@@ -37,7 +37,8 @@ Other useful targets:
 
 Prefer not to build? Every `v*` tag publishes a
 [GitHub release](https://github.com/perrito666/textchum/releases) with a
-ready-made `Textchum.app` zip (and its SHA-256). The app is not
+ready-made `Textchum.app` zip and `textchum-gtk` Linux tarballs
+(x86_64 and arm64), each with its SHA-256. The app is not
 code-signed, so on first launch right-click it and choose Open.
 
 ## Repository layout

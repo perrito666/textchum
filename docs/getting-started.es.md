@@ -39,7 +39,8 @@ Otros objetivos útiles:
 
 ¿Sin ganas de compilar? Cada etiqueta `v*` publica una
 [release de GitHub](https://github.com/perrito666/textchum/releases) con
-un zip de `Textchum.app` listo para usar (y su SHA-256). La aplicación
+un zip de `Textchum.app` listo para usar y tarballs Linux de
+`textchum-gtk` (x86_64 y arm64), cada uno con su SHA-256. La aplicación
 no está firmada, así que en el primer arranque haga clic derecho sobre
 ella y elija Abrir.
 

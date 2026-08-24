@@ -39,7 +39,8 @@ Autres cibles utiles :
 
 Pas envie de compiler ? Chaque étiquette `v*` publie une
 [release GitHub](https://github.com/perrito666/textchum/releases) avec
-un zip de `Textchum.app` prêt à l'emploi (et son SHA-256).
+un zip de `Textchum.app` prêt à l'emploi et des tarballs Linux de
+`textchum-gtk` (x86_64 et arm64), chacun avec son SHA-256.
 L'application n'est pas signée : au premier lancement, faites un clic
 droit dessus et choisissez Ouvrir.
 
