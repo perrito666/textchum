@@ -99,9 +99,12 @@ lados son Rust). Es más joven que la aplicación de macOS pero ya no es
 un juguete: pestañas (AdwTabView) que enfocan en vez de duplicar, un
 árbol de archivos del proyecto en barra lateral (F9), edición y
 deshacer propiedad del núcleo, coloreado tree-sitter desde la tabla de
-temas compartida, búsqueda en el archivo (Ctrl+F), apertura difusa
-(Ctrl+P), el pool de servidores de lenguaje conectado (diagnósticos
-subrayados con recuento de problemas, salto a la definición con F12,
+temas compartida, búsqueda en el archivo (Ctrl+F), búsqueda en el proyecto
+(Ctrl+Shift+F, regex con smart case y línea de estado que dice qué
+hizo), apertura difusa (Ctrl+P), una lista de archivos abiertos
+agrupada por proyecto sobre el árbol, el pool de servidores de
+lenguaje conectado (diagnósticos subrayados con recuento de problemas,
+autocompletado al escribir, hover, salto a la definición con F12,
 problemas de servidor como avisos) y una ventana de preferencias
 (Ctrl+,) sobre el mismo contrato de `config.json` — apariencia, tema,
 ajustes del editor y comandos de servidor por lenguaje, guardado en

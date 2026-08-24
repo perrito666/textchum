@@ -46,6 +46,7 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.new-tab", &["<Ctrl>t"]);
     app.set_accels_for_action("win.new", &["<Ctrl>n"]);
     app.set_accels_for_action("win.find", &["<Ctrl>f"]);
+    app.set_accels_for_action("win.find-in-project", &["<Ctrl><Shift>f"]);
     app.set_accels_for_action("win.quick-open", &["<Ctrl>p"]);
     app.set_accels_for_action("win.definition", &["F12"]);
     app.set_accels_for_action("win.sidebar", &["F9"]);
@@ -179,6 +180,57 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             .any(|tag| tag.name().is_some_and(|name| name.starts_with("diag-")));
         if !squiggled {
             eprintln!("FAIL: diagnostics did not tag the text");
+            return 1;
+        }
+
+        // Completion and hover ride the same request/response plumbing.
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        let completion_labels: Rc<RefCell<Option<Vec<String>>>> =
+            Rc::new(RefCell::new(None));
+        {
+            let shell = shell::Shell::instance();
+            let id = shell
+                .pool
+                .borrow_mut()
+                .completion(&path, 0, 3);
+            let sink = Rc::clone(&completion_labels);
+            shell.expect_response(id, move |json| {
+                *sink.borrow_mut() = Some(
+                    page::parse_completion_items(json)
+                        .into_iter()
+                        .map(|(label, _)| label)
+                        .collect(),
+                );
+            });
+        }
+        let hover: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+        {
+            let shell = shell::Shell::instance();
+            let id = shell.pool.borrow_mut().hover(&path, 0, 3);
+            let sink = Rc::clone(&hover);
+            shell.expect_response(id, move |json| {
+                *sink.borrow_mut() = page::hover_text(json);
+            });
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        loop {
+            context.iteration(true);
+            if completion_labels.borrow().is_some() && hover.borrow().is_some() {
+                break;
+            }
+            if std::time::Instant::now() > deadline {
+                eprintln!("FAIL: completion/hover responses did not arrive");
+                return 1;
+            }
+        }
+        let labels = completion_labels.borrow().clone().unwrap_or_default();
+        if !labels.iter().any(|label| label == "fake_function") {
+            eprintln!("FAIL: completion items missing: {labels:?}");
+            return 1;
+        }
+        if !hover.borrow().as_deref().unwrap_or("").contains("fake hover") {
+            eprintln!("FAIL: hover text missing");
             return 1;
         }
         println!("gtk smoke test passed (with language server)");

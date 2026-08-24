@@ -92,9 +92,12 @@ crate rather than through the C header (both sides are Rust there). It
 is younger than the macOS app but no longer a toy: tabs (AdwTabView)
 with focus-not-duplicate opens, a project file-tree sidebar (F9),
 core-owned editing and undo, tree-sitter highlighting from the shared
-theme table, in-file search (Ctrl+F), fuzzy Open Quickly (Ctrl+P), the
+theme table, in-file search (Ctrl+F), Find in Project (Ctrl+Shift+F, regex with
+smart case and a says-what-it-did status line), fuzzy Open Quickly
+(Ctrl+P), an Open Files list grouped by project over the tree, the
 language-server pool wired in (squiggled diagnostics with problem
-counts, jump to definition on F12, server trouble as toasts), and a
+counts, completion as you type, hover, jump to definition on F12,
+server trouble as toasts), and a
 preferences window (Ctrl+,) over the same `config.json` contract —
 appearance, theme, editor settings, and per-language server commands,
 stored at `~/.config/textchum/config.json`.

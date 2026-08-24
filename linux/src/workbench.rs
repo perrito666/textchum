@@ -20,7 +20,12 @@ pub struct Workbench {
     title: adw::WindowTitle,
     toasts: adw::ToastOverlay,
     split: adw::OverlaySplitView,
-    sidebar_box: gtk::Box,
+    buffers_box: gtk::Box,
+    tree_box: gtk::Box,
+    /// Aligned with the buffer list's rows: None for group headers.
+    buffer_rows: RefCell<Vec<Option<Rc<Page>>>>,
+    /// (title, dirty, selected) per page — rebuild only on real change.
+    buffer_signature: RefCell<Vec<(String, bool, bool)>>,
     search_bar: gtk::SearchBar,
     search_entry: gtk::SearchEntry,
     pages: RefCell<Vec<Rc<Page>>>,
@@ -62,6 +67,7 @@ impl Workbench {
         edit_section.append(Some("Undo"), Some("win.undo"));
         edit_section.append(Some("Redo"), Some("win.redo"));
         edit_section.append(Some("Find…"), Some("win.find"));
+        edit_section.append(Some("Find in Project…"), Some("win.find-in-project"));
         let go_section = gtk::gio::Menu::new();
         go_section.append(Some("Jump to Definition"), Some("win.definition"));
         go_section.append(Some("Toggle File Tree"), Some("win.sidebar"));
@@ -98,9 +104,16 @@ impl Workbench {
         content_box.append(&tab_view);
         tab_view.set_vexpand(true);
 
-        // Sidebar: the project file tree of the selected page.
+        // Sidebar: open buffers grouped by project, over the selected
+        // page's project file tree — the drawer, GTK edition.
         let sidebar_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         sidebar_box.set_width_request(220);
+        let buffers_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let tree_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        tree_box.set_vexpand(true);
+        sidebar_box.append(&buffers_box);
+        sidebar_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+        sidebar_box.append(&tree_box);
         let split = adw::OverlaySplitView::new();
         split.set_sidebar(Some(&sidebar_box));
         split.set_content(Some(&content_box));
@@ -144,7 +157,10 @@ impl Workbench {
             title,
             toasts,
             split,
-            sidebar_box,
+            buffers_box,
+            tree_box,
+            buffer_rows: RefCell::new(Vec::new()),
+            buffer_signature: RefCell::new(Vec::new()),
             search_bar,
             search_entry: search_entry.clone(),
             pages: RefCell::new(Vec::new()),
@@ -314,15 +330,141 @@ impl Workbench {
         if let Some(path) = page.path.borrow().clone() {
             if let Some(handles) = Shell::instance().pages.borrow().get(&path) {
                 refresh_subtitle(handles);
+                self.rebuild_buffer_list();
                 return;
             }
         }
         self.title.set_subtitle("");
+        self.rebuild_buffer_list();
     }
 
     // MARK: Sidebar (project file tree)
 
     pub fn refresh_sidebar(&self) {
+        self.rebuild_buffer_list();
+        self.rebuild_tree();
+    }
+
+    /// The open-buffers half: every tab, grouped by project, the
+    /// selected one emphasized; clicking a row selects its tab.
+    /// Rebuilt only when the (title, dirty, selected) signature moves.
+    pub fn rebuild_buffer_list(&self) {
+        let selected = self.selected();
+        let signature: Vec<(String, bool, bool)> = self
+            .pages
+            .borrow()
+            .iter()
+            .map(|page| {
+                (
+                    page.display_name(),
+                    page.state.borrow().document.is_dirty(),
+                    selected.as_ref().is_some_and(|s| Rc::ptr_eq(s, page)),
+                )
+            })
+            .collect();
+        if *self.buffer_signature.borrow() == signature {
+            return;
+        }
+        *self.buffer_signature.borrow_mut() = signature;
+
+        while let Some(child) = self.buffers_box.first_child() {
+            self.buffers_box.remove(&child);
+        }
+        let heading = gtk::Label::new(Some("Open Files"));
+        heading.set_xalign(0.0);
+        heading.add_css_class("heading");
+        heading.set_margin_start(12);
+        heading.set_margin_top(10);
+        heading.set_margin_bottom(4);
+        self.buffers_box.append(&heading);
+
+        // Group pages by project root, loose files last.
+        let mut groups: Vec<(String, Vec<Rc<Page>>)> = Vec::new();
+        for page in self.pages.borrow().iter() {
+            let root = page
+                .path
+                .borrow()
+                .as_deref()
+                .map(Path::new)
+                .and_then(workspace::project_root_for);
+            let label = root
+                .as_deref()
+                .and_then(Path::file_name)
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Other".into());
+            match groups.iter_mut().find(|(name, _)| *name == label) {
+                Some((_, pages)) => pages.push(Rc::clone(page)),
+                None => groups.push((label, vec![Rc::clone(page)])),
+            }
+        }
+        groups.sort_by(|a, b| {
+            (a.0 == "Other").cmp(&(b.0 == "Other")).then(a.0.cmp(&b.0))
+        });
+
+        let list = gtk::ListBox::new();
+        list.set_selection_mode(gtk::SelectionMode::None);
+        list.add_css_class("navigation-sidebar");
+        let mut rows: Vec<Option<Rc<Page>>> = Vec::new();
+        for (group, pages) in groups {
+            let header = gtk::Label::new(Some(&group));
+            header.set_xalign(0.0);
+            header.add_css_class("dim-label");
+            header.set_margin_start(6);
+            header.set_margin_top(6);
+            let header_row = gtk::ListBoxRow::new();
+            header_row.set_child(Some(&header));
+            header_row.set_activatable(false);
+            list.append(&header_row);
+            rows.push(None);
+            for page in pages {
+                let dirty = page.state.borrow().document.is_dirty();
+                let is_selected =
+                    selected.as_ref().is_some_and(|s| Rc::ptr_eq(s, &page));
+                let label = gtk::Label::new(Some(&format!(
+                    "{}{}",
+                    if dirty { "● " } else { "" },
+                    page.display_name()
+                )));
+                label.set_xalign(0.0);
+                label.set_margin_start(14);
+                if is_selected {
+                    label.add_css_class("heading");
+                }
+                let row = gtk::ListBoxRow::new();
+                row.set_child(Some(&label));
+                list.append(&row);
+                rows.push(Some(Rc::clone(&page)));
+            }
+        }
+        *self.buffer_rows.borrow_mut() = rows;
+        {
+            let workbench = Rc::downgrade(&WORKBENCHES.with(|list| {
+                list.borrow()
+                    .iter()
+                    .find(|w| w.window == self.window)
+                    .cloned()
+                    .expect("workbench registered")
+            }));
+            list.connect_row_activated(move |_, row| {
+                let Some(workbench) = workbench.upgrade() else { return };
+                let index = row.index();
+                let page = workbench
+                    .buffer_rows
+                    .borrow()
+                    .get(index as usize)
+                    .cloned()
+                    .flatten();
+                if let Some(page) = page {
+                    let tab_page = workbench.tab_view.page(&page.scrolled);
+                    workbench.tab_view.set_selected_page(&tab_page);
+                }
+            });
+        }
+        self.buffers_box.append(&list);
+    }
+
+    /// The file-tree half, rebuilt when the project root changes.
+    fn rebuild_tree(&self) {
         let root = self.selected().and_then(|page| {
             page.path
                 .borrow()
@@ -337,8 +479,8 @@ impl Workbench {
             return;
         }
         *self.sidebar_root.borrow_mut() = root.clone();
-        while let Some(child) = self.sidebar_box.first_child() {
-            self.sidebar_box.remove(&child);
+        while let Some(child) = self.tree_box.first_child() {
+            self.tree_box.remove(&child);
         }
         let Some(root) = root else { return };
 
@@ -353,11 +495,11 @@ impl Workbench {
         header.set_margin_start(12);
         header.set_margin_top(10);
         header.set_margin_bottom(4);
-        self.sidebar_box.append(&header);
+        self.tree_box.append(&header);
 
         let tree = build_file_tree(&root);
         let scrolled = gtk::ScrolledWindow::builder().child(&tree).vexpand(true).build();
-        self.sidebar_box.append(&scrolled);
+        self.tree_box.append(&scrolled);
     }
 }
 
@@ -610,6 +752,18 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let app = app.clone();
         shell.expect_response(id, move |json| open_definition(&app, json));
     });
+    add("find-in-project", workbench, |workbench, _| {
+        let root = workbench
+            .selected()
+            .and_then(|page| {
+                page.path.borrow().as_deref().map(Path::new).and_then(|path| {
+                    workspace::project_root_for(path)
+                        .or_else(|| path.parent().map(Path::to_owned))
+                })
+            })
+            .unwrap_or_else(glib::home_dir);
+        show_grep(workbench, root);
+    });
     add("quick-open", workbench, |workbench, _| {
         let root = workbench
             .selected()
@@ -753,6 +907,169 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
                 let full = root.join(label.text().as_str());
                 dialog.close();
                 workbench.open(Some(full), None);
+            }
+        }
+    };
+    {
+        let open_row = open_row.clone();
+        list.connect_row_activated(move |_, row| open_row(row));
+    }
+    {
+        let list = list.clone();
+        entry.connect_activate(move |_| {
+            if let Some(row) = list.selected_row().or_else(|| list.row_at_index(0)) {
+                open_row(&row);
+            }
+        });
+    }
+    let escape = gtk::EventControllerKey::new();
+    {
+        let dialog = dialog.clone();
+        escape.connect_key_pressed(move |_, key, _, _| {
+            if key == gtk::gdk::Key::Escape {
+                dialog.close();
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+    }
+    dialog.add_controller(escape);
+    dialog.present();
+    entry.grab_focus();
+}
+
+// MARK: Find in Project
+
+/// Project-wide content search over the core's grep: the query is a
+/// regex with ripgrep's smart-case rule, results are `path:line: text`,
+/// ⏎ jumps, and a status line says what the search did — matches and
+/// files searched, or the reason nothing was (bad pattern quoted).
+fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
+    let entry = gtk::SearchEntry::new();
+    entry.set_placeholder_text(Some("regular expression…"));
+    let status = gtk::Label::new(None);
+    status.set_xalign(0.0);
+    status.add_css_class("dim-label");
+    status.set_margin_start(4);
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::Browse);
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&list)
+        .vexpand(true)
+        .build();
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    content.set_margin_top(10);
+    content.set_margin_bottom(10);
+    content.set_margin_start(10);
+    content.set_margin_end(10);
+    content.append(&entry);
+    content.append(&scrolled);
+    content.append(&status);
+
+    let dialog = adw::Window::builder()
+        .transient_for(&workbench.window)
+        .modal(true)
+        .default_width(680)
+        .default_height(440)
+        .title(&*root.to_string_lossy())
+        .content(&content)
+        .build();
+
+    // (relative path, one-based line) per row, aligned with the list.
+    let hits: Rc<RefCell<Vec<(String, usize)>>> = Rc::new(RefCell::new(Vec::new()));
+    let run = {
+        let list = list.clone();
+        let status = status.clone();
+        let root = root.clone();
+        let hits = Rc::clone(&hits);
+        move |query: &str| {
+            while let Some(child) = list.first_child() {
+                list.remove(&child);
+            }
+            hits.borrow_mut().clear();
+            if query.is_empty() {
+                status.set_text("Type to search.");
+                return;
+            }
+            // Smart case: lowercase queries match any case.
+            let smart_case = query == query.to_lowercase();
+            match textchum_core::search::grep_with_stats(
+                &root, query, smart_case, 200, &[],
+            ) {
+                Ok((found, stats)) => {
+                    for hit in &found {
+                        let label = gtk::Label::new(Some(&format!(
+                            "{}:{}: {}",
+                            hit.path, hit.line, hit.text
+                        )));
+                        label.set_xalign(0.0);
+                        label.set_margin_start(6);
+                        label.set_margin_top(2);
+                        label.set_margin_bottom(2);
+                        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                        list.append(&label);
+                        hits.borrow_mut().push((hit.path.clone(), hit.line as usize));
+                    }
+                    if let Some(first) = list.row_at_index(0) {
+                        list.select_row(Some(&first));
+                    }
+                    status.set_text(&if found.is_empty() {
+                        if stats.files_searched == 0 {
+                            "No files to search here — everything is ignored or \
+                             the scope is empty."
+                                .to_string()
+                        } else {
+                            format!("No matches in {} files searched.", stats.files_searched)
+                        }
+                    } else {
+                        format!(
+                            "{} matches · {} files searched",
+                            found.len(),
+                            stats.files_searched
+                        )
+                    });
+                }
+                Err(error) => status.set_text(&error),
+            }
+        }
+    };
+    run("");
+    // Debounced while typing.
+    let pending: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+    {
+        let run = run.clone();
+        let pending = Rc::clone(&pending);
+        entry.connect_search_changed(move |entry| {
+            if let Some(previous) = pending.borrow_mut().take() {
+                previous.remove();
+            }
+            let run = run.clone();
+            let text = entry.text().to_string();
+            let pending_inner = Rc::clone(&pending);
+            let source = glib::timeout_add_local_once(
+                std::time::Duration::from_millis(200),
+                move || {
+                    *pending_inner.borrow_mut() = None;
+                    run(&text);
+                },
+            );
+            *pending.borrow_mut() = Some(source);
+        });
+    }
+
+    let open_row = {
+        let workbench = Rc::clone(workbench);
+        let dialog = dialog.clone();
+        let root = root.clone();
+        let hits = Rc::clone(&hits);
+        move |row: &gtk::ListBoxRow| {
+            let hit = hits.borrow().get(row.index() as usize).cloned();
+            if let Some((relative, line)) = hit {
+                dialog.close();
+                workbench.open(
+                    Some(root.join(&relative)),
+                    Some((line.saturating_sub(1) as i32, 0)),
+                );
             }
         }
     };

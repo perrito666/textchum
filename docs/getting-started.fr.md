@@ -100,9 +100,13 @@ Plus jeune que l'application macOS mais plus un jouet : onglets
 (AdwTabView) qui focalisent au lieu de dupliquer, arbre de fichiers du
 projet en barre latérale (F9), édition et annulation propriété du
 noyau, coloration tree-sitter depuis la table de thèmes partagée,
-recherche dans le fichier (Ctrl+F), ouverture floue (Ctrl+P), le pool
-de serveurs de langage branché (diagnostics soulignés avec compte de
-problèmes, saut à la définition en F12, ennuis de serveur en avis) et
+recherche dans le fichier (Ctrl+F), recherche dans le projet
+(Ctrl+Shift+F, regex avec smart case et ligne d'état qui dit ce
+qu'elle a fait), ouverture floue (Ctrl+P), une liste de fichiers
+ouverts groupée par projet au-dessus de l'arbre, le pool de serveurs
+de langage branché (diagnostics soulignés avec compte de problèmes,
+complétion pendant la frappe, survol, saut à la définition en F12,
+ennuis de serveur en avis) et
 une fenêtre de préférences (Ctrl+,) sur le même contrat `config.json`
 — apparence, thème, réglages d'éditeur et commandes de serveur par
 langage, rangé dans `~/.config/textchum/config.json`.

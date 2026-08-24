@@ -377,8 +377,10 @@ Prove the architecture end to end before writing real features.
   definition, server status as toasts. The smoke test exercises the whole server
   path against the scripted server. Tabs (AdwTabView), the file-tree
   sidebar, and a preferences window over the same config.json (appearance, theme,
-  editor, per-language servers) are in. Next: the buffer-list half of the drawer,
-  grep panel, completion and hover.
+  editor, per-language servers) are in. The buffer-list half of the drawer, the
+  grep panel (smart case + status line), completion, and hover are in too — the
+  GTK shell now covers the daily-driver set. Next: session restore, chum-style
+  opens over D-Bus, drag-reorder tabs.
 
 **Linux shell design (decided ahead of need):** GTK4 + libadwaita, editor view via
 GtkSourceView, preview via WebKitGTK, written in Rust with gtk4-rs — the same shape
