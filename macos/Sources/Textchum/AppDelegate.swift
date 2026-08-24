@@ -487,6 +487,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(openQuickly(_:)): "openQuickly",
             #selector(EditorWindowController.saveDocument(_:)): "save",
             #selector(EditorWindowController.saveDocumentAs(_:)): "saveAs",
+            #selector(EditorWindowController.revertToSaved(_:)): "revertToSaved",
             #selector(NSWindow.performClose(_:)): "close",
             #selector(EditorWindowController.performUndo(_:)): "undo",
             #selector(EditorWindowController.performRedo(_:)): "redo",
@@ -1199,6 +1200,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         saveAs.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(saveAs)
+        let revert = NSMenuItem(
+            title: "Revert to Saved",
+            action: #selector(EditorWindowController.revertToSaved(_:)),
+            keyEquivalent: "r"
+        )
+        revert.keyEquivalentModifierMask = [.command, .option]
+        fileMenu.addItem(revert)
         fileMenu.addItem(.separator())
         // The front tab's location in every useful spelling; also on the
         // context menus of buffer-list and file-tree rows.

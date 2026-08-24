@@ -60,6 +60,13 @@ Textchum watches each open document's file. If another program changes it:
 A file that disappears from disk is left alone: the buffer stays, and
 saving recreates the file.
 
+**Revert to Saved** (File menu, ⌥⌘R, rebindable as `revertToSaved`)
+is the manual version of the same reload: throw the buffer away and
+take the disk's word for it, with one confirmation when there are
+unsaved changes (and one Undo to take it back). It exists for the rare
+external change the watcher misses — delete-and-replace flows like a
+git checkout.
+
 ## Dirty state
 
 A document knows the exact point in its history where it was last saved, so

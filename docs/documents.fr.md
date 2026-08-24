@@ -67,6 +67,13 @@ programme le modifie :
 Un fichier qui disparaît du disque est laissé tranquille : le tampon
 reste, et enregistrer recrée le fichier.
 
+**Revenir à l'enregistré** (menu File, ⌥⌘R, réassignable comme
+`revertToSaved`) est la version manuelle du même rechargement : jeter
+le tampon et croire le disque, avec une confirmation quand il y a des
+modifications non enregistrées (et une Annulation pour les retrouver).
+Il existe pour le rare changement externe que le veilleur manque — les
+flux supprimer-et-remplacer comme un git checkout.
+
 ## Modifications non enregistrées
 
 Un document connaît le point exact de son historique où il a été enregistré

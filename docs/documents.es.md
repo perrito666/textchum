@@ -67,6 +67,13 @@ cambia:
 Un archivo que desaparece del disco se deja en paz: el búfer permanece y
 guardar recrea el archivo.
 
+**Revertir a lo guardado** (menú File, ⌥⌘R, reasignable como
+`revertToSaved`) es la versión manual de la misma recarga: descartar el
+búfer y aceptar lo que diga el disco, con una confirmación cuando hay
+cambios sin guardar (y un Deshacer para recuperarlos). Existe para el
+raro cambio externo que el vigilante no ve — flujos de borrar y
+reemplazar como un git checkout.
+
 ## Estado de cambios sin guardar
 
 Un documento conoce el punto exacto de su historial en el que se guardó por

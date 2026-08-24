@@ -1041,6 +1041,25 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    /// File → Revert to Saved: throw away the buffer and take the disk's
+    /// word for it — the manual escape hatch for the rare external change
+    /// the watcher misses (delete-and-replace flows like git checkout).
+    @objc func revertToSaved(_ sender: Any?) {
+        guard coreDocument.path != nil else { return }
+        if coreDocument.isDirty {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Revert to the saved version?"
+            alert.informativeText =
+                "Your unsaved changes will be replaced by the file on disk "
+                + "(one Undo brings them back)."
+            alert.addButton(withTitle: "Revert")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        reloadFromDisk()
+    }
+
     private func reloadFromDisk() {
         let selection = textView?.selectedRange()
         do {
@@ -1653,7 +1672,7 @@ extension EditorWindowController: NSMenuItemValidation {
             menuItem.state = previewItem != nil ? .on : .off
             return coreDocument.languageName == "markdown"
         case #selector(copyFileName(_:)), #selector(copyRelativePath(_:)),
-            #selector(copyAbsolutePath(_:)):
+            #selector(copyAbsolutePath(_:)), #selector(revertToSaved(_:)):
             return coreDocument.path != nil
         case #selector(copyForgeURL(_:)):
             return coreDocument.path.map(PathActions.isInGitRepository) ?? false
