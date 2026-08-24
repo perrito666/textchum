@@ -1,9 +1,96 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// A small language badge for file rows: the language's conventional
-/// short label on its (linguist-style) color. At sidebar sizes a real
-/// logo would be mush; two letters on the community color reads
-/// instantly. Unknown files keep the generic document glyph.
+/// The icon for a file row: the type's own Finder icon when macOS
+/// actually differentiates it (LaunchServices knows Python, Markdown,
+/// HTML, and whatever installed apps registered), falling back to the
+/// colored language badge where the system would serve the same
+/// generic document for everything — which is the genericness the
+/// icons exist to avoid.
+struct FileTypeIcon: View {
+    let filename: String
+
+    var body: some View {
+        if let icon = SystemFileIcon.icon(forFilename: filename) {
+            Image(nsImage: icon)
+                .frame(width: 17)
+        } else {
+            LanguageBadge(filename: filename)
+        }
+    }
+}
+
+/// Finder icons per extension, cached — with two crucial filters. An
+/// icon equal to a generic baseline (plain data, plain text, generic
+/// source code) means "the system has nothing". And an icon shared by
+/// several *different* known types is a default handler stamping its
+/// own document icon on everything it claims (an IDE claiming .py,
+/// .md, and .yml alike) — identical everywhere and misleading, so it
+/// counts as nothing too. Only genuinely type-specific icons survive.
+@MainActor
+enum SystemFileIcon {
+    private static var extras: [String: NSImage?] = [:]
+
+    private static let baselines: [Data] = {
+        [UTType.data, .item, .plainText, .sourceCode, .text].compactMap {
+            NSWorkspace.shared.icon(for: $0).tiffRepresentation
+        }
+    }()
+
+    /// The badge-known extensions resolved together, keeping only icons
+    /// that are non-generic AND unique to their type.
+    private static let knownIcons: [String: NSImage] = {
+        let extensions = [
+            "rs", "py", "go", "js", "ts", "json", "yaml", "yml", "toml",
+            "html", "css", "md", "sh", "c", "h", "swift", "zig", "mk",
+        ]
+        var byData: [Data: [(String, NSImage)]] = [:]
+        for ext in extensions {
+            guard let type = UTType(filenameExtension: ext) else { continue }
+            let icon = NSWorkspace.shared.icon(for: type)
+            guard let data = icon.tiffRepresentation, !baselines.contains(data) else {
+                continue
+            }
+            byData[data, default: []].append((ext, icon))
+        }
+        var unique: [String: NSImage] = [:]
+        for owners in byData.values where owners.count == 1 {
+            let (ext, icon) = owners[0]
+            icon.size = NSSize(width: 16, height: 16)
+            unique[ext] = icon
+        }
+        return unique
+    }()
+
+    static func icon(forFilename filename: String) -> NSImage? {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        guard !ext.isEmpty else { return nil }
+        if let known = knownIcons[ext] { return known }
+        guard LanguageBadge.badge(for: filename) == nil else {
+            // A known language whose system icon failed the filters:
+            // the badge is the more honest picture.
+            return nil
+        }
+        // Unknown-to-us types have no badge to offer, so any
+        // non-generic system icon is an upgrade over the plain glyph.
+        if let cached = extras[ext] { return cached }
+        var result: NSImage?
+        if let type = UTType(filenameExtension: ext) {
+            let icon = NSWorkspace.shared.icon(for: type)
+            if let data = icon.tiffRepresentation, !baselines.contains(data) {
+                icon.size = NSSize(width: 16, height: 16)
+                result = icon
+            }
+        }
+        extras[ext] = result
+        return result
+    }
+}
+
+/// A small language badge: the language's conventional short label on
+/// its (linguist-style) color. At sidebar sizes a real logo would be
+/// mush; two letters on the community color reads instantly. Unknown
+/// files keep the generic document glyph.
 struct LanguageBadge: View {
     let filename: String
 

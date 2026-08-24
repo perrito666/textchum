@@ -144,7 +144,7 @@ struct FileTreeRow: View {
                 Image(systemName: "folder")
                     .foregroundStyle(.secondary)
             } else {
-                LanguageBadge(filename: node.name)
+                FileTypeIcon(filename: node.name)
             }
             Text(node.name)
             Spacer(minLength: 0)
@@ -307,7 +307,7 @@ struct SidebarView: View {
                                     .foregroundStyle(.primary)
                                     .frame(width: 17)
                             } else {
-                                LanguageBadge(filename: document.title)
+                                FileTypeIcon(filename: document.title)
                             }
                             Text(document.display)
                                 .fontWeight(

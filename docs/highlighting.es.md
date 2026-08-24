@@ -17,8 +17,13 @@ Actualmente se reconocen: Rust, Python, Go, C, JavaScript, JSON, Bash,
 Make, mensajes de commit de git, HTML, CSS, TOML, YAML, Swift, Zig y
 Markdown. El subtítulo de la ventana muestra el lenguaje activo; los
 archivos no reconocidos se quedan simplemente en texto plano. Las filas
-del navegador llevan una pequeña insignia con el color convencional de
-cada lenguaje conocido, para recorrer el árbol de un vistazo.
+del navegador llevan el icono de Finder propio del tipo cuando macOS lo
+distingue de verdad — y una pequeña insignia con el color convencional
+del lenguaje en caso contrario. La distinción importa: una aplicación
+predeterminada (un IDE, por ejemplo) estampa su *propio* icono de
+documento en todos los tipos que reclama, idéntico en todas partes, así
+que un icono compartido entre tipos cuenta como genérico y gana la
+insignia.
 
 Las gramáticas van compiladas dentro de la aplicación, así que el
 coloreado funciona sin conexión y de forma idéntica en todas partes.

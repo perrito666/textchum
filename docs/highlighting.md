@@ -15,8 +15,12 @@ and on the first save of an untitled document. Currently recognized:
 Rust, Python, Go, C, JavaScript, JSON, Bash, Make, git commit messages,
 HTML, CSS, TOML, YAML, Swift, Zig, and Markdown. The window subtitle
 shows the active language; unrecognized files simply stay plain text.
-The navigator's file rows carry a small badge in each known language's
-conventional color, so a tree scans by shape.
+The navigator's file rows carry the type's own Finder icon when macOS
+genuinely differentiates it — and a small badge in the language's
+conventional color otherwise. The distinction matters: a default
+handler (an IDE, say) stamps its *own* document icon on every type it
+claims, identical everywhere, so an icon shared across types counts as
+generic and the badge wins.
 
 Grammars are compiled into the application, so highlighting works offline
 and identically everywhere.

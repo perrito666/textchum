@@ -17,9 +17,13 @@ document sans titre. Sont actuellement reconnus : Rust, Python, Go, C,
 JavaScript, JSON, Bash, Make, messages de commit git, HTML, CSS, TOML,
 YAML, Swift, Zig et Markdown. Le sous-titre de la fenêtre affiche le
 langage actif ; les fichiers non reconnus restent simplement en texte
-brut. Les lignes du navigateur portent un petit insigne à la couleur
-conventionnelle de chaque langage connu, pour parcourir l'arbre d'un
-coup d'œil.
+brut. Les lignes du navigateur portent l'icône Finder propre au type quand
+macOS le distingue vraiment — et un petit insigne à la couleur
+conventionnelle du langage sinon. La distinction compte : une
+application par défaut (un IDE, disons) estampille son *propre* icône
+de document sur tous les types qu'elle revendique, identique partout ;
+une icône partagée entre types compte donc comme générique et l'insigne
+l'emporte.
 
 Les grammaires sont compilées dans l'application : la coloration
 fonctionne hors ligne et à l'identique partout.
