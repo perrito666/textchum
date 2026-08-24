@@ -266,6 +266,20 @@ uint64_t tc_lsp_definition(struct TcApp *app,
                            uint32_t character);
 
 /**
+ * Requests completions at an LSP position; same contract as
+ * [`tc_lsp_hover`]. The response's `result` is an LSP
+ * `CompletionItem[]` or `CompletionList`.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_completion(struct TcApp *app,
+                           const char *path,
+                           uintptr_t path_len,
+                           uint32_t line,
+                           uint32_t character);
+
+/**
  * Announces a closed document. The server instance stays warm.
  *
  * # Safety

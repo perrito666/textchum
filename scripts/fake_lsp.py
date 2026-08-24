@@ -93,6 +93,21 @@ def main():
                     },
                 }],
             })
+        elif method == "textDocument/completion":
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": {
+                    "isIncomplete": False,
+                    "items": [
+                        {"label": "fake_function", "kind": 3,
+                         "detail": "fn fake_function()",
+                         "insertText": "fake_function()", "sortText": "0001"},
+                        {"label": "fake_variable", "kind": 6,
+                         "detail": "let fake_variable", "sortText": "0002"},
+                    ],
+                },
+            })
         elif method == "shutdown":
             send({"jsonrpc": "2.0", "id": message["id"], "result": None})
         elif method == "exit":

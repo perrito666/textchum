@@ -27,6 +27,10 @@ nadie.
   *debounce*) y marcan el texto afectado: rojo para errores, naranja para
   avisos, azul para notas.
 - El subtítulo de la ventana los cuenta («2 errors, 1 warning»).
+- **Autocompletado al escribir**: las sugerencias aparecen tras
+  caracteres de identificador y `.`, filtradas mientras se sigue
+  escribiendo — ↑/↓ para elegir, ⏎ o ⇥ para aceptar, ⎋ para descartar,
+  ⌃Espacio para pedirlas explícitamente.
 - Dejar el ratón sobre un símbolo muestra la documentación **hover** del
   servidor en un globo.
 - **Saltar a la definición** (⌃⌘J) va al símbolo bajo el cursor — entre
@@ -86,9 +90,9 @@ servidor guionizado.
 
 ## Aún no está
 
-- Autocompletado, referencias, renombrar, formatear — los diagnósticos,
-  el *hover* y las definiciones llegaron primero porque la validación es
-  la promesa central del producto.
+- Referencias, renombrar, formatear.
+- Los marcadores de fragmento (snippets) en el autocompletado se
+  aplanan a texto plano.
 - ⌘-clic como disparador alternativo de Saltar a la definición.
 - El renderizado de Markdown en los globos de *hover* (muestran el texto
   en crudo).

@@ -26,6 +26,10 @@ quelqu'un d'autre.
   temporisation) et marquent le texte concerné : rouge pour les erreurs,
   orange pour les avertissements, bleu pour les notes.
 - Le sous-titre de la fenêtre les compte (« 2 errors, 1 warning »).
+- **La complétion pendant la frappe** : les suggestions apparaissent
+  après les caractères d'identifiant et `.`, filtrées au fil de la
+  frappe — ↑/↓ pour choisir, ⏎ ou ⇥ pour accepter, ⎋ pour fermer,
+  ⌃Espace pour les demander explicitement.
 - Laisser la souris sur un symbole affiche la documentation **hover** du
   serveur dans une bulle.
 - **Aller à la définition** (⌃⌘J) rejoint le symbole sous le curseur —
@@ -87,9 +91,9 @@ un serveur scripté.
 
 ## Pas encore là
 
-- Complétion, références, renommage, formatage — les diagnostics, le
-  survol et les définitions sont venus d'abord parce que la validation
-  est la promesse centrale du produit.
+- Références, renommage, formatage.
+- Les marqueurs de fragments (snippets) dans la complétion sont aplanis
+  en texte brut.
 - ⌘-clic comme déclencheur alternatif d'Aller à la définition.
 - Le rendu Markdown dans les bulles de survol (elles montrent le texte
   brut).

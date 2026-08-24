@@ -313,6 +313,33 @@ pub unsafe extern "C" fn tc_lsp_definition(
     .unwrap_or(0)
 }
 
+/// Requests completions at an LSP position; same contract as
+/// [`tc_lsp_hover`]. The response's `result` is an LSP
+/// `CompletionItem[]` or `CompletionList`.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_completion(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool
+            .completion(std::path::Path::new(path), line, character)
+    }))
+    .unwrap_or(0)
+}
+
 /// Announces a closed document. The server instance stays warm.
 ///
 /// # Safety

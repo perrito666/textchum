@@ -163,6 +163,24 @@ public final class CoreApp {
         }
     }
 
+    /// Requests completions at an LSP position; same contract as
+    /// ``lspHover(path:line:character:completion:)``. The JSON is an LSP
+    /// `CompletionItem[]` or `CompletionList`.
+    @MainActor
+    public func lspCompletion(
+        path: String,
+        line: Int,
+        character: Int,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_completion(
+                handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
     /// Applies the configuration's `lsp` JSON to the server pool. Affects
     /// instances spawned afterwards.
     public func lspConfigure(json: String) {

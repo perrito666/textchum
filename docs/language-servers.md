@@ -22,6 +22,9 @@ never join someone else's workspace either.
 - Findings arrive as you type (sent in debounced batches) and mark the
   offending text: red for errors, orange for warnings, blue for notes.
 - The window subtitle counts them ("2 errors, 1 warning").
+- **Completion as you type**: suggestions appear after identifier
+  characters and `.`, filtered as you keep typing — ↑/↓ to choose,
+  ⏎ or ⇥ to accept, ⎋ to dismiss, ⌃Space to ask explicitly.
 - Resting the mouse over a symbol shows the server's **hover**
   documentation in a popover.
 - **Jump to Definition** (⌃⌘J) goes to the symbol under the caret —
@@ -78,9 +81,8 @@ protocol path is exercised in CI against a scripted server.
 
 ## Not there yet
 
-- Completion, references, rename, formatting — diagnostics, hover, and
-  definitions came first because validation is the product's core
-  promise.
+- References, rename, formatting.
+- Snippet placeholders in completions are flattened to plain text.
 - ⌘-click as an alternative trigger for Jump to Definition.
 - Markdown rendering in hover popovers (they show the raw text).
 - Automatic restart of crashed servers (a crash is reported; reopening

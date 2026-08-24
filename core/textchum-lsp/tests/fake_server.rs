@@ -124,6 +124,15 @@ fn per_project_instances_and_diagnostics() {
                 && json.contains("file://")))
     });
 
+    // Completion: items come back tagged with the request id.
+    let completion_id = pool.completion(&file_b, 0, 3);
+    collect_until(&events, "completion response", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == completion_id
+                && json.contains("fake_function")
+                && json.contains("fake_variable")))
+    });
+
     pool.did_close(&file_a);
     // Dropping the pool must shut both instances down without hanging
     // (the test itself would time out otherwise).

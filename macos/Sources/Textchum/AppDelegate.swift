@@ -129,6 +129,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self?.showSettings(nil)
                         return
                     }
+                    if allArguments[flagIndex + 1] == "complete" {
+                        // scope=line, query=character for this mode.
+                        let line = Int(scope) ?? 0
+                        let character = Int(query) ?? 0
+                        if let editor = self?.editors.first {
+                            editor.reveal(line: line, character: character)
+                            editor.triggerCompletion(nil)
+                        }
+                        return
+                    }
                     self?.showQuickFinder(mode: mode)
                     self?.quickFinder.debugSet(scope: scope, query: query, filters: filters)
                 }
@@ -297,6 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.jumpToDefinition(_:)): "jumpToDefinition",
             #selector(EditorWindowController.goToBlockStart(_:)): "goToBlockStart",
             #selector(EditorWindowController.goToBlockEnd(_:)): "goToBlockEnd",
+            #selector(EditorWindowController.triggerCompletion(_:)): "complete",
             #selector(findInProject(_:)): "findInProject",
             #selector(NSSplitViewController.toggleSidebar(_:)): "toggleNavigator",
             #selector(EditorWindowController.togglePreview(_:)): "togglePreview",
@@ -792,6 +803,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         blockEnd.keyEquivalentModifierMask = [.control, .option]
         editMenu.addItem(blockEnd)
+        let complete = NSMenuItem(
+            title: "Complete",
+            action: #selector(EditorWindowController.triggerCompletion(_:)),
+            keyEquivalent: " "
+        )
+        complete.keyEquivalentModifierMask = [.control]
+        editMenu.addItem(complete)
         editMenu.addItem(.separator())
 
         // Find submenu, driving the text view's native find bar.

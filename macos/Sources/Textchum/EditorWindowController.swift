@@ -76,6 +76,12 @@ final class EditorWindowController: NSWindowController {
     private var lspChangeTimer: Timer?
     /// The latest language-server findings for this document.
     private var diagnostics: [CoreDiagnostic] = []
+    /// The completion popup and its trigger machinery.
+    private let completionPopup = CompletionPopup()
+    private var completionTimer: Timer?
+    /// The most recent replacement the user typed (single keystroke or
+    /// paste), for completion auto-triggering.
+    private var lastTypedText = ""
     /// Debounces hover requests while the mouse moves.
     private var hoverTimer: Timer?
     /// The popover currently showing hover content, if any.
@@ -209,6 +215,9 @@ final class EditorWindowController: NSWindowController {
 
         if let settings {
             apply(settings: settings)
+        }
+        completionPopup.onAccept = { [weak self] item in
+            self?.accept(completion: item)
         }
         updateChrome()
         startWatchingFile()
@@ -594,6 +603,7 @@ final class EditorWindowController: NSWindowController {
 
     @objc private func editorDidScroll(_ notification: Notification) {
         lineRuler?.needsDisplay = true
+        completionPopup.dismiss()
         guard let previewWebView, let scrollView = textView?.enclosingScrollView else { return }
         // Ignore echoes of a preview-driven sync.
         if lastScrollSync.fromPreview, Date().timeIntervalSince(lastScrollSync.at) < 0.15 {
@@ -946,6 +956,100 @@ final class EditorWindowController: NSWindowController {
         assertInSync()
     }
 
+    // MARK: Completion
+
+    /// The identifier prefix ending at the caret, if any.
+    private func currentWordPrefix() -> (text: String, range: NSRange)? {
+        guard let textView else { return nil }
+        let text = textView.string as NSString
+        let caret = textView.selectedRange().location
+        var start = caret
+        while start > 0 {
+            let ch = Character(UnicodeScalar(text.character(at: start - 1)) ?? " ")
+            if ch.isLetter || ch.isNumber || ch == "_" {
+                start -= 1
+            } else {
+                break
+            }
+        }
+        guard start < caret else { return nil }
+        let range = NSRange(location: start, length: caret - start)
+        return (text.substring(with: range), range)
+    }
+
+    /// Manual trigger (⌃Space) and the debug hook's entry point.
+    @objc func triggerCompletion(_ sender: Any?) {
+        requestCompletion()
+    }
+
+    private func scheduleCompletionRequest() {
+        completionTimer?.invalidate()
+        completionTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.requestCompletion() }
+            }
+        }
+    }
+
+    private func requestCompletion() {
+        guard let lspApp, let path = lspOpenPath, let textView, let window else { return }
+        let caret = textView.selectedRange().location
+        let (line, character) = Self.lspPosition(
+            ofIndex: caret, in: textView.string as NSString)
+        lspApp.lspCompletion(path: path, line: line, character: character) {
+            [weak self] json in
+            guard let self, let textView = self.textView else { return }
+            // Stale if the caret moved lines since the request.
+            guard textView.selectedRange().location >= caret - 1 else { return }
+            let items = CompletionPopup.parse(resultJSON: json)
+            guard !items.isEmpty else {
+                self.completionPopup.dismiss()
+                return
+            }
+            let caretRect = textView.firstRect(
+                forCharacterRange: NSRange(location: textView.selectedRange().location, length: 0),
+                actualRange: nil
+            )
+            self.completionPopup.show(
+                items: items,
+                prefix: self.currentWordPrefix()?.text ?? "",
+                below: caretRect,
+                parent: window
+            )
+        }
+    }
+
+    /// Applies an accepted suggestion by replacing the word prefix — via
+    /// `insertText`, so the edit flows through the normal synchronized
+    /// path (delegate → core → history).
+    private func accept(completion item: CompletionPopup.Item) {
+        guard let textView else { return }
+        let replacementRange =
+            currentWordPrefix()?.range
+            ?? NSRange(location: textView.selectedRange().location, length: 0)
+        textView.insertText(item.insertText, replacementRange: replacementRange)
+    }
+
+    /// Auto-trigger after identifier characters and member access.
+    private func completionAfterTyping() {
+        if completionPopup.isVisible {
+            if let prefix = currentWordPrefix() {
+                completionPopup.filter(prefix: prefix.text)
+            } else if lastTypedText != "." {
+                completionPopup.dismiss()
+            } else {
+                scheduleCompletionRequest()
+            }
+            return
+        }
+        guard lspOpenPath != nil, lastTypedText.count == 1,
+            let ch = lastTypedText.first,
+            ch.isLetter || ch == "_" || ch == "."
+        else { return }
+        scheduleCompletionRequest()
+    }
+
     // MARK: Block navigation
 
     /// Moves the caret to a UTF-16 offset and reveals it.
@@ -1050,6 +1154,8 @@ extension EditorWindowController: WKNavigationDelegate {
 
 extension EditorWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
+        completionPopup.dismiss()
+        completionTimer?.invalidate()
         lspChangeTimer?.invalidate()
         if let path = lspOpenPath {
             lspApp?.lspDidClose(path: path)
@@ -1097,6 +1203,7 @@ extension EditorWindowController: NSTextViewDelegate {
         do {
             try coreDocument.replace(utf16Range: affectedCharRange, with: replacementString)
             selectionChangeIsFromEditing = true
+            lastTypedText = replacementString
             return true
         } catch {
             // Core refused: refuse the view edit as well so neither side
@@ -1152,7 +1259,31 @@ extension EditorWindowController: NSTextViewDelegate {
         scheduleLSPChange()
         schedulePreviewUpdate()
         lineRuler?.invalidateLineStarts()
+        completionAfterTyping()
         assertInSync()
+    }
+
+    /// Keyboard routing while the completion popup is visible: arrows
+    /// navigate it, return/tab accept, escape dismisses — everything else
+    /// keeps flowing to the editor.
+    func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard completionPopup.isVisible else { return false }
+        switch commandSelector {
+        case #selector(NSResponder.moveDown(_:)):
+            completionPopup.moveSelection(by: 1)
+            return true
+        case #selector(NSResponder.moveUp(_:)):
+            completionPopup.moveSelection(by: -1)
+            return true
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
+            completionPopup.acceptSelection()
+            return true
+        case #selector(NSResponder.cancelOperation(_:)):
+            completionPopup.dismiss()
+            return true
+        default:
+            return false
+        }
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
@@ -1162,6 +1293,7 @@ extension EditorWindowController: NSTextViewDelegate {
             selectionChangeIsFromEditing = false
         } else {
             coreDocument.breakUndoCoalescing()
+            completionPopup.dismiss()
         }
     }
 }

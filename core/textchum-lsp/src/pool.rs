@@ -241,6 +241,20 @@ impl Pool {
         )
     }
 
+    /// Requests completions at an LSP position; same contract as
+    /// [`Self::hover`]. The response's `result` is an LSP
+    /// `CompletionItem[]` or `CompletionList`.
+    pub fn completion(&mut self, path: &Path, line: u32, character: u32) -> u64 {
+        self.request(
+            path,
+            "textDocument/completion",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "position": {"line": line, "character": character},
+            }),
+        )
+    }
+
     /// Sends a request to the document's instance; the response arrives as
     /// an [`Event::LspResponse`] with the returned id (0 = no instance).
     fn request(&mut self, path: &Path, method: &str, params: serde_json::Value) -> u64 {
