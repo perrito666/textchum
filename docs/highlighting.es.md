@@ -53,9 +53,14 @@ Los documentos muy grandes (más allá de unos pocos megabytes) omiten el
 coloreado deliberadamente; el editor sigue siendo rápido a cualquier
 tamaño.
 
-La propia paleta es un tema — se incluyen tres de serie, y los temas de
+La propia paleta es un tema — se incluyen siete de serie, y los temas de
 la persona usuaria son archivos JSON; véanse
 [los temas en la configuración](configuration.es.md).
+
+Si un artefacto de coloreado sobreviviera a una edición, **View →
+Redraw** (⌥⌘L, reasignable como `redraw`) reconstruye desde cero cada
+capa visual: atributos base, colores de sintaxis, marcas de
+diagnóstico y el margen.
 
 ## Aún no está
 

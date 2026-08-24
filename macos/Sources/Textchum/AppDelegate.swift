@@ -384,6 +384,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.togglePreview(_:)): "togglePreview",
             #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
             #selector(togglePathDisplay(_:)): "togglePathDisplay",
+            #selector(EditorWindowController.redrawDocument(_:)): "redraw",
             #selector(showCommandPalette(_:)): "commandPalette",
             #selector(showSettings(_:)): "settings",
         ]
@@ -1108,6 +1109,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         pathDisplayItem.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(pathDisplayItem)
+        let redrawItem = NSMenuItem(
+            title: "Redraw",
+            action: #selector(EditorWindowController.redrawDocument(_:)),
+            keyEquivalent: "l"
+        )
+        redrawItem.keyEquivalentModifierMask = [.command, .option]
+        viewMenu.addItem(redrawItem)
         viewMenu.addItem(.separator())
         let paletteItem = NSMenuItem(
             title: "Command Palette…",

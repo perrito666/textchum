@@ -187,7 +187,7 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `jumpToDefinition`, `findReferences`, `renameSymbol`, `formatDocument`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`togglePathDisplay`, `commandPalette`, `settings` —
+`togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nombre desconocido se registra junto a la lista completa. Ir al
 inicio/fin de bloque (⌃⌥↑/⌃⌥↓ por defecto) salta sobre el bloque
 sintáctico multilínea más interno alrededor del cursor, cortesía del

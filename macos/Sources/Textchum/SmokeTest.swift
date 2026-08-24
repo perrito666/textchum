@@ -271,6 +271,27 @@ func runSmokeTest() -> Int32 {
     }
     print("themes ok (\(builtins.count) built-ins, user JSON, template)")
 
+    // Auto-indent: return inherits the line's indentation, deepens
+    // after openers in the document's own style, and stays plain when
+    // there is nothing to inherit.
+    func newline(_ text: String, caret: Int, tabWidth: Int = 4) -> String? {
+        EditorWindowController.autoIndentedNewline(
+            in: text as NSString,
+            selection: NSRange(location: caret, length: 0),
+            tabWidth: tabWidth)
+    }
+    guard newline("    let x = 1", caret: 13) == "\n    ",
+        newline("\tfn main() {", caret: 12) == "\n\t\t",
+        newline("def f():", caret: 8, tabWidth: 2) == "\n  ",
+        newline("plain line", caret: 10) == nil,
+        newline("    early", caret: 2) == "\n  ",
+        newline("if x {   ", caret: 9) == "\n    "
+    else {
+        print("FAIL: auto-indent rules")
+        return 1
+    }
+    print("auto-indent ok (inherit, deepen, tab/space styles)")
+
     // Async event round trip: core dispatch thread → main queue.
     var receivedSequence: UInt64?
     let coreApp = CoreApp { event in

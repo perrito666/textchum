@@ -5,6 +5,16 @@ convierte en un archivo: un historial de deshacer, un indicador de cambios
 sin guardar, una ruta y una codificación. Las ventanas del editor trabajan
 siempre con documentos.
 
+## Escritura
+
+Retorno aplica sangría automática: la línea nueva hereda el espacio en
+blanco inicial de la actual, y baja un nivel más cuando la línea termina
+(antes del cursor) con un abridor — `{`, `[`, `(` o `:`. El nivel extra
+habla el dialecto del propio documento: tabuladores en un archivo
+sangrado con tabuladores, espacios al ancho de tabulación configurado en
+caso contrario. Una línea sin nada que heredar recibe un salto de línea
+normal, así que la función es invisible hasta que ayuda.
+
 ## Deshacer y rehacer
 
 El historial de deshacer vive en el núcleo, no en el `NSUndoManager` de

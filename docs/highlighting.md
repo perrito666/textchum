@@ -46,8 +46,12 @@ each.
 Very large documents (beyond a few megabytes) deliberately skip
 highlighting; the editor itself stays fast at any size.
 
-The palette itself is a theme — three ship built in, and user themes are
-JSON files; see [themes in the configuration](configuration.md).
+The palette itself is a theme — seven ship built in, and user themes
+are JSON files; see [themes in the configuration](configuration.md).
+
+Should a coloring artifact ever survive an edit, **View → Redraw**
+(⌥⌘L, rebindable as `redraw`) rebuilds every visual layer from scratch:
+base attributes, syntax colors, diagnostic marks, and the gutter.
 
 ## Not there yet
 

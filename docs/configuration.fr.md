@@ -191,7 +191,7 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `jumpToDefinition`, `findReferences`, `renameSymbol`, `formatDocument`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`togglePathDisplay`, `commandPalette`, `settings` —
+`togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à
 la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique
 multiligne le plus interne autour du curseur, grâce à l'arbre qui

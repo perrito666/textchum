@@ -915,6 +915,23 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    /// View → Redraw (⌥⌘L): rebuilds every visual layer from scratch —
+    /// base text attributes, syntax colors, diagnostic marks, the
+    /// gutter — for when a rendering artifact survives an edit.
+    @objc func redrawDocument(_ sender: Any?) {
+        guard let textView else { return }
+        if let storage = textView.textStorage {
+            storage.setAttributes(
+                textView.typingAttributes,
+                range: NSRange(location: 0, length: storage.length)
+            )
+        }
+        refreshDecorations()
+        lineRuler?.invalidateLineStarts()
+        textView.needsDisplay = true
+        textView.enclosingScrollView?.needsDisplay = true
+    }
+
     // MARK: External changes
 
     /// (Re)arms the file watcher on the document's current path. Called at
@@ -1463,9 +1480,15 @@ extension EditorWindowController: NSTextViewDelegate {
 
     /// Keyboard routing while the completion popup is visible: arrows
     /// navigate it, return/tab accept, escape dismisses — everything else
-    /// keeps flowing to the editor.
+    /// keeps flowing to the editor. With the popup away, return picks up
+    /// the auto-indent path.
     func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        guard completionPopup.isVisible else { return false }
+        guard completionPopup.isVisible else {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                return insertNewlineAutoIndenting(in: textView)
+            }
+            return false
+        }
         switch commandSelector {
         case #selector(NSResponder.moveDown(_:)):
             completionPopup.moveSelection(by: 1)
@@ -1482,6 +1505,68 @@ extension EditorWindowController: NSTextViewDelegate {
         default:
             return false
         }
+    }
+
+    /// Return carries the current line's leading whitespace onto the new
+    /// one, plus one more level after an opener; a line with nothing to
+    /// inherit falls through to the plain newline.
+    private func insertNewlineAutoIndenting(in textView: NSTextView) -> Bool {
+        let selection = textView.selectedRange()
+        guard
+            let insertion = Self.autoIndentedNewline(
+                in: textView.string as NSString,
+                selection: selection,
+                tabWidth: appliedTabWidth)
+        else { return false }
+        textView.insertText(insertion, replacementRange: selection)
+        return true
+    }
+
+    /// The text return should insert at `selection`: a newline carrying
+    /// the current line's leading whitespace, one level deeper when the
+    /// last non-blank character before the caret is an opener (`{ [ (`
+    /// or `:`) — tabs if the document indents with tabs, spaces at
+    /// `tabWidth` otherwise. Nil when a plain newline will do.
+    static func autoIndentedNewline(
+        in text: NSString, selection: NSRange, tabWidth: Int
+    ) -> String? {
+        let caret = min(selection.location, text.length)
+        let lineRange = text.lineRange(for: NSRange(location: caret, length: 0))
+
+        var indent = ""
+        var index = lineRange.location
+        while index < caret {
+            let character = text.character(at: index)
+            guard character == 0x20 /* space */ || character == 0x09 /* tab */ else {
+                break
+            }
+            indent.append(character == 0x09 ? "\t" : " ")
+            index += 1
+        }
+        // The last non-blank character before the caret decides whether
+        // the new line goes one level deeper.
+        var opener: unichar = 0
+        var scan = index
+        while scan < caret {
+            let character = text.character(at: scan)
+            if character != 0x20 && character != 0x09 {
+                opener = character
+            }
+            scan += 1
+        }
+        let deepens: Bool
+        switch opener {
+        case 0x7B /* { */, 0x5B /* [ */, 0x28 /* ( */, 0x3A /* : */:
+            deepens = true
+        default:
+            deepens = false
+        }
+        guard !indent.isEmpty || deepens else { return nil }
+        if deepens {
+            let usesTabs = indent.contains("\t") || text.contains("\n\t")
+            indent += usesTabs ? "\t" : String(repeating: " ", count: max(1, tabWidth))
+        }
+        return "\n" + indent
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {

@@ -4,6 +4,15 @@ A *buffer* is raw text; a *document* is a buffer plus everything that makes
 it a file: an undo history, a dirty flag, a path, and an encoding. Editor
 windows always work with documents.
 
+## Typing
+
+Return auto-indents: the new line inherits the current line's leading
+whitespace, and goes one level deeper when the line ends (before the
+caret) with an opener — `{`, `[`, `(`, or a `:`. The extra level speaks
+the document's own dialect: tabs in a tab-indented file, spaces at the
+configured tab width otherwise. A line with nothing to inherit gets a
+plain newline, so the feature is invisible until it helps.
+
 ## Undo and redo
 
 The undo history lives in the core, not in AppKit's `NSUndoManager`. Every

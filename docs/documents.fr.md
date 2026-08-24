@@ -5,6 +5,16 @@ en fait un fichier : un historique d'annulation, un indicateur de
 modifications non enregistrées, un chemin et un encodage. Les fenêtres de
 l'éditeur travaillent toujours avec des documents.
 
+## Frappe
+
+Entrée indente automatiquement : la nouvelle ligne hérite du blanc de
+tête de la ligne courante, et descend d'un niveau quand la ligne se
+termine (avant le curseur) par un ouvrant — `{`, `[`, `(` ou `:`. Le
+niveau supplémentaire parle le dialecte du document lui-même : des
+tabulations dans un fichier indenté aux tabulations, des espaces à la
+largeur configurée sinon. Une ligne sans rien à hériter reçoit un saut
+de ligne ordinaire — la fonction est invisible jusqu'à ce qu'elle serve.
+
 ## Annuler et rétablir
 
 L'historique d'annulation vit dans le noyau, pas dans le `NSUndoManager`

@@ -52,9 +52,14 @@ Les très grands documents (au-delà de quelques mégaoctets) sautent
 délibérément la coloration ; l'éditeur lui-même reste rapide à toute
 taille.
 
-La palette elle-même est un thème — trois sont fournis d'origine, et les
+La palette elle-même est un thème — sept sont fournis d'origine, et les
 thèmes de l'utilisateur sont des fichiers JSON ; voir
 [les thèmes dans la configuration](configuration.fr.md).
+
+Si un artefact de coloration survivait à une édition, **View → Redraw**
+(⌥⌘L, réassignable comme `redraw`) reconstruit chaque couche visuelle
+depuis zéro : attributs de base, couleurs de syntaxe, marques de
+diagnostic et la marge.
 
 ## Pas encore là
 
