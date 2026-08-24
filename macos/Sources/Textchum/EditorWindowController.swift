@@ -669,31 +669,49 @@ final class EditorWindowController: NSWindowController {
         }
         hoverPopover?.close()
 
+        // Measured by hand, framed by hand: Auto Layout inside an
+        // NSPopover collapsed the wrapping label to a sliver and showed
+        // an empty balloon — the popover sized itself while the label
+        // laid out at zero. Explicit frames cannot disagree with the
+        // popover about geometry.
+        let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        let measured = (content as NSString).boundingRect(
+            with: NSSize(width: 480, height: 800),
+            options: [.usesLineFragmentOrigin],
+            attributes: [.font: font]
+        )
+        let textSize = NSSize(
+            width: ceil(measured.width) + 4, height: ceil(measured.height) + 2)
         let label = NSTextField(wrappingLabelWithString: content)
-        label.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        label.preferredMaxLayoutWidth = 480
-        let controller = NSViewController()
-        let container = NSView()
+        label.font = font
+        label.frame = NSRect(x: 12, y: 10, width: textSize.width, height: textSize.height)
+        let container = NSView(
+            frame: NSRect(
+                x: 0, y: 0,
+                width: textSize.width + 24, height: textSize.height + 20))
         container.addSubview(label)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
-            label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
-            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            container.widthAnchor.constraint(lessThanOrEqualToConstant: 520),
-        ])
+        let controller = NSViewController()
         controller.view = container
 
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentViewController = controller
+        popover.contentSize = container.frame.size
         popover.show(
             relativeTo: NSRect(origin: point, size: NSSize(width: 1, height: 1)),
             of: textView,
             preferredEdge: .maxY
         )
         hoverPopover = popover
+    }
+
+    /// Debug hook: renders a hover balloon with known content at a fixed
+    /// spot, so the popover's layout is screenshot-verifiable without
+    /// synthesizing mouse events.
+    func debugShowHover() {
+        showHover(
+            resultJSON: #"{"contents": {"kind": "markdown", "value": "fn frobnicate(x: usize) -> usize\n\nTurns x into a properly frobnicated value."}}"#,
+            at: NSPoint(x: 200, y: 100))
     }
 
     deinit {

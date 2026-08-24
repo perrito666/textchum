@@ -149,6 +149,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let filters = Array(allArguments.dropFirst(flagIndex + 4))
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 MainActor.assumeIsolated {
+                    if allArguments[flagIndex + 1] == "hover" {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                self?.editors.first?.debugShowHover()
+                            }
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "paths" {
                         self?.togglePathDisplay(nil)
                         return
