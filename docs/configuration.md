@@ -172,6 +172,7 @@ Modifiers: `cmd`, `shift`, `alt`, `ctrl`. Keys: a character, or
 Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `undo`, `redo`, `find`, `findAndReplace`, `findNext`, `findPrevious`,
 `useSelectionForFind`, `findInProject`, `jumpToDefinition`,
+`findReferences`, `renameSymbol`, `formatDocument`,
 `goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
 `toggleLineNumbers`, `togglePathDisplay`, `commandPalette`, `settings`
 — an unknown name is

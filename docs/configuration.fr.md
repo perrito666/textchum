@@ -184,7 +184,8 @@ ou `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
 Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
-`jumpToDefinition`, `goToBlockStart`, `goToBlockEnd`,
+`jumpToDefinition`, `findReferences`, `renameSymbol`, `formatDocument`,
+`goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
 `togglePathDisplay`, `commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à

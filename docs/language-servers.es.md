@@ -35,6 +35,15 @@ nadie.
   servidor en un globo.
 - **Saltar a la definición** (⌃⌘J) va al símbolo bajo el cursor — entre
   archivos, abriendo o trayendo al frente el destino según haga falta.
+- **Buscar referencias** (⇧⌘R) lista cada uso del símbolo bajo el
+  cursor en un panel flotante — ↑/↓ para moverse, ⏎ para saltar.
+- **Renombrar símbolo…** (⌃⌘R) renombra en todo el espacio de trabajo:
+  las ventanas abiertas se editan en el sitio (el deshacer funciona por
+  ventana) y los archivos que nadie tiene abiertos se reescriben en
+  disco.
+- **Formatear documento** (⌥⇧⌘F) reformatea a través del servidor,
+  conservando tabuladores si el documento sangra con tabuladores y
+  espacios en caso contrario.
 - Un servidor ausente se informa una sola vez, con el comando que lo
   instala; todo lo demás del editor sigue funcionando sin él.
 
@@ -122,7 +131,6 @@ servidor guionizado.
 
 ## Aún no está
 
-- Referencias, renombrar, formatear.
 - Los marcadores de fragmento (snippets) en el autocompletado se
   aplanan a texto plano.
 - ⌘-clic como disparador alternativo de Saltar a la definición.

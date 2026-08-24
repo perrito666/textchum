@@ -35,6 +35,16 @@ quelqu'un d'autre.
 - **Aller à la définition** (⌃⌘J) rejoint le symbole sous le curseur —
   d'un fichier à l'autre, en ouvrant ou en ramenant la cible au premier
   plan au besoin.
+- **Chercher les références** (⇧⌘R) liste chaque usage du symbole sous
+  le curseur dans un panneau flottant — ↑/↓ pour se déplacer, ⏎ pour
+  sauter.
+- **Renommer le symbole…** (⌃⌘R) renomme dans tout l'espace de
+  travail : les fenêtres ouvertes sont éditées sur place (l'annulation
+  fonctionne par fenêtre) et les fichiers que personne n'a ouverts sont
+  réécrits sur disque.
+- **Formater le document** (⌥⇧⌘F) reformate via le serveur, en gardant
+  les tabulations si le document indente avec des tabulations, des
+  espaces sinon.
 - Un serveur manquant est signalé une seule fois, avec la commande qui
   l'installe ; tout le reste de l'éditeur continue de fonctionner sans
   lui.
@@ -123,7 +133,6 @@ un serveur scripté.
 
 ## Pas encore là
 
-- Références, renommage, formatage.
 - Les marqueurs de fragments (snippets) dans la complétion sont aplanis
   en texte brut.
 - ⌘-clic comme déclencheur alternatif d'Aller à la définition.

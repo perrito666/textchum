@@ -180,7 +180,8 @@ Modificadores: `cmd`, `shift`, `alt`, `ctrl`. Teclas: un carácter, o
 Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
-`jumpToDefinition`, `goToBlockStart`, `goToBlockEnd`,
+`jumpToDefinition`, `findReferences`, `renameSymbol`, `formatDocument`,
+`goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
 `togglePathDisplay`, `commandPalette`, `settings` —
 un nombre desconocido se registra junto a la lista completa. Ir al

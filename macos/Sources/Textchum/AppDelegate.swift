@@ -298,6 +298,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Applies a rename's `WorkspaceEdit`: open documents edit in place
+    /// (through the synchronized text-view path, so undo works), files
+    /// nobody has open are rewritten on disk atomically. Returns whether
+    /// anything was applied.
+    func applyWorkspaceEdit(resultJSON: String) -> Bool {
+        let byPath = LSPEdits.workspaceEdits(fromResultJSON: resultJSON)
+        guard !byPath.isEmpty else { return false }
+        for (path, edits) in byPath {
+            if let editor = editors.first(where: { $0.coreDocument.path == path }) {
+                editor.apply(textEdits: edits)
+            } else if let contents = try? String(contentsOfFile: path, encoding: .utf8) {
+                try? LSPEdits.applied(to: contents, edits: edits)
+                    .write(toFile: path, atomically: true, encoding: .utf8)
+            }
+        }
+        return true
+    }
+
     /// Retires every running server instance and re-announces the open
     /// documents, respawning them under the current configuration.
     private func restartLanguageServers() {
@@ -330,6 +348,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.performUndo(_:)): "undo",
             #selector(EditorWindowController.performRedo(_:)): "redo",
             #selector(EditorWindowController.jumpToDefinition(_:)): "jumpToDefinition",
+            #selector(EditorWindowController.findReferences(_:)): "findReferences",
+            #selector(EditorWindowController.renameSymbol(_:)): "renameSymbol",
+            #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
             #selector(EditorWindowController.goToBlockStart(_:)): "goToBlockStart",
             #selector(EditorWindowController.goToBlockEnd(_:)): "goToBlockEnd",
             #selector(EditorWindowController.triggerCompletion(_:)): "complete",
@@ -941,6 +962,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         jump.keyEquivalentModifierMask = [.command, .control]
         editMenu.addItem(jump)
+        let references = NSMenuItem(
+            title: "Find References",
+            action: #selector(EditorWindowController.findReferences(_:)),
+            keyEquivalent: "r"
+        )
+        references.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(references)
+        let rename = NSMenuItem(
+            title: "Rename Symbol…",
+            action: #selector(EditorWindowController.renameSymbol(_:)),
+            keyEquivalent: "r"
+        )
+        rename.keyEquivalentModifierMask = [.command, .control]
+        editMenu.addItem(rename)
+        let format = NSMenuItem(
+            title: "Format Document",
+            action: #selector(EditorWindowController.formatDocument(_:)),
+            keyEquivalent: "f"
+        )
+        format.keyEquivalentModifierMask = [.command, .option, .shift]
+        editMenu.addItem(format)
         let blockStart = NSMenuItem(
             title: "Go to Block Start",
             action: #selector(EditorWindowController.goToBlockStart(_:)),

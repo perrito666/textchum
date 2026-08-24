@@ -133,6 +133,31 @@ fn per_project_instances_and_diagnostics() {
                 && json.contains("fake_variable")))
     });
 
+    // References: the declaration and one use, both in this file.
+    let references_id = pool.references(&file_b, 0, 3);
+    collect_until(&events, "references response", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == references_id
+                && json.contains("\"line\":2")
+                && json.matches("file://").count() >= 2))
+    });
+
+    // Rename: a WorkspaceEdit carrying the new name.
+    let rename_id = pool.rename(&file_b, 0, 3, "renamed_main");
+    collect_until(&events, "rename response", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == rename_id
+                && json.contains("changes")
+                && json.contains("renamed_main")))
+    });
+
+    // Formatting: a TextEdit[] the shell can apply.
+    let formatting_id = pool.formatting(&file_b, 4, true);
+    collect_until(&events, "formatting response", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == formatting_id && json.contains("formatted: ")))
+    });
+
     pool.did_close(&file_a);
     // Dropping the pool must shut both instances down without hanging
     // (the test itself would time out otherwise).

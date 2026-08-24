@@ -108,6 +108,44 @@ def main():
                     ],
                 },
             })
+        elif method == "textDocument/references":
+            uri = message["params"]["textDocument"]["uri"]
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": [
+                    {"uri": uri,
+                     "range": {"start": {"line": line, "character": 0},
+                               "end": {"line": line, "character": 4}}}
+                    for line in (0, 2)
+                ],
+            })
+        elif method == "textDocument/rename":
+            uri = message["params"]["textDocument"]["uri"]
+            new_name = message["params"]["newName"]
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": {
+                    "changes": {
+                        uri: [{
+                            "range": {"start": {"line": 0, "character": 0},
+                                      "end": {"line": 0, "character": 4}},
+                            "newText": new_name,
+                        }],
+                    },
+                },
+            })
+        elif method == "textDocument/formatting":
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": [{
+                    "range": {"start": {"line": 0, "character": 0},
+                              "end": {"line": 0, "character": 0}},
+                    "newText": "formatted: ",
+                }],
+            })
         elif method == "shutdown":
             send({"jsonrpc": "2.0", "id": message["id"], "result": None})
         elif method == "exit":

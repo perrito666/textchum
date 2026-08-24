@@ -372,6 +372,111 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    // MARK: References, rename, formatting
+
+    /// Lists every reference to the symbol under the caret.
+    @objc func findReferences(_ sender: Any?) {
+        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        let text = textView.string as NSString
+        let index = min(textView.selectedRange().location, text.length)
+        let (line, character) = Self.lspPosition(ofIndex: index, in: text)
+        lspApp.lspReferences(path: path, line: line, character: character) { [weak self] json in
+            guard let self else { return }
+            let locations = Self.referenceLocations(fromResultJSON: json)
+            guard !locations.isEmpty else {
+                NSSound.beep()
+                return
+            }
+            ReferencesPanel.shared.show(locations: locations, over: self.window) {
+                [weak self] location in
+                self?.openLocation?(location.path, location.line, location.character)
+            }
+        }
+    }
+
+    private static func referenceLocations(
+        fromResultJSON json: String
+    ) -> [ReferencesPanel.Location] {
+        guard let data = json.data(using: .utf8),
+            let array = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+        else { return [] }
+        return array.compactMap { raw in
+            guard
+                let uri = raw["uri"] as? String,
+                let path = LSPEdits.path(fromURI: uri),
+                let range = raw["range"] as? [String: Any],
+                let start = range["start"] as? [String: Any],
+                let line = start["line"] as? Int,
+                let character = start["character"] as? Int
+            else { return nil }
+            return ReferencesPanel.Location(path: path, line: line, character: character)
+        }
+        .sorted { ($0.path, $0.line) < ($1.path, $1.line) }
+    }
+
+    /// Renames the symbol under the caret everywhere the server knows
+    /// about — open windows edit in place, closed files are rewritten on
+    /// disk.
+    @objc func renameSymbol(_ sender: Any?) {
+        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        let current = symbolUnderCaret() ?? ""
+        let alert = NSAlert()
+        alert.messageText = "Rename Symbol"
+        alert.informativeText =
+            current.isEmpty ? "New name:" : "New name for “\(current)”:"
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        field.stringValue = current
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let newName = field.stringValue.trimmingCharacters(in: .whitespaces)
+        guard !newName.isEmpty, newName != current else { return }
+        let text = textView.string as NSString
+        let index = min(textView.selectedRange().location, text.length)
+        let (line, character) = Self.lspPosition(ofIndex: index, in: text)
+        lspApp.lspRename(path: path, line: line, character: character, newName: newName) {
+            json in
+            let applied =
+                (NSApp.delegate as? AppDelegate)?.applyWorkspaceEdit(resultJSON: json)
+                ?? false
+            if !applied {
+                NSSound.beep()
+            }
+        }
+    }
+
+    /// Reformats the whole document through its language server.
+    @objc func formatDocument(_ sender: Any?) {
+        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        // Respect what the document already does: a tab-indented file
+        // keeps tabs, everything else formats with spaces.
+        let usesTabs =
+            textView.string.contains("\n\t") || textView.string.hasPrefix("\t")
+        lspApp.lspFormatting(path: path, tabSize: appliedTabWidth, insertSpaces: !usesTabs) {
+            [weak self] json in
+            guard let self else { return }
+            let edits = LSPEdits.textEdits(fromResultJSON: json)
+            guard !edits.isEmpty else {
+                NSSound.beep()
+                return
+            }
+            self.apply(textEdits: edits)
+        }
+    }
+
+    /// Applies LSP edits to this window's document through the normal
+    /// text-view path, so the core stays synchronized and undo works —
+    /// bottom-up, so earlier ranges never shift.
+    func apply(textEdits: [LSPEdits.TextEdit]) {
+        guard let textView else { return }
+        for edit in LSPEdits.bottomUp(textEdits) {
+            let range = LSPEdits.nsRange(of: edit, in: textView.string as NSString)
+            textView.insertText(edit.newText, replacementRange: range)
+        }
+    }
+
     /// Whether this document's project opted into the ctags fallback.
     var ctagsFallbackEnabled: Bool {
         guard let projectRoot else { return false }
@@ -1402,6 +1507,9 @@ extension EditorWindowController: NSMenuItemValidation {
             return coreDocument.canRedo
         case #selector(jumpToDefinition(_:)):
             return lspOpenPath != nil || ctagsFallbackEnabled
+        case #selector(findReferences(_:)), #selector(renameSymbol(_:)),
+            #selector(formatDocument(_:)):
+            return lspOpenPath != nil
         case #selector(goToBlockStart(_:)), #selector(goToBlockEnd(_:)):
             return coreDocument.languageName != nil
         case #selector(togglePreview(_:)):

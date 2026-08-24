@@ -29,6 +29,13 @@ never join someone else's workspace either.
   documentation in a popover.
 - **Jump to Definition** (⌃⌘J) goes to the symbol under the caret —
   across files, opening or fronting the target as needed.
+- **Find References** (⇧⌘R) lists every use of the symbol under the
+  caret in a floating panel — ↑/↓ to move, ⏎ to jump.
+- **Rename Symbol…** (⌃⌘R) renames across the whole workspace: open
+  windows edit in place (undo works per window), files nobody has open
+  are rewritten on disk.
+- **Format Document** (⌥⇧⌘F) reformats through the server, keeping tabs
+  if the document indents with tabs and spaces otherwise.
 - A missing server is reported once, with the command that installs it;
   everything else about the editor keeps working without it.
 
@@ -112,7 +119,6 @@ protocol path is exercised in CI against a scripted server.
 
 ## Not there yet
 
-- References, rename, formatting.
 - Snippet placeholders in completions are flattened to plain text.
 - ⌘-click as an alternative trigger for Jump to Definition.
 - Markdown rendering in hover popovers (they show the raw text).

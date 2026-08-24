@@ -322,7 +322,7 @@ Prove the architecture end to end before writing real features.
 - LSP client (JSON-RPC over stdio, incremental didChange) and the **instance pool** keyed by
   `(server, root)` with idle shutdown, crash restart + backoff, and a server-status UI.
 - Features in order: diagnostics → hover → completion → go-to-definition → references →
-  rename → formatting → document symbols.
+  rename → formatting (all done) → document symbols.
 - Server registry + curated defaults; "server missing" guidance.
 - **Exit — the acceptance test is the original requirement:** open files from two separate
   Python projects and observe two pyright instances, each reporting project-correct
