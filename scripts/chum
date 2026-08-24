@@ -5,6 +5,8 @@
 #   +N             put the caret on line N (applies to following files)
 #   -t, --tab      open as a tab of the current window
 #   -w, --window   open as a separate window
+#   --wait         block until the file's window is closed — for
+#                  GIT_EDITOR and friends: git config core.editor "chum --wait"
 #   -h, --help     this help
 #
 # Without -t/-w the app's own "Open files in" setting decides. Requires
@@ -15,10 +17,12 @@ set -eu
 
 target=""
 line=""
+wait_mode=""
+sentinels=""
 opened=0
 
 usage() {
-    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
     exit "${1:-0}"
 }
 
@@ -33,20 +37,30 @@ for arg in "$@"; do
     case "$arg" in
         -t|--tab) target="tab" ;;
         -w|--window) target="window" ;;
+        --wait) wait_mode="yes" ;;
         +[0-9]*) line="${arg#+}" ;;
         *)
             if [ ! -f "$arg" ]; then
                 echo "chum: no such file: $arg" >&2
                 exit 1
             fi
-            url=$(/usr/bin/python3 - "$arg" "$line" "$target" <<'EOF'
+            sentinel=""
+            if [ -n "$wait_mode" ]; then
+                # The app deletes this file when the document's window
+                # closes; we block on its existence below.
+                sentinel=$(mktemp "${TMPDIR:-/tmp}/textchum-wait.XXXXXX")
+                sentinels="$sentinels $sentinel"
+            fi
+            url=$(/usr/bin/python3 - "$arg" "$line" "$target" "$sentinel" <<'EOF'
 import os, sys, urllib.parse
-path, line, target = sys.argv[1], sys.argv[2], sys.argv[3]
+path, line, target, sentinel = sys.argv[1:5]
 url = "textchum://open?path=" + urllib.parse.quote(os.path.abspath(path), safe="")
 if line:
     url += "&line=" + line
 if target:
     url += "&target=" + target
+if sentinel:
+    url += "&wait=" + urllib.parse.quote(sentinel, safe="")
 print(url)
 EOF
 )
@@ -61,3 +75,15 @@ EOF
 done
 
 [ "$opened" -gt 0 ] || usage 1 >&2
+
+# --wait: block until the app releases each sentinel (window closed).
+# A vanished app releases everything — a hung git would be worse.
+for sentinel in $sentinels; do
+    while [ -e "$sentinel" ]; do
+        if ! pgrep -xq Textchum; then
+            rm -f "$sentinel"
+            break
+        fi
+        sleep 0.2
+    done
+done

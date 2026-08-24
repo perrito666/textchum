@@ -250,6 +250,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
         recordJumpOrigin()
         open(path: path, target: target, revealLine: line)
+        // `chum --wait` blocks on this sentinel file; deleting it when
+        // the document's window closes is what lets tools like
+        // GIT_EDITOR read the edited file at the right moment.
+        if let sentinel = components.queryItems?.first(where: { $0.name == "wait" })?.value {
+            let absolute = URL(fileURLWithPath: path).standardizedFileURL.path
+            if let editor = editors.first(where: { $0.coreDocument.path == absolute }) {
+                chumWaitSentinels[ObjectIdentifier(editor)] = sentinel
+            } else {
+                // Nothing opened; never leave the caller hanging.
+                try? FileManager.default.removeItem(atPath: sentinel)
+            }
+        }
+    }
+
+    /// Sentinel files whose deletion unblocks a waiting `chum --wait`,
+    /// keyed by the editor whose window close releases them.
+    private var chumWaitSentinels: [ObjectIdentifier: String] = [:]
+
+    private func releaseChumWait(for editor: EditorWindowController) {
+        if let sentinel = chumWaitSentinels.removeValue(forKey: ObjectIdentifier(editor)) {
+            try? FileManager.default.removeItem(atPath: sentinel)
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Quitting releases every waiter — a hung git is worse than an
+        // aborted commit.
+        for sentinel in chumWaitSentinels.values {
+            try? FileManager.default.removeItem(atPath: sentinel)
+        }
+        chumWaitSentinels.removeAll()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -1081,6 +1112,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ) { [weak self] notification in
                 guard let closing = notification.object as? NSWindow else { return }
                 MainActor.assumeIsolated {
+                    if let editor = self?.editors.first(where: { $0.window === closing }) {
+                        self?.releaseChumWait(for: editor)
+                    }
                     self?.editors.removeAll { $0.window === closing }
                 }
                 DispatchQueue.main.async {

@@ -70,7 +70,20 @@ chum notas.md                # abrir (pestaña o ventana según sus ajustes)
 chum +42 src/main.rs         # abrir con el cursor en la línea 42
 chum -w grande.md            # forzar una ventana separada
 chum -t a.rs +7 b.rs         # varios archivos, pestañas, uno con línea
+chum --wait borrador.md      # bloquea hasta cerrar la ventana
 ```
+
+`--wait` es lo que necesitan las herramientas que lanzan un editor y
+leen el archivo después — guarde, cierre la ventana y quien llamó
+continúa:
+
+```sh
+git config --global core.editor "chum --wait"
+```
+
+Cerrar sin guardar deja el archivo intacto, lo que git lee como un
+commit abortado — el mismo gesto que `:q!`. Si Textchum se cierra (o no
+está), los chum en espera se liberan en lugar de quedar colgados.
 
 Funciona mediante el esquema de URL `textchum://`, así que el paquete de
 la aplicación (`make app`) debe haberse lanzado al menos una vez para

@@ -67,7 +67,19 @@ chum notes.md                # open (tab or window per your settings)
 chum +42 src/main.rs         # open with the caret on line 42
 chum -w big.md               # force a separate window
 chum -t a.rs +7 b.rs         # several files, tabs, one with a line
+chum --wait draft.md         # block until the window is closed
 ```
+
+`--wait` is what tools that spawn an editor and read the file afterwards
+need — save, close the window, and the caller resumes:
+
+```sh
+git config --global core.editor "chum --wait"
+```
+
+Closing without saving leaves the file untouched, which git reads as an
+aborted commit — the same gesture as `:q!`. If Textchum quits (or is
+gone), waiting chums are released rather than left hanging.
 
 It works through the `textchum://` URL scheme, so the app bundle
 (`make app`) must have been launched at least once to register it.

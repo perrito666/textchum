@@ -70,7 +70,21 @@ chum notes.md                # ouvrir (onglet ou fenêtre selon vos réglages)
 chum +42 src/main.rs         # ouvrir avec le curseur à la ligne 42
 chum -w grand.md             # forcer une fenêtre séparée
 chum -t a.rs +7 b.rs         # plusieurs fichiers, onglets, un avec ligne
+chum --wait brouillon.md     # bloque jusqu'à la fermeture de la fenêtre
 ```
+
+`--wait` est ce qu'il faut aux outils qui lancent un éditeur puis
+lisent le fichier — enregistrez, fermez la fenêtre, et l'appelant
+reprend :
+
+```sh
+git config --global core.editor "chum --wait"
+```
+
+Fermer sans enregistrer laisse le fichier intact, ce que git lit comme
+un commit abandonné — le même geste que `:q!`. Si Textchum quitte (ou
+n'est plus là), les chum en attente sont libérés plutôt que laissés
+suspendus.
 
 Elle passe par le schéma d'URL `textchum://` ; le paquet de
 l'application (`make app`) doit donc avoir été lancé au moins une fois
