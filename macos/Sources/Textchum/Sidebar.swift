@@ -57,6 +57,60 @@ final class SidebarModel: ObservableObject {
     }
 }
 
+/// Shared file-explorer state: which folders are expanded. One instance
+/// serves every window, so the tree looks identical across the tabs of a
+/// group (and everywhere else the same project shows).
+@MainActor
+final class FileTreeState: ObservableObject {
+    @Published var expanded: Set<URL> = []
+
+    func binding(for url: URL) -> Binding<Bool> {
+        Binding(
+            get: { self.expanded.contains(url) },
+            set: { open in
+                if open {
+                    self.expanded.insert(url)
+                } else {
+                    self.expanded.remove(url)
+                }
+            }
+        )
+    }
+}
+
+/// One row of the project tree; directories recurse via disclosure
+/// groups whose expansion lives in the shared ``FileTreeState``.
+struct FileTreeRow: View {
+    let node: FileNode
+    @ObservedObject var state: FileTreeState
+    let onOpenFile: (String) -> Void
+
+    var body: some View {
+        if node.isDirectory {
+            DisclosureGroup(isExpanded: state.binding(for: node.url)) {
+                ForEach(node.children ?? []) { child in
+                    FileTreeRow(node: child, state: state, onOpenFile: onOpenFile)
+                }
+            } label: {
+                label
+            }
+        } else {
+            label
+                .contentShape(Rectangle())
+                .onTapGesture { onOpenFile(node.url.path) }
+        }
+    }
+
+    private var label: some View {
+        HStack(spacing: 4) {
+            Image(systemName: node.isDirectory ? "folder" : "doc.text")
+                .foregroundStyle(.secondary)
+            Text(node.name)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 /// A file-system node of the project tree. Children are read lazily from
 /// disk on expansion; hidden files are skipped.
 struct FileNode: Identifiable, Hashable {
@@ -99,6 +153,8 @@ struct SidebarView: View {
     /// "current" one, and its project scopes the tree).
     let currentDocumentID: ObjectIdentifier
     @ObservedObject var context: WindowSidebarContext
+    /// Shared across windows: expansion follows between tabs.
+    @ObservedObject var treeState: FileTreeState
     let onSelectDocument: (ObjectIdentifier) -> Void
     let onOpenFile: (String) -> Void
 
@@ -144,17 +200,9 @@ struct SidebarView: View {
                         url: URL(fileURLWithPath: projectRoot), isDirectory: true)
                     List {
                         Section((projectRoot as NSString).lastPathComponent) {
-                            OutlineGroup(rootNode.children ?? [], children: \.children) { node in
-                                HStack(spacing: 4) {
-                                    Image(systemName: node.isDirectory ? "folder" : "doc.text")
-                                        .foregroundStyle(.secondary)
-                                    Text(node.name)
-                                    Spacer(minLength: 0)
-                                }
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if !node.isDirectory { onOpenFile(node.url.path) }
-                                }
+                            ForEach(rootNode.children ?? []) { node in
+                                FileTreeRow(
+                                    node: node, state: treeState, onOpenFile: onOpenFile)
                             }
                         }
                     }

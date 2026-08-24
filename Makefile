@@ -19,8 +19,10 @@ all: build
 core:
 	cargo build --release --manifest-path $(RUST_MANIFEST)
 
-## Core + macOS app.
+## Core + macOS app. SwiftPM does not track the Rust static library as a
+## dependency, so force the relink or a fresh core goes unlinked.
 build: core
+	rm -f macos/.build/debug/Textchum
 	swift build $(SWIFT_PKG)
 
 ## Build everything and launch the editor.
@@ -46,6 +48,7 @@ APP_BUNDLE := dist/Textchum.app
 
 ## A double-clickable application bundle in dist/, with the icon.
 app: core
+	rm -f macos/.build/release/Textchum
 	swift build -c release $(SWIFT_PKG)
 	rm -rf $(APP_BUNDLE)
 	mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources

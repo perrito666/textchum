@@ -12,13 +12,20 @@ mientras que las ventanas separadas mantienen mundos separados (que los
 archivos se abran como pestañas o ventanas es un
 [ajuste](configuration.md)). Los documentos se agrupan por el **proyecto**
 al que pertenecen. El proyecto de un archivo
-es el directorio ancestro más cercano que parece una raíz de proyecto: un
-directorio de control de versiones (`.git`, `.hg`, `.svn`) o un archivo de
-construcción/manifiesto (`Cargo.toml`, `go.mod`, `package.json`,
-`pyproject.toml`, `Package.swift`, `build.zig`, `Makefile`, …). Gana el
-más cercano: en un monorepo, un archivo dentro de un *crate* con su propio
-`Cargo.toml` pertenece a ese *crate*, no a la raíz del repositorio. Los
-archivos fuera de todo proyecto se reúnen bajo **Other**.
+se resuelve en este orden:
+
+1. el `.textchum.json` más cercano — la asignación explícita, colocada a
+   mano;
+2. la **raíz de control de versiones más externa** (`.git`, `.hg`,
+   `.svn`): un repositorio es un solo proyecto sin importar cuántos
+   manifiestos anidados contenga — un paquete Python en una subcarpeta
+   pertenece al repositorio, y los repositorios anidados se resuelven al
+   más externo;
+3. fuera del control de versiones, el archivo de construcción/manifiesto
+   más cercano (`Cargo.toml`, `go.mod`, `package.json`,
+   `pyproject.toml`, `Package.swift`, `build.zig`, `Makefile`, …).
+
+Los archivos fuera de todo proyecto se reúnen bajo **Other**.
 
 Esta es la misma noción de «proyecto» que usa el resto de Textchum (y por
 la que se delimitarán los servidores de lenguaje), así que el cajón hace
@@ -36,6 +43,10 @@ El panel inferior muestra el árbol de carpetas del proyecto del documento
 actual, desde su raíz. Al hacer clic en un archivo se abre — o su ventana
 pasa al frente si ya está abierto. Los documentos sin proyecto (el grupo
 **Other**) no muestran árbol.
+
+Las carpetas expandidas son estado compartido: abra una carpeta en una
+pestaña y estará abierta en todas (y en cualquier ventana que muestre el
+mismo proyecto).
 
 Los archivos ocultos no se listan.
 

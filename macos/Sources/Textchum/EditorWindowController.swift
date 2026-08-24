@@ -33,6 +33,8 @@ private final class ScriptMessageProxy: NSObject, WKScriptMessageHandler {
 /// 4. Debug builds assert both sides are byte-identical after every change.
 /// Everything a window needs to host its navigation drawer.
 struct SidebarConfiguration {
+    /// Shared explorer state, so expansion follows between tabs.
+    let treeState: FileTreeState
     let selectDocument: (ObjectIdentifier) -> Void
     let openFile: (String) -> Void
 }
@@ -190,6 +192,7 @@ final class EditorWindowController: NSWindowController {
                 model: sidebarModel,
                 currentDocumentID: ObjectIdentifier(self),
                 context: sidebarContext,
+                treeState: sidebar.treeState,
                 onSelectDocument: sidebar.selectDocument,
                 onOpenFile: sidebar.openFile
             )

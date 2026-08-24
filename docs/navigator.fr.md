@@ -12,13 +12,20 @@ liste, tandis que les fenêtres séparées gardent des mondes séparés (que
 les fichiers s'ouvrent en onglets ou en fenêtres est un
 [réglage](configuration.md)). Les documents sont groupés par le
 **projet** auquel ils appartiennent. Le projet d'un fichier
-est le répertoire ancêtre le plus proche qui ressemble à une racine de
-projet : un répertoire de contrôle de versions (`.git`, `.hg`, `.svn`) ou
-un fichier de build/manifeste (`Cargo.toml`, `go.mod`, `package.json`,
-`pyproject.toml`, `Package.swift`, `build.zig`, `Makefile`, …). Le plus
-proche gagne : dans un monorepo, un fichier au sein d'un *crate* doté de
-son propre `Cargo.toml` appartient à ce *crate*, pas à la racine du
-dépôt. Les fichiers hors de tout projet se rassemblent sous **Other**.
+se résout dans cet ordre :
+
+1. le `.textchum.json` le plus proche — l'affectation explicite, posée à
+   la main ;
+2. la **racine de contrôle de versions la plus externe** (`.git`, `.hg`,
+   `.svn`) : un dépôt est un seul projet, quel que soit le nombre de
+   manifestes imbriqués — un paquet Python dans un sous-dossier
+   appartient au dépôt, et les dépôts imbriqués se résolvent au plus
+   externe ;
+3. hors contrôle de versions, le fichier de build/manifeste le plus
+   proche (`Cargo.toml`, `go.mod`, `package.json`, `pyproject.toml`,
+   `Package.swift`, `build.zig`, `Makefile`, …).
+
+Les fichiers hors de tout projet se rassemblent sous **Other**.
 
 C'est la même notion de « projet » que le reste de Textchum utilise (et
 celle qui délimitera les serveurs de langage) ; le tiroir sert donc aussi
@@ -35,6 +42,10 @@ Le volet inférieur montre l'arborescence du projet du document courant,
 depuis sa racine. Cliquer sur un fichier l'ouvre — ou ramène sa fenêtre
 au premier plan s'il est déjà ouvert. Les documents sans projet (le
 groupe **Other**) n'affichent pas d'arborescence.
+
+Les dossiers dépliés sont un état partagé : dépliez un dossier dans un
+onglet et il l'est dans tous (et dans toute fenêtre montrant le même
+projet).
 
 Les fichiers cachés ne sont pas listés.
 

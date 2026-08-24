@@ -442,8 +442,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// One explorer state for the whole app: the tree looks the same
+    /// across tabs (and windows showing the same project).
+    private let fileTreeState = FileTreeState()
+
     private var sidebarConfiguration: SidebarConfiguration {
         SidebarConfiguration(
+            treeState: fileTreeState,
             selectDocument: { [weak self] id in
                 guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
                 else { return }
