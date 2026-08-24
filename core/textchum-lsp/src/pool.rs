@@ -56,6 +56,9 @@ pub struct Pool {
     failed: HashSet<InstanceKey>,
     /// Test/override servers, consulted before the built-in registry.
     overrides: Vec<ServerConfig>,
+    /// Next client→server request id. Starts above the lifecycle ids
+    /// (1 = initialize, 2 = shutdown).
+    next_request_id: u64,
 }
 
 impl Pool {
@@ -67,6 +70,7 @@ impl Pool {
             versions: HashMap::new(),
             failed: HashSet::new(),
             overrides: Vec::new(),
+            next_request_id: 100,
         }
     }
 
@@ -161,6 +165,37 @@ impl Pool {
                 path: path.to_owned(),
             });
         }
+    }
+
+    /// Requests hover information at an LSP position (zero-based line,
+    /// UTF-16 column). Returns the request id whose
+    /// [`Event::LspResponse`] will carry the answer, or 0 when the
+    /// document has no server.
+    pub fn hover(&mut self, path: &Path, line: u32, character: u32) -> u64 {
+        self.request(
+            path,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "position": {"line": line, "character": character},
+            }),
+        )
+    }
+
+    /// Sends a request to the document's instance; the response arrives as
+    /// an [`Event::LspResponse`] with the returned id (0 = no instance).
+    fn request(&mut self, path: &Path, method: &str, params: serde_json::Value) -> u64 {
+        let Some(key) = self.documents.get(path) else {
+            return 0;
+        };
+        let id = self.next_request_id;
+        self.next_request_id += 1;
+        self.instances[key].send(Command::Request {
+            id,
+            method: method.to_owned(),
+            params,
+        });
+        id
     }
 
     /// Live instances as (server id, root) pairs, for status display.

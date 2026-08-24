@@ -31,6 +31,12 @@
 #define TC_EVENT_SERVER_STATUS 3
 
 /**
+ * Event kind: a language server answered a request. `seq` is the id the
+ * request call returned; `payload` is the response's `result` as JSON.
+ */
+#define TC_EVENT_LSP_RESPONSE 4
+
+/**
  * Appearance choice: follow the system.
  */
 #define TC_APPEARANCE_SYSTEM 0
@@ -220,6 +226,20 @@ void tc_lsp_did_change(struct TcApp *app,
                        uintptr_t path_len,
                        const char *text,
                        uintptr_t text_len);
+
+/**
+ * Requests hover information at an LSP position (zero-based line, UTF-16
+ * column). Returns the request id whose `TC_EVENT_LSP_RESPONSE` event
+ * will carry the answer, or 0 when the document has no server.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_hover(struct TcApp *app,
+                      const char *path,
+                      uintptr_t path_len,
+                      uint32_t line,
+                      uint32_t character);
 
 /**
  * Announces a closed document. The server instance stays warm.

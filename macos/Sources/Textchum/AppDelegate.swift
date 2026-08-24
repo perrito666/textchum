@@ -4,7 +4,7 @@ import TextchumKit
 /// Application lifecycle: the main menu, the core instance, configuration,
 /// and the set of open editor windows.
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var coreApp: CoreApp?
     private var config: CoreConfig?
     private var settingsModel: SettingsModel?
@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.mainMenu = Self.makeMainMenu()
+        NSApp.mainMenu = makeMainMenu()
 
         let config = CoreConfig(path: Self.configPath)
         self.config = config
@@ -39,12 +39,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NotificationCenter.default.addObserver(
             forName: .textchumDocumentsChanged, object: nil, queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
+            let changedEditor = notification.object as? EditorWindowController
             // Deferred a runloop turn: the notification can fire while
             // AppKit is mid-layout (e.g. from a window-title update), and
             // rebuilding the list reentrantly trips NSTableView.
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.rebuildSidebar() }
+                MainActor.assumeIsolated {
+                    self?.rebuildSidebar()
+                    // Save-as gives untitled documents a path; recents
+                    // track it (the controller cannot reach this list).
+                    if let path = changedEditor?.coreDocument.path {
+                        self?.noteRecent(path: path)
+                    }
+                }
             }
         }
 
@@ -107,6 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("core \(Core.version) event channel verified (pong \(sequence))")
         case let .diagnostics(path, items):
             editors.first { $0.coreDocument.path == path }?.apply(diagnostics: items)
+        case .lspResponse:
+            break  // routed to its completion handler inside CoreApp
         case let .serverStatus(server, root, status, message):
             NSLog("lsp \(server) [\(root)]: \(status) \(message)")
             if status == "not-found", !reportedMissingServers.contains(server) {
@@ -169,6 +179,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    // MARK: Recent files
+
+    /// The Open Recent submenu; rebuilt from NSDocumentController's
+    /// persisted list each time the menu opens.
+    private var openRecentMenu: NSMenu?
+
+    func noteRecent(path: String) {
+        NSDocumentController.shared.noteNewRecentDocumentURL(URL(fileURLWithPath: path))
+    }
+
+    @objc private func openRecentDocument(_ sender: NSMenuItem) {
+        guard let path = sender.representedObject as? String else { return }
+        // Focus if already open, exactly like the navigator does.
+        if let existing = editors.first(where: { $0.coreDocument.path == path }) {
+            existing.window?.makeKeyAndOrderFront(nil)
+        } else {
+            open(path: path)
+        }
+    }
+
+    @objc private func clearRecentDocuments(_ sender: Any?) {
+        NSDocumentController.shared.clearRecentDocuments(nil)
+    }
+
+    /// Rebuilds Open Recent from the persisted list every time it opens.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === openRecentMenu else { return }
+        menu.removeAllItems()
+        let recents = NSDocumentController.shared.recentDocumentURLs
+        for url in recents {
+            let item = NSMenuItem(
+                title: url.lastPathComponent,
+                action: #selector(openRecentDocument(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = url.path
+            item.toolTip = url.path
+            menu.addItem(item)
+        }
+        if recents.isEmpty {
+            let empty = NSMenuItem(title: "No Recent Files", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            menu.addItem(empty)
+        } else {
+            menu.addItem(.separator())
+            let clear = NSMenuItem(
+                title: "Clear Menu",
+                action: #selector(clearRecentDocuments(_:)),
+                keyEquivalent: ""
+            )
+            clear.target = self
+            menu.addItem(clear)
+        }
+    }
+
     // MARK: Settings
 
     @objc func showSettings(_ sender: Any?) {
@@ -206,6 +272,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Untitled windows that were never touched: pathless, clean, empty.
+    /// Opening a real file replaces them rather than leaving them behind.
+    private func closeUntouchedUntitledWindows() {
+        let untouched = editors.filter {
+            $0.coreDocument.path == nil && !$0.coreDocument.isDirty
+                && $0.coreDocument.lengthInBytes == 0
+        }
+        for editor in untouched {
+            editor.window?.close()
+        }
+    }
+
     /// Opens `path` in a new editor window, alerting on failure.
     private func open(path: String) {
         // Absolute, standardized paths throughout: relative paths (e.g.
@@ -214,6 +292,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let path = URL(fileURLWithPath: path).standardizedFileURL.path
         do {
             let document = try CoreDocument(contentsOf: path)
+            closeUntouchedUntitledWindows()
+            noteRecent(path: path)
             show(
                 editor: EditorWindowController(
                     document: document,
@@ -257,7 +337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Programmatic main menu: the app has no nib. Undo/redo use dedicated
     /// selectors handled by the editor window controller, since document
     /// history lives in the core rather than in an `NSUndoManager`.
-    private static func makeMainMenu() -> NSMenu {
+    private func makeMainMenu() -> NSMenu {
         let mainMenu = NSMenu()
 
         let appMenu = NSMenu()
@@ -287,6 +367,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             withTitle: "New", action: #selector(newDocument(_:)), keyEquivalent: "n")
         fileMenu.addItem(
             withTitle: "Open…", action: #selector(openDocument(_:)), keyEquivalent: "o")
+        let openRecentItem = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
+        let openRecent = NSMenu(title: "Open Recent")
+        openRecent.delegate = self
+        openRecentItem.submenu = openRecent
+        self.openRecentMenu = openRecent
+        fileMenu.addItem(openRecentItem)
         fileMenu.addItem(.separator())
         fileMenu.addItem(
             withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")

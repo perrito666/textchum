@@ -27,6 +27,8 @@ nadie.
   *debounce*) y marcan el texto afectado: rojo para errores, naranja para
   avisos, azul para notas.
 - El subtítulo de la ventana los cuenta («2 errors, 1 warning»).
+- Dejar el ratón sobre un símbolo muestra la documentación **hover** del
+  servidor en un globo.
 - Un servidor ausente se informa una sola vez, con el comando que lo
   instala; todo lo demás del editor sigue funcionando sin él.
 
@@ -60,9 +62,11 @@ servidor guionizado.
 
 ## Aún no está
 
-- Autocompletado, *hover*, ir a definición, referencias, renombrar,
-  formatear — los diagnósticos llegaron primero porque la validación es
+- Autocompletado, ir a definición, referencias, renombrar, formatear —
+  los diagnósticos y el *hover* llegaron primero porque la validación es
   la promesa central del producto.
+- El renderizado de Markdown en los globos de *hover* (muestran el texto
+  en crudo).
 - Reinicio automático de servidores caídos (una caída se informa; reabrir
   el archivo arranca una instancia nueva).
 - Apagado por inactividad de instancias sin uso y un panel de estado de

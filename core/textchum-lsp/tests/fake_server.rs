@@ -106,6 +106,15 @@ fn per_project_instances_and_diagnostics() {
         "severity carried through"
     );
 
+    // Hover: the response comes back tagged with the request id.
+    let request_id = pool.hover(&file_b, 0, 3);
+    assert!(request_id > 2, "real request ids start above lifecycle ids");
+    collect_until(&events, "hover response", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == request_id && json.contains("fake hover at 0:3")))
+    });
+    assert_eq!(pool.hover(std::path::Path::new("/not/open.rs"), 0, 0), 0);
+
     pool.did_close(&file_a);
     // Dropping the pool must shut both instances down without hanging
     // (the test itself would time out otherwise).

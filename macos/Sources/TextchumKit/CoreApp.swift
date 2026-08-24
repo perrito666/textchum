@@ -31,6 +31,9 @@ public final class CoreApp {
         /// A language-server instance changed state; `status` is one of
         /// starting/running/not-found/failed/exited.
         case serverStatus(server: String, root: String, status: String, message: String)
+        /// A request response (internal: routed to its completion handler,
+        /// never delivered to the app's event closure).
+        case lspResponse(id: UInt64, json: String)
     }
 
     /// Retained context handed to the C callback as its `userdata`.
@@ -42,20 +45,47 @@ public final class CoreApp {
         }
     }
 
+    /// Completion handlers for in-flight requests, keyed by request id.
+    /// Register and complete both happen on the main actor (registration
+    /// from the main-actor API, completion inside the main-queue delivery
+    /// hop), so plain storage suffices.
+    private final class ResponseRouter: @unchecked Sendable {
+        private var pending: [UInt64: (String) -> Void] = [:]
+
+        func register(_ id: UInt64, _ completion: @escaping (String) -> Void) {
+            pending[id] = completion
+        }
+
+        func complete(_ id: UInt64, _ json: String) {
+            pending.removeValue(forKey: id)?(json)
+        }
+    }
+
     private let handle: OpaquePointer
     private let sink: EventSink
+    private let router: ResponseRouter
 
     /// Creates a core instance.
     ///
     /// - Parameter onEvent: called on the **main actor** for every core
     ///   event. The closure escapes for the lifetime of this object.
     public init(onEvent: @escaping @MainActor @Sendable (Event) -> Void) {
+        let router = ResponseRouter()
+        self.router = router
         let sink = EventSink { event in
             DispatchQueue.main.async {
                 // Safe by construction: the main queue is the main actor's
                 // executor. Dispatch (rather than Task) keeps delivery in
                 // strict event order.
-                MainActor.assumeIsolated { onEvent(event) }
+                MainActor.assumeIsolated {
+                    // Request responses complete their registered handler
+                    // instead of reaching the general event stream.
+                    if case let .lspResponse(id, json) = event {
+                        router.complete(id, json)
+                    } else {
+                        onEvent(event)
+                    }
+                }
             }
         }
         self.sink = sink
@@ -87,6 +117,8 @@ public final class CoreApp {
                         status: event.status.map { String(cString: $0) } ?? "",
                         message: payload ?? ""
                     ))
+            case UInt32(TC_EVENT_LSP_RESPONSE):
+                sink.deliver(.lspResponse(id: event.seq, json: payload ?? "null"))
             default:
                 // Unknown kinds are forward-compatibility, not errors: a
                 // newer core may emit events this shell does not know yet.
@@ -136,6 +168,24 @@ public final class CoreApp {
         withUTF8(path) { path, pathLen in
             tc_lsp_did_close(handle, path, pathLen)
         }
+    }
+
+    /// Requests hover information at an LSP position (zero-based line,
+    /// UTF-16 column). The completion receives the response's `result` as
+    /// JSON ("null" when the server has nothing to say), on the main
+    /// actor; it is dropped silently when the document has no server.
+    @MainActor
+    public func lspHover(
+        path: String,
+        line: Int,
+        character: Int,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_hover(handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
     }
 }
 

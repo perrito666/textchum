@@ -38,6 +38,10 @@ pub enum Event {
         status: String,
         message: String,
     },
+    /// A language server answered a request (hover, and later completion,
+    /// definitions, …). `id` is the value the request call returned;
+    /// `json` is the response's `result` serialized ("null" on errors).
+    LspResponse { id: u64, json: String },
 }
 
 /// A handle for pushing events into the app's delivery channel from

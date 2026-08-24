@@ -31,6 +31,9 @@ pub const TC_EVENT_DIAGNOSTICS: u32 = 2;
 /// starting/running/not-found/failed/exited, `payload` a human-readable
 /// message.
 pub const TC_EVENT_SERVER_STATUS: u32 = 3;
+/// Event kind: a language server answered a request. `seq` is the id the
+/// request call returned; `payload` is the response's `result` as JSON.
+pub const TC_EVENT_LSP_RESPONSE: u32 = 4;
 
 /// An event delivered from the core to the shell.
 ///
@@ -158,6 +161,13 @@ pub extern "C" fn tc_app_new(callback: TcEventCallback, userdata: *mut c_void) -
                     out.payload = message.as_ptr();
                     callback(&out, userdata.get());
                 }
+                Event::LspResponse { id, json } => {
+                    let json = callback_cstring(json);
+                    let mut out = TcEvent::new(TC_EVENT_LSP_RESPONSE);
+                    out.seq = id;
+                    out.payload = json.as_ptr();
+                    callback(&out, userdata.get());
+                }
             }
         });
         let pool = textchum_lsp::Pool::new(app.sender());
@@ -248,6 +258,32 @@ pub unsafe extern "C" fn tc_lsp_did_change(
     let _ = catch_unwind(AssertUnwindSafe(|| {
         app.pool.did_change(std::path::Path::new(path), text);
     }));
+}
+
+/// Requests hover information at an LSP position (zero-based line, UTF-16
+/// column). Returns the request id whose `TC_EVENT_LSP_RESPONSE` event
+/// will carry the answer, or 0 when the document has no server.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_hover(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool.hover(std::path::Path::new(path), line, character)
+    }))
+    .unwrap_or(0)
 }
 
 /// Announces a closed document. The server instance stays warm.

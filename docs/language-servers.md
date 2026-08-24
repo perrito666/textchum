@@ -22,6 +22,8 @@ never join someone else's workspace either.
 - Findings arrive as you type (sent in debounced batches) and mark the
   offending text: red for errors, orange for warnings, blue for notes.
 - The window subtitle counts them ("2 errors, 1 warning").
+- Resting the mouse over a symbol shows the server's **hover**
+  documentation in a popover.
 - A missing server is reported once, with the command that installs it;
   everything else about the editor keeps working without it.
 
@@ -53,8 +55,10 @@ protocol path is exercised in CI against a scripted server.
 
 ## Not there yet
 
-- Completion, hover, go-to-definition, references, rename, formatting —
-  diagnostics came first because validation is the product's core promise.
+- Completion, go-to-definition, references, rename, formatting —
+  diagnostics and hover came first because validation is the product's
+  core promise.
+- Markdown rendering in hover popovers (they show the raw text).
 - Automatic restart of crashed servers (a crash is reported; reopening
   the file starts a fresh instance).
 - Idle shutdown of unused instances, and a server-status panel.

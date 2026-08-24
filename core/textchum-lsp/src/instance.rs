@@ -38,6 +38,13 @@ pub enum Command {
     DidClose {
         path: PathBuf,
     },
+    /// A client→server request; the response comes back asynchronously as
+    /// an [`Event::LspResponse`] carrying the same id.
+    Request {
+        id: u64,
+        method: String,
+        params: Value,
+    },
     Shutdown,
 }
 
@@ -208,6 +215,20 @@ fn run_manager(
                             == Some("textDocument/publishDiagnostics")
                         {
                             publish_diagnostics(&events, &message);
+                        } else if message.get("method").is_none() {
+                            // A response to one of our requests. Ids 1–2
+                            // (initialize/shutdown) are lifecycle traffic;
+                            // everything else is forwarded to the shell.
+                            if let Some(id) =
+                                message.get("id").and_then(Value::as_u64).filter(|id| *id > 2)
+                            {
+                                let result = message.get("result").cloned().unwrap_or(Value::Null);
+                                let _ = events.send(Event::LspResponse {
+                                    id,
+                                    json: serde_json::to_string(&result)
+                                        .unwrap_or_else(|_| "null".into()),
+                                });
+                            }
                         } else {
                             answer_if_request(&stdin, &message);
                         }
@@ -256,6 +277,12 @@ fn run_manager(
                 "jsonrpc": "2.0",
                 "method": "textDocument/didClose",
                 "params": {"textDocument": {"uri": path_to_uri(&path)}},
+            }),
+            Command::Request { id, method, params } => json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": method,
+                "params": params,
             }),
             Command::Shutdown => break,
         };

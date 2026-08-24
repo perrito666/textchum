@@ -202,11 +202,21 @@ The workspace model exists chiefly to serve the "one LSP per project group" requ
     directory listing API); the shell contributes only the outline views and the split.
     Buffer→project grouping therefore needs the Phase 3 workspace model — until then the
     tree scopes to the enclosing git repo as a stopgap.
-- Command palette (⇧⌘P-style) and fuzzy file-open (⌘T, TextMate's beloved feature) backed by
-  core-side indexes.
+- Command palette (⇧⌘P-style).
 - Diagnostics UI: underlines + gutter marks, a per-buffer issues list, jump-to-next-error.
-- Find: in-buffer (with regex) and project-wide search in the core (parallel directory
-  scan, gitignore-aware — effectively an embedded ripgrep).
+- Recent files: the standard File → Open Recent menu.
+- **Content search "in and around the file" (⇧⌘F), ripgrep-style.** Search starts scoped
+  to the current file's surroundings — its project root, or its directory for loose files —
+  and the scope is a **path shown in an editable field**: widening the search is literally
+  editing the path (up to `~` or `/` if you like). Engine in the core, in the spirit of
+  ripgrep rather than shelling out to it: ripgrep's own crates (`grep-searcher`,
+  `grep-regex`, the `ignore` walker), so results are gitignore-aware, fast, and parallel.
+  Results stream into a list; clicking jumps to the file/line.
+- **Fuzzy file finding (⌘T) with the same scope criteria.** Same editable root path, same
+  ignore-aware walk; fzf-style scoring via an embedded matcher (e.g. the `nucleo` crate —
+  fzf's spirit, in-process) rather than a subprocess. Type to filter, return to open.
+  Both features share the "scope = a visible, editable path" principle so search never
+  silently looks somewhere the user did not expect.
 
 ### 3.6 Configuration
 
@@ -327,7 +337,8 @@ Prove the architecture end to end before writing real features.
 
 ### Phase 5 — Breadth & polish (~4–6 weeks, then ongoing)
 - Grammar set to ~40 languages; server defaults to ~12.
-- Fuzzy file-open (⌘T), command palette, project-wide search, document outline (LSP symbols).
+- Content search (⇧⌘F, ripgrep crates) and fuzzy file-open (⌘T, nucleo) with the shared
+  editable-scope-path design (§3.5); command palette; document outline (LSP symbols).
 - Themes (§3.7): JSON theme format, built-in curated set, selection in Settings, and the
   `--emit-theme` vanilla theme generator.
 - Navigation drawer polish: rename/reveal actions, gitignore-aware filtering options,

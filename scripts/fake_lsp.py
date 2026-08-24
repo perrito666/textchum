@@ -67,6 +67,19 @@ def main():
                     }],
                 },
             })
+        elif method == "textDocument/hover":
+            position = message["params"]["position"]
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": {
+                    "contents": {
+                        "kind": "markdown",
+                        "value": "fake hover at %d:%d"
+                        % (position["line"], position["character"]),
+                    }
+                },
+            })
         elif method == "shutdown":
             send({"jsonrpc": "2.0", "id": message["id"], "result": None})
         elif method == "exit":

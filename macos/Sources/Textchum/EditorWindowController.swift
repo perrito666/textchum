@@ -62,6 +62,10 @@ final class EditorWindowController: NSWindowController {
     private var lspChangeTimer: Timer?
     /// The latest language-server findings for this document.
     private var diagnostics: [CoreDiagnostic] = []
+    /// Debounces hover requests while the mouse moves.
+    private var hoverTimer: Timer?
+    /// The popover currently showing hover content, if any.
+    private var hoverPopover: NSPopover?
 
     init(
         document: CoreDocument,
@@ -100,6 +104,14 @@ final class EditorWindowController: NSWindowController {
         textView.isIncrementalSearchingEnabled = true
         textView.delegate = self
         self.textView = textView
+        // Mouse-move tracking feeds language-server hover.
+        textView.addTrackingArea(
+            NSTrackingArea(
+                rect: .zero,
+                options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+                owner: self,
+                userInfo: nil
+            ))
 
         textView.string = coreDocument.text
 
@@ -189,6 +201,103 @@ final class EditorWindowController: NSWindowController {
         self.diagnostics = diagnostics
         renderDiagnostics()
         updateChrome()
+    }
+
+    // MARK: Hover
+
+    /// Tracking-area callback: after the mouse rests for a beat, ask the
+    /// server what is under it.
+    override func mouseMoved(with event: NSEvent) {
+        hoverPopover?.close()
+        hoverPopover = nil
+        guard lspApp != nil, lspOpenPath != nil, let textView else { return }
+        let point = textView.convert(event.locationInWindow, from: nil)
+        hoverTimer?.invalidate()
+        hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.requestHover(at: point) }
+            }
+        }
+    }
+
+    private func requestHover(at point: NSPoint) {
+        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        let text = textView.string as NSString
+        let index = textView.characterIndexForInsertion(at: point)
+        guard index >= 0, index <= text.length else { return }
+        // Character offset → LSP (line, UTF-16 column): walk line ranges
+        // until the one containing the offset.
+        var line = 0
+        var lineStart = 0
+        var scan = 0
+        while scan < text.length {
+            let lineRange = text.lineRange(for: NSRange(location: scan, length: 0))
+            if index < NSMaxRange(lineRange) {
+                lineStart = lineRange.location
+                break
+            }
+            scan = NSMaxRange(lineRange)
+            line += 1
+            lineStart = scan
+        }
+        let character = index - lineStart
+        lspApp.lspHover(path: path, line: line, character: character) { [weak self] json in
+            self?.showHover(resultJSON: json, at: point)
+        }
+    }
+
+    /// Extracts human-readable text from an LSP hover result: contents as
+    /// MarkupContent, a bare string, or an array of either.
+    private static func hoverText(fromResultJSON json: String) -> String? {
+        guard let data = json.data(using: .utf8),
+            let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let contents = result["contents"]
+        else { return nil }
+        func text(from value: Any) -> String? {
+            if let string = value as? String { return string }
+            if let dict = value as? [String: Any] { return dict["value"] as? String }
+            if let array = value as? [Any] {
+                let parts = array.compactMap(text(from:))
+                return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
+            }
+            return nil
+        }
+        let extracted = text(from: contents)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (extracted?.isEmpty ?? true) ? nil : extracted
+    }
+
+    private func showHover(resultJSON: String, at point: NSPoint) {
+        guard let textView, let content = Self.hoverText(fromResultJSON: resultJSON) else {
+            return
+        }
+        hoverPopover?.close()
+
+        let label = NSTextField(wrappingLabelWithString: content)
+        label.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        label.preferredMaxLayoutWidth = 480
+        let controller = NSViewController()
+        let container = NSView()
+        container.addSubview(label)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
+            label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            container.widthAnchor.constraint(lessThanOrEqualToConstant: 520),
+        ])
+        controller.view = container
+
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = controller
+        popover.show(
+            relativeTo: NSRect(origin: point, size: NSSize(width: 1, height: 1)),
+            of: textView,
+            preferredEdge: .maxY
+        )
+        hoverPopover = popover
     }
 
     deinit {
