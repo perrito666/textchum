@@ -343,6 +343,19 @@ Prove the architecture end to end before writing real features.
 - TextMate-grammar fallback for exotic languages; semantic tokens; code actions.
 - A second platform shell (the core is already portable; a Linux GTK shell would be the test).
 
+**Very-far stretch (explicitly last, after everything above):**
+- **Images.** Opening an image file shows it instead of failing or spewing bytes. If macOS
+  provides native editing machinery worth adopting (the `PhotosUI`/markup-style editors or
+  whatever the OS then offers), use it; otherwise images are strictly **read-only** viewers
+  — Textchum is not growing an image editor of its own. Shell-only feature: the core's
+  involvement stops at "this is not text".
+- **Binary files as hex dump.** Files that decode as neither UTF-8 nor Latin-1 text open in
+  a hex-dump mode (offset · bytes · ASCII gutter, the classic layout). Read-only first;
+  byte-level editing only if it ever earns its keep. Hex rendering is a presentation of the
+  raw bytes, so this one does touch the core: the document layer learns to hold "bytes
+  without a text decoding" and the shell renders the dump. Also the natural fallback UI
+  when someone opens a 2 GB blob by accident.
+
 ## 6. Top risks & mitigations
 
 | Risk | Mitigation |
