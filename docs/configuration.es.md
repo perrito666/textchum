@@ -19,6 +19,8 @@ aplicación.
   o la tipografía monoespaciada de la plataforma.
 - **Tamaño de letra** — de 6 a 72 puntos.
 - **Ancho de tabulación** — de 1 a 16 columnas.
+- **Mostrar números de línea** — el margen, también conmutables por
+  sesión con View → Toggle Line Numbers (⇧⌘L).
 
 Cada cambio se aplica de inmediato a las ventanas abiertas del editor y se
 escribe a disco en el mismo momento. No hay botón de Aplicar o Guardar que
@@ -69,6 +71,34 @@ Dos garantías hacen segura la edición a mano:
 Los valores fuera de rango o con tipo incorrecto no cuentan como rotura: un
 `font_size` de `4000` se recorta al rango válido, un `font_family` de `42`
 se ignora y el resto del archivo funciona con normalidad.
+
+## Atajos de teclado
+
+Los atajos de los menús se reasignan mediante una sección `keys` editada
+a mano (sin interfaz todavía): un objeto de nombres de acción a
+especificaciones `modificadores+tecla`, aplicado al arrancar.
+
+```json
+{
+  "keys": {
+    "openQuickly": "cmd+p",
+    "goToBlockEnd": "ctrl+alt+down",
+    "findInProject": "cmd+shift+g"
+  }
+}
+```
+
+Modificadores: `cmd`, `shift`, `alt`, `ctrl`. Teclas: un carácter, o
+`up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
+Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
+`close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
+`findPrevious`, `useSelectionForFind`, `findInProject`,
+`jumpToDefinition`, `goToBlockStart`, `goToBlockEnd`,
+`toggleNavigator`, `togglePreview`, `toggleLineNumbers`, `settings` —
+un nombre desconocido se registra junto a la lista completa. Ir al
+inicio/fin de bloque (⌃⌥↑/⌃⌥↓ por defecto) salta sobre el bloque
+sintáctico multilínea más interno alrededor del cursor, cortesía del
+mismo árbol que alimenta el coloreado.
 
 ## Aún no está
 

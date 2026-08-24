@@ -122,6 +122,19 @@ public final class CoreConfig {
         set { tc_config_set_tab_width(handle, UInt32(max(0, newValue))) }
     }
 
+    /// Whether the editor shows a line-number gutter (default true).
+    public var lineNumbers: Bool {
+        get { tc_config_line_numbers(handle) }
+        set { tc_config_set_line_numbers(handle, newValue) }
+    }
+
+    /// Keyboard-shortcut overrides as JSON: `{action: "modifiers+key"}`.
+    public var keysJSON: String {
+        guard let cString = tc_config_keys_json(handle) else { return "{}" }
+        defer { tc_string_free(cString) }
+        return String(cString: cString)
+    }
+
     /// The language-server section, serialized for the pool:
     /// `{"defaults": {lang: cmdline}, "projects": {root: {lang: cmdline}}}`.
     public var lspJSON: String {

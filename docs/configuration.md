@@ -18,6 +18,8 @@ reads and writes it; nothing lives only inside the app.
   platform's monospaced font.
 - **Font size** — 6 to 72 points.
 - **Tab width** — 1 to 16 columns.
+- **Show line numbers** — the gutter, also togglable per session with
+  View → Toggle Line Numbers (⇧⌘L).
 
 Every change is applied to open editor windows immediately and written to
 disk at the same moment. There is no Apply or Save button to forget.
@@ -65,6 +67,33 @@ Two guarantees make hand editing safe:
 Out-of-range or mistyped values do not count as breakage: a `font_size` of
 `4000` is clamped to the valid range, a `font_family` of `42` is ignored,
 and the rest of the file works normally.
+
+## Key shortcuts
+
+Menu shortcuts are rebindable through a hand-edited `keys` section (no
+UI yet): an object of action names to `modifiers+key` specs, applied at
+launch.
+
+```json
+{
+  "keys": {
+    "openQuickly": "cmd+p",
+    "goToBlockEnd": "ctrl+alt+down",
+    "findInProject": "cmd+shift+g"
+  }
+}
+```
+
+Modifiers: `cmd`, `shift`, `alt`, `ctrl`. Keys: a character, or
+`up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
+Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
+`undo`, `redo`, `find`, `findAndReplace`, `findNext`, `findPrevious`,
+`useSelectionForFind`, `findInProject`, `jumpToDefinition`,
+`goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
+`toggleLineNumbers`, `settings` — an unknown name is logged with the
+full list. Go to Block Start/End (⌃⌥↑/⌃⌥↓ by default) jump over the
+innermost multi-line syntax block around the caret, courtesy of the
+same tree that powers highlighting.
 
 ## Not there yet
 

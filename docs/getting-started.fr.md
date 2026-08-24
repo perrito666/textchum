@@ -51,6 +51,22 @@ textchum/
 └── Makefile                 le point d'entrée de toutes les tâches
 ```
 
+## La commande `chum`
+
+`make install-cli` (respecte `PREFIX`, `/usr/local` par défaut) installe
+une petite commande de terminal qui parle à l'application en cours :
+
+```sh
+chum notes.md                # ouvrir (onglet ou fenêtre selon vos réglages)
+chum +42 src/main.rs         # ouvrir avec le curseur à la ligne 42
+chum -w grand.md             # forcer une fenêtre séparée
+chum -t a.rs +7 b.rs         # plusieurs fichiers, onglets, un avec ligne
+```
+
+Elle passe par le schéma d'URL `textchum://` ; le paquet de
+l'application (`make app`) doit donc avoir été lancé au moins une fois
+pour l'enregistrer.
+
 ## Construire la documentation
 
 La documentation est un site [MkDocs](https://www.mkdocs.org) avec le thème

@@ -82,6 +82,8 @@ final class EditorWindowController: NSWindowController {
     private var hoverPopover: NSPopover?
     /// The window's split view controller (sidebar · editor · preview).
     private var splitController: NSSplitViewController?
+    /// The line-number gutter (a sibling of the scroll view, not a ruler).
+    private var lineRuler: LineNumberGutterView?
     /// The Markdown preview pane, present while the preview is shown.
     private var previewItem: NSSplitViewItem?
     private var previewWebView: WKWebView?
@@ -132,6 +134,34 @@ final class EditorWindowController: NSWindowController {
         textView.isIncrementalSearchingEnabled = true
         textView.delegate = self
         self.textView = textView
+
+        // Gutter + scroll view side by side in one container.
+        let gutter = LineNumberGutterView(textView: textView)
+        gutter.setVisible(settings?.lineNumbers ?? true)
+        self.lineRuler = gutter
+        let editorContainer = NSView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        editorContainer.addSubview(gutter)
+        editorContainer.addSubview(scrollView)
+        NSLayoutConstraint.activate([
+            gutter.leadingAnchor.constraint(equalTo: editorContainer.leadingAnchor),
+            gutter.topAnchor.constraint(equalTo: editorContainer.topAnchor),
+            gutter.bottomAnchor.constraint(equalTo: editorContainer.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: editorContainer.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: editorContainer.bottomAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: editorContainer.trailingAnchor),
+        ])
+        // The gutter follows every scroll.
+        let clipView = scrollView.contentView
+        clipView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(editorDidScroll(_:)),
+            name: NSView.boundsDidChangeNotification,
+            object: clipView
+        )
+
         // Mouse-move tracking feeds language-server hover.
         textView.addTrackingArea(
             NSTrackingArea(
@@ -147,7 +177,7 @@ final class EditorWindowController: NSWindowController {
             // Sidebar + editor in a split view controller; the sidebar item
             // brings native collapse behavior and the toggleSidebar action.
             let editorController = NSViewController()
-            editorController.view = scrollView
+            editorController.view = editorContainer
 
             let splitController = NSSplitViewController()
             let sidebarView = SidebarView(
@@ -174,7 +204,7 @@ final class EditorWindowController: NSWindowController {
             window.center()
             self.splitController = splitController
         } else {
-            window.contentView = scrollView
+            window.contentView = editorContainer
         }
 
         if let settings {
@@ -518,17 +548,9 @@ final class EditorWindowController: NSWindowController {
         splitController.addSplitViewItem(item)
         previewItem = item
         previewWebView = webView
+        // Editor scrolling drives the preview via the scroll observer
+        // registered at init (shared with the line-number gutter).
 
-        // Editor scrolling drives the preview.
-        if let clipView = textView?.enclosingScrollView?.contentView {
-            clipView.postsBoundsChangedNotifications = true
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(editorDidScroll(_:)),
-                name: NSView.boundsDidChangeNotification,
-                object: clipView
-            )
-        }
         // Deferred: resizing during window setup gets overridden by the
         // content controller's initial layout pass.
         DispatchQueue.main.async { [weak self] in
@@ -546,10 +568,6 @@ final class EditorWindowController: NSWindowController {
         splitController.removeSplitViewItem(previewItem)
         self.previewItem = nil
         previewWebView = nil
-        if let clipView = textView?.enclosingScrollView?.contentView {
-            NotificationCenter.default.removeObserver(
-                self, name: NSView.boundsDidChangeNotification, object: clipView)
-        }
     }
 
     /// Pushes the rendered document into the page (no reload: the DOM is
@@ -575,6 +593,7 @@ final class EditorWindowController: NSWindowController {
     }
 
     @objc private func editorDidScroll(_ notification: Notification) {
+        lineRuler?.needsDisplay = true
         guard let previewWebView, let scrollView = textView?.enclosingScrollView else { return }
         // Ignore echoes of a preview-driven sync.
         if lastScrollSync.fromPreview, Date().timeIntervalSince(lastScrollSync.at) < 0.15 {
@@ -808,6 +827,8 @@ final class EditorWindowController: NSWindowController {
         paragraphStyle.tabStops = []
         paragraphStyle.defaultTabInterval = spaceWidth * CGFloat(settings.tabWidth)
 
+        lineRuler?.setVisible(settings.lineNumbers)
+        lineRuler?.invalidateLineStarts()
         textView.font = settings.font
         textView.defaultParagraphStyle = paragraphStyle
         textView.typingAttributes = [
@@ -921,7 +942,38 @@ final class EditorWindowController: NSWindowController {
         refreshDecorations()
         scheduleLSPChange()
         schedulePreviewUpdate()
+        lineRuler?.invalidateLineStarts()
         assertInSync()
+    }
+
+    // MARK: Block navigation
+
+    /// Moves the caret to a UTF-16 offset and reveals it.
+    private func moveCaret(to offset: Int) {
+        guard let textView else { return }
+        let clamped = min(max(0, offset), (textView.string as NSString).length)
+        textView.setSelectedRange(NSRange(location: clamped, length: 0))
+        textView.scrollRangeToVisible(NSRange(location: clamped, length: 0))
+    }
+
+    @objc func goToBlockStart(_ sender: Any?) {
+        guard let textView,
+            let block = coreDocument.blockBounds(at: textView.selectedRange().location)
+        else {
+            NSSound.beep()
+            return
+        }
+        moveCaret(to: block.location)
+    }
+
+    @objc func goToBlockEnd(_ sender: Any?) {
+        guard let textView,
+            let block = coreDocument.blockBounds(at: textView.selectedRange().location)
+        else {
+            NSSound.beep()
+            return
+        }
+        moveCaret(to: NSMaxRange(block))
     }
 
     // MARK: Saving
@@ -1099,6 +1151,7 @@ extension EditorWindowController: NSTextViewDelegate {
         refreshDecorations()
         scheduleLSPChange()
         schedulePreviewUpdate()
+        lineRuler?.invalidateLineStarts()
         assertInSync()
     }
 
@@ -1124,6 +1177,8 @@ extension EditorWindowController: NSMenuItemValidation {
             return coreDocument.canRedo
         case #selector(jumpToDefinition(_:)):
             return lspOpenPath != nil
+        case #selector(goToBlockStart(_:)), #selector(goToBlockEnd(_:)):
+            return coreDocument.languageName != nil
         case #selector(togglePreview(_:)):
             menuItem.state = previewItem != nil ? .on : .off
             return coreDocument.languageName == "markdown"

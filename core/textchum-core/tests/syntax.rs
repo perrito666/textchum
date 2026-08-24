@@ -119,6 +119,30 @@ fn range_queries_only_return_overlapping_spans() {
 }
 
 #[test]
+fn block_bounds_find_the_enclosing_multiline_node() {
+    let source = "fn outer() {\n    if x {\n        inner();\n    }\n}\n";
+    let doc = doc_with("rust", source);
+
+    // Caret on "inner();" → the enclosing if-block, not the whole fn.
+    let inner_pos = source.find("inner").unwrap();
+    let (start, end) = doc.block_bounds(inner_pos).unwrap();
+    let block = &source[start..end];
+    assert!(block.starts_with("{\n        inner"), "got: {block:?}");
+    assert!(block.ends_with('}'), "got: {block:?}");
+    assert!(!block.contains("fn outer"), "must be the innermost block");
+
+    // Caret on "outer" (single-line span) → climbs to the function.
+    let fn_pos = source.find("outer").unwrap();
+    let (start, _) = doc.block_bounds(fn_pos).unwrap();
+    assert_eq!(&source[start..start + 2], "fn");
+
+    // Plain text has no blocks.
+    let mut plain = Document::new();
+    plain.replace_utf16(0, 0, "just\ntext\n").unwrap();
+    assert_eq!(plain.block_bounds(2), None);
+}
+
+#[test]
 fn language_detected_from_extension_on_open() {
     let dir = std::env::temp_dir().join(format!("textchum-syn-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

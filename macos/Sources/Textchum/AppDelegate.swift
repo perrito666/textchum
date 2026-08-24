@@ -21,10 +21,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.mainMenu = makeMainMenu()
+        let mainMenu = makeMainMenu()
+        NSApp.mainMenu = mainMenu
+        registerMenuActions(in: mainMenu)
 
         let config = CoreConfig(path: Self.configPath)
         self.config = config
+        applyKeyOverrides()
         let settingsModel = SettingsModel(config: config)
         settingsModel.onChange = { [weak self] in
             guard let self, let model = self.settingsModel else { return }
@@ -144,11 +147,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Files opened from Finder (double-click, Open With, drag to icon).
+    /// Files opened from Finder (double-click, Open With, drag to icon)
+    /// and `textchum://` URLs from the `chum` command.
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls where url.isFileURL {
-            open(path: url.path)
+        for url in urls {
+            if url.scheme == "textchum" {
+                handleChumURL(url)
+            } else if url.isFileURL {
+                open(path: url.path)
+            }
         }
+    }
+
+    /// `textchum://open?path=…[&line=N][&target=tab|window]` — the wire
+    /// format behind the `chum` terminal command.
+    private func handleChumURL(_ url: URL) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return
+        }
+        var path: String?
+        var line: Int?
+        var target: CoreOpenTarget?
+        for item in components.queryItems ?? [] {
+            switch item.name {
+            case "path": path = item.value
+            case "line": line = item.value.flatMap(Int.init)
+            case "target":
+                target = item.value == "window" ? .window : item.value == "tab" ? .tab : nil
+            default: break
+            }
+        }
+        guard let path else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        open(path: path, target: target, revealLine: line)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -241,6 +272,109 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for editor in editors {
             editor.reannounceLSP()
         }
+    }
+
+    @objc func toggleLineNumbers(_ sender: Any?) {
+        settingsModel?.lineNumbers.toggle()
+    }
+
+    // MARK: Configurable key shortcuts
+
+    /// Menu items by their stable action name, for `keys` overrides.
+    private var menuActions: [String: NSMenuItem] = [:]
+
+    /// Indexes every overridable menu item by a stable name.
+    private func registerMenuActions(in menu: NSMenu) {
+        let bySelector: [Selector: String] = [
+            #selector(newDocument(_:)): "new",
+            #selector(openDocument(_:)): "open",
+            #selector(openQuickly(_:)): "openQuickly",
+            #selector(EditorWindowController.saveDocument(_:)): "save",
+            #selector(EditorWindowController.saveDocumentAs(_:)): "saveAs",
+            #selector(NSWindow.performClose(_:)): "close",
+            #selector(EditorWindowController.performUndo(_:)): "undo",
+            #selector(EditorWindowController.performRedo(_:)): "redo",
+            #selector(EditorWindowController.jumpToDefinition(_:)): "jumpToDefinition",
+            #selector(EditorWindowController.goToBlockStart(_:)): "goToBlockStart",
+            #selector(EditorWindowController.goToBlockEnd(_:)): "goToBlockEnd",
+            #selector(findInProject(_:)): "findInProject",
+            #selector(NSSplitViewController.toggleSidebar(_:)): "toggleNavigator",
+            #selector(EditorWindowController.togglePreview(_:)): "togglePreview",
+            #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
+            #selector(showSettings(_:)): "settings",
+        ]
+        let finderNames: [Int: String] = [
+            NSTextFinder.Action.showFindInterface.rawValue: "find",
+            NSTextFinder.Action.showReplaceInterface.rawValue: "findAndReplace",
+            NSTextFinder.Action.nextMatch.rawValue: "findNext",
+            NSTextFinder.Action.previousMatch.rawValue: "findPrevious",
+            NSTextFinder.Action.setSearchString.rawValue: "useSelectionForFind",
+        ]
+        for item in menu.items {
+            if let submenu = item.submenu {
+                registerMenuActions(in: submenu)
+            }
+            guard let action = item.action else { continue }
+            if action == #selector(NSResponder.performTextFinderAction(_:)) {
+                if let name = finderNames[item.tag] {
+                    menuActions[name] = item
+                }
+            } else if let name = bySelector[action] {
+                menuActions[name] = item
+            }
+        }
+    }
+
+    /// Applies the configuration's `keys` overrides (`{action:
+    /// "modifiers+key"}`) to the indexed menu items. Unknown actions and
+    /// unparseable shortcuts are logged, never fatal.
+    private func applyKeyOverrides() {
+        guard let config,
+            let data = config.keysJSON.data(using: .utf8),
+            let overrides = try? JSONSerialization.jsonObject(with: data) as? [String: String]
+        else { return }
+        for (action, spec) in overrides {
+            guard let item = menuActions[action] else {
+                NSLog("keys: unknown action \(action) (known: \(menuActions.keys.sorted()))")
+                continue
+            }
+            guard let (key, modifiers) = Self.parseShortcut(spec) else {
+                NSLog("keys: could not parse shortcut \(spec) for \(action)")
+                continue
+            }
+            item.keyEquivalent = key
+            item.keyEquivalentModifierMask = modifiers
+        }
+    }
+
+    /// Parses `"cmd+shift+f"`-style shortcut specs. Modifiers: cmd,
+    /// shift, alt/option, ctrl. Keys: a single character, or up/down/
+    /// left/right/return/escape/space/tab/delete.
+    static func parseShortcut(_ spec: String) -> (String, NSEvent.ModifierFlags)? {
+        var modifiers: NSEvent.ModifierFlags = []
+        var key: String?
+        for token in spec.lowercased().split(separator: "+").map(String.init) {
+            switch token {
+            case "cmd", "command": modifiers.insert(.command)
+            case "shift": modifiers.insert(.shift)
+            case "alt", "option", "opt": modifiers.insert(.option)
+            case "ctrl", "control": modifiers.insert(.control)
+            case "up": key = String(UnicodeScalar(NSUpArrowFunctionKey)!)
+            case "down": key = String(UnicodeScalar(NSDownArrowFunctionKey)!)
+            case "left": key = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
+            case "right": key = String(UnicodeScalar(NSRightArrowFunctionKey)!)
+            case "return", "enter": key = "\r"
+            case "escape", "esc": key = "\u{1b}"
+            case "space": key = " "
+            case "tab": key = "\t"
+            case "delete", "backspace": key = "\u{8}"
+            default:
+                guard token.count == 1 else { return nil }
+                key = token
+            }
+        }
+        guard let key else { return nil }
+        return (key, modifiers)
     }
 
     // MARK: Appearance & sidebar
@@ -464,26 +598,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Opens `path` in a new editor window, alerting on failure.
-    private func open(path: String) {
+    /// Opens `path` in a new editor (or fronts an existing one), alerting
+    /// on failure. `target` overrides the configured tab/window choice;
+    /// `revealLine` puts the caret on a one-based line.
+    private func open(path: String, target: CoreOpenTarget? = nil, revealLine: Int? = nil) {
         // Absolute, standardized paths throughout: relative paths (e.g.
         // from the command line) would corrupt project-root resolution
         // and defeat open-file deduplication.
         let path = URL(fileURLWithPath: path).standardizedFileURL.path
+        if let existing = editors.first(where: { $0.coreDocument.path == path }) {
+            existing.window?.makeKeyAndOrderFront(nil)
+            if let revealLine {
+                existing.reveal(line: revealLine - 1, character: 0)
+            }
+            return
+        }
         do {
             let document = try CoreDocument(contentsOf: path)
             closeUntouchedUntitledWindows()
             noteRecent(path: path)
-            show(
-                editor: EditorWindowController(
-                    document: document,
-                    settings: currentSettings,
-                    sidebar: sidebarConfiguration,
+            let editor = EditorWindowController(
+                document: document,
+                settings: currentSettings,
+                sidebar: sidebarConfiguration,
                 lspApp: coreApp,
                 openLocation: { [weak self] path, line, character in
                     self?.openLocation(path: path, line: line, character: character)
-                }                ),
-                placeAsConfigured: true)
+                }
+            )
+            show(editor: editor, placeAsConfigured: true, target: target)
+            if let revealLine {
+                editor.reveal(line: revealLine - 1, character: 0)
+            }
         } catch {
             let alert = NSAlert()
             alert.alertStyle = .warning
@@ -493,10 +639,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Attaches `editor` per the configured open target: as a tab of the
-    /// key editor window's group, or as its own window.
-    private func place(editor: EditorWindowController) {
-        guard config?.openTarget == .tab,
+    /// Attaches `editor` per the requested (or configured) open target: as
+    /// a tab of the key editor window's group, or as its own window.
+    private func place(editor: EditorWindowController, target: CoreOpenTarget?) {
+        guard (target ?? config?.openTarget) == .tab,
             let newWindow = editor.window,
             let anchor = editors.first(where: { $0 !== editor && $0.window?.isKeyWindow == true })
                 ?? editors.first(where: { $0 !== editor && $0.window != nil })
@@ -504,9 +650,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         anchor.window?.addTabbedWindow(newWindow, ordered: .above)
     }
 
-    private func show(editor: EditorWindowController, placeAsConfigured: Bool = false) {
+    private func show(
+        editor: EditorWindowController,
+        placeAsConfigured: Bool = false,
+        target: CoreOpenTarget? = nil
+    ) {
         if placeAsConfigured {
-            place(editor: editor)
+            place(editor: editor, target: target)
         }
         editors.append(editor)
         if let window = editor.window {
@@ -628,6 +778,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         jump.keyEquivalentModifierMask = [.command, .control]
         editMenu.addItem(jump)
+        let blockStart = NSMenuItem(
+            title: "Go to Block Start",
+            action: #selector(EditorWindowController.goToBlockStart(_:)),
+            keyEquivalent: String(UnicodeScalar(NSUpArrowFunctionKey)!)
+        )
+        blockStart.keyEquivalentModifierMask = [.control, .option]
+        editMenu.addItem(blockStart)
+        let blockEnd = NSMenuItem(
+            title: "Go to Block End",
+            action: #selector(EditorWindowController.goToBlockEnd(_:)),
+            keyEquivalent: String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        )
+        blockEnd.keyEquivalentModifierMask = [.control, .option]
+        editMenu.addItem(blockEnd)
         editMenu.addItem(.separator())
 
         // Find submenu, driving the text view's native find bar.
@@ -683,6 +847,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         togglePreview.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(togglePreview)
+        let lineNumbersItem = NSMenuItem(
+            title: "Toggle Line Numbers",
+            action: #selector(toggleLineNumbers(_:)),
+            keyEquivalent: "l"
+        )
+        lineNumbersItem.keyEquivalentModifierMask = [.command, .shift]
+        viewMenu.addItem(lineNumbersItem)
         let viewMenuItem = NSMenuItem()
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)

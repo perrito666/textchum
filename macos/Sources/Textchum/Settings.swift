@@ -7,6 +7,7 @@ import TextchumKit
 struct EditorSettings {
     let font: NSFont
     let tabWidth: Int
+    let lineNumbers: Bool
 
     /// Resolves configuration values into a usable font: the configured
     /// family if it exists on this system, the platform monospaced font
@@ -19,6 +20,7 @@ struct EditorSettings {
             self.font = .monospacedSystemFont(ofSize: size, weight: .regular)
         }
         self.tabWidth = config.tabWidth
+        self.lineNumbers = config.lineNumbers
     }
 }
 
@@ -63,6 +65,9 @@ final class SettingsModel: ObservableObject {
     @Published var tabWidth: Int {
         didSet { persist { $0.tabWidth = tabWidth } }
     }
+    @Published var lineNumbers: Bool {
+        didSet { persist { $0.lineNumbers = lineNumbers } }
+    }
     @Published private(set) var lspEntries: [LSPEntry] = []
 
     init(config: CoreConfig) {
@@ -72,6 +77,7 @@ final class SettingsModel: ObservableObject {
         self.fontFamily = config.fontFamily ?? ""
         self.fontSize = config.fontSize
         self.tabWidth = config.tabWidth
+        self.lineNumbers = config.lineNumbers
         self.isLoading = false
         reloadLSPEntries()
     }
@@ -198,6 +204,7 @@ private struct GeneralSettingsTab: View {
             Stepper(value: $model.tabWidth, in: 1...16) {
                 Text("Tab width: \(model.tabWidth) columns")
             }
+            Toggle("Show line numbers", isOn: $model.lineNumbers)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 20)

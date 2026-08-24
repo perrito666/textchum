@@ -572,6 +572,47 @@ char *tc_document_path(const struct TcDocument *document);
 char *tc_document_markdown_html(const struct TcDocument *document);
 
 /**
+ * The UTF-16 bounds of the innermost multi-line syntax block containing
+ * `position` — the caret's enclosing block, for go-to-block navigation.
+ * Returns false (outputs untouched) for plain text or positions outside
+ * any block.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `start_out` and `end_out`
+ * must point to writable slots.
+ */
+bool tc_document_block_bounds(const struct TcDocument *document,
+                              uintptr_t position,
+                              uintptr_t *start_out,
+                              uintptr_t *end_out);
+
+/**
+ * Whether the editor shows a line-number gutter (default true).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_line_numbers(const struct TcConfig *config);
+
+/**
+ * Sets whether the editor shows a line-number gutter.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_line_numbers(struct TcConfig *config, bool shown);
+
+/**
+ * The keyboard-shortcut overrides (`keys` section), serialized as an
+ * object of `{action: "modifiers+key"}` entries; `{}` when unset.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_keys_json(const struct TcConfig *config);
+
+/**
  * The document's encoding as a static human-readable name (e.g. "UTF-8").
  * Owned by the core; do not free.
  *

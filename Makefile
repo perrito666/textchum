@@ -11,7 +11,7 @@ SWIFT_PKG     := --package-path macos
 # Outside docs/ so MkDocs does not scan it as content.
 DOCS_VENV     := .docs-venv
 
-.PHONY: all build core run test smoke header-check check app docs docs-serve clean
+.PHONY: all build core run test smoke header-check check app docs docs-serve clean install-cli
 
 all: build
 
@@ -62,6 +62,14 @@ app: core
 	iconutil -c icns dist/Textchum.iconset -o $(APP_BUNDLE)/Contents/Resources/Textchum.icns
 	rm -rf dist/Textchum.iconset
 	@echo "Built $(APP_BUNDLE) — open it, or copy to /Applications"
+
+PREFIX ?= /usr/local
+
+## Installs the `chum` terminal command (chum [+LINE] [-t|-w] file...).
+install-cli:
+	install -d $(PREFIX)/bin
+	install -m 0755 scripts/chum $(PREFIX)/bin/chum
+	@echo "Installed $(PREFIX)/bin/chum"
 
 # Newest available Python: patched versions of the docs toolchain's
 # transitive dependencies require >= 3.10.

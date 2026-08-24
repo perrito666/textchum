@@ -1,0 +1,63 @@
+#!/bin/sh
+# chum — open files in Textchum from the terminal.
+#
+# usage: chum [options] [+LINE] file...
+#   +N             put the caret on line N (applies to following files)
+#   -t, --tab      open as a tab of the current window
+#   -w, --window   open as a separate window
+#   -h, --help     this help
+#
+# Without -t/-w the app's own "Open files in" setting decides. Requires
+# the Textchum app bundle (make app) to have been launched at least once,
+# which registers the textchum:// URL scheme.
+
+set -eu
+
+target=""
+line=""
+opened=0
+
+usage() {
+    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    exit "${1:-0}"
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help) usage 0 ;;
+    esac
+done
+[ $# -eq 0 ] && usage 1 >&2
+
+for arg in "$@"; do
+    case "$arg" in
+        -t|--tab) target="tab" ;;
+        -w|--window) target="window" ;;
+        +[0-9]*) line="${arg#+}" ;;
+        *)
+            if [ ! -f "$arg" ]; then
+                echo "chum: no such file: $arg" >&2
+                exit 1
+            fi
+            url=$(/usr/bin/python3 - "$arg" "$line" "$target" <<'EOF'
+import os, sys, urllib.parse
+path, line, target = sys.argv[1], sys.argv[2], sys.argv[3]
+url = "textchum://open?path=" + urllib.parse.quote(os.path.abspath(path), safe="")
+if line:
+    url += "&line=" + line
+if target:
+    url += "&target=" + target
+print(url)
+EOF
+)
+            open "$url" || {
+                echo "chum: could not reach Textchum — build and launch it once: make app && open dist/Textchum.app" >&2
+                exit 1
+            }
+            opened=$((opened + 1))
+            line=""
+            ;;
+    esac
+done
+
+[ "$opened" -gt 0 ] || usage 1 >&2

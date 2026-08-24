@@ -232,6 +232,30 @@ impl Config {
         prune_empty(top, "lsp");
     }
 
+    /// Whether the editor shows a line-number gutter
+    /// (`editor.line_numbers`, default true).
+    pub fn line_numbers(&self) -> bool {
+        self.editor()
+            .get("line_numbers")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
+
+    pub fn set_line_numbers(&mut self, shown: bool) {
+        self.editor_mut()
+            .insert("line_numbers".into(), Value::Bool(shown));
+    }
+
+    /// The keyboard-shortcut overrides (`keys`), serialized: an object of
+    /// `{action: "modifiers+key"}` entries (e.g. `"save": "cmd+s"`).
+    /// Empty object when unset; hand-edited, no UI.
+    pub fn keys_json(&self) -> String {
+        self.root
+            .get("keys")
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "{}".into())
+    }
+
     /// Where opened files go (`editor.open_files_in`): tabs by default.
     pub fn open_target(&self) -> OpenTarget {
         match self.editor().get("open_files_in").and_then(Value::as_str) {

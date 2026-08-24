@@ -80,6 +80,23 @@ impl SyntaxState {
         }
     }
 
+    /// The byte range of the innermost multi-line named node containing
+    /// `byte` — the caret's enclosing *block*, language-agnostically:
+    /// a function body, a brace pair, a list, a markdown section…
+    /// `None` when nothing multi-line encloses the position.
+    pub fn block_at(&self, rope: &Rope, byte: usize) -> Option<Range<usize>> {
+        let root = self.tree.root_node();
+        let mut node = root.named_descendant_for_byte_range(byte, byte)?;
+        loop {
+            let multi_line = node.start_position().row < node.end_position().row;
+            if multi_line && node != root {
+                let _ = rope; // ranges are byte offsets; no conversion here
+                return Some(node.start_byte()..node.end_byte());
+            }
+            node = node.parent()?;
+        }
+    }
+
     /// Styled spans of `byte_range`, host language plus one level of
     /// injections, in application order (later wins).
     pub fn highlights(&self, rope: &Rope, byte_range: Range<usize>) -> Vec<HighlightSpan> {

@@ -823,6 +823,76 @@ pub unsafe extern "C" fn tc_document_markdown_html(document: *const TcDocument) 
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// The UTF-16 bounds of the innermost multi-line syntax block containing
+/// `position` — the caret's enclosing block, for go-to-block navigation.
+/// Returns false (outputs untouched) for plain text or positions outside
+/// any block.
+///
+/// # Safety
+/// `document` must be a live document pointer; `start_out` and `end_out`
+/// must point to writable slots.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_block_bounds(
+    document: *const TcDocument,
+    position: usize,
+    start_out: *mut usize,
+    end_out: *mut usize,
+) -> bool {
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return false;
+    };
+    if start_out.is_null() || end_out.is_null() {
+        return false;
+    }
+    catch_unwind(AssertUnwindSafe(|| {
+        match document.inner.block_bounds(position) {
+            Some((start, end)) => {
+                unsafe {
+                    *start_out = start;
+                    *end_out = end;
+                }
+                true
+            }
+            None => false,
+        }
+    }))
+    .unwrap_or(false)
+}
+
+/// Whether the editor shows a line-number gutter (default true).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_line_numbers(config: *const TcConfig) -> bool {
+    unsafe { config.as_ref() }.map_or(true, |c| c.inner.line_numbers())
+}
+
+/// Sets whether the editor shows a line-number gutter.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_line_numbers(config: *mut TcConfig, shown: bool) {
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_line_numbers(shown);
+    }
+}
+
+/// The keyboard-shortcut overrides (`keys` section), serialized as an
+/// object of `{action: "modifiers+key"}` entries; `{}` when unset.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_keys_json(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    owned_c_string(config.inner.keys_json())
+}
+
 /// The document's encoding as a static human-readable name (e.g. "UTF-8").
 /// Owned by the core; do not free.
 ///

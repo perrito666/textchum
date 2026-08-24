@@ -133,6 +133,18 @@ public final class CoreDocument {
         }
     }
 
+    /// The UTF-16 range of the innermost multi-line syntax block
+    /// containing `position` — the caret's enclosing block. Nil for plain
+    /// text or positions outside any block.
+    public func blockBounds(at position: Int) -> NSRange? {
+        var start: UInt = 0
+        var end: UInt = 0
+        guard tc_document_block_bounds(handle, UInt(max(0, position)), &start, &end) else {
+            return nil
+        }
+        return NSRange(location: Int(start), length: Int(end - start))
+    }
+
     /// The document rendered as an HTML fragment for the live preview, or
     /// nil unless the document's language is markdown.
     public var markdownHTML: String? {

@@ -20,6 +20,8 @@ uniquement à l'intérieur de l'application.
   police à chasse fixe de la plateforme.
 - **Taille de police** — de 6 à 72 points.
 - **Largeur de tabulation** — de 1 à 16 colonnes.
+- **Afficher les numéros de ligne** — la marge, aussi basculables par
+  session avec View → Toggle Line Numbers (⇧⌘L).
 
 Chaque changement s'applique immédiatement aux fenêtres d'édition ouvertes
 et s'écrit sur disque au même instant. Il n'y a aucun bouton Appliquer ou
@@ -70,6 +72,34 @@ Deux garanties rendent l'édition à la main sûre :
 Les valeurs hors limites ou mal typées ne comptent pas comme une casse : un
 `font_size` de `4000` est ramené dans la plage valide, un `font_family` de
 `42` est ignoré, et le reste du fichier fonctionne normalement.
+
+## Raccourcis clavier
+
+Les raccourcis des menus se réassignent via une section `keys` éditée à
+la main (pas d'interface pour l'instant) : un objet de noms d'action
+vers des spécifications `modificateurs+touche`, appliqué au lancement.
+
+```json
+{
+  "keys": {
+    "openQuickly": "cmd+p",
+    "goToBlockEnd": "ctrl+alt+down",
+    "findInProject": "cmd+shift+g"
+  }
+}
+```
+
+Modificateurs : `cmd`, `shift`, `alt`, `ctrl`. Touches : un caractère,
+ou `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
+Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
+`close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
+`findPrevious`, `useSelectionForFind`, `findInProject`,
+`jumpToDefinition`, `goToBlockStart`, `goToBlockEnd`,
+`toggleNavigator`, `togglePreview`, `toggleLineNumbers`, `settings` —
+un nom inconnu est journalisé avec la liste complète. Aller au début/à
+la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique
+multiligne le plus interne autour du curseur, grâce à l'arbre qui
+alimente déjà la coloration.
 
 ## Pas encore là
 

@@ -187,6 +187,19 @@ impl Document {
         Some(crate::markdown::to_html(&self.buffer.text()))
     }
 
+    /// The UTF-16 bounds of the innermost multi-line syntax block
+    /// containing the position — for go-to-block-start/end navigation.
+    /// `None` for plain text or positions outside any block.
+    pub fn block_bounds(&self, position: usize) -> Option<(usize, usize)> {
+        let syntax = self.syntax.as_ref()?;
+        let (byte, _) = self.buffer.utf16_range_to_bytes(position, position).ok()?;
+        let range = syntax.block_at(self.buffer.rope(), byte)?;
+        Some((
+            self.buffer.byte_to_utf16(range.start).ok()?,
+            self.buffer.byte_to_utf16(range.end).ok()?,
+        ))
+    }
+
     /// Styled spans over the UTF-16 code unit range `start..end`, in
     /// application order (later spans win where they overlap). Empty for
     /// plain-text documents.
