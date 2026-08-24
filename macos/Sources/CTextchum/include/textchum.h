@@ -266,6 +266,50 @@ uint64_t tc_lsp_definition(struct TcApp *app,
                            uint32_t character);
 
 /**
+ * Requests every reference to the symbol at an LSP position, the
+ * declaration included; same contract as [`tc_lsp_hover`]. The
+ * response's `result` is an LSP `Location[]`.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_references(struct TcApp *app,
+                           const char *path,
+                           uintptr_t path_len,
+                           uint32_t line,
+                           uint32_t character);
+
+/**
+ * Requests a workspace-wide rename of the symbol at an LSP position to
+ * `new_name` (`new_name_len` bytes of UTF-8); same contract as
+ * [`tc_lsp_hover`]. The response's `result` is an LSP `WorkspaceEdit`.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`]; `new_name` must point to
+ * `new_name_len` readable bytes.
+ */
+uint64_t tc_lsp_rename(struct TcApp *app,
+                       const char *path,
+                       uintptr_t path_len,
+                       uint32_t line,
+                       uint32_t character,
+                       const char *new_name,
+                       uintptr_t new_name_len);
+
+/**
+ * Requests whole-document formatting; same contract as
+ * [`tc_lsp_hover`]. The response's `result` is an LSP `TextEdit[]`.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_formatting(struct TcApp *app,
+                           const char *path,
+                           uintptr_t path_len,
+                           uint32_t tab_size,
+                           bool insert_spaces);
+
+/**
  * Requests completions at an LSP position; same contract as
  * [`tc_lsp_hover`]. The response's `result` is an LSP
  * `CompletionItem[]` or `CompletionList`.

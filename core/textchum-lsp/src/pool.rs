@@ -325,6 +325,49 @@ impl Pool {
         )
     }
 
+    /// Requests every reference to the symbol at an LSP position, the
+    /// declaration included; same contract as [`Self::hover`]. The
+    /// response's `result` is an LSP `Location[]`.
+    pub fn references(&mut self, path: &Path, line: u32, character: u32) -> u64 {
+        self.request(
+            path,
+            "textDocument/references",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "position": {"line": line, "character": character},
+                "context": {"includeDeclaration": true},
+            }),
+        )
+    }
+
+    /// Requests a workspace-wide rename of the symbol at an LSP position;
+    /// same contract as [`Self::hover`]. The response's `result` is an
+    /// LSP `WorkspaceEdit`.
+    pub fn rename(&mut self, path: &Path, line: u32, character: u32, new_name: &str) -> u64 {
+        self.request(
+            path,
+            "textDocument/rename",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "position": {"line": line, "character": character},
+                "newName": new_name,
+            }),
+        )
+    }
+
+    /// Requests whole-document formatting; same contract as
+    /// [`Self::hover`]. The response's `result` is an LSP `TextEdit[]`.
+    pub fn formatting(&mut self, path: &Path, tab_size: u32, insert_spaces: bool) -> u64 {
+        self.request(
+            path,
+            "textDocument/formatting",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "options": {"tabSize": tab_size, "insertSpaces": insert_spaces},
+            }),
+        )
+    }
+
     /// Sends a request to the document's instance; the response arrives as
     /// an [`Event::LspResponse`] with the returned id (0 = no instance).
     fn request(&mut self, path: &Path, method: &str, params: serde_json::Value) -> u64 {

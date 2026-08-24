@@ -313,6 +313,91 @@ pub unsafe extern "C" fn tc_lsp_definition(
     .unwrap_or(0)
 }
 
+/// Requests every reference to the symbol at an LSP position, the
+/// declaration included; same contract as [`tc_lsp_hover`]. The
+/// response's `result` is an LSP `Location[]`.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_references(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool
+            .references(std::path::Path::new(path), line, character)
+    }))
+    .unwrap_or(0)
+}
+
+/// Requests a workspace-wide rename of the symbol at an LSP position to
+/// `new_name` (`new_name_len` bytes of UTF-8); same contract as
+/// [`tc_lsp_hover`]. The response's `result` is an LSP `WorkspaceEdit`.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`]; `new_name` must point to
+/// `new_name_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_rename(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+    new_name: *const c_char,
+    new_name_len: usize,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let (path, new_name) =
+        unsafe { (str_from_raw(path, path_len), str_from_raw(new_name, new_name_len)) };
+    let (Some(path), Some(new_name)) = (path, new_name) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool
+            .rename(std::path::Path::new(path), line, character, new_name)
+    }))
+    .unwrap_or(0)
+}
+
+/// Requests whole-document formatting; same contract as
+/// [`tc_lsp_hover`]. The response's `result` is an LSP `TextEdit[]`.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_formatting(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    tab_size: u32,
+    insert_spaces: bool,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool
+            .formatting(std::path::Path::new(path), tab_size, insert_spaces)
+    }))
+    .unwrap_or(0)
+}
+
 /// Requests completions at an LSP position; same contract as
 /// [`tc_lsp_hover`]. The response's `result` is an LSP
 /// `CompletionItem[]` or `CompletionList`.

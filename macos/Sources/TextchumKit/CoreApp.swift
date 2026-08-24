@@ -237,6 +237,65 @@ public final class CoreApp {
         guard id != 0 else { return }
         router.register(id, completion)
     }
+
+    /// Requests every reference to the symbol at an LSP position
+    /// (declaration included); same contract as
+    /// ``lspHover(path:line:character:completion:)``. The JSON is an LSP
+    /// `Location[]`.
+    @MainActor
+    public func lspReferences(
+        path: String,
+        line: Int,
+        character: Int,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_references(
+                handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
+    /// Requests a workspace-wide rename of the symbol at an LSP position;
+    /// same contract as ``lspHover(path:line:character:completion:)``.
+    /// The JSON is an LSP `WorkspaceEdit`.
+    @MainActor
+    public func lspRename(
+        path: String,
+        line: Int,
+        character: Int,
+        newName: String,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            withUTF8(newName) { name, nameLen in
+                tc_lsp_rename(
+                    handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)),
+                    name, nameLen)
+            }
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
+    /// Requests whole-document formatting; same contract as
+    /// ``lspHover(path:line:character:completion:)``. The JSON is an LSP
+    /// `TextEdit[]`.
+    @MainActor
+    public func lspFormatting(
+        path: String,
+        tabSize: Int,
+        insertSpaces: Bool,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_formatting(
+                handle, path, pathLen, UInt32(max(1, tabSize)), insertSpaces)
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
 }
 
 /// Runs `body` with a `(pointer, length)` view of the string's UTF-8.

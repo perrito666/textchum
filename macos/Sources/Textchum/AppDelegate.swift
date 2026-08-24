@@ -138,6 +138,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let filters = Array(allArguments.dropFirst(flagIndex + 4))
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 MainActor.assumeIsolated {
+                    if allArguments[flagIndex + 1] == "paths" {
+                        self?.togglePathDisplay(nil)
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "palette" {
                         // scope doubles as the initial query.
                         self?.showCommandPalette(nil)
@@ -333,6 +337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(NSSplitViewController.toggleSidebar(_:)): "toggleNavigator",
             #selector(EditorWindowController.togglePreview(_:)): "togglePreview",
             #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
+            #selector(togglePathDisplay(_:)): "togglePathDisplay",
             #selector(showCommandPalette(_:)): "commandPalette",
             #selector(showSettings(_:)): "settings",
         ]
@@ -579,6 +584,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// ⇧⌘P: the fuzzy-searchable menu.
     @objc func showCommandPalette(_ sender: Any?) {
         commandPalette.show(over: NSApp.keyWindow)
+    }
+
+    /// ⌥⌘T: buffer rows show project-relative paths while on. Applied to
+    /// every window's sidebar so switching tabs keeps a consistent view;
+    /// deliberately session-only.
+    @objc func togglePathDisplay(_ sender: Any?) {
+        let active =
+            editors.first { $0.window == NSApp.keyWindow }?.sidebarModel
+            ?? editors.first?.sidebarModel
+        let newValue = !(active?.showFullPaths ?? false)
+        for editor in editors {
+            editor.sidebarModel.showFullPaths = newValue
+        }
     }
 
     /// The search scope for the key window: its project, else its file's
@@ -1006,6 +1024,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         lineNumbersItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(lineNumbersItem)
+        let pathDisplayItem = NSMenuItem(
+            title: "Toggle Path Display",
+            action: #selector(togglePathDisplay(_:)),
+            keyEquivalent: "t"
+        )
+        pathDisplayItem.keyEquivalentModifierMask = [.command, .option]
+        viewMenu.addItem(pathDisplayItem)
         viewMenu.addItem(.separator())
         let paletteItem = NSMenuItem(
             title: "Command Palette…",

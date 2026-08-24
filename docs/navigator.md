@@ -28,9 +28,10 @@ several projects in a trenchcoat.
 
 Rows show bare filenames — until two open files share one, in which
 case each shows just enough trailing path to tell them apart (tab
-titles follow suit). The button at the top of the list switches every
-row to its path from the project root while it is on; deliberately not
-remembered across launches — it is a quick look, not a mode.
+titles follow suit). The button at the top of the list — or
+View → Toggle Path Display (⌥⌘T) — switches every row to its path from
+the project root while it is on; deliberately not remembered across
+launches — it is a quick look, not a mode.
 
 Right-clicking a buffer row or a tree entry offers the file's location
 in every useful spelling: the bare name, the path relative to the

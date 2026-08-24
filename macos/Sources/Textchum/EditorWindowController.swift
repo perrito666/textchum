@@ -892,9 +892,13 @@ final class EditorWindowController: NSWindowController {
         startWatchingFile()
     }
 
+    /// The configured tab width, remembered for formatting requests.
+    private var appliedTabWidth = 4
+
     /// Applies configuration-derived settings to the view: the font, and
     /// tab stops sized to the configured width in that font.
     func apply(settings: EditorSettings) {
+        appliedTabWidth = settings.tabWidth
         guard let textView else { return }
         let paragraphStyle = NSMutableParagraphStyle()
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: settings.font]).width

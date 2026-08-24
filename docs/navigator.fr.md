@@ -35,7 +35,8 @@ projets déguisés en un seul.
 Les lignes affichent le nom de fichier nu — jusqu'à ce que deux
 fichiers ouverts en partagent un : chacun montre alors juste assez de
 fin de chemin pour les distinguer (les titres d'onglets suivent). Le
-bouton en haut de la liste bascule toutes les lignes vers leur chemin
+bouton en haut de la liste — ou View → Toggle Path Display (⌥⌘T) —
+bascule toutes les lignes vers leur chemin
 depuis la racine du projet tant qu'il est actif ; volontairement non
 mémorisé d'un lancement à l'autre — c'est un coup d'œil, pas un mode.
 

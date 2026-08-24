@@ -186,7 +186,7 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
 `jumpToDefinition`, `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`commandPalette`, `settings` —
+`togglePathDisplay`, `commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à
 la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique
 multiligne le plus interne autour du curseur, grâce à l'arbre qui

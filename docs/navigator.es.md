@@ -35,7 +35,8 @@ varios proyectos disfrazados de uno.
 Las filas muestran solo el nombre del archivo — hasta que dos archivos
 abiertos comparten uno: entonces cada uno muestra justo la cola de ruta
 necesaria para distinguirlos (los títulos de las pestañas hacen lo
-mismo). El botón en la parte superior de la lista cambia todas las
+mismo). El botón en la parte superior de la lista — o View → Toggle
+Path Display (⌥⌘T) — cambia todas las
 filas a su ruta desde la raíz del proyecto mientras está activo;
 deliberadamente no se recuerda entre arranques — es un vistazo rápido,
 no un modo.

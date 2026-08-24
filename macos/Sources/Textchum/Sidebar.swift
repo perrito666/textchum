@@ -15,6 +15,11 @@ struct SidebarDocument: Identifiable, Hashable {
     let title: String
     let path: String?
     let isDirty: Bool
+    /// What the row shows: the title, or the project-relative path while
+    /// the full-path toggle is on. Part of the row data on purpose — the
+    /// list diffs by value, so a display that changed must change the
+    /// value or stale rows survive the toggle.
+    var display: String = ""
 }
 
 /// Open documents that share a project root.
@@ -40,14 +45,30 @@ final class SidebarModel: ObservableObject {
     /// While on, buffer rows show paths from the project root instead of
     /// names. Session-only by design — a quick look, not a mode, so it is
     /// never persisted.
-    @Published var showFullPaths = false
+    @Published var showFullPaths = false {
+        didSet { recompute() }
+    }
+
+    private var entries: [(document: SidebarDocument, projectRoot: String?)] = []
 
     /// Rebuilds the grouped buffer list. `entries` pairs each document
     /// with its (cached) project root.
     func rebuild(entries: [(document: SidebarDocument, projectRoot: String?)]) {
+        self.entries = entries
+        recompute()
+    }
+
+    private func recompute() {
         var byRoot: [String?: [SidebarDocument]] = [:]
         for entry in entries {
-            byRoot[entry.projectRoot, default: []].append(entry.document)
+            var document = entry.document
+            if showFullPaths, let path = document.path {
+                document.display = PathActions.relativePath(
+                    path, projectRoot: entry.projectRoot)
+            } else {
+                document.display = document.title
+            }
+            byRoot[entry.projectRoot, default: []].append(document)
         }
         groups = byRoot
             .map { SidebarProjectGroup(root: $0.key, documents: $0.value) }
@@ -173,15 +194,6 @@ struct SidebarView: View {
 
     private var projectRoot: String? { context.projectRoot }
 
-    /// The row label: normally the (disambiguated) title, or the path
-    /// from the project root while the full-path toggle is held on.
-    private func rowText(for document: SidebarDocument, in group: SidebarProjectGroup)
-        -> String
-    {
-        guard model.showFullPaths, let path = document.path else { return document.title }
-        return PathActions.relativePath(path, projectRoot: group.root)
-    }
-
     var body: some View {
         VSplitView {
             VStack(spacing: 0) {
@@ -219,7 +231,7 @@ struct SidebarView: View {
                                 .font(.system(size: document.isDirty ? 7 : 12))
                                 .foregroundStyle(
                                     document.isDirty ? .primary : .secondary)
-                                Text(rowText(for: document, in: group))
+                                Text(document.display)
                                     .fontWeight(
                                         document.id == currentDocumentID
                                             ? .semibold : .regular)
