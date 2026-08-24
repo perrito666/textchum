@@ -41,6 +41,14 @@ filas a su ruta desde la raíz del proyecto mientras está activo;
 deliberadamente no se recuerda entre arranques — es un vistazo rápido,
 no un modo.
 
+Un clic derecho sobre la **cabecera de un proyecto** ofrece la
+disposición de ventanas del grupo entero: **Split into New Window** saca
+los documentos del proyecto a una ventana propia (como pestañas suyas) y
+**Gather Here as Tabs** los adopta en el grupo de pestañas de la ventana
+actual. El divisor entre la lista de búferes y el árbol de carpetas es
+una única posición compartida — arrastrarlo en cualquier pestaña lo
+mueve en todas, y se recuerda con la sesión.
+
 Un clic derecho sobre una fila de la lista o una entrada del árbol
 ofrece la ubicación del archivo en todas sus formas útiles: el nombre a
 secas, la ruta relativa a la raíz del proyecto, la ruta absoluta y —

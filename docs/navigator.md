@@ -33,6 +33,14 @@ View → Toggle Path Display (⌥⌘T) — switches every row to its path from
 the project root while it is on; deliberately not remembered across
 launches — it is a quick look, not a mode.
 
+Right-clicking a **project's header** offers window arrangement for the
+whole group: **Split into New Window** pulls the project's documents out
+into a window of their own (as tabs of it), and **Gather Here as Tabs**
+adopts them into the current window's tab group. The divider between
+the buffer list and the folder tree is one shared position — dragging
+it in any tab moves it in all of them, and it is remembered with the
+session.
+
 Right-clicking a buffer row or a tree entry offers the file's location
 in every useful spelling: the bare name, the path relative to the
 project root, the absolute path, and — inside a git repository with a

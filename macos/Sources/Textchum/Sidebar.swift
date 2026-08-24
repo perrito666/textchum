@@ -90,6 +90,14 @@ final class SidebarModel: ObservableObject {
 final class FileTreeState: ObservableObject {
     @Published var expanded: Set<URL> = []
 
+    /// Fraction of the sidebar's height given to the buffer list.
+    /// Shared like the expansion set, so every tab shows the same split
+    /// instead of each remembering its own; persisted with the session.
+    @Published var splitFraction: Double = 0.45
+    /// Called when a divider drag ends, so the session can be saved
+    /// once, not per drag tick.
+    var onSplitCommitted: (() -> Void)?
+
     func binding(for url: URL) -> Binding<Bool> {
         Binding(
             get: { self.expanded.contains(url) },
@@ -191,91 +199,146 @@ struct SidebarView: View {
     @ObservedObject var treeState: FileTreeState
     let onSelectDocument: (ObjectIdentifier) -> Void
     let onOpenFile: (String) -> Void
+    /// Moves a project group's windows out into their own window…
+    var onSplitGroup: (SidebarProjectGroup) -> Void = { _ in }
+    /// …or gathers them into this window as tabs.
+    var onMergeGroup: (SidebarProjectGroup) -> Void = { _ in }
 
     private var projectRoot: String? { context.projectRoot }
 
     var body: some View {
-        VSplitView {
+        // A hand-rolled splitter rather than VSplitView: the divider
+        // fraction lives in the shared FileTreeState, so every tab shows
+        // the same split instead of each remembering its own.
+        GeometryReader { geometry in
+            let height = max(geometry.size.height, 1)
             VStack(spacing: 0) {
-                HStack {
-                    Text("Open Files")
+                bufferPane
+                    .frame(height: max(80, (height - 9) * treeState.splitFraction))
+                splitDivider(totalHeight: height)
+                treePane
+                    .frame(maxHeight: .infinity)
+            }
+            .coordinateSpace(name: "sidebarSplit")
+        }
+    }
+
+    private func splitDivider(totalHeight: CGFloat) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(height: 1)
+        }
+        .frame(height: 9)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering {
+                NSCursor.resizeUpDown.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1, coordinateSpace: .named("sidebarSplit"))
+                .onChanged { value in
+                    treeState.splitFraction = min(
+                        0.85, max(0.15, value.location.y / totalHeight))
+                }
+                .onEnded { _ in
+                    treeState.onSplitCommitted?()
+                }
+        )
+    }
+
+    private var bufferPane: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Open Files")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Toggle(isOn: $model.showFullPaths) {
+                    Image(systemName: "list.bullet.indent")
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                .help("Show paths from the project root while enabled")
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+            // Group headers are plain rows rather than Section headers:
+            // the sidebar list style unreliably hides the first pinned
+            // section header under the scroll inset.
+            List {
+                ForEach(model.groups) { group in
+                    Text(group.name)
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
-                    Spacer()
-                    Toggle(isOn: $model.showFullPaths) {
-                        Image(systemName: "list.bullet.indent")
+                        .padding(.top, 6)
+                        .contentShape(Rectangle())
+                        .contextMenu {
+                            Button("Split into New Window") {
+                                onSplitGroup(group)
+                            }
+                            Button("Gather Here as Tabs") {
+                                onMergeGroup(group)
+                            }
+                        }
+                    ForEach(group.documents) { document in
+                        HStack(spacing: 4) {
+                            Image(
+                                systemName: document.isDirty
+                                    ? "circle.fill" : "doc.text"
+                            )
+                            .font(.system(size: document.isDirty ? 7 : 12))
+                            .foregroundStyle(
+                                document.isDirty ? .primary : .secondary)
+                            Text(document.display)
+                                .fontWeight(
+                                    document.id == currentDocumentID
+                                        ? .semibold : .regular)
+                                .lineLimit(1)
+                                .truncationMode(.head)
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { onSelectDocument(document.id) }
+                        .contextMenu {
+                            if let path = document.path {
+                                PathCopyMenu(
+                                    path: path, projectRoot: group.root,
+                                    isDirectory: false)
+                            }
+                        }
                     }
-                    .toggleStyle(.button)
-                    .controlSize(.small)
-                    .help("Show paths from the project root while enabled")
                 }
-                .padding(.horizontal, 10)
-                .padding(.top, 6)
-                // Group headers are plain rows rather than Section headers:
-                // the sidebar list style unreliably hides the first pinned
-                // section header under the scroll inset.
+            }
+            .listStyle(.sidebar)
+        }
+    }
+
+    private var treePane: some View {
+        Group {
+            if let projectRoot {
+                let rootNode = FileNode(
+                    url: URL(fileURLWithPath: projectRoot), isDirectory: true)
                 List {
-                    ForEach(model.groups) { group in
-                        Text(group.name)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 6)
-                        ForEach(group.documents) { document in
-                            HStack(spacing: 4) {
-                                Image(
-                                    systemName: document.isDirty
-                                        ? "circle.fill" : "doc.text"
-                                )
-                                .font(.system(size: document.isDirty ? 7 : 12))
-                                .foregroundStyle(
-                                    document.isDirty ? .primary : .secondary)
-                                Text(document.display)
-                                    .fontWeight(
-                                        document.id == currentDocumentID
-                                            ? .semibold : .regular)
-                                    .lineLimit(1)
-                                    .truncationMode(.head)
-                                Spacer(minLength: 0)
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture { onSelectDocument(document.id) }
-                            .contextMenu {
-                                if let path = document.path {
-                                    PathCopyMenu(
-                                        path: path, projectRoot: group.root,
-                                        isDirectory: false)
-                                }
-                            }
+                    Section((projectRoot as NSString).lastPathComponent) {
+                        ForEach(rootNode.children ?? []) { node in
+                            FileTreeRow(
+                                node: node, state: treeState,
+                                projectRoot: projectRoot, onOpenFile: onOpenFile)
                         }
                     }
                 }
                 .listStyle(.sidebar)
+            } else {
+                Text("No project")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(minHeight: 120)
-
-            Group {
-                if let projectRoot {
-                    let rootNode = FileNode(
-                        url: URL(fileURLWithPath: projectRoot), isDirectory: true)
-                    List {
-                        Section((projectRoot as NSString).lastPathComponent) {
-                            ForEach(rootNode.children ?? []) { node in
-                                FileTreeRow(
-                                    node: node, state: treeState,
-                                    projectRoot: projectRoot, onOpenFile: onOpenFile)
-                            }
-                        }
-                    }
-                    .listStyle(.sidebar)
-                } else {
-                    Text("No project")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .frame(minHeight: 120)
         }
     }
 }

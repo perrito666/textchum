@@ -21,6 +21,9 @@ struct SessionState: Codable {
     var windows: [Window] = []
     /// Path of the frontmost document, if any.
     var frontmost: String?
+    /// The sidebar's buffer-list/file-tree divider, as a fraction of the
+    /// sidebar height. Shared by every window, so it is saved once.
+    var sidebarSplit: Double?
 }
 
 enum SessionStore {

@@ -90,6 +90,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsModel.onRestartServers = { [weak self] in
             self?.restartLanguageServers()
         }
+        fileTreeState.onSplitCommitted = { [weak self] in
+            self?.saveSession()
+        }
 
         // Open files given on the command line — actual files only, not
         // directories, flags, or flag values. With none, defer the
@@ -271,12 +274,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         state.frontmost =
             editors.first { $0.window?.isKeyWindow == true }?.coreDocument.path
             ?? state.windows.last?.path
+        state.sidebarSplit = fileTreeState.splitFraction
         SessionStore.save(state)
     }
 
     /// Reopens the saved session's files and positions.
     private func restoreSession() {
         guard let state = SessionStore.load() else { return }
+        if let split = state.sidebarSplit {
+            fileTreeState.splitFraction = min(0.85, max(0.15, split))
+        }
         var frontmostEditor: EditorWindowController?
         for window in state.windows
         where FileManager.default.fileExists(atPath: window.path) {
@@ -712,6 +719,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// across tabs (and windows showing the same project).
     private let fileTreeState = FileTreeState()
 
+    // MARK: Window arrangement (project group → windows/tabs)
+
+    /// "Split into New Window": pulls the group's windows out of their
+    /// tab groups and gathers them as tabs of a window of their own.
+    private func splitIntoNewWindow(documentIDs: [ObjectIdentifier]) {
+        let members = editors.filter { documentIDs.contains(ObjectIdentifier($0)) }
+        guard let first = members.first, let anchor = first.window else { return }
+        anchor.tabGroup?.removeWindow(anchor)
+        for member in members.dropFirst() {
+            guard let window = member.window else { continue }
+            window.tabGroup?.removeWindow(window)
+            anchor.addTabbedWindow(window, ordered: .above)
+        }
+        anchor.makeKeyAndOrderFront(nil)
+        NotificationCenter.default.post(name: .textchumDocumentsChanged, object: nil)
+    }
+
+    /// "Gather Here as Tabs": adopts the group's windows into the host
+    /// window's tab group.
+    private func mergeAsTabs(documentIDs: [ObjectIdentifier], into host: ObjectIdentifier) {
+        guard
+            let hostWindow = editors.first(where: { ObjectIdentifier($0) == host })?.window
+        else { return }
+        let members = editors.filter { documentIDs.contains(ObjectIdentifier($0)) }
+        for member in members {
+            guard let window = member.window, window != hostWindow,
+                window.tabGroup !== hostWindow.tabGroup
+            else { continue }
+            window.tabGroup?.removeWindow(window)
+            hostWindow.addTabbedWindow(window, ordered: .above)
+        }
+        hostWindow.makeKeyAndOrderFront(nil)
+        NotificationCenter.default.post(name: .textchumDocumentsChanged, object: nil)
+    }
+
     /// The pool configuration: server entries plus workspace behavior.
     private var combinedLSPConfiguration: String {
         "{\"lsp\":\(config?.lspJSON ?? "{}"),\"workspace\":\(config?.workspaceJSON ?? "{}")}"
@@ -739,6 +781,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else {
                     self.open(path: path)
                 }
+            },
+            splitGroup: { [weak self] ids in
+                self?.splitIntoNewWindow(documentIDs: ids)
+            },
+            mergeGroup: { [weak self] ids, host in
+                self?.mergeAsTabs(documentIDs: ids, into: host)
             }
         )
     }

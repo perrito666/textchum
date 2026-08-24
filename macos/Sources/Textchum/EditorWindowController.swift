@@ -42,6 +42,10 @@ struct SidebarConfiguration {
     var workspaceSettingsJSON: () -> String = { "{}" }
     let selectDocument: (ObjectIdentifier) -> Void
     let openFile: (String) -> Void
+    /// Moves the given documents' windows into a window of their own…
+    var splitGroup: ([ObjectIdentifier]) -> Void = { _ in }
+    /// …or into the named host controller's window as tabs.
+    var mergeGroup: ([ObjectIdentifier], ObjectIdentifier) -> Void = { _, _ in }
 }
 
 /// Per-window observable state feeding the sidebar's folder tree.
@@ -206,7 +210,14 @@ final class EditorWindowController: NSWindowController {
                 context: sidebarContext,
                 treeState: sidebar.treeState,
                 onSelectDocument: sidebar.selectDocument,
-                onOpenFile: sidebar.openFile
+                onOpenFile: sidebar.openFile,
+                onSplitGroup: { group in
+                    sidebar.splitGroup(group.documents.map(\.id))
+                },
+                onMergeGroup: { [weak self] group in
+                    guard let self else { return }
+                    sidebar.mergeGroup(group.documents.map(\.id), ObjectIdentifier(self))
+                }
             )
             let sidebarHost = NSHostingController(rootView: sidebarView)
             // Without this, the list inherits a phantom titlebar inset and

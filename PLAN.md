@@ -367,7 +367,33 @@ Prove the architecture end to end before writing real features.
 - Hybrid/WYSIWYG Markdown (§3.4 tier 3).
 - Custom Core Text renderer if TextKit 2 has hit measured limits.
 - TextMate-grammar fallback for exotic languages; semantic tokens; code actions.
-- A second platform shell (the core is already portable; a Linux GTK shell would be the test).
+- A second platform shell (the core is already portable; a Linux shell would be the test).
+
+**Linux shell design (decided ahead of need):** GTK4 + libadwaita, editor view via
+GtkSourceView, preview via WebKitGTK, written in Rust with gtk4-rs — the same shape
+Ghostty (this plan's architectural model) ships on Linux. Rationale and mapping:
+
+- *Toolkit*: GTK4/libadwaita over Qt. GtkTextView/GtkTextBuffer is a view the shell can
+  drive — `insert-text`/`delete-range` are the choke point, so the core-owns-the-document
+  sync protocol (checksums, fuzz test) ports structurally unchanged. KDE's KTextEditor is
+  more capable but wants to own documents, which fights the core; Qt adds C++ interop
+  friction from Rust and QtWebEngine means bundling Chromium where WebKitGTK is native.
+- *Wins over the macOS shell*: the line-number gutter is a first-class API
+  (`GtkSourceGutter` — no sibling-view workaround); `AdwTabView` was designed for editors
+  (better than native macOS tabs); the per-window drawer maps to `AdwOverlaySplitView`;
+  `GApplication` gives single-instance + file/URI open over D-Bus, replacing the
+  `textchum://` plumbing for `chum`.
+- *Mechanical mappings*: core tree-sitter spans → `GtkTextTag`s from the same style table
+  (GtkSourceView's own regex highlighting stays off); Settings → `AdwPreferencesWindow`
+  over the same `config.json`; appearance/themes → libadwaita's style manager and the
+  existing light/dark pairs; the `keys` registry → named `GAction`s (the action names
+  already fit); file watching → `GFileMonitor`; panels (⌘T, ⇧⌘F, palette, outline) →
+  `GtkListView` popovers. Packaging: Flatpak first (pins WebKitGTK/GtkSourceView).
+- *Boundary*: the Rust shell links `textchum-core` as a crate — the C ABI's job is
+  crossing languages, and Rust→C→Rust would add `unsafe` ceremony for nothing. The
+  architecture (core owns truth, one event channel, shell never mutates documents) carries
+  over identically; the Swift shell keeps the C header honest. The only genuinely new work
+  is Pango-side text measurement in the editor widget.
 
 **Very-far stretch (explicitly last, after everything above):**
 - **Images.** Opening an image file shows it instead of failing or spewing bytes. If macOS

@@ -40,6 +40,14 @@ bascule toutes les lignes vers leur chemin
 depuis la racine du projet tant qu'il est actif ; volontairement non
 mémorisé d'un lancement à l'autre — c'est un coup d'œil, pas un mode.
 
+Un clic droit sur l'**en-tête d'un projet** propose l'agencement des
+fenêtres du groupe entier : **Split into New Window** sort les
+documents du projet dans une fenêtre à eux (comme ses onglets) et
+**Gather Here as Tabs** les adopte dans le groupe d'onglets de la
+fenêtre courante. Le séparateur entre la liste des tampons et l'arbre
+des dossiers est une position unique partagée — le glisser dans un
+onglet le déplace dans tous, et il est retenu avec la session.
+
 Un clic droit sur une ligne de la liste ou une entrée de l'arbre
 propose l'emplacement du fichier sous toutes ses formes utiles : le nom
 nu, le chemin relatif à la racine du projet, le chemin absolu et — dans
