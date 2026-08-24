@@ -1,5 +1,6 @@
 # Rust
 core/target/
+linux/target/
 
 # SwiftPM
 macos/.build/

@@ -1,0 +1,18 @@
+[package]
+name = "textchum-gtk"
+version = "0.1.0"
+edition = "2021"
+description = "Textchum's Linux shell: GTK4 + libadwaita over the same core"
+license = "MIT"
+
+# The Rust shell links the core as a crate — the C ABI's job is crossing
+# languages, and the Swift shell keeps that header honest. Architecture
+# is unchanged: the core owns documents, the shell owns presentation.
+[dependencies]
+textchum-core = { path = "../core/textchum-core" }
+gtk = { package = "gtk4", version = "0.9", features = ["v4_12"] }
+adw = { package = "libadwaita", version = "0.7", features = ["v1_4"] }
+sourceview5 = "0.9"
+
+[profile.release]
+lto = true

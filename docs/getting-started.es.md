@@ -76,6 +76,24 @@ Funciona mediante el esquema de URL `textchum://`, así que el paquete de
 la aplicación (`make app`) debe haberse lanzado al menos una vez para
 registrarlo.
 
+## Linux (experimental)
+
+El mismo núcleo impulsa una carcasa nativa GTK4/libadwaita, enlazada
+como crate de Rust en lugar de a través de la cabecera C (allí ambos
+lados son Rust). Es joven — una ventana por archivo, edición y deshacer
+propiedad del núcleo, coloreado tree-sitter desde la tabla de temas
+compartida, abrir/guardar — pero es la arquitectura real, no una
+adaptación: el protocolo de sincronización y sus aserciones de
+depuración son los de macOS traducidos.
+
+```sh
+sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+cargo build --release --manifest-path linux/Cargo.toml
+linux/target/release/textchum-gtk notas.md
+```
+
+La CI lo compila y ejecuta su prueba de humo sin pantalla en cada push.
+
 ## Generar la documentación
 
 La documentación es un sitio [MkDocs](https://www.mkdocs.org) con el tema

@@ -67,6 +67,11 @@ app: core
 	rm -rf dist/Textchum.iconset
 	@echo "Built $(APP_BUNDLE) — open it, or copy to /Applications"
 
+## The GTK shell (Linux only; needs gtk4/libadwaita/gtksourceview dev
+## packages — see docs/getting-started.md).
+linux:
+	cargo build --release --manifest-path linux/Cargo.toml
+
 PREFIX ?= /usr/local
 
 ## Installs the `chum` terminal command (chum [+LINE] [-t|-w] file...).

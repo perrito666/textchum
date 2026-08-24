@@ -72,6 +72,23 @@ chum -t a.rs +7 b.rs         # several files, tabs, one with a line
 It works through the `textchum://` URL scheme, so the app bundle
 (`make app`) must have been launched at least once to register it.
 
+## Linux (experimental)
+
+The same core drives a native GTK4/libadwaita shell, linked as a Rust
+crate rather than through the C header (both sides are Rust there). It
+is young — one window per file, core-owned editing and undo, tree-sitter
+highlighting from the shared theme table, open/save — but it is the real
+architecture, not a port: the sync protocol and its debug assertions are
+the macOS ones translated.
+
+```sh
+sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+cargo build --release --manifest-path linux/Cargo.toml
+linux/target/release/textchum-gtk notes.md
+```
+
+CI builds it and runs its headless smoke test on every push.
+
 ## Building the documentation
 
 The documentation is a [MkDocs](https://www.mkdocs.org) site using the

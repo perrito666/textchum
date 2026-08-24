@@ -368,6 +368,11 @@ Prove the architecture end to end before writing real features.
 - Custom Core Text renderer if TextKit 2 has hit measured limits.
 - TextMate-grammar fallback for exotic languages; semantic tokens; code actions.
 - A second platform shell (the core is already portable; a Linux shell would be the test).
+  **Started** (`linux/`): the GTK4/libadwaita shell builds and passes a headless smoke
+  test in CI — core-owned editing and undo through the `insert-text`/`delete-range`
+  choke point, tree-sitter highlighting as text tags from the shared theme table,
+  GtkSourceView line numbers, open/save. Next: tabs (AdwTabView), the drawer, search
+  panels, LSP wiring.
 
 **Linux shell design (decided ahead of need):** GTK4 + libadwaita, editor view via
 GtkSourceView, preview via WebKitGTK, written in Rust with gtk4-rs — the same shape
