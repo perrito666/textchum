@@ -1,0 +1,36 @@
+name: Dependency audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/Cargo.toml"
+      - "core/Cargo.lock"
+      - "core/*/Cargo.toml"
+      - "docs/requirements.txt"
+      - ".github/workflows/audit.yml"
+  schedule:
+    # Weekly, Mondays 06:00 UTC — advisories appear for dependencies that
+    # have not changed.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: taiki-e/install-action@6cd13508893c0e7eab5f273c2575d3859bd7229a # v2
+        with:
+          tool: cargo-audit
+      - name: RustSec advisories (core)
+        run: cargo audit
+        working-directory: core
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: PyPI advisories (docs toolchain)
+        run: |
+          pip install -r docs/requirements.txt pip-audit
+          pip-audit
