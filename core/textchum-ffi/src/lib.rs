@@ -1174,6 +1174,30 @@ pub unsafe extern "C" fn tc_config_set_appearance(config: *mut TcConfig, appeara
 /// # Safety
 /// `config` must be a live configuration pointer.
 #[no_mangle]
+pub unsafe extern "C" fn tc_config_hover_docs(config: *const TcConfig) -> bool {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return true;
+    };
+    catch_unwind(AssertUnwindSafe(|| config.inner.hover_docs())).unwrap_or(true)
+}
+
+/// Sets the hover-documentation choice.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_hover_docs(config: *mut TcConfig, enabled: bool) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_hover_docs(enabled)));
+}
+
+/// Whether hover documentation pops on mouse rest (default true).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
 pub unsafe extern "C" fn tc_config_theme(config: *const TcConfig) -> *mut c_char {
     let Some(config) = (unsafe { config.as_ref() }) else {
         return std::ptr::null_mut();

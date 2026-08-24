@@ -26,7 +26,12 @@ never join someone else's workspace either.
   characters and `.`, filtered as you keep typing — ↑/↓ to choose,
   ⏎ or ⇥ to accept, ⎋ to dismiss, ⌃Space to ask explicitly.
 - Resting the mouse over a symbol shows the server's **hover**
-  documentation in a popover.
+  documentation in a popover, with the Markdown servers send rendered
+  — code blocks monospaced, emphasis and inline code styled. It only
+  triggers over identifiers (never whitespace or comments), can be
+  switched off in View ▸ Hover Documentation (or Settings), and
+  **Show Documentation for Symbol** (⌃⌘H) asks for the symbol under
+  the caret on demand — even with mouse hover off.
 - **Jump to Definition** (⌃⌘J) goes to the symbol under the caret —
   across files, opening or fronting the target as needed.
 - **Find References** (⇧⌘R) lists every use of the symbol under the
@@ -140,5 +145,4 @@ for five minutes** is shut down — the next open starts a fresh one.
 
 - Snippet placeholders in completions are flattened to plain text.
 - ⌘-click as an alternative trigger for Jump to Definition.
-- Markdown rendering in hover popovers (they show the raw text).
 - A server-status panel.

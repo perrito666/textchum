@@ -258,6 +258,20 @@ impl Config {
         }
     }
 
+    /// Whether hover documentation pops up on mouse rest
+    /// (`editor.hover`, default true).
+    pub fn hover_docs(&self) -> bool {
+        self.editor()
+            .get("hover")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
+
+    pub fn set_hover_docs(&mut self, enabled: bool) {
+        self.editor_mut()
+            .insert("hover".into(), Value::Bool(enabled));
+    }
+
     pub fn line_numbers(&self) -> bool {
         self.editor()
             .get("line_numbers")

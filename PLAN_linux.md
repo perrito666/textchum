@@ -46,7 +46,10 @@ Ordered roughly by how much daily pain each gap causes.
    search results leave no trail.
 5. **LSP breadth.** References, rename, formatting, and the document
    outline are macOS-only; the pool methods exist in the linked crate,
-   so each is a panel/action away. The LSP debug log is also unwired
+   so each is a panel/action away. Hover on Linux also lags the Mac's:
+   no Markdown rendering, no symbol gating (it fires over whitespace
+   and comments), no on/off toggle, and no show-at-caret command. The
+   LSP debug log is also unwired
    (`textchum_lsp::log::set_path` is never called — point it at
    `~/.local/state/textchum/lsp.log`).
 6. **Replace in file.** The search bar finds; it does not replace, and

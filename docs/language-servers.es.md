@@ -32,7 +32,13 @@ nadie.
   escribiendo — ↑/↓ para elegir, ⏎ o ⇥ para aceptar, ⎋ para descartar,
   ⌃Espacio para pedirlas explícitamente.
 - Dejar el ratón sobre un símbolo muestra la documentación **hover** del
-  servidor en un globo.
+  servidor en un globo, con el Markdown que envían los servidores ya
+  renderizado — bloques de código en monoespaciada, énfasis y código en
+  línea con su estilo. Solo se dispara sobre identificadores (nunca
+  sobre espacios ni comentarios), se puede apagar en Vista ▸
+  Documentación al pasar (o en Ajustes), y **Mostrar documentación del
+  símbolo** (⌃⌘H) la pide para el símbolo bajo el cursor a demanda —
+  incluso con el hover del ratón apagado.
 - **Saltar a la definición** (⌃⌘J) va al símbolo bajo el cursor — entre
   archivos, abriendo o trayendo al frente el destino según haga falta.
 - **Buscar referencias** (⇧⌘R) lista cada uso del símbolo bajo el
@@ -157,6 +163,4 @@ apertura arranca una fresca.
 - Los marcadores de fragmento (snippets) en el autocompletado se
   aplanan a texto plano.
 - ⌘-clic como disparador alternativo de Saltar a la definición.
-- El renderizado de Markdown en los globos de *hover* (muestran el texto
-  en crudo).
 - Un panel de estado de servidores.

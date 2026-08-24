@@ -760,6 +760,22 @@ void tc_config_set_appearance(struct TcConfig *config, uint32_t appearance);
  * # Safety
  * `config` must be a live configuration pointer.
  */
+bool tc_config_hover_docs(const struct TcConfig *config);
+
+/**
+ * Sets the hover-documentation choice.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_hover_docs(struct TcConfig *config, bool enabled);
+
+/**
+ * Whether hover documentation pops on mouse rest (default true).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
 char *tc_config_theme(const struct TcConfig *config);
 
 /**

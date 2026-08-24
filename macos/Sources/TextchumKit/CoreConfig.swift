@@ -128,6 +128,12 @@ public final class CoreConfig {
         set { tc_config_set_line_numbers(handle, newValue) }
     }
 
+    /// Whether hover documentation pops up on mouse rest.
+    public var hoverDocs: Bool {
+        get { tc_config_hover_docs(handle) }
+        set { tc_config_set_hover_docs(handle, newValue) }
+    }
+
     /// The chosen theme name (the default theme's name when unset).
     public var theme: String {
         get {

@@ -301,6 +301,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return jumpStack.canGoBack
         case #selector(goForward(_:)):
             return jumpStack.canGoForward
+        case #selector(toggleHoverDocs(_:)):
+            menuItem.state = (settingsModel?.hoverDocs ?? true) ? .on : .off
+            return true
         default:
             return true
         }
@@ -482,6 +485,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsModel?.lineNumbers.toggle()
     }
 
+    @objc func toggleHoverDocs(_ sender: Any?) {
+        settingsModel?.hoverDocs.toggle()
+    }
+
     // MARK: Configurable key shortcuts
 
     /// Menu items by their stable action name, for `keys` overrides.
@@ -512,6 +519,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(NSSplitViewController.toggleSidebar(_:)): "toggleNavigator",
             #selector(EditorWindowController.togglePreview(_:)): "togglePreview",
             #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
+            #selector(toggleHoverDocs(_:)): "toggleHover",
+            #selector(EditorWindowController.showHoverAtCaret(_:)): "showHover",
             #selector(togglePathDisplay(_:)): "togglePathDisplay",
             #selector(EditorWindowController.redrawDocument(_:)): "redraw",
             #selector(EditorWindowController.showDocumentOutline(_:)): "documentOutline",
@@ -1434,6 +1443,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         pathDisplayItem.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(pathDisplayItem)
+        let hoverDocsItem = NSMenuItem(
+            title: "Hover Documentation",
+            action: #selector(toggleHoverDocs(_:)),
+            keyEquivalent: ""
+        )
+        viewMenu.addItem(hoverDocsItem)
+        let showHoverItem = NSMenuItem(
+            title: "Show Documentation for Symbol",
+            action: #selector(EditorWindowController.showHoverAtCaret(_:)),
+            keyEquivalent: "h"
+        )
+        showHoverItem.keyEquivalentModifierMask = [.command, .control]
+        viewMenu.addItem(showHoverItem)
         let outlineItem = NSMenuItem(
             title: "Document Outline…",
             action: #selector(EditorWindowController.showDocumentOutline(_:)),

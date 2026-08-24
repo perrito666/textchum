@@ -334,7 +334,7 @@ final class EditorWindowController: NSWindowController {
     override func mouseMoved(with event: NSEvent) {
         hoverPopover?.close()
         hoverPopover = nil
-        guard lspApp != nil, lspOpenPath != nil, let textView else { return }
+        guard appliedHoverDocs, lspApp != nil, lspOpenPath != nil, let textView else { return }
         let point = textView.convert(event.locationInWindow, from: nil)
         hoverTimer?.invalidate()
         hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {
@@ -343,6 +343,21 @@ final class EditorWindowController: NSWindowController {
                 MainActor.assumeIsolated { self?.requestHover(at: point) }
             }
         }
+    }
+
+    /// Shows hover documentation for the symbol under the caret. Works
+    /// even when mouse hover is switched off — this is the deliberate ask.
+    @objc func showHoverAtCaret(_ sender: Any?) {
+        guard let textView, lspApp != nil, lspOpenPath != nil else {
+            NSSound.beep()
+            return
+        }
+        let caret = min(textView.selectedRange().location, (textView.string as NSString).length)
+        let screenRect = textView.firstRect(forCharacterRange: NSRange(location: caret, length: 0), actualRange: nil)
+        guard let window = textView.window else { return }
+        let windowRect = window.convertFromScreen(screenRect)
+        let point = textView.convert(windowRect.origin, from: nil)
+        requestHover(at: point, deliberate: true)
     }
 
     /// Character offset → LSP (line, UTF-16 column): walk line ranges
@@ -372,14 +387,35 @@ final class EditorWindowController: NSWindowController {
         return (line, index - lineStart)
     }
 
-    private func requestHover(at point: NSPoint) {
+    private func requestHover(at point: NSPoint, deliberate: Bool = false) {
         guard let lspApp, let path = lspOpenPath, let textView else { return }
         let text = textView.string as NSString
         let index = textView.characterIndexForInsertion(at: point)
         guard index >= 0, index <= text.length else { return }
+        // A passive mouse rest only asks the server about symbols:
+        // whitespace, punctuation, the void past a line's end, and
+        // comments have no documentation, and an empty answer still
+        // costs a round trip and a popover flicker.
+        if !deliberate, !isHoverableSymbol(at: index, in: text) { return }
         let (line, character) = Self.lspPosition(ofIndex: index, in: text)
         lspApp.lspHover(path: path, line: line, character: character) { [weak self] json in
             self?.showHover(resultJSON: json, at: point)
+        }
+    }
+
+    /// Whether `index` sits on an identifier character outside a comment
+    /// — the only places a hover request can have an answer.
+    private func isHoverableSymbol(at index: Int, in text: NSString) -> Bool {
+        guard index < text.length, let scalar = UnicodeScalar(text.character(at: index)) else {
+            return false
+        }
+        var identifier = CharacterSet.alphanumerics
+        identifier.insert("_")
+        guard identifier.contains(scalar) else { return false }
+        // Style index 1 is the canonical comment capture (theme contract).
+        let spans = coreDocument.highlights(in: NSRange(location: index, length: 1))
+        return !spans.contains { span in
+            span.styleIndex == 1 && NSLocationInRange(index, span.range)
         }
     }
 
@@ -663,6 +699,71 @@ final class EditorWindowController: NSWindowController {
         return (extracted?.isEmpty ?? true) ? nil : extracted
     }
 
+    /// Renders LSP hover markdown for the balloon: fenced code blocks in
+    /// the monospaced font, everything else through Foundation's inline
+    /// markdown parser (bold, italics, `code` spans, links as plain
+    /// styled text). Block constructs beyond fences degrade gracefully
+    /// to their literal text, which is how servers expect unsupporting
+    /// clients to behave.
+    static func hoverAttributedText(fromMarkdown content: String) -> NSAttributedString {
+        let bodyFont = NSFont.systemFont(ofSize: 12)
+        let codeFont = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        let result = NSMutableAttributedString()
+        let append = { (chunk: String, isCode: Bool) in
+            let trimmed = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            if result.length > 0 {
+                result.append(NSAttributedString(
+                    string: "\n\n", attributes: [.font: bodyFont]))
+            }
+            if isCode {
+                result.append(NSAttributedString(
+                    string: trimmed,
+                    attributes: [.font: codeFont, .foregroundColor: NSColor.textColor]))
+                return
+            }
+            var options = AttributedString.MarkdownParsingOptions()
+            options.interpretedSyntax = .inlineOnlyPreservingWhitespace
+            let styled: NSMutableAttributedString
+            if let parsed = try? AttributedString(markdown: trimmed, options: options) {
+                styled = NSMutableAttributedString(attributedString: NSAttributedString(parsed))
+            } else {
+                styled = NSMutableAttributedString(string: trimmed)
+            }
+            let full = NSRange(location: 0, length: styled.length)
+            styled.addAttribute(.foregroundColor, value: NSColor.textColor, range: full)
+            styled.enumerateAttribute(.inlinePresentationIntent, in: full) { value, range, _ in
+                let intent = value as? InlinePresentationIntent ?? []
+                if intent.contains(.code) {
+                    styled.addAttribute(.font, value: codeFont, range: range)
+                } else {
+                    var traits: NSFontDescriptor.SymbolicTraits = []
+                    if intent.contains(.stronglyEmphasized) { traits.insert(.bold) }
+                    if intent.contains(.emphasized) { traits.insert(.italic) }
+                    let descriptor = bodyFont.fontDescriptor.withSymbolicTraits(traits)
+                    let font = NSFont(descriptor: descriptor, size: bodyFont.pointSize)
+                    styled.addAttribute(.font, value: font ?? bodyFont, range: range)
+                }
+            }
+            result.append(styled)
+        }
+        // Split on fence lines by hand; the odd chunks are code. The
+        // language tag after the opening ``` is dropped.
+        var isCode = false
+        var chunk: [Substring] = []
+        for line in content.split(separator: "\n", omittingEmptySubsequences: false) {
+            if line.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                append(chunk.joined(separator: "\n"), isCode)
+                chunk = []
+                isCode.toggle()
+            } else {
+                chunk.append(line)
+            }
+        }
+        append(chunk.joined(separator: "\n"), isCode)
+        return result
+    }
+
     private func showHover(resultJSON: String, at point: NSPoint) {
         guard let textView, let content = Self.hoverText(fromResultJSON: resultJSON) else {
             return
@@ -674,16 +775,15 @@ final class EditorWindowController: NSWindowController {
         // an empty balloon — the popover sized itself while the label
         // laid out at zero. Explicit frames cannot disagree with the
         // popover about geometry.
-        let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        let measured = (content as NSString).boundingRect(
-            with: NSSize(width: 480, height: 800),
-            options: [.usesLineFragmentOrigin],
-            attributes: [.font: font]
-        )
+        let attributed = Self.hoverAttributedText(fromMarkdown: content)
+        guard attributed.length > 0 else { return }
+        let label = NSTextField(wrappingLabelWithString: "")
+        label.attributedStringValue = attributed
+        // Ask the field itself how it wraps — an NSString measurement
+        // can disagree with the control by a word, clipping the tail.
+        let fitted = label.sizeThatFits(NSSize(width: 480, height: 800))
         let textSize = NSSize(
-            width: ceil(measured.width) + 4, height: ceil(measured.height) + 2)
-        let label = NSTextField(wrappingLabelWithString: content)
-        label.font = font
+            width: ceil(fitted.width) + 4, height: ceil(fitted.height) + 2)
         label.frame = NSRect(x: 12, y: 10, width: textSize.width, height: textSize.height)
         let container = NSView(
             frame: NSRect(
@@ -710,7 +810,7 @@ final class EditorWindowController: NSWindowController {
     /// synthesizing mouse events.
     func debugShowHover() {
         showHover(
-            resultJSON: #"{"contents": {"kind": "markdown", "value": "fn frobnicate(x: usize) -> usize\n\nTurns x into a properly frobnicated value."}}"#,
+            resultJSON: #"{"contents": {"kind": "markdown", "value": "```go\nfunc Frobnicate(x int) int\n```\n\nTurns **x** into a properly `frobnicated` value, *carefully*."}}"#,
             at: NSPoint(x: 200, y: 100))
     }
 
@@ -1110,10 +1210,20 @@ final class EditorWindowController: NSWindowController {
     /// The configured tab width, remembered for formatting requests.
     private var appliedTabWidth = 4
 
+    /// Whether mouse-rest hover documentation is on. The deliberate
+    /// show-at-caret command ignores this.
+    private var appliedHoverDocs = true
+
     /// Applies configuration-derived settings to the view: the font, and
     /// tab stops sized to the configured width in that font.
     func apply(settings: EditorSettings) {
         appliedTabWidth = settings.tabWidth
+        appliedHoverDocs = settings.hoverDocs
+        if !settings.hoverDocs {
+            hoverTimer?.invalidate()
+            hoverPopover?.close()
+            hoverPopover = nil
+        }
         guard let textView else { return }
         let paragraphStyle = NSMutableParagraphStyle()
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: settings.font]).width

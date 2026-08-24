@@ -41,13 +41,16 @@ A file edited by hand might look like:
   "editor": {
     "font_family": "JetBrains Mono",
     "font_size": 13,
-    "tab_width": 4
+    "tab_width": 4,
+    "hover": false
   }
 }
 ```
 
 `appearance` accepts `"system"`, `"light"`, or `"dark"`; omitting it (the
-default) follows the system.
+default) follows the system. `editor.hover` switches the mouse-rest
+documentation popover off (`true`, the default, keeps it on). `editor.hover` switches the mouse-rest
+documentation popover off (`true`, the default, keeps it on).
 
 Everything is optional — a missing file, a missing section, or a missing
 key simply means the default. Writes are atomic (temporary file plus
@@ -179,7 +182,8 @@ Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `findReferences`, `renameSymbol`, `formatDocument`, `documentOutline`,
 `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
-`toggleLineNumbers`, `togglePathDisplay`, `redraw`, `commandPalette`,
+`toggleLineNumbers`, `toggleHover`, `showHover`, `togglePathDisplay`,
+`redraw`, `commandPalette`,
 `settings` — an unknown name is
 logged with the full list. And when a shortcut escapes memory entirely,
 the **Command Palette** (⇧⌘P) fuzzy-searches every menu action by name

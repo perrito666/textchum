@@ -8,6 +8,7 @@ struct EditorSettings {
     let font: NSFont
     let tabWidth: Int
     let lineNumbers: Bool
+    let hoverDocs: Bool
 
     /// Resolves configuration values into a usable font: the configured
     /// family if it exists on this system, the platform monospaced font
@@ -21,6 +22,7 @@ struct EditorSettings {
         }
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
+        self.hoverDocs = config.hoverDocs
     }
 }
 
@@ -73,6 +75,9 @@ final class SettingsModel: ObservableObject {
     }
     @Published var lineNumbers: Bool {
         didSet { persist { $0.lineNumbers = lineNumbers } }
+    }
+    @Published var hoverDocs: Bool {
+        didSet { persist { $0.hoverDocs = hoverDocs } }
     }
     @Published private(set) var lspEntries: [LSPEntry] = []
 
@@ -131,6 +136,7 @@ final class SettingsModel: ObservableObject {
         self.fontSize = config.fontSize
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
+        self.hoverDocs = config.hoverDocs
         self.isLoading = false
         reloadLSPEntries()
         reloadWorkspaceEntries()
@@ -346,6 +352,7 @@ private struct GeneralSettingsTab: View {
                 Text("Tab width: \(model.tabWidth) columns")
             }
             Toggle("Show line numbers", isOn: $model.lineNumbers)
+            Toggle("Hover documentation", isOn: $model.hoverDocs)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 20)

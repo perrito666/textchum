@@ -31,7 +31,13 @@ quelqu'un d'autre.
   frappe — ↑/↓ pour choisir, ⏎ ou ⇥ pour accepter, ⎋ pour fermer,
   ⌃Espace pour les demander explicitement.
 - Laisser la souris sur un symbole affiche la documentation **hover** du
-  serveur dans une bulle.
+  serveur dans une bulle, avec le Markdown envoyé par les serveurs déjà
+  rendu — blocs de code en chasse fixe, emphase et code en ligne
+  stylés. Elle ne se déclenche que sur les identifiants (jamais sur les
+  espaces ni les commentaires), se désactive dans Présentation ▸
+  Documentation au survol (ou dans les Réglages), et **Afficher la
+  documentation du symbole** (⌃⌘H) la demande pour le symbole sous le
+  curseur — même souris désactivée.
 - **Aller à la définition** (⌃⌘J) rejoint le symbole sous le curseur —
   d'un fichier à l'autre, en ouvrant ou en ramenant la cible au premier
   plan au besoin.
@@ -159,6 +165,4 @@ minutes** est arrêtée — l'ouverture suivante en lance une fraîche.
 - Les marqueurs de fragments (snippets) dans la complétion sont aplanis
   en texte brut.
 - ⌘-clic comme déclencheur alternatif d'Aller à la définition.
-- Le rendu Markdown dans les bulles de survol (elles montrent le texte
-  brut).
 - Un panneau d'état des serveurs.

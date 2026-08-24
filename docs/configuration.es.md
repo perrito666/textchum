@@ -43,13 +43,16 @@ Un archivo editado a mano podría verse así:
   "editor": {
     "font_family": "JetBrains Mono",
     "font_size": 13,
-    "tab_width": 4
+    "tab_width": 4,
+    "hover": false
   }
 }
 ```
 
 `appearance` acepta `"system"`, `"light"` u `"dark"`; si se omite (el
-valor por defecto), se sigue al sistema.
+valor por defecto), se sigue al sistema. `editor.hover` apaga el globo
+de documentación al reposar el ratón (`true`, el valor por defecto, lo
+mantiene encendido).
 
 Todo es opcional: un archivo, una sección o una clave ausentes significan
 simplemente el valor por defecto. Las escrituras son atómicas (archivo
@@ -188,6 +191,7 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
+`toggleHover`, `showHover`,
 `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nombre desconocido se registra junto a la lista completa. Ir al
 inicio/fin de bloque (⌃⌥↑/⌃⌥↓ por defecto) salta sobre el bloque
