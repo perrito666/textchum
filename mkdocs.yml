@@ -45,6 +45,7 @@ plugins:
             Getting started: Primeros pasos
             Architecture: Arquitectura
             Documents: Documentos
+            Search: Búsqueda
             Highlighting: Coloreado
             Markdown: Markdown
             Language servers: Servidores de lenguaje
@@ -59,6 +60,7 @@ plugins:
             Getting started: Premiers pas
             Architecture: Architecture
             Documents: Documents
+            Search: Recherche
             Highlighting: Coloration
             Markdown: Markdown
             Language servers: Serveurs de langage
@@ -71,6 +73,7 @@ nav:
   - Getting started: getting-started.md
   - Architecture: architecture.md
   - Documents: documents.md
+  - Search: search.md
   - Highlighting: highlighting.md
   - Markdown: markdown.md
   - Language servers: language-servers.md

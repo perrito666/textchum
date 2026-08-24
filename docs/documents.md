@@ -104,4 +104,3 @@ any of the three is a complete reset.
 ## Not there yet
 
 - Encodings beyond UTF-8 and Latin-1.
-- Project-wide search across files.

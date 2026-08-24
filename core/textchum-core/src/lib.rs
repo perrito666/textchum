@@ -17,6 +17,7 @@ mod document;
 mod fsutil;
 mod history;
 pub mod markdown;
+pub mod search;
 pub mod syntax;
 pub mod workspace;
 

@@ -114,4 +114,3 @@ Para arrancar sin memoria (útil persiguiendo un error): lanzar con
 ## Aún no está
 
 - Codificaciones más allá de UTF-8 y Latin-1.
-- Búsqueda en todo el proyecto, entre archivos.

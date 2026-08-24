@@ -765,6 +765,42 @@ bool tc_document_highlights(const struct TcDocument *document,
  */
 void tc_highlight_spans_free(struct TcHighlightSpan *spans, uintptr_t count);
 
+/**
+ * Fuzzy-matches file paths under `root` against `query`, best match
+ * first (an empty query lists files alphabetically). Returns the
+ * relative paths joined by `\n` as one string (release with
+ * [`tc_string_free`]); empty string for no matches, null on invalid
+ * input. Pure function over the file system — callable from any thread.
+ *
+ * # Safety
+ * `root` and `query` must point to their stated numbers of readable
+ * bytes.
+ */
+char *tc_fuzzy_files(const char *root,
+                     uintptr_t root_len,
+                     const char *query,
+                     uintptr_t query_len,
+                     uintptr_t limit);
+
+/**
+ * Searches file contents under `root` for the regex `pattern`. Each hit
+ * is `path \x1f line \x1f text`, hits joined by `\n`, as one string
+ * (release with [`tc_string_free`]); empty string for no hits. On a bad
+ * pattern returns null and fills the optional `error_out` (release with
+ * [`tc_string_free`]). Pure function — callable from any thread.
+ *
+ * # Safety
+ * `root` and `pattern` must point to their stated numbers of readable
+ * bytes; `error_out`, if non-null, must point to a writable slot.
+ */
+char *tc_grep(const char *root,
+              uintptr_t root_len,
+              const char *pattern,
+              uintptr_t pattern_len,
+              bool case_insensitive,
+              uintptr_t limit,
+              char **error_out);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus

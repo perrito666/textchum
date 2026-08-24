@@ -64,11 +64,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         coreApp.ping(sequence: 1)
         self.coreApp = coreApp
 
-        // Open files given on the command line. With none, defer the
+        // Open files given on the command line — actual files only, not
+        // directories, flags, or flag values. With none, defer the
         // decision one runloop turn: Finder-open events may still be in
         // flight, and session restore should not race them.
-        let fileArguments = CommandLine.arguments.dropFirst()
-            .filter { FileManager.default.fileExists(atPath: $0) }
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        var flagValueIndexes: Set<Int> = []
+        if let flag = arguments.firstIndex(of: "--debug-panel") {
+            flagValueIndexes = [flag + 1, flag + 2, flag + 3]
+        }
+        let fileArguments = arguments.enumerated()
+            .filter { index, argument in
+                guard !argument.hasPrefix("--"), !flagValueIndexes.contains(index) else {
+                    return false
+                }
+                var isDirectory: ObjCBool = false
+                return FileManager.default.fileExists(atPath: argument, isDirectory: &isDirectory)
+                    && !isDirectory.boolValue
+            }
+            .map(\.element)
         for path in fileArguments {
             open(path: path)
         }
@@ -88,6 +102,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         NSApp.activate(ignoringOtherApps: true)
+
+        // Hidden debug hook for screenshot-driven UI verification:
+        // --debug-panel files|grep <scope> <query>
+        let allArguments = CommandLine.arguments
+        if let flagIndex = allArguments.firstIndex(of: "--debug-panel"),
+            allArguments.count > flagIndex + 3
+        {
+            let mode: QuickFinderPanel.Mode =
+                allArguments[flagIndex + 1] == "grep" ? .grep : .files
+            let scope = allArguments[flagIndex + 2]
+            let query = allArguments[flagIndex + 3]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.showQuickFinder(mode: mode)
+                    self?.quickFinder.debugSet(scope: scope, query: query)
+                }
+            }
+        }
 
         // A config file that exists but could not be used deserves exactly
         // one loud notice — the app is running on defaults meanwhile, and
@@ -261,6 +293,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         )
+    }
+
+    // MARK: Quick search
+
+    private let quickFinder = QuickFinderPanel()
+
+    /// The search scope for the key window: its project, else its file's
+    /// directory, else home — always shown editable in the panel.
+    private var currentScope: String {
+        let keyEditor = editors.first { $0.window?.isKeyWindow == true } ?? editors.first
+        if let root = keyEditor?.projectRoot { return root }
+        if let path = keyEditor?.coreDocument.path {
+            return (path as NSString).deletingLastPathComponent
+        }
+        return NSHomeDirectory()
+    }
+
+    private func showQuickFinder(mode: QuickFinderPanel.Mode) {
+        quickFinder.onOpen = { [weak self] path, line in
+            guard let self else { return }
+            if line > 0 {
+                self.openLocation(path: path, line: line - 1, character: 0)
+            } else if let existing = self.editors.first(where: {
+                $0.coreDocument.path == path
+            }) {
+                existing.window?.makeKeyAndOrderFront(nil)
+            } else {
+                self.open(path: path)
+            }
+        }
+        quickFinder.show(mode: mode, scope: currentScope, over: NSApp.keyWindow)
+    }
+
+    @objc func openQuickly(_ sender: Any?) {
+        showQuickFinder(mode: .files)
+    }
+
+    @objc func findInProject(_ sender: Any?) {
+        showQuickFinder(mode: .grep)
     }
 
     // MARK: Recent files
@@ -475,6 +546,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             withTitle: "New", action: #selector(newDocument(_:)), keyEquivalent: "n")
         fileMenu.addItem(
             withTitle: "Open…", action: #selector(openDocument(_:)), keyEquivalent: "o")
+        fileMenu.addItem(
+            withTitle: "Open Quickly…", action: #selector(openQuickly(_:)), keyEquivalent: "t")
         let openRecentItem = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
         let openRecent = NSMenu(title: "Open Recent")
         openRecent.delegate = self
@@ -558,6 +631,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         findMenu.addItem(finderItem("Find Next", .nextMatch, "g"))
         findMenu.addItem(finderItem("Find Previous", .previousMatch, "g", [.command, .shift]))
         findMenu.addItem(finderItem("Use Selection for Find", .setSearchString, "e"))
+        findMenu.addItem(.separator())
+        let findInProject = NSMenuItem(
+            title: "Find in Project…",
+            action: #selector(findInProject(_:)),
+            keyEquivalent: "f"
+        )
+        findInProject.keyEquivalentModifierMask = [.command, .shift]
+        findMenu.addItem(findInProject)
         let findMenuItem = NSMenuItem(title: "Find", action: nil, keyEquivalent: "")
         findMenuItem.submenu = findMenu
         editMenu.addItem(findMenuItem)

@@ -1243,6 +1243,86 @@ pub unsafe extern "C" fn tc_highlight_spans_free(spans: *mut TcHighlightSpan, co
     }
 }
 
+/// Fuzzy-matches file paths under `root` against `query`, best match
+/// first (an empty query lists files alphabetically). Returns the
+/// relative paths joined by `\n` as one string (release with
+/// [`tc_string_free`]); empty string for no matches, null on invalid
+/// input. Pure function over the file system — callable from any thread.
+///
+/// # Safety
+/// `root` and `query` must point to their stated numbers of readable
+/// bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_fuzzy_files(
+    root: *const c_char,
+    root_len: usize,
+    query: *const c_char,
+    query_len: usize,
+    limit: usize,
+) -> *mut c_char {
+    let (root, query) =
+        unsafe { (str_from_raw(root, root_len), str_from_raw(query, query_len)) };
+    let (Some(root), Some(query)) = (root, query) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let paths =
+            textchum_core::search::fuzzy_files(std::path::Path::new(root), query, limit);
+        owned_c_string(paths.join("\n"))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Searches file contents under `root` for the regex `pattern`. Each hit
+/// is `path \x1f line \x1f text`, hits joined by `\n`, as one string
+/// (release with [`tc_string_free`]); empty string for no hits. On a bad
+/// pattern returns null and fills the optional `error_out` (release with
+/// [`tc_string_free`]). Pure function — callable from any thread.
+///
+/// # Safety
+/// `root` and `pattern` must point to their stated numbers of readable
+/// bytes; `error_out`, if non-null, must point to a writable slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_grep(
+    root: *const c_char,
+    root_len: usize,
+    pattern: *const c_char,
+    pattern_len: usize,
+    case_insensitive: bool,
+    limit: usize,
+    error_out: *mut *mut c_char,
+) -> *mut c_char {
+    if !error_out.is_null() {
+        unsafe { *error_out = std::ptr::null_mut() };
+    }
+    let (root, pattern) =
+        unsafe { (str_from_raw(root, root_len), str_from_raw(pattern, pattern_len)) };
+    let (Some(root), Some(pattern)) = (root, pattern) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::search::grep(
+            std::path::Path::new(root),
+            pattern,
+            case_insensitive,
+            limit,
+        ) {
+            Ok(hits) => {
+                let joined: Vec<String> = hits
+                    .into_iter()
+                    .map(|hit| format!("{}\x1f{}\x1f{}", hit.path, hit.line, hit.text))
+                    .collect();
+                owned_c_string(joined.join("\n"))
+            }
+            Err(error) => {
+                unsafe { write_error(error_out, &error) };
+                std::ptr::null_mut()
+            }
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Shared implementation of undo/redo entry points.
 unsafe fn pop_history(
     document: *mut TcDocument,

@@ -116,4 +116,3 @@ complète.
 ## Pas encore là
 
 - Les encodages au-delà d'UTF-8 et de Latin-1.
-- La recherche à l'échelle du projet, entre fichiers.
