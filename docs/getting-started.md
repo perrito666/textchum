@@ -1,6 +1,7 @@
 # Getting started
 
-Textchum currently builds and runs on macOS only.
+Textchum's home platform is macOS; an experimental Linux shell over the
+same core builds too — see [Linux](#linux-experimental) below.
 
 ## Prerequisites
 
@@ -88,7 +89,7 @@ It works through the `textchum://` URL scheme, so the app bundle
 
 The same core drives a native GTK4/libadwaita shell, linked as a Rust
 crate rather than through the C header (both sides are Rust there). It
-is young — one window per file, core-owned editing and undo, tree-sitter
+is young — one window per file, core-owned editing and undo, a header-bar menu listing everything available, tree-sitter
 highlighting from the shared theme table, open/save — but it is the real
 architecture, not a port: the sync protocol and its debug assertions are
 the macOS ones translated.

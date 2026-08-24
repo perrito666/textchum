@@ -1,6 +1,8 @@
 # Primeros pasos
 
-Por ahora Textchum se compila y ejecuta solo en macOS.
+La plataforma de origen de Textchum es macOS; una carcasa experimental
+para Linux sobre el mismo núcleo también compila — véase
+[Linux](#linux-experimental) más abajo.
 
 ## Requisitos
 
@@ -94,7 +96,8 @@ registrarlo.
 El mismo núcleo impulsa una carcasa nativa GTK4/libadwaita, enlazada
 como crate de Rust en lugar de a través de la cabecera C (allí ambos
 lados son Rust). Es joven — una ventana por archivo, edición y deshacer
-propiedad del núcleo, coloreado tree-sitter desde la tabla de temas
+propiedad del núcleo, un menú en la barra de cabecera que lista todo lo
+disponible, coloreado tree-sitter desde la tabla de temas
 compartida, abrir/guardar — pero es la arquitectura real, no una
 adaptación: el protocolo de sincronización y sus aserciones de
 depuración son los de macOS traducidos.

@@ -41,6 +41,7 @@ fn main() -> gtk::glib::ExitCode {
         }
     });
 
+    app.set_accels_for_action("win.new", &["<Ctrl>n"]);
     app.set_accels_for_action("win.open", &["<Ctrl>o"]);
     app.set_accels_for_action("win.save", &["<Ctrl>s"]);
     app.set_accels_for_action("win.save-as", &["<Ctrl><Shift>s"]);

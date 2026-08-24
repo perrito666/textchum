@@ -1,6 +1,8 @@
 # Premiers pas
 
-Pour l'instant, Textchum se compile et s'exécute uniquement sous macOS.
+La plateforme d'origine de Textchum est macOS ; une coque Linux
+expérimentale sur le même noyau se compile aussi — voir
+[Linux](#linux-experimental) plus bas.
 
 ## Prérequis
 
@@ -95,7 +97,7 @@ pour l'enregistrer.
 Le même noyau anime une coque native GTK4/libadwaita, liée comme crate
 Rust plutôt qu'à travers l'en-tête C (là, les deux côtés sont Rust).
 C'est jeune — une fenêtre par fichier, édition et annulation propriété
-du noyau, coloration tree-sitter depuis la table de thèmes partagée,
+du noyau, un menu de barre d'en-tête listant tout ce qui existe, coloration tree-sitter depuis la table de thèmes partagée,
 ouvrir/enregistrer — mais c'est la vraie architecture, pas un portage :
 le protocole de synchronisation et ses assertions de débogage sont ceux
 de macOS traduits.

@@ -70,6 +70,37 @@ impl EditorWindow {
         open_button.set_action_name(Some("win.open"));
         header.pack_start(&open_button);
 
+        // The primary menu: users are not seers — everything the window
+        // can do is listed here, with its shortcut (GTK shows the accels
+        // registered on the application automatically).
+        let file_section = gtk::gio::Menu::new();
+        file_section.append(Some("New Window"), Some("win.new"));
+        file_section.append(Some("Open…"), Some("win.open"));
+        file_section.append(Some("Save"), Some("win.save"));
+        file_section.append(Some("Save As…"), Some("win.save-as"));
+        let edit_section = gtk::gio::Menu::new();
+        edit_section.append(Some("Undo"), Some("win.undo"));
+        edit_section.append(Some("Redo"), Some("win.redo"));
+        let window_section = gtk::gio::Menu::new();
+        window_section.append(Some("Close Window"), Some("window.close"));
+        let menu = gtk::gio::Menu::new();
+        menu.append_section(None, &file_section);
+        menu.append_section(None, &edit_section);
+        menu.append_section(None, &window_section);
+        let menu_button = gtk::MenuButton::builder()
+            .icon_name("open-menu-symbolic")
+            .menu_model(&menu)
+            .tooltip_text("Menu")
+            .build();
+        header.pack_end(&menu_button);
+        // Screenshot-driven verification: pop the menu open on demand.
+        if std::env::var_os("TEXTCHUM_DEBUG_MENU").is_some() {
+            let button = menu_button.clone();
+            glib::timeout_add_local_once(std::time::Duration::from_millis(1200), move || {
+                button.popup();
+            });
+        }
+
         let toolbar = adw::ToolbarView::new();
         toolbar.add_top_bar(&header);
         toolbar.set_content(Some(&scrolled));
@@ -288,6 +319,15 @@ fn install_actions(
     buffer: &sourceview5::Buffer,
     state: &Rc<RefCell<State>>,
 ) {
+    let new_window = gtk::gio::SimpleAction::new("new", None);
+    {
+        let app = app.clone();
+        new_window.connect_activate(move |_, _| {
+            EditorWindow::new(&app, None).present();
+        });
+    }
+    window.add_action(&new_window);
+
     let open = gtk::gio::SimpleAction::new("open", None);
     {
         let app = app.clone();
