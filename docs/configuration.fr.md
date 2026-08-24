@@ -77,11 +77,14 @@ Les valeurs hors limites ou mal typées ne comptent pas comme une casse : un
 ## Thèmes
 
 Le sélecteur **Theme** de l'onglet General choisit la palette de
-syntaxe. Trois sont fournis d'origine — **Textchum** (par défaut),
-**Textchum High Contrast** et **Graphite**, un thème feutré presque
-monochrome. Chaque thème porte une palette claire et une palette sombre
-dans un même fichier, si bien qu'un thème sert aux deux modes
-d'apparence.
+syntaxe. Sept sont fournis d'origine : **Textchum** (par défaut),
+**Textchum High Contrast**, **Graphite** (un thème feutré presque
+monochrome) et les classiques — **Molokai**, **Solarized**, **Dracula**
+et **Gruvbox**. Chaque thème porte une palette claire et une palette
+sombre dans un même fichier, si bien qu'un thème sert aux deux modes
+d'apparence (les classiques nés sombres associent leur palette
+canonique à une claire au contraste ajusté ; Solarized et Gruvbox
+utilisent leurs vraies palettes claires).
 
 Les thèmes personnels sont des fichiers JSON dans :
 
@@ -90,7 +93,8 @@ Les thèmes personnels sont des fichiers JSON dans :
 ```
 
 sélectionnés par nom de fichier (sans `.json`) ; un fichier portant le
-nom d'un thème intégré le remplace. Le plus rapide pour en commencer un
+nom d'un thème intégré le remplace. **Textchum → Open Themes Folder**
+ouvre (et crée) ce dossier. Le plus rapide pour en commencer un
 est de générer un point de départ complet — chaque nom de capture
 stylée, rempli avec la palette par défaut — et de ne changer que les
 couleurs :

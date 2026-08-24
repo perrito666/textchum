@@ -171,6 +171,142 @@ static GRAPHITE_STYLES: &[Style] = &[
     style(0x30363DFF, 0xC9D1D9FF, STYLE_ITALIC), // variable.parameter
 ];
 
+/// The Monokai family as vim's Molokai popularized it: pink keywords,
+/// green functions, purple constants, yellow strings. The dark palette
+/// is the classic; the light one darkens each accent to keep contrast.
+static MOLOKAI_STYLES: &[Style] = &[
+    style(0x6FA800FF, 0xA6E22EFF, 0),           // attribute
+    style(0x7A7463FF, 0x75715EFF, STYLE_ITALIC), // comment
+    style(0x7A3EC8FF, 0xAE81FFFF, 0),           // constant
+    style(0x7A3EC8FF, 0xAE81FFFF, 0),           // constant.builtin
+    style(0x6FA800FF, 0xA6E22EFF, 0),           // constructor
+    style(0x7A3EC8FF, 0xAE81FFFF, 0),           // escape
+    style(0x6FA800FF, 0xA6E22EFF, 0),           // function
+    style(0x0089B3FF, 0x66D9EFFF, 0),           // function.builtin
+    style(0xDC1A60FF, 0xF92672FF, 0),           // keyword
+    style(0xA08A00FF, 0xE6DB74FF, 0),           // label
+    style(0x0089B3FF, 0x66D9EFFF, 0),           // module
+    style(0x7A3EC8FF, 0xAE81FFFF, 0),           // number
+    style(0xDC1A60FF, 0xF92672FF, 0),           // operator
+    style(0xBF6A00FF, 0xFD971FFF, 0),           // property
+    style(0x6E6E68FF, 0x8F908AFF, 0),           // punctuation
+    style(0xDC1A60FF, 0xF92672FF, 0),           // punctuation.special
+    style(0xA08A00FF, 0xE6DB74FF, 0),           // string
+    style(0xA08A00FF, 0xE6DB74FF, 0),           // string.special
+    style(0xDC1A60FF, 0xF92672FF, 0),           // tag
+    style(0x272822FF, 0xF8F8F2FF, STYLE_ITALIC), // text.emphasis
+    style(0xA08A00FF, 0xE6DB74FF, 0),           // text.literal
+    style(0x0089B3FF, 0x66D9EFFF, 0),           // text.reference
+    style(0x272822FF, 0xF8F8F2FF, STYLE_BOLD),  // text.strong
+    style(0x6FA800FF, 0xA6E22EFF, STYLE_BOLD),  // text.title
+    style(0x0089B3FF, 0x66D9EFFF, 0),           // text.uri
+    style(0x0089B3FF, 0x66D9EFFF, STYLE_ITALIC), // type
+    style(0x0089B3FF, 0x66D9EFFF, STYLE_ITALIC), // type.builtin
+    style(0xBF6A00FF, 0xFD971FFF, STYLE_ITALIC), // variable.builtin
+    style(0xBF6A00FF, 0xFD971FFF, STYLE_ITALIC), // variable.parameter
+];
+
+/// Ethan Schoonover's Solarized — the shared accent set on its own
+/// light and dark bases, the rare scheme genuinely designed as a pair.
+static SOLARIZED_STYLES: &[Style] = &[
+    style(0xB58900FF, 0xB58900FF, 0),           // attribute
+    style(0x93A1A1FF, 0x586E75FF, STYLE_ITALIC), // comment
+    style(0x6C71C4FF, 0x6C71C4FF, 0),           // constant
+    style(0xD33682FF, 0xD33682FF, 0),           // constant.builtin
+    style(0xCB4B16FF, 0xCB4B16FF, 0),           // constructor
+    style(0xDC322FFF, 0xDC322FFF, 0),           // escape
+    style(0x268BD2FF, 0x268BD2FF, 0),           // function
+    style(0x268BD2FF, 0x268BD2FF, 0),           // function.builtin
+    style(0x859900FF, 0x859900FF, 0),           // keyword
+    style(0xB58900FF, 0xB58900FF, 0),           // label
+    style(0xB58900FF, 0xB58900FF, 0),           // module
+    style(0xD33682FF, 0xD33682FF, 0),           // number
+    style(0x657B83FF, 0x839496FF, 0),           // operator
+    style(0x2AA198FF, 0x2AA198FF, 0),           // property
+    style(0x93A1A1FF, 0x586E75FF, 0),           // punctuation
+    style(0xDC322FFF, 0xDC322FFF, 0),           // punctuation.special
+    style(0x2AA198FF, 0x2AA198FF, 0),           // string
+    style(0xCB4B16FF, 0xCB4B16FF, 0),           // string.special
+    style(0x268BD2FF, 0x268BD2FF, 0),           // tag
+    style(0x657B83FF, 0x839496FF, STYLE_ITALIC), // text.emphasis
+    style(0x2AA198FF, 0x2AA198FF, 0),           // text.literal
+    style(0x268BD2FF, 0x268BD2FF, 0),           // text.reference
+    style(0x586E75FF, 0x93A1A1FF, STYLE_BOLD),  // text.strong
+    style(0xCB4B16FF, 0xCB4B16FF, STYLE_BOLD),  // text.title
+    style(0x268BD2FF, 0x268BD2FF, 0),           // text.uri
+    style(0xB58900FF, 0xB58900FF, 0),           // type
+    style(0xB58900FF, 0xB58900FF, 0),           // type.builtin
+    style(0xD33682FF, 0xD33682FF, STYLE_ITALIC), // variable.builtin
+    style(0x657B83FF, 0x839496FF, STYLE_ITALIC), // variable.parameter
+];
+
+/// Dracula's pastel-on-night palette; the light column darkens each
+/// accent, since the scheme itself only defines the dark side.
+static DRACULA_STYLES: &[Style] = &[
+    style(0x1B9E3CFF, 0x50FA7BFF, 0),           // attribute
+    style(0x5A6499FF, 0x6272A4FF, STYLE_ITALIC), // comment
+    style(0x7C4DDAFF, 0xBD93F9FF, 0),           // constant
+    style(0x7C4DDAFF, 0xBD93F9FF, 0),           // constant.builtin
+    style(0x0997B3FF, 0x8BE9FDFF, 0),           // constructor
+    style(0xD6218FFF, 0xFF79C6FF, 0),           // escape
+    style(0x1B9E3CFF, 0x50FA7BFF, 0),           // function
+    style(0x0997B3FF, 0x8BE9FDFF, 0),           // function.builtin
+    style(0xD6218FFF, 0xFF79C6FF, 0),           // keyword
+    style(0xC97A16FF, 0xFFB86CFF, 0),           // label
+    style(0x0997B3FF, 0x8BE9FDFF, 0),           // module
+    style(0x7C4DDAFF, 0xBD93F9FF, 0),           // number
+    style(0xD6218FFF, 0xFF79C6FF, 0),           // operator
+    style(0x0997B3FF, 0x8BE9FDFF, 0),           // property
+    style(0x5A5F73FF, 0x9DA3BDFF, 0),           // punctuation
+    style(0xD6218FFF, 0xFF79C6FF, 0),           // punctuation.special
+    style(0x9C9A1AFF, 0xF1FA8CFF, 0),           // string
+    style(0xC97A16FF, 0xFFB86CFF, 0),           // string.special
+    style(0xD6218FFF, 0xFF79C6FF, 0),           // tag
+    style(0x44475AFF, 0xF8F8F2FF, STYLE_ITALIC), // text.emphasis
+    style(0x9C9A1AFF, 0xF1FA8CFF, 0),           // text.literal
+    style(0x0997B3FF, 0x8BE9FDFF, 0),           // text.reference
+    style(0x44475AFF, 0xF8F8F2FF, STYLE_BOLD),  // text.strong
+    style(0x7C4DDAFF, 0xBD93F9FF, STYLE_BOLD),  // text.title
+    style(0x0997B3FF, 0x8BE9FDFF, 0),           // text.uri
+    style(0x0997B3FF, 0x8BE9FDFF, STYLE_ITALIC), // type
+    style(0x0997B3FF, 0x8BE9FDFF, STYLE_ITALIC), // type.builtin
+    style(0x7C4DDAFF, 0xBD93F9FF, STYLE_ITALIC), // variable.builtin
+    style(0xC97A16FF, 0xFFB86CFF, STYLE_ITALIC), // variable.parameter
+];
+
+/// Gruvbox, with its official light and dark palettes.
+static GRUVBOX_STYLES: &[Style] = &[
+    style(0xB57614FF, 0xFABD2FFF, 0),           // attribute
+    style(0x928374FF, 0x928374FF, STYLE_ITALIC), // comment
+    style(0x8F3F71FF, 0xD3869BFF, 0),           // constant
+    style(0x8F3F71FF, 0xD3869BFF, 0),           // constant.builtin
+    style(0x427B58FF, 0x8EC07CFF, 0),           // constructor
+    style(0xAF3A03FF, 0xFE8019FF, 0),           // escape
+    style(0x79740EFF, 0xB8BB26FF, 0),           // function
+    style(0x427B58FF, 0x8EC07CFF, 0),           // function.builtin
+    style(0x9D0006FF, 0xFB4934FF, 0),           // keyword
+    style(0xB57614FF, 0xFABD2FFF, 0),           // label
+    style(0x076678FF, 0x83A598FF, 0),           // module
+    style(0x8F3F71FF, 0xD3869BFF, 0),           // number
+    style(0x3C3836FF, 0xEBDBB2FF, 0),           // operator
+    style(0x076678FF, 0x83A598FF, 0),           // property
+    style(0x7C6F64FF, 0xA89984FF, 0),           // punctuation
+    style(0xAF3A03FF, 0xFE8019FF, 0),           // punctuation.special
+    style(0x79740EFF, 0xB8BB26FF, 0),           // string
+    style(0xAF3A03FF, 0xFE8019FF, 0),           // string.special
+    style(0x9D0006FF, 0xFB4934FF, 0),           // tag
+    style(0x3C3836FF, 0xEBDBB2FF, STYLE_ITALIC), // text.emphasis
+    style(0x79740EFF, 0xB8BB26FF, 0),           // text.literal
+    style(0x076678FF, 0x83A598FF, 0),           // text.reference
+    style(0x3C3836FF, 0xEBDBB2FF, STYLE_BOLD),  // text.strong
+    style(0xB57614FF, 0xFABD2FFF, STYLE_BOLD),  // text.title
+    style(0x076678FF, 0x83A598FF, 0),           // text.uri
+    style(0xB57614FF, 0xFABD2FFF, 0),           // type
+    style(0xB57614FF, 0xFABD2FFF, 0),           // type.builtin
+    style(0xAF3A03FF, 0xFE8019FF, STYLE_ITALIC), // variable.builtin
+    style(0x076678FF, 0x83A598FF, STYLE_ITALIC), // variable.parameter
+];
+
 /// The theme used when nothing else is chosen (or a chosen theme breaks).
 pub const DEFAULT_THEME: &str = "Textchum";
 
@@ -178,6 +314,10 @@ static BUILTINS: &[(&str, &[Style])] = &[
     (DEFAULT_THEME, DEFAULT_STYLES),
     ("Textchum High Contrast", HIGH_CONTRAST_STYLES),
     ("Graphite", GRAPHITE_STYLES),
+    ("Molokai", MOLOKAI_STYLES),
+    ("Solarized", SOLARIZED_STYLES),
+    ("Dracula", DRACULA_STYLES),
+    ("Gruvbox", GRUVBOX_STYLES),
 ];
 
 /// Built-in theme names, in presentation order.

@@ -893,6 +893,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             action: #selector(showSettings(_:)),
             keyEquivalent: ","
         )
+        appMenu.addItem(
+            withTitle: "Install chum Command…",
+            action: #selector(installCommandLineTool(_:)),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(
+            withTitle: "Open Themes Folder",
+            action: #selector(openThemesFolder(_:)),
+            keyEquivalent: ""
+        )
         appMenu.addItem(.separator())
         appMenu.addItem(
             withTitle: "Quit Textchum",

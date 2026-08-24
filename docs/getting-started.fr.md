@@ -59,8 +59,11 @@ textchum/
 
 ## La commande `chum`
 
-`make install-cli` (respecte `PREFIX`, `/usr/local` par défaut) installe
-une petite commande de terminal qui parle à l'application en cours :
+**Textchum → Install chum Command…** (ou, depuis un checkout,
+`make install-cli` — respecte `PREFIX`, `/usr/local` par défaut)
+installe une petite commande de terminal qui parle à l'application en
+cours ; la voie du menu ne demande les droits d'administration que si
+`/usr/local/bin` l'exige :
 
 ```sh
 chum notes.md                # ouvrir (onglet ou fenêtre selon vos réglages)

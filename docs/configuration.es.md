@@ -76,10 +76,13 @@ se ignora y el resto del archivo funciona con normalidad.
 ## Temas
 
 El selector **Theme** de la pestaña General elige la paleta de
-sintaxis. Se incluyen tres de serie — **Textchum** (el predeterminado),
-**Textchum High Contrast** y **Graphite**, uno apagado casi
-monocromo. Cada tema lleva una paleta clara y una oscura en un mismo
-archivo, de modo que un tema sirve para ambos modos de apariencia.
+sintaxis. Se incluyen siete de serie: **Textchum** (el predeterminado),
+**Textchum High Contrast**, **Graphite** (uno apagado casi monocromo) y
+los clásicos — **Molokai**, **Solarized**, **Dracula** y **Gruvbox**.
+Cada tema lleva una paleta clara y una oscura en un mismo archivo, de
+modo que un tema sirve para ambos modos de apariencia (los clásicos
+nacidos oscuros emparejan su paleta canónica con una clara ajustada en
+contraste; Solarized y Gruvbox usan sus paletas claras genuinas).
 
 Los temas propios son archivos JSON en:
 
@@ -88,7 +91,8 @@ Los temas propios son archivos JSON en:
 ```
 
 seleccionados por nombre de archivo (sin `.json`); un archivo con el
-nombre de un tema incorporado lo reemplaza. La forma más rápida de
+nombre de un tema incorporado lo reemplaza. **Textchum → Open Themes
+Folder** abre (y crea) este directorio. La forma más rápida de
 empezar uno es generar un arranque completo — cada nombre de captura
 con estilo, relleno con la paleta por defecto — y solo cambiar colores:
 

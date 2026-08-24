@@ -72,10 +72,13 @@ and the rest of the file works normally.
 ## Themes
 
 The **Theme** picker in the General tab selects the syntax palette.
-Three ship built in — **Textchum** (the default), **Textchum High
-Contrast**, and **Graphite**, a muted near-monochrome. Every theme
+Seven ship built in: **Textchum** (the default), **Textchum High
+Contrast**, **Graphite** (a muted near-monochrome), and the classics —
+**Molokai**, **Solarized**, **Dracula**, and **Gruvbox**. Every theme
 carries a light and a dark palette in one file, so one theme serves
-both appearance modes.
+both appearance modes (the dark-born classics pair their canonical
+palette with a contrast-adjusted light one; Solarized and Gruvbox use
+their genuine light palettes).
 
 User themes are JSON files in:
 
@@ -84,7 +87,8 @@ User themes are JSON files in:
 ```
 
 selected by file name (without `.json`); a file named after a built-in
-overrides it. The fastest way to start one is to generate a complete
+overrides it. **Textchum → Open Themes Folder** opens (and creates)
+this directory. The fastest way to start one is to generate a complete
 starter — every styled capture name, filled with the default palette —
 and just change colors:
 
