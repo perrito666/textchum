@@ -80,6 +80,19 @@ def main():
                     }
                 },
             })
+        elif method == "textDocument/definition":
+            uri = message["params"]["textDocument"]["uri"]
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": [{
+                    "uri": uri,
+                    "range": {
+                        "start": {"line": 0, "character": 3},
+                        "end": {"line": 0, "character": 7},
+                    },
+                }],
+            })
         elif method == "shutdown":
             send({"jsonrpc": "2.0", "id": message["id"], "result": None})
         elif method == "exit":

@@ -242,6 +242,20 @@ uint64_t tc_lsp_hover(struct TcApp *app,
                       uint32_t character);
 
 /**
+ * Requests the definition location(s) of the symbol at an LSP position;
+ * same contract as [`tc_lsp_hover`]. The response's `result` is an LSP
+ * `Location`, `Location[]`, or `LocationLink[]`.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_definition(struct TcApp *app,
+                           const char *path,
+                           uintptr_t path_len,
+                           uint32_t line,
+                           uint32_t character);
+
+/**
  * Announces a closed document. The server instance stays warm.
  *
  * # Safety

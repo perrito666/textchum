@@ -115,6 +115,15 @@ fn per_project_instances_and_diagnostics() {
     });
     assert_eq!(pool.hover(std::path::Path::new("/not/open.rs"), 0, 0), 0);
 
+    // Definition: locations come back with the file's own uri.
+    let definition_id = pool.definition(&file_b, 0, 5);
+    collect_until(&events, "definition response", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == definition_id
+                && json.contains("\"character\":3")
+                && json.contains("file://")))
+    });
+
     pool.did_close(&file_a);
     // Dropping the pool must shut both instances down without hanging
     // (the test itself would time out otherwise).

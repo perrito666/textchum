@@ -67,14 +67,20 @@ final class EditorWindowController: NSWindowController {
     /// The popover currently showing hover content, if any.
     private var hoverPopover: NSPopover?
 
+    /// Opens (or fronts) a file at a position — cross-file navigation,
+    /// provided by the app.
+    private let openLocation: ((String, Int, Int) -> Void)?
+
     init(
         document: CoreDocument,
         settings: EditorSettings? = nil,
         sidebar: SidebarConfiguration? = nil,
-        lspApp: CoreApp? = nil
+        lspApp: CoreApp? = nil,
+        openLocation: ((String, Int, Int) -> Void)? = nil
     ) {
         self.coreDocument = document
         self.lspApp = lspApp
+        self.openLocation = openLocation
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 480),
@@ -221,13 +227,9 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
-    private func requestHover(at point: NSPoint) {
-        guard let lspApp, let path = lspOpenPath, let textView else { return }
-        let text = textView.string as NSString
-        let index = textView.characterIndexForInsertion(at: point)
-        guard index >= 0, index <= text.length else { return }
-        // Character offset → LSP (line, UTF-16 column): walk line ranges
-        // until the one containing the offset.
+    /// Character offset → LSP (line, UTF-16 column): walk line ranges
+    /// until the one containing the offset.
+    private static func lspPosition(ofIndex index: Int, in text: NSString) -> (Int, Int) {
         var line = 0
         var lineStart = 0
         var scan = 0
@@ -241,10 +243,82 @@ final class EditorWindowController: NSWindowController {
             line += 1
             lineStart = scan
         }
-        let character = index - lineStart
+        return (line, index - lineStart)
+    }
+
+    private func requestHover(at point: NSPoint) {
+        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        let text = textView.string as NSString
+        let index = textView.characterIndexForInsertion(at: point)
+        guard index >= 0, index <= text.length else { return }
+        let (line, character) = Self.lspPosition(ofIndex: index, in: text)
         lspApp.lspHover(path: path, line: line, character: character) { [weak self] json in
             self?.showHover(resultJSON: json, at: point)
         }
+    }
+
+    // MARK: Go to definition
+
+    /// Jumps to the definition of the symbol under the caret.
+    @objc func jumpToDefinition(_ sender: Any?) {
+        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        let text = textView.string as NSString
+        let index = min(textView.selectedRange().location, text.length)
+        let (line, character) = Self.lspPosition(ofIndex: index, in: text)
+        lspApp.lspDefinition(path: path, line: line, character: character) { [weak self] json in
+            guard let location = Self.firstLocation(fromResultJSON: json) else {
+                NSSound.beep()
+                return
+            }
+            self?.openLocation?(location.path, location.line, location.character)
+        }
+    }
+
+    /// Extracts the first target from an LSP definition result: a
+    /// `Location`, `Location[]`, or `LocationLink[]`.
+    private static func firstLocation(
+        fromResultJSON json: String
+    ) -> (path: String, line: Int, character: Int)? {
+        guard let data = json.data(using: .utf8),
+            let parsed = try? JSONSerialization.jsonObject(with: data)
+        else { return nil }
+        let candidate: [String: Any]?
+        if let array = parsed as? [[String: Any]] {
+            candidate = array.first
+        } else {
+            candidate = parsed as? [String: Any]
+        }
+        guard let candidate else { return nil }
+        // Location uses uri/range; LocationLink uses targetUri and
+        // targetSelectionRange (preferred) or targetRange.
+        let uri = (candidate["uri"] ?? candidate["targetUri"]) as? String
+        let range =
+            (candidate["range"] ?? candidate["targetSelectionRange"]
+                ?? candidate["targetRange"]) as? [String: Any]
+        guard let uri, uri.hasPrefix("file://"),
+            let start = range?["start"] as? [String: Any],
+            let line = start["line"] as? Int,
+            let character = start["character"] as? Int,
+            let url = URL(string: uri)
+        else { return nil }
+        return (url.path, line, character)
+    }
+
+    /// Moves the caret to an LSP position and reveals it.
+    func reveal(line: Int, character: Int) {
+        guard let textView else { return }
+        let text = textView.string as NSString
+        var index = 0
+        var currentLine = 0
+        while currentLine < line && index < text.length {
+            index = NSMaxRange(text.lineRange(for: NSRange(location: index, length: 0)))
+            currentLine += 1
+        }
+        let target = min(index + max(0, character), text.length)
+        selectionChangeIsFromEditing = false
+        textView.setSelectedRange(NSRange(location: target, length: 0))
+        textView.scrollRangeToVisible(NSRange(location: target, length: 0))
+        window?.makeFirstResponder(textView)
     }
 
     /// Extracts human-readable text from an LSP hover result: contents as
@@ -801,6 +875,8 @@ extension EditorWindowController: NSMenuItemValidation {
             return coreDocument.canUndo
         case #selector(performRedo(_:)):
             return coreDocument.canRedo
+        case #selector(jumpToDefinition(_:)):
+            return lspOpenPath != nil
         default:
             return true
         }

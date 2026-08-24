@@ -28,6 +28,9 @@ quelqu'un d'autre.
 - Le sous-titre de la fenêtre les compte (« 2 errors, 1 warning »).
 - Laisser la souris sur un symbole affiche la documentation **hover** du
   serveur dans une bulle.
+- **Aller à la définition** (⌃⌘J) rejoint le symbole sous le curseur —
+  d'un fichier à l'autre, en ouvrant ou en ramenant la cible au premier
+  plan au besoin.
 - Un serveur manquant est signalé une seule fois, avec la commande qui
   l'installe ; tout le reste de l'éditeur continue de fonctionner sans
   lui.
@@ -62,9 +65,10 @@ un serveur scripté.
 
 ## Pas encore là
 
-- Complétion, aller à la définition, références, renommage, formatage —
-  les diagnostics et le survol sont venus d'abord parce que la validation
+- Complétion, références, renommage, formatage — les diagnostics, le
+  survol et les définitions sont venus d'abord parce que la validation
   est la promesse centrale du produit.
+- ⌘-clic comme déclencheur alternatif d'Aller à la définition.
 - Le rendu Markdown dans les bulles de survol (elles montrent le texte
   brut).
 - Le redémarrage automatique des serveurs plantés (un plantage est

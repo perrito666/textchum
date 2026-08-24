@@ -24,6 +24,8 @@ never join someone else's workspace either.
 - The window subtitle counts them ("2 errors, 1 warning").
 - Resting the mouse over a symbol shows the server's **hover**
   documentation in a popover.
+- **Jump to Definition** (⌃⌘J) goes to the symbol under the caret —
+  across files, opening or fronting the target as needed.
 - A missing server is reported once, with the command that installs it;
   everything else about the editor keeps working without it.
 
@@ -55,9 +57,10 @@ protocol path is exercised in CI against a scripted server.
 
 ## Not there yet
 
-- Completion, go-to-definition, references, rename, formatting —
-  diagnostics and hover came first because validation is the product's
-  core promise.
+- Completion, references, rename, formatting — diagnostics, hover, and
+  definitions came first because validation is the product's core
+  promise.
+- ⌘-click as an alternative trigger for Jump to Definition.
 - Markdown rendering in hover popovers (they show the raw text).
 - Automatic restart of crashed servers (a crash is reported; reopening
   the file starts a fresh instance).

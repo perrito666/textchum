@@ -187,6 +187,24 @@ public final class CoreApp {
         guard id != 0 else { return }
         router.register(id, completion)
     }
+
+    /// Requests the definition of the symbol at an LSP position; same
+    /// contract as ``lspHover(path:line:character:completion:)``. The JSON
+    /// is an LSP `Location`, `Location[]`, or `LocationLink[]`.
+    @MainActor
+    public func lspDefinition(
+        path: String,
+        line: Int,
+        character: Int,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_definition(
+                handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
 }
 
 /// Runs `body` with a `(pointer, length)` view of the string's UTF-8.

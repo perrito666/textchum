@@ -158,6 +158,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             })
     }
 
+    /// Cross-file navigation: front (or open) `path` and put the caret at
+    /// an LSP position. Used by go-to-definition.
+    private func openLocation(path: String, line: Int, character: Int) {
+        if let existing = editors.first(where: { $0.coreDocument.path == path }) {
+            existing.window?.makeKeyAndOrderFront(nil)
+            existing.reveal(line: line, character: character)
+        } else {
+            open(path: path)
+            editors.first { $0.coreDocument.path == path }?
+                .reveal(line: line, character: character)
+        }
+    }
+
     private var sidebarConfiguration: SidebarConfiguration {
         SidebarConfiguration(
             model: sidebarModel,
@@ -259,7 +272,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 document: CoreDocument(),
                 settings: currentSettings,
                 sidebar: sidebarConfiguration,
-                lspApp: coreApp            ))
+                lspApp: coreApp,
+                openLocation: { [weak self] path, line, character in
+                    self?.openLocation(path: path, line: line, character: character)
+                }            ))
     }
 
     @objc func openDocument(_ sender: Any?) {
@@ -299,7 +315,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     document: document,
                     settings: currentSettings,
                     sidebar: sidebarConfiguration,
-                lspApp: coreApp                ))
+                lspApp: coreApp,
+                openLocation: { [weak self] path, line, character in
+                    self?.openLocation(path: path, line: line, character: character)
+                }                ))
         } catch {
             let alert = NSAlert()
             alert.alertStyle = .warning
@@ -417,6 +436,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             action: #selector(NSText.selectAll(_:)),
             keyEquivalent: "a"
         )
+        editMenu.addItem(.separator())
+        let jump = NSMenuItem(
+            title: "Jump to Definition",
+            action: #selector(EditorWindowController.jumpToDefinition(_:)),
+            keyEquivalent: "j"
+        )
+        jump.keyEquivalentModifierMask = [.command, .control]
+        editMenu.addItem(jump)
         editMenu.addItem(.separator())
 
         // Find submenu, driving the text view's native find bar.

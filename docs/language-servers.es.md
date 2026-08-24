@@ -29,6 +29,8 @@ nadie.
 - El subtítulo de la ventana los cuenta («2 errors, 1 warning»).
 - Dejar el ratón sobre un símbolo muestra la documentación **hover** del
   servidor en un globo.
+- **Saltar a la definición** (⌃⌘J) va al símbolo bajo el cursor — entre
+  archivos, abriendo o trayendo al frente el destino según haga falta.
 - Un servidor ausente se informa una sola vez, con el comando que lo
   instala; todo lo demás del editor sigue funcionando sin él.
 
@@ -62,9 +64,10 @@ servidor guionizado.
 
 ## Aún no está
 
-- Autocompletado, ir a definición, referencias, renombrar, formatear —
-  los diagnósticos y el *hover* llegaron primero porque la validación es
+- Autocompletado, referencias, renombrar, formatear — los diagnósticos,
+  el *hover* y las definiciones llegaron primero porque la validación es
   la promesa central del producto.
+- ⌘-clic como disparador alternativo de Saltar a la definición.
 - El renderizado de Markdown en los globos de *hover* (muestran el texto
   en crudo).
 - Reinicio automático de servidores caídos (una caída se informa; reabrir
