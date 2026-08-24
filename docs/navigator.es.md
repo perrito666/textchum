@@ -25,7 +25,12 @@ se resuelve en este orden:
    más cercano (`Cargo.toml`, `go.mod`, `package.json`,
    `pyproject.toml`, `Package.swift`, `build.zig`, `Makefile`, …).
 
-Los archivos fuera de todo proyecto se reúnen bajo **Other**.
+Los archivos fuera de todo proyecto se reúnen bajo **Other**. La regla
+del paso 2 — gana el repositorio — puede relajarse por proyecto: el
+interruptor **Manifest projects** de
+[Ajustes → Projects](configuration.es.md) vuelve a dividir una raíz por
+sus manifiestos de lenguaje, para repositorios que en realidad son
+varios proyectos disfrazados de uno.
 
 Esta es la misma noción de «proyecto» que usa el resto de Textchum (y por
 la que se delimitarán los servidores de lenguaje), así que el cajón hace

@@ -35,6 +35,8 @@ private final class ScriptMessageProxy: NSObject, WKScriptMessageHandler {
 struct SidebarConfiguration {
     /// Shared explorer state, so expansion follows between tabs.
     let treeState: FileTreeState
+    /// Settings-aware project-root resolution (workspace toggles apply).
+    let resolveProjectRoot: (String) -> String?
     let selectDocument: (ObjectIdentifier) -> Void
     let openFile: (String) -> Void
 }
@@ -102,6 +104,8 @@ final class EditorWindowController: NSWindowController {
     /// Opens (or fronts) a file at a position — cross-file navigation,
     /// provided by the app.
     private let openLocation: ((String, Int, Int) -> Void)?
+    /// Settings-aware project-root resolution from the app.
+    private let resolveProjectRoot: (String) -> String?
 
     init(
         document: CoreDocument,
@@ -113,6 +117,8 @@ final class EditorWindowController: NSWindowController {
         self.coreDocument = document
         self.lspApp = lspApp
         self.openLocation = openLocation
+        self.resolveProjectRoot =
+            sidebar?.resolveProjectRoot ?? { CoreWorkspace.projectRoot(forPath: $0) }
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 480),
@@ -898,10 +904,18 @@ final class EditorWindowController: NSWindowController {
         let state = (window?.title ?? "Untitled", coreDocument.isDirty, coreDocument.path)
         guard state != publishedState else { return }
         if state.2 != publishedState.2 {
-            projectRoot = state.2.flatMap { CoreWorkspace.projectRoot(forPath: $0) }
+            projectRoot = state.2.flatMap(resolveProjectRoot)
             sidebarContext.projectRoot = projectRoot
         }
         publishedState = state
+        NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
+    }
+
+    /// Recomputes the project root under the current workspace settings
+    /// (called when those settings change).
+    func refreshProjectRoot() {
+        projectRoot = coreDocument.path.flatMap(resolveProjectRoot)
+        sidebarContext.projectRoot = projectRoot
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
     }
 

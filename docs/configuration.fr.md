@@ -73,6 +73,45 @@ Les valeurs hors limites ou mal typées ne comptent pas comme une casse : un
 `font_size` de `4000` est ramené dans la plage valide, un `font_family` de
 `42` est ignoré, et le reste du fichier fonctionne normalement.
 
+## Projets
+
+L'onglet Projects décide où un projet commence et finit — la frontière
+selon laquelle le navigateur regroupe et sur laquelle le pool de
+serveurs de langage indexe ses instances. Chaque interrupteur existe en
+deux exemplaires : comme valeur par défaut pour tous les projets, et par
+racine de projet. Une ligne ajoutée avec le champ de chemin (qui
+complète les noms de répertoire pendant la frappe et porte un bouton
+Browse…) remplace les valeurs par défaut pour cette racine seulement.
+
+- **Manifest projects** — normalement le dépôt le plus externe
+  l'emporte : ouvrir un fichier n'importe où dans un dépôt fait du dépôt
+  le projet, quel que soit le nombre de `Cargo.toml` ou `pyproject.toml`
+  entre les deux. L'activer redécoupe une racine aux manifestes de
+  langage, si bien que les modules imbriqués redeviennent des projets à
+  part entière.
+- **Recursive config** — fait que les réglages par projet d'une racine
+  (ses commandes de serveur de langage et ces interrupteurs eux-mêmes)
+  s'appliquent aux projets imbriqués qu'elle contient, l'ancêtre le plus
+  proche d'abord. Utile pour les monorepos : une configuration en haut,
+  beaucoup de projets en dessous.
+
+Dans le fichier, tout cela vit dans une section `workspace` :
+
+```json
+{
+  "workspace": {
+    "manifest_projects": false,
+    "recursive_config": false,
+    "projects": {
+      "/Users/you/code/monorepo": {
+        "manifest_projects": true,
+        "recursive_config": true
+      }
+    }
+  }
+}
+```
+
 ## Raccourcis clavier
 
 Les raccourcis des menus se réassignent via une section `keys` éditée à
@@ -106,4 +145,6 @@ alimente déjà la coloration.
 - Textchum ne surveille pas encore le fichier en cours d'exécution ; les
   changements faits dans un autre éditeur s'appliquent au prochain
   lancement.
-- Les réglages par projet.
+- Les réglages d'éditeur par projet (police, largeur de tabulation) —
+  les projets portent déjà leurs propres réglages de détection et de
+  serveurs de langage, mais pas ceux-ci.

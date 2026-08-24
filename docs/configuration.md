@@ -68,6 +68,42 @@ Out-of-range or mistyped values do not count as breakage: a `font_size` of
 `4000` is clamped to the valid range, a `font_family` of `42` is ignored,
 and the rest of the file works normally.
 
+## Projects
+
+The Projects tab decides where a project starts and ends — the boundary
+the navigator groups by and the language-server pool keys its instances
+on. Both switches exist twice: as a default for every project, and per
+project root. A row added with the path field (which completes directory
+names as you type, and carries a Browse… button) overrides the defaults
+for that root only.
+
+- **Manifest projects** — normally the outermost repository wins:
+  opening a file anywhere inside a repository makes the repository the
+  project, however many `Cargo.toml` or `pyproject.toml` files sit in
+  between. Switching this on splits a root at language manifests again,
+  so nested modules become projects of their own.
+- **Recursive config** — makes a root's per-project settings (its
+  language-server commands, and these very switches) apply to the nested
+  projects inside it, closest ancestor first. Useful for monorepos: one
+  configuration at the top, many projects underneath.
+
+In the file, these live in a `workspace` section:
+
+```json
+{
+  "workspace": {
+    "manifest_projects": false,
+    "recursive_config": false,
+    "projects": {
+      "/Users/you/code/monorepo": {
+        "manifest_projects": true,
+        "recursive_config": true
+      }
+    }
+  }
+}
+```
+
 ## Key shortcuts
 
 Menu shortcuts are rebindable through a hand-edited `keys` section (no
@@ -99,4 +135,6 @@ same tree that powers highlighting.
 
 - Textchum does not yet watch the file while running; changes made in
   another editor apply on the next launch.
-- Per-project overrides.
+- Per-project overrides of the editor settings (font, tab width) —
+  projects already carry their own detection and language-server
+  settings, but not these.

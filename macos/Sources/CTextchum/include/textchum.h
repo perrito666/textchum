@@ -700,15 +700,48 @@ uint32_t tc_config_appearance(const struct TcConfig *config);
 void tc_config_set_appearance(struct TcConfig *config, uint32_t appearance);
 
 /**
- * The project root for a file or directory path (`len` bytes of UTF-8):
- * the nearest ancestor with a root marker (VCS directory or
- * build/manifest file). Returns null for loose files outside any
- * project; release non-null results with [`tc_string_free`].
+ * The project root for a file or directory path (`len` bytes of UTF-8),
+ * resolved under the workspace settings passed as JSON (`settings_len`
+ * bytes; may be empty for defaults — the configuration's `workspace`
+ * section). Returns null for loose files outside any project; release
+ * non-null results with [`tc_string_free`].
  *
  * # Safety
- * `path` must point to `len` readable bytes.
+ * `path` and `settings` must point to their stated numbers of readable
+ * bytes.
  */
-char *tc_project_root_for_path(const char *path, uintptr_t len);
+char *tc_project_root_for_path(const char *path,
+                               uintptr_t len,
+                               const char *settings,
+                               uintptr_t settings_len);
+
+/**
+ * The configuration's `workspace` section, serialized (`{}` when
+ * unset). Release with [`tc_string_free`]. Feed it to
+ * [`tc_project_root_for_path`] and, combined with the `lsp` section, to
+ * [`tc_lsp_configure`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_workspace_json(const struct TcConfig *config);
+
+/**
+ * Sets (or removes, when `has_value` is false) a workspace flag —
+ * `manifest_projects` or `recursive_config` — for a project root
+ * (`root_len > 0`) or the defaults.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_workspace_flag(struct TcConfig *config,
+                                  const char *root,
+                                  uintptr_t root_len,
+                                  const char *key,
+                                  uintptr_t key_len,
+                                  bool has_value,
+                                  bool value);
 
 /**
  * Where opened files go, as a `TC_OPEN_IN_*` value.

@@ -256,6 +256,41 @@ impl Config {
             .unwrap_or_else(|| "{}".into())
     }
 
+    /// The workspace-behavior section (`workspace`), serialized:
+    /// `{"manifest_projects": bool, "recursive_config": bool,
+    /// "projects": {root: {same flags}}}`. Top-level flags are the
+    /// defaults; per-root entries override them. `{}` when unset.
+    pub fn workspace_json(&self) -> String {
+        self.root
+            .get("workspace")
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "{}".into())
+    }
+
+    /// Sets (or, with `None`, removes) a workspace flag —
+    /// `manifest_projects` or `recursive_config` — for a project root, or
+    /// the defaults when `root` is `None`. Empty sections are pruned.
+    pub fn set_workspace_flag(&mut self, root: Option<&str>, key: &str, value: Option<bool>) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let workspace = ensure_object(top, "workspace");
+        let section = match root {
+            Some(root) => ensure_object(ensure_object(workspace, "projects"), root),
+            None => workspace,
+        };
+        match value {
+            Some(value) => {
+                section.insert(key.into(), Value::Bool(value));
+            }
+            None => {
+                section.remove(key);
+            }
+        }
+        prune_empty(top, "workspace");
+    }
+
     /// Where opened files go (`editor.open_files_in`): tabs by default.
     pub fn open_target(&self) -> OpenTarget {
         match self.editor().get("open_files_in").and_then(Value::as_str) {

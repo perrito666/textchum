@@ -3,16 +3,27 @@ import Foundation
 
 /// The core's workspace model: which project a file belongs to.
 public enum CoreWorkspace {
-    /// The project root for a file or directory path — the nearest
-    /// ancestor with a root marker (VCS directory, build/manifest file) —
-    /// or nil for loose files outside any project.
-    public static func projectRoot(forPath path: String) -> String? {
+    /// The project root for a file or directory path, resolved under the
+    /// given workspace settings JSON (the configuration's `workspace`
+    /// section; "{}" for defaults) — or nil for loose files outside any
+    /// project.
+    public static func projectRoot(forPath path: String, settingsJSON: String = "{}") -> String?
+    {
         var path = path
-        let cString: UnsafeMutablePointer<CChar>? = path.withUTF8 { bytes in
-            let pointer = bytes.baseAddress.map {
-                UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+        var settings = settingsJSON
+        let cString: UnsafeMutablePointer<CChar>? = path.withUTF8 { pathBytes in
+            settings.withUTF8 { settingsBytes in
+                tc_project_root_for_path(
+                    pathBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(pathBytes.count),
+                    settingsBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(settingsBytes.count)
+                )
             }
-            return tc_project_root_for_path(pointer, UInt(bytes.count))
         }
         guard let cString else { return nil }
         defer { tc_string_free(cString) }

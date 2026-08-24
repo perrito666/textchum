@@ -32,7 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsModel.onChange = { [weak self] in
             guard let self, let model = self.settingsModel else { return }
             self.applyAppearanceChoice()
-            self.coreApp?.lspConfigure(json: model.lspJSON)
+            self.coreApp?.lspConfigure(json: self.combinedLSPConfiguration)
+            for editor in self.editors {
+                editor.refreshProjectRoot()
+            }
             for editor in self.editors {
                 editor.apply(settings: model.currentSettings)
             }
@@ -66,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.handleCoreEvent(event)
         }
         coreApp.ping(sequence: 1)
-        coreApp.lspConfigure(json: config.lspJSON)
+        coreApp.lspConfigure(json: "{\"lsp\":\(config.lspJSON),\"workspace\":\(config.workspaceJSON)}")
         self.coreApp = coreApp
 
         settingsModel.onRestartServers = { [weak self] in
@@ -126,6 +129,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 MainActor.assumeIsolated {
                     if allArguments[flagIndex + 1] == "settings" {
+                        // scope names the tab tag for this mode.
+                        self?.settingsModel?.selectedTab = scope
                         self?.showSettings(nil)
                         return
                     }
@@ -446,9 +451,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// across tabs (and windows showing the same project).
     private let fileTreeState = FileTreeState()
 
+    /// The pool configuration: server entries plus workspace behavior.
+    private var combinedLSPConfiguration: String {
+        "{\"lsp\":\(config?.lspJSON ?? "{}"),\"workspace\":\(config?.workspaceJSON ?? "{}")}"
+    }
+
     private var sidebarConfiguration: SidebarConfiguration {
         SidebarConfiguration(
             treeState: fileTreeState,
+            resolveProjectRoot: { [weak self] path in
+                CoreWorkspace.projectRoot(
+                    forPath: path, settingsJSON: self?.config?.workspaceJSON ?? "{}")
+            },
             selectDocument: { [weak self] id in
                 guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
                 else { return }

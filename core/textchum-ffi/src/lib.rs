@@ -1059,25 +1059,82 @@ pub unsafe extern "C" fn tc_config_set_appearance(config: *mut TcConfig, appeara
     }
 }
 
-/// The project root for a file or directory path (`len` bytes of UTF-8):
-/// the nearest ancestor with a root marker (VCS directory or
-/// build/manifest file). Returns null for loose files outside any
-/// project; release non-null results with [`tc_string_free`].
+/// The project root for a file or directory path (`len` bytes of UTF-8),
+/// resolved under the workspace settings passed as JSON (`settings_len`
+/// bytes; may be empty for defaults — the configuration's `workspace`
+/// section). Returns null for loose files outside any project; release
+/// non-null results with [`tc_string_free`].
 ///
 /// # Safety
-/// `path` must point to `len` readable bytes.
+/// `path` and `settings` must point to their stated numbers of readable
+/// bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tc_project_root_for_path(path: *const c_char, len: usize) -> *mut c_char {
-    let Some(path) = (unsafe { str_from_raw(path, len) }) else {
+pub unsafe extern "C" fn tc_project_root_for_path(
+    path: *const c_char,
+    len: usize,
+    settings: *const c_char,
+    settings_len: usize,
+) -> *mut c_char {
+    let (path, settings) =
+        unsafe { (str_from_raw(path, len), str_from_raw(settings, settings_len)) };
+    let (Some(path), Some(settings_json)) = (path, settings) else {
         return std::ptr::null_mut();
     };
     catch_unwind(AssertUnwindSafe(|| {
-        match textchum_core::workspace::project_root_for(std::path::Path::new(path)) {
+        let settings = textchum_core::workspace::WorkspaceSettings::from_json(settings_json);
+        match textchum_core::workspace::project_root_with(std::path::Path::new(path), &settings)
+        {
             Some(root) => owned_c_string(root.to_string_lossy().into_owned()),
             None => std::ptr::null_mut(),
         }
     }))
     .unwrap_or(std::ptr::null_mut())
+}
+
+/// The configuration's `workspace` section, serialized (`{}` when
+/// unset). Release with [`tc_string_free`]. Feed it to
+/// [`tc_project_root_for_path`] and, combined with the `lsp` section, to
+/// [`tc_lsp_configure`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_workspace_json(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    owned_c_string(config.inner.workspace_json())
+}
+
+/// Sets (or removes, when `has_value` is false) a workspace flag —
+/// `manifest_projects` or `recursive_config` — for a project root
+/// (`root_len > 0`) or the defaults.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_workspace_flag(
+    config: *mut TcConfig,
+    root: *const c_char,
+    root_len: usize,
+    key: *const c_char,
+    key_len: usize,
+    has_value: bool,
+    value: bool,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let (root, key) = unsafe { (str_from_raw(root, root_len), str_from_raw(key, key_len)) };
+    let (Some(root), Some(key)) = (root, key) else {
+        return;
+    };
+    config.inner.set_workspace_flag(
+        (!root.is_empty()).then_some(root),
+        key,
+        has_value.then_some(value),
+    );
 }
 
 /// Open-target choice: files open as tabs of the current window group.

@@ -135,6 +135,39 @@ public final class CoreConfig {
         return String(cString: cString)
     }
 
+    /// The workspace-behavior section: manifest-project and
+    /// recursive-config flags, defaults plus per-root entries.
+    public var workspaceJSON: String {
+        guard let cString = tc_config_workspace_json(handle) else { return "{}" }
+        defer { tc_string_free(cString) }
+        return String(cString: cString)
+    }
+
+    /// Sets (nil removes) a workspace flag — "manifest_projects" or
+    /// "recursive_config" — for a project root, or the defaults when
+    /// `root` is nil.
+    public func setWorkspaceFlag(root: String?, key: String, value: Bool?) {
+        var root = root ?? ""
+        var key = key
+        root.withUTF8 { rootBytes in
+            key.withUTF8 { keyBytes in
+                tc_config_set_workspace_flag(
+                    handle,
+                    rootBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(rootBytes.count),
+                    keyBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(keyBytes.count),
+                    value != nil,
+                    value ?? false
+                )
+            }
+        }
+    }
+
     /// The language-server section, serialized for the pool:
     /// `{"defaults": {lang: cmdline}, "projects": {root: {lang: cmdline}}}`.
     public var lspJSON: String {

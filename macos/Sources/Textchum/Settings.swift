@@ -29,6 +29,9 @@ struct EditorSettings {
 /// notifies the app so open editors update live.
 @MainActor
 final class SettingsModel: ObservableObject {
+    /// Which settings tab is frontmost; a tag from `SettingsView`.
+    @Published var selectedTab = "general"
+
     /// One language-server configuration row.
     struct LSPEntry: Identifiable, Equatable {
         /// Project root path; empty means the defaults section.
@@ -70,6 +73,33 @@ final class SettingsModel: ObservableObject {
     }
     @Published private(set) var lspEntries: [LSPEntry] = []
 
+    /// One workspace-behavior row (a project root and its two flags).
+    struct WorkspaceEntry: Identifiable, Equatable {
+        let scope: String
+        var manifestProjects: Bool
+        var recursiveConfig: Bool
+        var id: String { scope }
+        var scopeLabel: String { (scope as NSString).lastPathComponent }
+    }
+
+    @Published var manifestProjectsDefault = false {
+        didSet {
+            guard !isLoading else { return }
+            config.setWorkspaceFlag(
+                root: nil, key: "manifest_projects", value: manifestProjectsDefault)
+            persistLSPChange()
+        }
+    }
+    @Published var recursiveConfigDefault = false {
+        didSet {
+            guard !isLoading else { return }
+            config.setWorkspaceFlag(
+                root: nil, key: "recursive_config", value: recursiveConfigDefault)
+            persistLSPChange()
+        }
+    }
+    @Published private(set) var workspaceEntries: [WorkspaceEntry] = []
+
     init(config: CoreConfig) {
         self.config = config
         self.appearance = config.appearance
@@ -80,7 +110,66 @@ final class SettingsModel: ObservableObject {
         self.lineNumbers = config.lineNumbers
         self.isLoading = false
         reloadLSPEntries()
+        reloadWorkspaceEntries()
     }
+
+    // MARK: Workspace behavior
+
+    private func reloadWorkspaceEntries() {
+        isLoading = true
+        defer { isLoading = false }
+        var entries: [WorkspaceEntry] = []
+        if let data = config.workspaceJSON.data(using: .utf8),
+            let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        {
+            manifestProjectsDefault = parsed["manifest_projects"] as? Bool ?? false
+            recursiveConfigDefault = parsed["recursive_config"] as? Bool ?? false
+            for (root, raw) in parsed["projects"] as? [String: [String: Any]] ?? [:] {
+                entries.append(
+                    WorkspaceEntry(
+                        scope: root,
+                        manifestProjects: raw["manifest_projects"] as? Bool
+                            ?? manifestProjectsDefault,
+                        recursiveConfig: raw["recursive_config"] as? Bool
+                            ?? recursiveConfigDefault
+                    ))
+            }
+        }
+        workspaceEntries = entries.sorted { $0.scope < $1.scope }
+    }
+
+    func addWorkspaceEntry(scope: String) {
+        let scope = (scope as NSString).expandingTildeInPath
+        guard !scope.isEmpty else { return }
+        config.setWorkspaceFlag(
+            root: scope, key: "manifest_projects", value: manifestProjectsDefault)
+        config.setWorkspaceFlag(
+            root: scope, key: "recursive_config", value: recursiveConfigDefault)
+        persistWorkspaceChange()
+    }
+
+    func setWorkspaceFlag(scope: String, key: String, value: Bool) {
+        config.setWorkspaceFlag(root: scope, key: key, value: value)
+        persistWorkspaceChange()
+    }
+
+    func removeWorkspaceEntry(_ entry: WorkspaceEntry) {
+        config.setWorkspaceFlag(root: entry.scope, key: "manifest_projects", value: nil)
+        config.setWorkspaceFlag(root: entry.scope, key: "recursive_config", value: nil)
+        persistWorkspaceChange()
+    }
+
+    private func persistWorkspaceChange() {
+        do {
+            try config.save()
+        } catch {
+            NSLog("could not save configuration: \(error)")
+        }
+        reloadWorkspaceEntries()
+        onChange?()
+    }
+
+    var workspaceJSON: String { config.workspaceJSON }
 
     var currentSettings: EditorSettings {
         EditorSettings(config: config)
@@ -156,13 +245,18 @@ struct SettingsView: View {
     @ObservedObject var model: SettingsModel
 
     var body: some View {
-        TabView {
+        TabView(selection: $model.selectedTab) {
             GeneralSettingsTab(model: model)
                 .tabItem { Label("General", systemImage: "gearshape") }
+                .tag("general")
+            ProjectsTab(model: model)
+                .tabItem { Label("Projects", systemImage: "folder.badge.gearshape") }
+                .tag("projects")
             LanguageServersTab(model: model)
                 .tabItem { Label("Language Servers", systemImage: "network") }
+                .tag("servers")
         }
-        .frame(width: 620, height: 420)
+        .frame(width: 640, height: 460)
         .padding(20)
     }
 }
@@ -209,6 +303,91 @@ private struct GeneralSettingsTab: View {
         .padding(.horizontal, 28)
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+private struct ProjectsTab: View {
+    @ObservedObject var model: SettingsModel
+    @State private var newScope = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(
+                "How projects are detected. By default a repository is one project; "
+                    + "\"manifest projects\" lets nested language manifests (pyproject.toml, "
+                    + "Cargo.toml, …) split it into sub-projects, and \"recursive config\" "
+                    + "makes a root's per-project settings apply to the nested projects "
+                    + "beneath it."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            GroupBox("Defaults (all projects)") {
+                HStack(spacing: 24) {
+                    Toggle("Manifest projects", isOn: $model.manifestProjectsDefault)
+                    Toggle("Recursive config", isOn: $model.recursiveConfigDefault)
+                    Spacer()
+                }
+                .padding(6)
+            }
+
+            List {
+                if model.workspaceEntries.isEmpty {
+                    Text("No per-project overrides.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.workspaceEntries) { entry in
+                    HStack(spacing: 12) {
+                        Text(entry.scopeLabel)
+                            .fontWeight(.semibold)
+                            .help(entry.scope)
+                        Spacer()
+                        Toggle(
+                            "Manifest projects",
+                            isOn: Binding(
+                                get: { entry.manifestProjects },
+                                set: {
+                                    model.setWorkspaceFlag(
+                                        scope: entry.scope, key: "manifest_projects",
+                                        value: $0)
+                                }
+                            ))
+                        Toggle(
+                            "Recursive config",
+                            isOn: Binding(
+                                get: { entry.recursiveConfig },
+                                set: {
+                                    model.setWorkspaceFlag(
+                                        scope: entry.scope, key: "recursive_config",
+                                        value: $0)
+                                }
+                            ))
+                        Button {
+                            model.removeWorkspaceEntry(entry)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+            .frame(minHeight: 120)
+
+            GroupBox("Add project override") {
+                HStack(spacing: 8) {
+                    PathPicker(text: $newScope, placeholder: "Project root path")
+                    Button("Add") {
+                        model.addWorkspaceEntry(scope: newScope)
+                        newScope = ""
+                    }
+                    .disabled(newScope.isEmpty)
+                }
+                .padding(6)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
 }
 
@@ -262,8 +441,9 @@ private struct LanguageServersTab: View {
 
             GroupBox("Add override") {
                 VStack(spacing: 8) {
-                    TextField(
-                        "Project root (empty = default for all projects)", text: $newScope)
+                    PathPicker(
+                        text: $newScope,
+                        placeholder: "Project root (empty = default for all projects)")
                     HStack(spacing: 8) {
                         TextField("Language (e.g. python)", text: $newLanguage)
                             .frame(width: 180)

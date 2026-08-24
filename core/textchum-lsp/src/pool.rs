@@ -15,7 +15,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use textchum_core::{workspace, Event, EventSender};
+use textchum_core::workspace::{self, WorkspaceSettings};
+use textchum_core::{Event, EventSender};
 
 use crate::instance::{Command, Instance};
 use crate::registry::{server_for_language, ServerSpec};
@@ -59,6 +60,8 @@ pub struct Pool {
     /// User configuration: `{"defaults": {lang: cmdline}, "projects":
     /// {root: {lang: cmdline}}}`, consulted before everything else.
     configured: serde_json::Value,
+    /// Workspace behavior (manifest-project and recursive-config flags).
+    workspace_settings: WorkspaceSettings,
     /// Next client→server request id. Starts above the lifecycle ids
     /// (1 = initialize, 2 = shutdown).
     next_request_id: u64,
@@ -74,17 +77,30 @@ impl Pool {
             failed: HashSet::new(),
             overrides: Vec::new(),
             configured: serde_json::Value::Null,
+            workspace_settings: WorkspaceSettings::default(),
             next_request_id: 100,
         }
     }
 
-    /// Applies the user's server configuration (the config file's `lsp`
-    /// section, serialized). Takes effect for instances spawned
-    /// afterwards; call [`Self::shutdown_all`] to also retire running
-    /// ones. Also clears the not-retried failure memory, since a fixed
-    /// command deserves a fresh chance.
+    /// Applies the user's configuration. Accepts either the `lsp` section
+    /// alone (`{"defaults": …, "projects": …}`) or a combined
+    /// `{"lsp": …, "workspace": …}` object carrying the workspace flags
+    /// too. Takes effect for instances spawned afterwards; call
+    /// [`Self::shutdown_all`] to also retire running ones. Also clears
+    /// the not-retried failure memory, since a fixed command deserves a
+    /// fresh chance.
     pub fn configure(&mut self, json: &str) {
-        self.configured = serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
+        let parsed: serde_json::Value =
+            serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
+        if parsed.get("lsp").is_some() || parsed.get("workspace").is_some() {
+            self.workspace_settings = WorkspaceSettings::from_json(
+                &parsed.get("workspace").map(|v| v.to_string()).unwrap_or_default(),
+            );
+            self.configured = parsed.get("lsp").cloned().unwrap_or(serde_json::Value::Null);
+        } else {
+            self.workspace_settings = WorkspaceSettings::default();
+            self.configured = parsed;
+        }
         self.failed.clear();
     }
 
@@ -97,12 +113,31 @@ impl Pool {
         self.versions.clear();
     }
 
-    /// A user-configured command line for (root, language): the project
-    /// entry wins over the defaults entry.
+    /// A user-configured command line for (root, language): the exact
+    /// project entry, else an ancestor's project entry when that ancestor
+    /// opted into recursive configuration (for nested projects), else the
+    /// defaults entry.
     fn configured_command(&self, root: &Path, language: &str) -> Option<String> {
-        let root_key = root.to_string_lossy();
-        let project = self.configured["projects"][root_key.as_ref()][language].as_str();
-        let value = project.or_else(|| self.configured["defaults"][language].as_str())?;
+        let project_entry = |dir: &Path| -> Option<String> {
+            self.configured["projects"][dir.to_string_lossy().as_ref()][language]
+                .as_str()
+                .map(str::to_owned)
+        };
+        let mut value = project_entry(root);
+        if value.is_none() {
+            let mut ancestor = root.parent();
+            while let Some(dir) = ancestor {
+                if self.workspace_settings.recursive_config(dir) {
+                    if let Some(found) = project_entry(dir) {
+                        value = Some(found);
+                        break;
+                    }
+                }
+                ancestor = dir.parent();
+            }
+        }
+        let value =
+            value.or_else(|| self.configured["defaults"][language].as_str().map(str::to_owned))?;
         let trimmed = value.trim();
         (!trimmed.is_empty()).then(|| trimmed.to_owned())
     }
@@ -135,10 +170,10 @@ impl Pool {
     }
 
     /// The project root that scopes `path`'s server instance: the
-    /// workspace model's answer, or the containing directory for loose
-    /// files.
-    fn root_for(path: &Path) -> PathBuf {
-        workspace::project_root_for(path)
+    /// workspace model's answer (under the configured workspace
+    /// settings), or the containing directory for loose files.
+    fn root_for(&self, path: &Path) -> PathBuf {
+        workspace::project_root_with(path, &self.workspace_settings)
             .or_else(|| path.parent().map(Path::to_owned))
             .unwrap_or_else(|| PathBuf::from("/"))
     }
@@ -146,7 +181,7 @@ impl Pool {
     /// Announces an opened document, spawning the (server, root) instance
     /// on first use.
     pub fn did_open(&mut self, path: &Path, language: &str, text: &str) {
-        let root = Self::root_for(path);
+        let root = self.root_for(path);
         let Some(config) = self.config_for(&root, language) else {
             return;
         };

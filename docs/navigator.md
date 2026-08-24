@@ -20,7 +20,11 @@ they belong to, resolved in this order:
    (`Cargo.toml`, `go.mod`, `package.json`, `pyproject.toml`,
    `Package.swift`, `build.zig`, `Makefile`, …).
 
-Files outside any project gather under **Other**.
+Files outside any project gather under **Other**. Step 2's
+repository-wins rule can be relaxed per project — the **Manifest
+projects** switch in [Settings → Projects](configuration.md) splits a
+root at its language manifests again, for repositories that are really
+several projects in a trenchcoat.
 
 This is the same notion of "project" the rest of Textchum uses (and the
 one language servers will be scoped by), so the drawer doubles as a

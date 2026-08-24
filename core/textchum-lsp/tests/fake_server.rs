@@ -187,6 +187,58 @@ fn configured_servers_win_per_project_then_default() {
 }
 
 #[test]
+fn workspace_toggles_split_projects_and_cascade_config() {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/fake_lsp.py")
+        .canonicalize()
+        .unwrap();
+    // A repository with a nested manifest.
+    let repo = std::env::temp_dir()
+        .join(format!("textchum-lsp-{}", std::process::id()))
+        .join("toggles-repo");
+    let module = repo.join("pkg/module");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    std::fs::create_dir_all(&module).unwrap();
+    std::fs::write(module.join("Cargo.toml"), "").unwrap();
+    let file = module.join("lib.rs");
+    std::fs::write(&file, "fn x() {}\n").unwrap();
+    let repo = repo.canonicalize().unwrap();
+    let module = module.canonicalize().unwrap();
+    let file = file.canonicalize().unwrap();
+
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    // manifest_projects splits the repo; recursive_config lets the repo's
+    // server entry serve the nested module project.
+    pool.configure(&format!(
+        r#"{{
+            "lsp": {{"projects": {{"{repo}": {{"rust": "python3 {script}"}}}}}},
+            "workspace": {{"projects": {{"{repo}": {{
+                "manifest_projects": true, "recursive_config": true}}}}}}
+        }}"#,
+        repo = repo.display(),
+        script = script.display()
+    ));
+
+    pool.did_open(&file, "rust", "fn x() {}\n");
+    let mut seen = Vec::new();
+    collect_until(&events, "nested project running repo's server", &mut seen, |seen| {
+        seen.iter().any(|e| {
+            matches!(e, Event::ServerStatus { status, server, root, .. }
+                if status == "running" && server.starts_with("custom:python3")
+                    && PathBuf::from(root) == module)
+        })
+    });
+    let running = pool.running();
+    assert_eq!(running.len(), 1);
+    assert_eq!(
+        PathBuf::from(&running[0].1),
+        module,
+        "manifest_projects must scope the instance to the nested project"
+    );
+}
+
+#[test]
 fn missing_server_reports_once_with_hint() {
     let (tx, events) = mpsc::channel();
     let mut pool = Pool::new(tx);

@@ -72,6 +72,45 @@ Los valores fuera de rango o con tipo incorrecto no cuentan como rotura: un
 `font_size` de `4000` se recorta al rango válido, un `font_family` de `42`
 se ignora y el resto del archivo funciona con normalidad.
 
+## Proyectos
+
+La pestaña Projects decide dónde empieza y termina un proyecto — el
+límite por el que agrupa el navegador y con el que el pool de servidores
+de lenguaje identifica sus instancias. Ambos interruptores existen dos
+veces: como valor por defecto para todos los proyectos y por raíz de
+proyecto. Una fila añadida con el campo de ruta (que completa nombres de
+directorio al escribir y lleva un botón Browse…) anula los valores por
+defecto solo para esa raíz.
+
+- **Manifest projects** — normalmente gana el repositorio más externo:
+  abrir un archivo en cualquier punto dentro de un repositorio convierte
+  al repositorio en el proyecto, por muchos `Cargo.toml` o
+  `pyproject.toml` que haya en medio. Activarlo vuelve a dividir una
+  raíz por manifiestos de lenguaje, de modo que los módulos anidados son
+  proyectos propios.
+- **Recursive config** — hace que los ajustes por proyecto de una raíz
+  (sus comandos de servidor de lenguaje y estos mismos interruptores) se
+  apliquen a los proyectos anidados dentro de ella, con prioridad para
+  el ancestro más cercano. Útil en monorepos: una configuración arriba,
+  muchos proyectos debajo.
+
+En el archivo, esto vive en una sección `workspace`:
+
+```json
+{
+  "workspace": {
+    "manifest_projects": false,
+    "recursive_config": false,
+    "projects": {
+      "/Users/you/code/monorepo": {
+        "manifest_projects": true,
+        "recursive_config": true
+      }
+    }
+  }
+}
+```
+
 ## Atajos de teclado
 
 Los atajos de los menús se reasignan mediante una sección `keys` editada
@@ -104,4 +143,6 @@ mismo árbol que alimenta el coloreado.
 
 - Textchum todavía no vigila el archivo mientras se ejecuta; los cambios
   hechos en otro editor se aplican en el siguiente arranque.
-- Ajustes por proyecto.
+- Ajustes del editor por proyecto (tipografía, ancho de tabulación) —
+  los proyectos ya tienen sus propios ajustes de detección y de
+  servidores de lenguaje, pero no estos.

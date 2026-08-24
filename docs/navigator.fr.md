@@ -25,7 +25,12 @@ se résout dans cet ordre :
    proche (`Cargo.toml`, `go.mod`, `package.json`, `pyproject.toml`,
    `Package.swift`, `build.zig`, `Makefile`, …).
 
-Les fichiers hors de tout projet se rassemblent sous **Other**.
+Les fichiers hors de tout projet se rassemblent sous **Other**. La règle
+de l'étape 2 — le dépôt l'emporte — peut être assouplie par projet :
+l'interrupteur **Manifest projects** de
+[Réglages → Projects](configuration.fr.md) redécoupe une racine à ses
+manifestes de langage, pour les dépôts qui sont en réalité plusieurs
+projets déguisés en un seul.
 
 C'est la même notion de « projet » que le reste de Textchum utilise (et
 celle qui délimitera les serveurs de langage) ; le tiroir sert donc aussi
