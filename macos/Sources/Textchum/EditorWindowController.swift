@@ -54,13 +54,23 @@ final class EditorWindowController: NSWindowController {
     private var isPresentingReloadPrompt = false
     /// Re-colors on system appearance changes (theme colors differ).
     private var appearanceObservation: NSKeyValueObservation?
+    /// The core app handle, used for language-server notifications.
+    private let lspApp: CoreApp?
+    /// The path this window has announced as open to the server pool.
+    private var lspOpenPath: String?
+    /// Debounces didChange notifications while typing.
+    private var lspChangeTimer: Timer?
+    /// The latest language-server findings for this document.
+    private var diagnostics: [CoreDiagnostic] = []
 
     init(
         document: CoreDocument,
         settings: EditorSettings? = nil,
-        sidebar: SidebarConfiguration? = nil
+        sidebar: SidebarConfiguration? = nil,
+        lspApp: CoreApp? = nil
     ) {
         self.coreDocument = document
+        self.lspApp = lspApp
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 480),
@@ -131,16 +141,128 @@ final class EditorWindowController: NSWindowController {
         }
         updateChrome()
         startWatchingFile()
-        applyHighlights()
+        refreshDecorations()
+        syncLSPOpenState()
         appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.applyHighlights() }
+                MainActor.assumeIsolated { self?.refreshDecorations() }
             }
         }
     }
 
+    // MARK: Language servers
+
+    /// Opens/closes this document with the server pool as its path and
+    /// language come and go (open, save-as).
+    private func syncLSPOpenState() {
+        guard let lspApp else { return }
+        let current: String? =
+            (coreDocument.languageName != nil) ? coreDocument.path : nil
+        guard current != lspOpenPath else { return }
+        if let old = lspOpenPath {
+            lspApp.lspDidClose(path: old)
+        }
+        if let new = current, let language = coreDocument.languageName {
+            lspApp.lspDidOpen(path: new, language: language, text: coreDocument.text)
+        }
+        lspOpenPath = current
+    }
+
+    /// Debounced full-text didChange, so servers see keystrokes in
+    /// human-sized batches.
+    private func scheduleLSPChange() {
+        guard lspApp != nil, lspOpenPath != nil else { return }
+        lspChangeTimer?.invalidate()
+        lspChangeTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, let path = self.lspOpenPath else { return }
+                    self.lspApp?.lspDidChange(path: path, text: self.coreDocument.text)
+                }
+            }
+        }
+    }
+
+    /// Called by the app when a server publishes findings for this path.
+    func apply(diagnostics: [CoreDiagnostic]) {
+        self.diagnostics = diagnostics
+        renderDiagnostics()
+        updateChrome()
+    }
+
     deinit {
         fileWatcher?.cancel()
+    }
+
+    // MARK: Decorations (syntax colors + diagnostic underlines)
+
+    /// Rendering attributes are one overlay: highlight spans *set*
+    /// attributes (replacing anything in their range), so diagnostics must
+    /// re-add their underlines afterwards.
+    private func refreshDecorations() {
+        applyHighlights()
+        renderDiagnostics()
+    }
+
+    /// Marks each finding with a tinted background: red for errors,
+    /// orange for warnings, blue otherwise.
+    private func renderDiagnostics() {
+        guard let textView, let layoutManager = textView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager
+        else { return }
+        let documentRange = layoutManager.documentRange
+        layoutManager.removeRenderingAttribute(.underlineStyle, for: documentRange)
+        layoutManager.removeRenderingAttribute(.underlineColor, for: documentRange)
+        layoutManager.removeRenderingAttribute(.backgroundColor, for: documentRange)
+        guard !diagnostics.isEmpty else { return }
+
+        let text = textView.string as NSString
+        for diagnostic in diagnostics {
+            guard let range = nsRange(of: diagnostic, in: text) else { continue }
+            guard
+                let start = contentManager.location(
+                    documentRange.location, offsetBy: range.location),
+                let end = contentManager.location(start, offsetBy: range.length),
+                let textRange = NSTextRange(location: start, end: end)
+            else { continue }
+            let color: NSColor =
+                switch diagnostic.severity {
+                case 1: .systemRed
+                case 2: .systemOrange
+                default: .systemBlue
+                }
+            // The background tint is the marker TextKit 2 actually renders
+            // from this layer; the underline attributes ride along for the
+            // day rendering attributes honor them.
+            layoutManager.addRenderingAttribute(
+                .underlineStyle, value: NSUnderlineStyle.thick.rawValue, for: textRange)
+            layoutManager.addRenderingAttribute(.underlineColor, value: color, for: textRange)
+            layoutManager.addRenderingAttribute(
+                .backgroundColor, value: color.withAlphaComponent(0.15), for: textRange)
+        }
+    }
+
+    /// Converts an LSP (line, UTF-16 column) range to an `NSRange`,
+    /// clamped to the current text — diagnostics can be a beat behind the
+    /// buffer, and a stale position must never crash the overlay.
+    private func nsRange(of diagnostic: CoreDiagnostic, in text: NSString) -> NSRange? {
+        func offset(line: Int, column: Int) -> Int {
+            var index = 0
+            var currentLine = 0
+            while currentLine < line && index < text.length {
+                index = NSMaxRange(text.lineRange(for: NSRange(location: index, length: 0)))
+                currentLine += 1
+            }
+            return min(index + max(column, 0), text.length)
+        }
+        let start = offset(line: diagnostic.line, column: diagnostic.character)
+        let end = offset(line: diagnostic.endLine, column: diagnostic.endCharacter)
+        guard end >= start else { return nil }
+        // A zero-length finding still deserves a visible mark.
+        let length = max(end - start, 1)
+        guard start < text.length || text.length == 0 else { return nil }
+        return NSRange(location: start, length: min(length, text.length - start))
     }
 
     // MARK: Syntax highlighting
@@ -314,6 +436,14 @@ final class EditorWindowController: NSWindowController {
         if let language = coreDocument.languageName {
             subtitle += " · \(language)"
         }
+        if !diagnostics.isEmpty {
+            let errors = diagnostics.filter { $0.severity == 1 }.count
+            let others = diagnostics.count - errors
+            var parts: [String] = []
+            if errors > 0 { parts.append("\(errors) error\(errors == 1 ? "" : "s")") }
+            if others > 0 { parts.append("\(others) warning\(others == 1 ? "" : "s")") }
+            subtitle += " · " + parts.joined(separator: ", ")
+        }
         window.subtitle = subtitle
         window.isDocumentEdited = coreDocument.isDirty
         publishSidebarState()
@@ -379,7 +509,8 @@ final class EditorWindowController: NSWindowController {
         textView.scrollRangeToVisible(NSRange(location: caret, length: 0))
 
         updateChrome()
-        applyHighlights()
+        refreshDecorations()
+        scheduleLSPChange()
         assertInSync()
     }
 
@@ -413,8 +544,9 @@ final class EditorWindowController: NSWindowController {
             noteOwnSave()
             updateChrome()
             // An untitled document may just have gained a language from
-            // its new extension.
-            applyHighlights()
+            // its new extension — recolor and announce it to the pool.
+            refreshDecorations()
+            syncLSPOpenState()
             return true
         } catch {
             presentError("Could not save to \(url.lastPathComponent).", details: "\(error)")
@@ -442,6 +574,14 @@ final class EditorWindowController: NSWindowController {
 // MARK: - Window lifecycle
 
 extension EditorWindowController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        lspChangeTimer?.invalidate()
+        if let path = lspOpenPath {
+            lspApp?.lspDidClose(path: path)
+            lspOpenPath = nil
+        }
+    }
+
     /// Standard dirty-document close flow: Save / Cancel / Don't Save.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard coreDocument.isDirty else { return true }
@@ -527,7 +667,8 @@ extension EditorWindowController: NSTextViewDelegate {
 
     func textDidChange(_ notification: Notification) {
         updateChrome()
-        applyHighlights()
+        refreshDecorations()
+        scheduleLSPChange()
         assertInSync()
     }
 

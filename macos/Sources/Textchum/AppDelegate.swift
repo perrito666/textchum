@@ -48,12 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // The core's event channel (diagnostics and more will arrive here);
-        // ping once on launch so a broken channel is caught immediately.
-        let coreApp = CoreApp { event in
-            if case let .pong(sequence) = event {
-                NSLog("core \(Core.version) event channel verified (pong \(sequence))")
-            }
+        // The core's event channel; ping once on launch so a broken
+        // channel is caught immediately.
+        let coreApp = CoreApp { [weak self] event in
+            self?.handleCoreEvent(event)
         }
         coreApp.ping(sequence: 1)
         self.coreApp = coreApp
@@ -96,6 +94,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         return .terminateNow
+    }
+
+    // MARK: Core events
+
+    /// Servers already reported missing, so the alert shows once each.
+    private var reportedMissingServers: Set<String> = []
+
+    private func handleCoreEvent(_ event: CoreApp.Event) {
+        switch event {
+        case let .pong(sequence):
+            NSLog("core \(Core.version) event channel verified (pong \(sequence))")
+        case let .diagnostics(path, items):
+            editors.first { $0.coreDocument.path == path }?.apply(diagnostics: items)
+        case let .serverStatus(server, root, status, message):
+            NSLog("lsp \(server) [\(root)]: \(status) \(message)")
+            if status == "not-found", !reportedMissingServers.contains(server) {
+                reportedMissingServers.insert(server)
+                let alert = NSAlert()
+                alert.alertStyle = .informational
+                alert.messageText = "No language server for this project"
+                alert.informativeText = message
+                alert.runModal()
+            }
+        }
     }
 
     // MARK: Appearance & sidebar
@@ -170,8 +192,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             editor: EditorWindowController(
                 document: CoreDocument(),
                 settings: currentSettings,
-                sidebar: sidebarConfiguration
-            ))
+                sidebar: sidebarConfiguration,
+                lspApp: coreApp            ))
     }
 
     @objc func openDocument(_ sender: Any?) {
@@ -196,8 +218,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 editor: EditorWindowController(
                     document: document,
                     settings: currentSettings,
-                    sidebar: sidebarConfiguration
-                ))
+                    sidebar: sidebarConfiguration,
+                lspApp: coreApp                ))
         } catch {
             let alert = NSAlert()
             alert.alertStyle = .warning

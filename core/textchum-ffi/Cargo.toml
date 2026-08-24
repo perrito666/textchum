@@ -12,6 +12,7 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 textchum-core = { path = "../textchum-core" }
+textchum-lsp = { path = "../textchum-lsp" }
 
 [build-dependencies]
 cbindgen = "0.29"

@@ -15,6 +15,22 @@
 #define TC_EVENT_PONG 1
 
 /**
+ * Event kind: a language server published diagnostics. `path` is the
+ * file; `payload` is a JSON array of `{line, character, endLine,
+ * endCharacter, severity, message}` (LSP positions: zero-based line,
+ * UTF-16 column).
+ */
+#define TC_EVENT_DIAGNOSTICS 2
+
+/**
+ * Event kind: a language-server instance changed state. `server` is the
+ * server id, `path` its project root, `status` one of
+ * starting/running/not-found/failed/exited, `payload` a human-readable
+ * message.
+ */
+#define TC_EVENT_SERVER_STATUS 3
+
+/**
  * Appearance choice: follow the system.
  */
 #define TC_APPEARANCE_SYSTEM 0
@@ -41,7 +57,11 @@
 
 /**
  * Root handle for a core instance. Create with [`tc_app_new`], release with
- * [`tc_app_free`].
+ * [`tc_app_free`]. Owns the language-server pool.
+ *
+ * Field order is load-bearing: the pool holds an event-sender clone, and
+ * `App`'s drop joins its dispatcher thread, which only ends once every
+ * sender is gone — so the pool must drop first.
  */
 typedef struct TcApp TcApp;
 
@@ -67,8 +87,9 @@ typedef struct TcDocument TcDocument;
 /**
  * An event delivered from the core to the shell.
  *
- * The struct is only valid for the duration of the callback invocation;
- * copy anything you need out of it.
+ * The struct and every string it points to are only valid for the
+ * duration of the callback invocation; copy anything you need out of it.
+ * Strings not applicable to the event kind are null.
  */
 typedef struct TcEvent {
   /**
@@ -76,9 +97,25 @@ typedef struct TcEvent {
    */
   uint32_t kind;
   /**
-   * Event-specific sequence number (currently used by pong events).
+   * Sequence number (pong events).
    */
   uint64_t seq;
+  /**
+   * File path (diagnostics) or project root (server status).
+   */
+  const char *path;
+  /**
+   * Server id (server status).
+   */
+  const char *server;
+  /**
+   * Status string (server status).
+   */
+  const char *status;
+  /**
+   * JSON payload (diagnostics) or message text (server status).
+   */
+  const char *payload;
 } TcEvent;
 
 /**
@@ -153,6 +190,44 @@ void tc_app_ping(struct TcApp *app, uint64_t seq);
  * `app` must be a pointer from [`tc_app_new`], not previously freed.
  */
 void tc_app_free(struct TcApp *app);
+
+/**
+ * Announces an opened document to the language-server pool: `path`, its
+ * syntax `language` name, and the full `text`. Spawns the (server,
+ * project-root) instance on first use; does nothing for languages
+ * without a registered server.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; each pointer/length
+ * pair must describe readable UTF-8.
+ */
+void tc_lsp_did_open(struct TcApp *app,
+                     const char *path,
+                     uintptr_t path_len,
+                     const char *language,
+                     uintptr_t language_len,
+                     const char *text,
+                     uintptr_t text_len);
+
+/**
+ * Announces new contents for an opened document (full-text sync).
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+void tc_lsp_did_change(struct TcApp *app,
+                       const char *path,
+                       uintptr_t path_len,
+                       const char *text,
+                       uintptr_t text_len);
+
+/**
+ * Announces a closed document. The server instance stays warm.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+void tc_lsp_did_close(struct TcApp *app, const char *path, uintptr_t path_len);
 
 /**
  * Creates an empty buffer.

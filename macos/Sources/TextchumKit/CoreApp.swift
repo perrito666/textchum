@@ -1,6 +1,18 @@
 import CTextchum
 import Foundation
 
+/// One language-server finding, positioned the LSP way: zero-based line,
+/// UTF-16 column.
+public struct CoreDiagnostic: Codable, Equatable, Sendable {
+    public let line: Int
+    public let character: Int
+    public let endLine: Int
+    public let endCharacter: Int
+    /// 1 = error, 2 = warning, 3 = information, 4 = hint.
+    public let severity: Int
+    public let message: String
+}
+
 /// The root handle for a core instance and the receiving end of its events.
 ///
 /// The core delivers events (today just pongs; later diagnostics, highlight
@@ -13,6 +25,12 @@ public final class CoreApp {
     public enum Event: Equatable, Sendable {
         /// Reply to ``ping(sequence:)``.
         case pong(sequence: UInt64)
+        /// A language server published diagnostics for a file (the full
+        /// current set — an empty array clears previous findings).
+        case diagnostics(path: String, items: [CoreDiagnostic])
+        /// A language-server instance changed state; `status` is one of
+        /// starting/running/not-found/failed/exited.
+        case serverStatus(server: String, root: String, status: String, message: String)
     }
 
     /// Retained context handed to the C callback as its `userdata`.
@@ -50,9 +68,25 @@ public final class CoreApp {
             guard let eventPointer, let userdata else { return }
             let sink = Unmanaged<EventSink>.fromOpaque(userdata).takeUnretainedValue()
             let event = eventPointer.pointee
+            // Event strings are only valid during this call; copy now.
+            let path = event.path.map { String(cString: $0) }
+            let payload = event.payload.map { String(cString: $0) }
             switch event.kind {
             case UInt32(TC_EVENT_PONG):
                 sink.deliver(.pong(sequence: event.seq))
+            case UInt32(TC_EVENT_DIAGNOSTICS):
+                guard let path, let payload else { return }
+                let items = (try? JSONDecoder().decode(
+                    [CoreDiagnostic].self, from: Data(payload.utf8))) ?? []
+                sink.deliver(.diagnostics(path: path, items: items))
+            case UInt32(TC_EVENT_SERVER_STATUS):
+                sink.deliver(
+                    .serverStatus(
+                        server: event.server.map { String(cString: $0) } ?? "",
+                        root: path ?? "",
+                        status: event.status.map { String(cString: $0) } ?? "",
+                        message: payload ?? ""
+                    ))
             default:
                 // Unknown kinds are forward-compatibility, not errors: a
                 // newer core may emit events this shell does not know yet.
@@ -71,5 +105,49 @@ public final class CoreApp {
     /// number. Exists to verify the async event path end to end.
     public func ping(sequence: UInt64) {
         tc_app_ping(handle, sequence)
+    }
+
+    // MARK: Language servers
+
+    /// Announces an opened document; spawns its project's server instance
+    /// on first use. No-op for languages without a registered server.
+    public func lspDidOpen(path: String, language: String, text: String) {
+        withUTF8(path) { path, pathLen in
+            withUTF8(language) { language, languageLen in
+                withUTF8(text) { text, textLen in
+                    tc_lsp_did_open(
+                        handle, path, pathLen, language, languageLen, text, textLen)
+                }
+            }
+        }
+    }
+
+    /// Announces new document contents (full-text sync).
+    public func lspDidChange(path: String, text: String) {
+        withUTF8(path) { path, pathLen in
+            withUTF8(text) { text, textLen in
+                tc_lsp_did_change(handle, path, pathLen, text, textLen)
+            }
+        }
+    }
+
+    /// Announces a closed document.
+    public func lspDidClose(path: String) {
+        withUTF8(path) { path, pathLen in
+            tc_lsp_did_close(handle, path, pathLen)
+        }
+    }
+}
+
+/// Runs `body` with a `(pointer, length)` view of the string's UTF-8.
+private func withUTF8<R>(
+    _ text: String, _ body: (UnsafePointer<CChar>?, UInt) -> R
+) -> R {
+    var text = text
+    return text.withUTF8 { bytes in
+        let pointer = bytes.baseAddress.map {
+            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+        }
+        return body(pointer, UInt(bytes.count))
     }
 }

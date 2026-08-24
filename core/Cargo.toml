@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["textchum-core", "textchum-ffi"]
+members = ["textchum-core", "textchum-ffi", "textchum-lsp"]
 
 [workspace.package]
 version = "0.1.0"

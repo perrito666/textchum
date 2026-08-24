@@ -46,6 +46,7 @@ plugins:
             Architecture: Arquitectura
             Documents: Documentos
             Highlighting: Coloreado
+            Language servers: Servidores de lenguaje
             The navigator: El navegador
             Configuration: Configuración
             The C boundary: La frontera C
@@ -58,6 +59,7 @@ plugins:
             Architecture: Architecture
             Documents: Documents
             Highlighting: Coloration
+            Language servers: Serveurs de langage
             The navigator: Le navigateur
             Configuration: Configuration
             The C boundary: La frontière C
@@ -68,6 +70,7 @@ nav:
   - Architecture: architecture.md
   - Documents: documents.md
   - Highlighting: highlighting.md
+  - Language servers: language-servers.md
   - The navigator: navigator.md
   - Configuration: configuration.md
   - The C boundary: ffi.md

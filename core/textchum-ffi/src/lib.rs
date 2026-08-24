@@ -21,17 +21,54 @@ use textchum_core::{App, Buffer, Config, Document, Event};
 
 /// Event kind: reply to `tc_app_ping`.
 pub const TC_EVENT_PONG: u32 = 1;
+/// Event kind: a language server published diagnostics. `path` is the
+/// file; `payload` is a JSON array of `{line, character, endLine,
+/// endCharacter, severity, message}` (LSP positions: zero-based line,
+/// UTF-16 column).
+pub const TC_EVENT_DIAGNOSTICS: u32 = 2;
+/// Event kind: a language-server instance changed state. `server` is the
+/// server id, `path` its project root, `status` one of
+/// starting/running/not-found/failed/exited, `payload` a human-readable
+/// message.
+pub const TC_EVENT_SERVER_STATUS: u32 = 3;
 
 /// An event delivered from the core to the shell.
 ///
-/// The struct is only valid for the duration of the callback invocation;
-/// copy anything you need out of it.
+/// The struct and every string it points to are only valid for the
+/// duration of the callback invocation; copy anything you need out of it.
+/// Strings not applicable to the event kind are null.
 #[repr(C)]
 pub struct TcEvent {
     /// One of the `TC_EVENT_*` constants.
     pub kind: u32,
-    /// Event-specific sequence number (currently used by pong events).
+    /// Sequence number (pong events).
     pub seq: u64,
+    /// File path (diagnostics) or project root (server status).
+    pub path: *const c_char,
+    /// Server id (server status).
+    pub server: *const c_char,
+    /// Status string (server status).
+    pub status: *const c_char,
+    /// JSON payload (diagnostics) or message text (server status).
+    pub payload: *const c_char,
+}
+
+impl TcEvent {
+    fn new(kind: u32) -> Self {
+        Self {
+            kind,
+            seq: 0,
+            path: std::ptr::null(),
+            server: std::ptr::null(),
+            status: std::ptr::null(),
+            payload: std::ptr::null(),
+        }
+    }
+}
+
+/// An owned, sanitized C string for the duration of a callback.
+fn callback_cstring(text: String) -> CString {
+    CString::new(text.replace('\0', "\u{FFFD}")).expect("nul bytes replaced")
 }
 
 /// Shell-provided event sink. Invoked on the core's single dispatch thread;
@@ -39,8 +76,13 @@ pub struct TcEvent {
 pub type TcEventCallback = Option<extern "C" fn(event: *const TcEvent, userdata: *mut c_void)>;
 
 /// Root handle for a core instance. Create with [`tc_app_new`], release with
-/// [`tc_app_free`].
+/// [`tc_app_free`]. Owns the language-server pool.
+///
+/// Field order is load-bearing: the pool holds an event-sender clone, and
+/// `App`'s drop joins its dispatcher thread, which only ends once every
+/// sender is gone — so the pool must drop first.
 pub struct TcApp {
+    pool: textchum_lsp::Pool,
     inner: App,
 }
 
@@ -84,15 +126,42 @@ pub extern "C" fn tc_app_new(callback: TcEventCallback, userdata: *mut c_void) -
     let userdata = UserData(userdata);
     catch_unwind(|| {
         let app = App::new(move |event| {
-            let event = match event {
-                Event::Pong { seq } => TcEvent {
-                    kind: TC_EVENT_PONG,
-                    seq,
-                },
-            };
-            callback(&event, userdata.get());
+            // The CStrings live on this frame for the whole callback.
+            match event {
+                Event::Pong { seq } => {
+                    let mut out = TcEvent::new(TC_EVENT_PONG);
+                    out.seq = seq;
+                    callback(&out, userdata.get());
+                }
+                Event::Diagnostics { path, json } => {
+                    let path = callback_cstring(path);
+                    let json = callback_cstring(json);
+                    let mut out = TcEvent::new(TC_EVENT_DIAGNOSTICS);
+                    out.path = path.as_ptr();
+                    out.payload = json.as_ptr();
+                    callback(&out, userdata.get());
+                }
+                Event::ServerStatus {
+                    server,
+                    root,
+                    status,
+                    message,
+                } => {
+                    let server = callback_cstring(server);
+                    let root = callback_cstring(root);
+                    let status = callback_cstring(status);
+                    let message = callback_cstring(message);
+                    let mut out = TcEvent::new(TC_EVENT_SERVER_STATUS);
+                    out.server = server.as_ptr();
+                    out.path = root.as_ptr();
+                    out.status = status.as_ptr();
+                    out.payload = message.as_ptr();
+                    callback(&out, userdata.get());
+                }
+            }
         });
-        Box::into_raw(Box::new(TcApp { inner: app }))
+        let pool = textchum_lsp::Pool::new(app.sender());
+        Box::into_raw(Box::new(TcApp { inner: app, pool }))
     })
     .unwrap_or(std::ptr::null_mut())
 }
@@ -119,6 +188,83 @@ pub unsafe extern "C" fn tc_app_free(app: *mut TcApp) {
     if !app.is_null() {
         drop(unsafe { Box::from_raw(app) });
     }
+}
+
+/// Announces an opened document to the language-server pool: `path`, its
+/// syntax `language` name, and the full `text`. Spawns the (server,
+/// project-root) instance on first use; does nothing for languages
+/// without a registered server.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; each pointer/length
+/// pair must describe readable UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_did_open(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    language: *const c_char,
+    language_len: usize,
+    text: *const c_char,
+    text_len: usize,
+) {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return;
+    };
+    let (path, language, text) = unsafe {
+        (
+            str_from_raw(path, path_len),
+            str_from_raw(language, language_len),
+            str_from_raw(text, text_len),
+        )
+    };
+    let (Some(path), Some(language), Some(text)) = (path, language, text) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        app.pool.did_open(std::path::Path::new(path), language, text);
+    }));
+}
+
+/// Announces new contents for an opened document (full-text sync).
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_did_change(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    text: *const c_char,
+    text_len: usize,
+) {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return;
+    };
+    let (path, text) = unsafe { (str_from_raw(path, path_len), str_from_raw(text, text_len)) };
+    let (Some(path), Some(text)) = (path, text) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        app.pool.did_change(std::path::Path::new(path), text);
+    }));
+}
+
+/// Announces a closed document. The server instance stays warm.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_did_close(app: *mut TcApp, path: *const c_char, path_len: usize) {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        app.pool.did_close(std::path::Path::new(path));
+    }));
 }
 
 /// Creates an empty buffer.

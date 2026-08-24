@@ -1,0 +1,10 @@
+[package]
+name = "textchum-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Language Server Protocol client and per-project instance pool."
+
+[dependencies]
+textchum-core = { path = "../textchum-core" }
+serde_json = "1"

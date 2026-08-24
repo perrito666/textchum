@@ -41,6 +41,11 @@ Textchum est jeune. Ce qui existe et fonctionne aujourd'hui :
   détection d'encodage et écritures atomiques, annuler/rétablir avec fusion
   des frappes, et suivi des modifications ancré au dernier enregistrement —
   voir [Documents](documents.md).
+- La validation par serveurs de langage avec **une instance de serveur
+  par projet** : des diagnostics pendant la frappe, marqués dans le texte
+  et comptés dans le sous-titre de la fenêtre, issus de processus
+  serveurs indépendants par projet — voir
+  [Serveurs de langage](language-servers.md).
 - Un tiroir de navigation dans chaque fenêtre : les documents ouverts
   groupés par projet (marqueur de racine le plus proche — le groupement
   que partageront les serveurs de langage), avec l'arborescence du projet
@@ -64,8 +69,9 @@ Textchum est jeune. Ce qui existe et fonctionne aujourd'hui :
   événements —, utilisé par l'intégration continue comme par les humains
   pressés.
 
-La suite, dans l'ordre approximatif : serveurs de langage par projet et
-aperçu Markdown.
+La suite, dans l'ordre approximatif : davantage de capacités des serveurs
+de langage (complétion, survol, aller à la définition) et l'aperçu
+Markdown.
 
 ## Pour aller plus loin
 

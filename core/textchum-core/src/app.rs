@@ -25,7 +25,24 @@ pub enum Event {
     /// Reply to [`App::ping`]; carries the caller-supplied sequence number.
     /// Exists to exercise and verify the async delivery path end to end.
     Pong { seq: u64 },
+    /// A language server published diagnostics for a file. `json` is a
+    /// compact array of `{line, character, endLine, endCharacter,
+    /// severity, message}` objects (positions in LSP convention: zero-based
+    /// line, UTF-16 column).
+    Diagnostics { path: String, json: String },
+    /// A language-server instance changed state. `status` is one of
+    /// `starting`, `running`, `not-found`, `failed`, `exited`.
+    ServerStatus {
+        server: String,
+        root: String,
+        status: String,
+        message: String,
+    },
 }
+
+/// A handle for pushing events into the app's delivery channel from
+/// core-owned subsystems (language servers, background work).
+pub type EventSender = mpsc::Sender<Event>;
 
 /// The root handle for a core instance.
 ///
@@ -58,6 +75,15 @@ impl App {
             sender: Some(sender),
             dispatcher: Some(dispatcher),
         }
+    }
+
+    /// A sender that subsystems (e.g. the language-server pool) use to push
+    /// events into the same delivery channel. Events sent after the app is
+    /// dropped are silently discarded.
+    pub fn sender(&self) -> EventSender {
+        self.sender
+            .clone()
+            .expect("sender only vacated during drop")
     }
 
     /// Requests an asynchronous [`Event::Pong`] carrying `seq`.
