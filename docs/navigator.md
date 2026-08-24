@@ -26,6 +26,19 @@ projects** switch in [Settings → Projects](configuration.md) splits a
 root at its language manifests again, for repositories that are really
 several projects in a trenchcoat.
 
+Rows show bare filenames — until two open files share one, in which
+case each shows just enough trailing path to tell them apart (tab
+titles follow suit). The button at the top of the list switches every
+row to its path from the project root while it is on; deliberately not
+remembered across launches — it is a quick look, not a mode.
+
+Right-clicking a buffer row or a tree entry offers the file's location
+in every useful spelling: the bare name, the path relative to the
+project root, the absolute path, and — inside a git repository with a
+remote — the file's URL on its forge, speaking GitHub's, GitLab's, and
+Forgejo's URL shapes natively. The same items act on the front tab from
+**File → Copy Path**.
+
 This is the same notion of "project" the rest of Textchum uses (and the
 one language servers will be scoped by), so the drawer doubles as a
 truth-teller: if a file is grouped somewhere surprising, that is exactly

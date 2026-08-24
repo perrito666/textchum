@@ -870,13 +870,27 @@ final class EditorWindowController: NSWindowController {
         fatalError("EditorWindowController is created in code")
     }
 
+    /// Title shown when the bare filename collides with another open
+    /// document's — enough trailing path to tell them apart. Nil means
+    /// the name is unique and shows as-is.
+    private var displayTitle: String?
+
+    /// Called by the sidebar rebuild, which sees every open document and
+    /// therefore knows which names collide.
+    func setDisplayTitle(_ title: String?) {
+        guard displayTitle != title else { return }
+        displayTitle = title
+        guard let window, let path = coreDocument.path else { return }
+        window.title = displayTitle ?? URL(fileURLWithPath: path).lastPathComponent
+    }
+
     /// Refreshes everything the window shows about the document: title,
     /// edited marker, represented file, and the encoding/size subtitle.
     private func updateChrome() {
         guard let window else { return }
         if let path = coreDocument.path {
             window.representedURL = URL(fileURLWithPath: path)
-            window.title = URL(fileURLWithPath: path).lastPathComponent
+            window.title = displayTitle ?? URL(fileURLWithPath: path).lastPathComponent
         } else {
             window.representedURL = nil
             window.title = "Untitled"
@@ -1120,7 +1134,10 @@ final class EditorWindowController: NSWindowController {
     func saveAsInteractively() -> Bool {
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = window?.title == "Untitled" ? "Untitled.txt" : window!.title
+        // The bare filename, not the window title — a disambiguated
+        // title carries path components no filename should.
+        panel.nameFieldStringValue =
+            coreDocument.path.map { ($0 as NSString).lastPathComponent } ?? "Untitled.txt"
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         do {
             try coreDocument.save(to: url.path)
@@ -1331,8 +1348,42 @@ extension EditorWindowController: NSMenuItemValidation {
         case #selector(togglePreview(_:)):
             menuItem.state = previewItem != nil ? .on : .off
             return coreDocument.languageName == "markdown"
+        case #selector(copyFileName(_:)), #selector(copyRelativePath(_:)),
+            #selector(copyAbsolutePath(_:)):
+            return coreDocument.path != nil
+        case #selector(copyForgeURL(_:)):
+            return coreDocument.path.map(PathActions.isInGitRepository) ?? false
         default:
             return true
         }
+    }
+}
+
+// MARK: - Copy path actions (File → Copy Path, acting on the front tab)
+
+extension EditorWindowController {
+    @objc func copyFileName(_ sender: Any?) {
+        guard let path = coreDocument.path else { return }
+        PathActions.copy((path as NSString).lastPathComponent)
+    }
+
+    @objc func copyRelativePath(_ sender: Any?) {
+        guard let path = coreDocument.path else { return }
+        PathActions.copy(PathActions.relativePath(path, projectRoot: projectRoot))
+    }
+
+    @objc func copyAbsolutePath(_ sender: Any?) {
+        guard let path = coreDocument.path else { return }
+        PathActions.copy(path)
+    }
+
+    @objc func copyForgeURL(_ sender: Any?) {
+        guard let path = coreDocument.path,
+            let url = PathActions.forgeURL(forPath: path, isDirectory: false)
+        else {
+            NSSound.beep()
+            return
+        }
+        PathActions.copy(url)
     }
 }

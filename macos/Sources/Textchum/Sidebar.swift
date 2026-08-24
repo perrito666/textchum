@@ -37,6 +37,11 @@ struct SidebarProjectGroup: Identifiable, Hashable {
 final class SidebarModel: ObservableObject {
     @Published var groups: [SidebarProjectGroup] = []
 
+    /// While on, buffer rows show paths from the project root instead of
+    /// names. Session-only by design — a quick look, not a mode, so it is
+    /// never persisted.
+    @Published var showFullPaths = false
+
     /// Rebuilds the grouped buffer list. `entries` pairs each document
     /// with its (cached) project root.
     func rebuild(entries: [(document: SidebarDocument, projectRoot: String?)]) {
@@ -83,13 +88,16 @@ final class FileTreeState: ObservableObject {
 struct FileTreeRow: View {
     let node: FileNode
     @ObservedObject var state: FileTreeState
+    let projectRoot: String?
     let onOpenFile: (String) -> Void
 
     var body: some View {
         if node.isDirectory {
             DisclosureGroup(isExpanded: state.binding(for: node.url)) {
                 ForEach(node.children ?? []) { child in
-                    FileTreeRow(node: child, state: state, onOpenFile: onOpenFile)
+                    FileTreeRow(
+                        node: child, state: state, projectRoot: projectRoot,
+                        onOpenFile: onOpenFile)
                 }
             } label: {
                 label
@@ -107,6 +115,11 @@ struct FileTreeRow: View {
                 .foregroundStyle(.secondary)
             Text(node.name)
             Spacer(minLength: 0)
+        }
+        .contextMenu {
+            PathCopyMenu(
+                path: node.url.path, projectRoot: projectRoot,
+                isDirectory: node.isDirectory)
         }
     }
 }
@@ -160,38 +173,74 @@ struct SidebarView: View {
 
     private var projectRoot: String? { context.projectRoot }
 
+    /// The row label: normally the (disambiguated) title, or the path
+    /// from the project root while the full-path toggle is held on.
+    private func rowText(for document: SidebarDocument, in group: SidebarProjectGroup)
+        -> String
+    {
+        guard model.showFullPaths, let path = document.path else { return document.title }
+        return PathActions.relativePath(path, projectRoot: group.root)
+    }
+
     var body: some View {
         VSplitView {
-            // Group headers are plain rows rather than Section headers:
-            // the sidebar list style unreliably hides the first pinned
-            // section header under the scroll inset.
-            List {
-                ForEach(model.groups) { group in
-                    Text(group.name)
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Open Files")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
-                        .padding(.top, 6)
-                    ForEach(group.documents) { document in
-                        HStack(spacing: 4) {
-                            Image(
-                                systemName: document.isDirty
-                                    ? "circle.fill" : "doc.text"
-                            )
-                            .font(.system(size: document.isDirty ? 7 : 12))
-                            .foregroundStyle(
-                                document.isDirty ? .primary : .secondary)
-                            Text(document.title)
-                                .fontWeight(
-                                    document.id == currentDocumentID ? .semibold : .regular)
-                            Spacer(minLength: 0)
+                    Spacer()
+                    Toggle(isOn: $model.showFullPaths) {
+                        Image(systemName: "list.bullet.indent")
+                    }
+                    .toggleStyle(.button)
+                    .controlSize(.small)
+                    .help("Show paths from the project root while enabled")
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 6)
+                // Group headers are plain rows rather than Section headers:
+                // the sidebar list style unreliably hides the first pinned
+                // section header under the scroll inset.
+                List {
+                    ForEach(model.groups) { group in
+                        Text(group.name)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 6)
+                        ForEach(group.documents) { document in
+                            HStack(spacing: 4) {
+                                Image(
+                                    systemName: document.isDirty
+                                        ? "circle.fill" : "doc.text"
+                                )
+                                .font(.system(size: document.isDirty ? 7 : 12))
+                                .foregroundStyle(
+                                    document.isDirty ? .primary : .secondary)
+                                Text(rowText(for: document, in: group))
+                                    .fontWeight(
+                                        document.id == currentDocumentID
+                                            ? .semibold : .regular)
+                                    .lineLimit(1)
+                                    .truncationMode(.head)
+                                Spacer(minLength: 0)
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture { onSelectDocument(document.id) }
+                            .contextMenu {
+                                if let path = document.path {
+                                    PathCopyMenu(
+                                        path: path, projectRoot: group.root,
+                                        isDirectory: false)
+                                }
+                            }
                         }
-                        .contentShape(Rectangle())
-                        .onTapGesture { onSelectDocument(document.id) }
                     }
                 }
+                .listStyle(.sidebar)
             }
-            .listStyle(.sidebar)
             .frame(minHeight: 120)
 
             Group {
@@ -202,7 +251,8 @@ struct SidebarView: View {
                         Section((projectRoot as NSString).lastPathComponent) {
                             ForEach(rootNode.children ?? []) { node in
                                 FileTreeRow(
-                                    node: node, state: treeState, onOpenFile: onOpenFile)
+                                    node: node, state: treeState,
+                                    projectRoot: projectRoot, onOpenFile: onOpenFile)
                             }
                         }
                     }

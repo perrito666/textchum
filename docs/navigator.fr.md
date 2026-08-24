@@ -32,6 +32,20 @@ l'interrupteur **Manifest projects** de
 manifestes de langage, pour les dépôts qui sont en réalité plusieurs
 projets déguisés en un seul.
 
+Les lignes affichent le nom de fichier nu — jusqu'à ce que deux
+fichiers ouverts en partagent un : chacun montre alors juste assez de
+fin de chemin pour les distinguer (les titres d'onglets suivent). Le
+bouton en haut de la liste bascule toutes les lignes vers leur chemin
+depuis la racine du projet tant qu'il est actif ; volontairement non
+mémorisé d'un lancement à l'autre — c'est un coup d'œil, pas un mode.
+
+Un clic droit sur une ligne de la liste ou une entrée de l'arbre
+propose l'emplacement du fichier sous toutes ses formes utiles : le nom
+nu, le chemin relatif à la racine du projet, le chemin absolu et — dans
+un dépôt git avec un remote — l'URL du fichier sur sa forge, parlant
+nativement les formes d'URL de GitHub, GitLab et Forgejo. Les mêmes
+éléments agissent sur l'onglet de devant via **File → Copy Path**.
+
 C'est la même notion de « projet » que le reste de Textchum utilise (et
 celle qui délimitera les serveurs de langage) ; le tiroir sert donc aussi
 de révélateur : si un fichier est groupé à un endroit surprenant, c'est

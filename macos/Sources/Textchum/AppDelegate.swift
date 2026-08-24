@@ -406,10 +406,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Bare filenames collide when two open documents share one; those
+    /// get as many trailing path components as it takes to tell them
+    /// apart. Unique names get no entry.
+    private func disambiguatedTitles() -> [ObjectIdentifier: String] {
+        var byName: [String: [(id: ObjectIdentifier, components: [String])]] = [:]
+        for editor in editors {
+            guard let path = editor.coreDocument.path else { continue }
+            let components = path.split(separator: "/").map(String.init)
+            guard let name = components.last else { continue }
+            byName[name, default: []].append((ObjectIdentifier(editor), components))
+        }
+        var result: [ObjectIdentifier: String] = [:]
+        for documents in byName.values where documents.count > 1 {
+            func suffix(_ components: [String], _ depth: Int) -> String {
+                components.suffix(depth).joined(separator: "/")
+            }
+            var depth = 2
+            let maxDepth = documents.map(\.components.count).max() ?? 1
+            while depth < maxDepth,
+                Set(documents.map { suffix($0.components, depth) }).count < documents.count
+            {
+                depth += 1
+            }
+            for document in documents {
+                result[document.id] = suffix(document.components, depth)
+            }
+        }
+        return result
+    }
+
     /// Rebuilds every window's sidebar: each buffer list shows only the
     /// documents of that window's tab group, so separate windows keep
     /// separate worlds.
     private func rebuildSidebar() {
+        // Titles first: the buffer rows below read window titles, and
+        // colliding names should already carry their extra path.
+        let overrides = disambiguatedTitles()
+        for editor in editors {
+            editor.setDisplayTitle(overrides[ObjectIdentifier(editor)])
+        }
         for editor in editors {
             let group: [NSWindow]
             if let window = editor.window {
@@ -771,6 +807,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         saveAs.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(saveAs)
+        fileMenu.addItem(.separator())
+        // The front tab's location in every useful spelling; also on the
+        // context menus of buffer-list and file-tree rows.
+        let copyPathItem = NSMenuItem(title: "Copy Path", action: nil, keyEquivalent: "")
+        let copyPath = NSMenu(title: "Copy Path")
+        copyPath.addItem(
+            withTitle: "File Name",
+            action: #selector(EditorWindowController.copyFileName(_:)), keyEquivalent: "")
+        copyPath.addItem(
+            withTitle: "Relative Path",
+            action: #selector(EditorWindowController.copyRelativePath(_:)), keyEquivalent: "")
+        copyPath.addItem(
+            withTitle: "Absolute Path",
+            action: #selector(EditorWindowController.copyAbsolutePath(_:)), keyEquivalent: "")
+        copyPath.addItem(
+            withTitle: "Forge URL",
+            action: #selector(EditorWindowController.copyForgeURL(_:)), keyEquivalent: "")
+        copyPathItem.submenu = copyPath
+        fileMenu.addItem(copyPathItem)
         let fileMenuItem = NSMenuItem()
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)

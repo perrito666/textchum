@@ -32,6 +32,22 @@ interruptor **Manifest projects** de
 sus manifiestos de lenguaje, para repositorios que en realidad son
 varios proyectos disfrazados de uno.
 
+Las filas muestran solo el nombre del archivo — hasta que dos archivos
+abiertos comparten uno: entonces cada uno muestra justo la cola de ruta
+necesaria para distinguirlos (los títulos de las pestañas hacen lo
+mismo). El botón en la parte superior de la lista cambia todas las
+filas a su ruta desde la raíz del proyecto mientras está activo;
+deliberadamente no se recuerda entre arranques — es un vistazo rápido,
+no un modo.
+
+Un clic derecho sobre una fila de la lista o una entrada del árbol
+ofrece la ubicación del archivo en todas sus formas útiles: el nombre a
+secas, la ruta relativa a la raíz del proyecto, la ruta absoluta y —
+dentro de un repositorio git con remoto — la URL del archivo en su
+forja, hablando con naturalidad las formas de URL de GitHub, GitLab y
+Forgejo. Los mismos elementos actúan sobre la pestaña frontal desde
+**File → Copy Path**.
+
 Esta es la misma noción de «proyecto» que usa el resto de Textchum (y por
 la que se delimitarán los servidores de lenguaje), así que el cajón hace
 también de detector de verdades: si un archivo aparece agrupado en un
