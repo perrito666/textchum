@@ -789,9 +789,13 @@ char *tc_fuzzy_files(const char *root,
  * pattern returns null and fills the optional `error_out` (release with
  * [`tc_string_free`]). Pure function — callable from any thread.
  *
+ * `filters` (`filters_len` bytes; may be empty) is a JSON array of
+ * stacked refinements applied case-insensitively as substrings:
+ * `[{"kind": "line"|"file", "include": bool, "pattern": "…"}]`.
+ *
  * # Safety
- * `root` and `pattern` must point to their stated numbers of readable
- * bytes; `error_out`, if non-null, must point to a writable slot.
+ * Each pointer/length pair must describe readable bytes; `error_out`,
+ * if non-null, must point to a writable slot.
  */
 char *tc_grep(const char *root,
               uintptr_t root_len,
@@ -799,7 +803,57 @@ char *tc_grep(const char *root,
               uintptr_t pattern_len,
               bool case_insensitive,
               uintptr_t limit,
+              const char *filters,
+              uintptr_t filters_len,
               char **error_out);
+
+/**
+ * The configuration's `lsp` section, serialized (`{}` when unset):
+ * `{"defaults": {lang: cmdline}, "projects": {root: {lang: cmdline}}}`.
+ * Release with [`tc_string_free`]. Feed to [`tc_lsp_configure`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_lsp_json(const struct TcConfig *config);
+
+/**
+ * Sets (or removes, with `command_len == 0`) the server command line for
+ * a language — scoped to a project root when `root_len > 0`, the
+ * defaults otherwise.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_lsp_entry(struct TcConfig *config,
+                             const char *root,
+                             uintptr_t root_len,
+                             const char *language,
+                             uintptr_t language_len,
+                             const char *command,
+                             uintptr_t command_len);
+
+/**
+ * Applies a server configuration (the JSON from [`tc_config_lsp_json`])
+ * to the pool. Takes effect for instances spawned afterwards and clears
+ * the missing-server memory.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; `json` must point to
+ * `len` readable bytes.
+ */
+void tc_lsp_configure(struct TcApp *app, const char *json, uintptr_t len);
+
+/**
+ * Shuts down every running server instance. The shell re-announces its
+ * open documents afterwards to respawn them under the current
+ * configuration.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`].
+ */
+void tc_lsp_restart_servers(struct TcApp *app);
 
 #ifdef __cplusplus
 }  // extern "C"

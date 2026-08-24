@@ -23,6 +23,19 @@ The query is a regular expression; results stream in as
 `path:line: text`. ⏎ jumps straight to the matching line. Results are
 capped (200) to stay instant; refine the pattern rather than scrolling.
 
+## Stacked filters
+
+Under the Find in Project query, **＋ Add Filter** stacks refinements:
+
+- **line contains / line excludes** — the matching line's text;
+- **file contains / file excludes** — the hit's file path.
+
+Filters are case-insensitive substrings and combine with *and*: lines
+with `foo` where `bar` also appears, but not in files with `test` in the
+name, is the query `foo` plus `line contains bar` plus
+`file excludes test`. File excludes prune whole files before they are
+even opened, so filtered searches stay as fast as plain ones.
+
 ## Not there yet
 
 - Replace across files.

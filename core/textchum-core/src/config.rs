@@ -198,6 +198,40 @@ impl Config {
         }
     }
 
+    /// The language-server configuration section (`lsp`), serialized:
+    /// `{"defaults": {lang: cmdline}, "projects": {root: {lang: cmdline}}}`.
+    /// Empty object when unset. The pool consumes this verbatim.
+    pub fn lsp_json(&self) -> String {
+        self.root
+            .get("lsp")
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "{}".into())
+    }
+
+    /// Sets (or, with `None`, removes) the server command line for a
+    /// language — under `lsp.projects.<root>` when `root` is given,
+    /// under `lsp.defaults` otherwise. Empty sections are pruned.
+    pub fn set_lsp_entry(&mut self, root: Option<&str>, language: &str, command: Option<&str>) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let lsp = ensure_object(top, "lsp");
+        let section = match root {
+            Some(root) => ensure_object(ensure_object(lsp, "projects"), root),
+            None => ensure_object(lsp, "defaults"),
+        };
+        match command.map(str::trim).filter(|c| !c.is_empty()) {
+            Some(command) => {
+                section.insert(language.into(), Value::String(command.into()));
+            }
+            None => {
+                section.remove(language);
+            }
+        }
+        prune_empty(top, "lsp");
+    }
+
     /// Where opened files go (`editor.open_files_in`): tabs by default.
     pub fn open_target(&self) -> OpenTarget {
         match self.editor().get("open_files_in").and_then(Value::as_str) {
@@ -289,6 +323,33 @@ impl Config {
         root.get_mut("editor")
             .and_then(Value::as_object_mut)
             .expect("just ensured the editor section is an object")
+    }
+}
+
+/// Gets `key` in `map` as an object, replacing any mistyped value.
+fn ensure_object<'a>(
+    map: &'a mut Map<String, Value>,
+    key: &str,
+) -> &'a mut Map<String, Value> {
+    if !map.get(key).map(Value::is_object).unwrap_or(false) {
+        map.insert(key.into(), Value::Object(Map::new()));
+    }
+    map.get_mut(key)
+        .and_then(Value::as_object_mut)
+        .expect("just ensured an object")
+}
+
+/// Removes `key` if it (recursively) holds only empty objects, keeping
+/// the hand-edited file free of husks.
+fn prune_empty(map: &mut Map<String, Value>, key: &str) {
+    fn is_effectively_empty(value: &Value) -> bool {
+        match value.as_object() {
+            Some(object) => object.values().all(is_effectively_empty),
+            None => false,
+        }
+    }
+    if map.get(key).is_some_and(is_effectively_empty) {
+        map.remove(key);
     }
 }
 
@@ -406,6 +467,33 @@ mod tests {
         let (weird, warning) = Config::load(&path);
         assert!(warning.is_none());
         assert_eq!(weird.appearance(), Appearance::System);
+    }
+
+    #[test]
+    fn lsp_entries_round_trip_defaults_and_projects() {
+        let path = temp_path("lsp.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.lsp_json(), "{}");
+
+        config.set_lsp_entry(None, "python", Some("pylsp"));
+        config.set_lsp_entry(Some("/work/projA"), "python", Some("pyright-langserver --stdio"));
+        config.save().unwrap();
+
+        let (reloaded, _) = Config::load(&path);
+        let lsp: Value = serde_json::from_str(&reloaded.lsp_json()).unwrap();
+        assert_eq!(lsp["defaults"]["python"], "pylsp");
+        assert_eq!(
+            lsp["projects"]["/work/projA"]["python"],
+            "pyright-langserver --stdio"
+        );
+
+        // Removing entries prunes empty sections away entirely.
+        let mut config = reloaded;
+        config.set_lsp_entry(None, "python", None);
+        config.set_lsp_entry(Some("/work/projA"), "python", None);
+        assert_eq!(config.lsp_json(), "{}");
+        config.save().unwrap();
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("lsp"));
     }
 
     #[test]

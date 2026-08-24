@@ -1279,9 +1279,13 @@ pub unsafe extern "C" fn tc_fuzzy_files(
 /// pattern returns null and fills the optional `error_out` (release with
 /// [`tc_string_free`]). Pure function — callable from any thread.
 ///
+/// `filters` (`filters_len` bytes; may be empty) is a JSON array of
+/// stacked refinements applied case-insensitively as substrings:
+/// `[{"kind": "line"|"file", "include": bool, "pattern": "…"}]`.
+///
 /// # Safety
-/// `root` and `pattern` must point to their stated numbers of readable
-/// bytes; `error_out`, if non-null, must point to a writable slot.
+/// Each pointer/length pair must describe readable bytes; `error_out`,
+/// if non-null, must point to a writable slot.
 #[no_mangle]
 pub unsafe extern "C" fn tc_grep(
     root: *const c_char,
@@ -1290,22 +1294,31 @@ pub unsafe extern "C" fn tc_grep(
     pattern_len: usize,
     case_insensitive: bool,
     limit: usize,
+    filters: *const c_char,
+    filters_len: usize,
     error_out: *mut *mut c_char,
 ) -> *mut c_char {
     if !error_out.is_null() {
         unsafe { *error_out = std::ptr::null_mut() };
     }
-    let (root, pattern) =
-        unsafe { (str_from_raw(root, root_len), str_from_raw(pattern, pattern_len)) };
-    let (Some(root), Some(pattern)) = (root, pattern) else {
+    let (root, pattern, filters) = unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(pattern, pattern_len),
+            str_from_raw(filters, filters_len),
+        )
+    };
+    let (Some(root), Some(pattern), Some(filters_json)) = (root, pattern, filters) else {
         return std::ptr::null_mut();
     };
+    let filters = parse_filters(filters_json);
     catch_unwind(AssertUnwindSafe(|| {
         match textchum_core::search::grep(
             std::path::Path::new(root),
             pattern,
             case_insensitive,
             limit,
+            &filters,
         ) {
             Ok(hits) => {
                 let joined: Vec<String> = hits
@@ -1321,6 +1334,117 @@ pub unsafe extern "C" fn tc_grep(
         }
     }))
     .unwrap_or(std::ptr::null_mut())
+}
+
+/// Parses the JSON filter array for [`tc_grep`]; malformed entries are
+/// skipped rather than failing the search.
+fn parse_filters(json: &str) -> Vec<textchum_core::search::Filter> {
+    use textchum_core::search::{Filter, FilterKind};
+    let Ok(values) = serde_json::from_str::<Vec<serde_json::Value>>(json) else {
+        return Vec::new();
+    };
+    values
+        .into_iter()
+        .filter_map(|value| {
+            let kind = match value["kind"].as_str()? {
+                "line" => FilterKind::Line,
+                "file" => FilterKind::File,
+                _ => return None,
+            };
+            let pattern = value["pattern"].as_str()?.to_owned();
+            if pattern.is_empty() {
+                return None;
+            }
+            Some(Filter {
+                kind,
+                include: value["include"].as_bool().unwrap_or(true),
+                pattern,
+            })
+        })
+        .collect()
+}
+
+/// The configuration's `lsp` section, serialized (`{}` when unset):
+/// `{"defaults": {lang: cmdline}, "projects": {root: {lang: cmdline}}}`.
+/// Release with [`tc_string_free`]. Feed to [`tc_lsp_configure`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_lsp_json(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    owned_c_string(config.inner.lsp_json())
+}
+
+/// Sets (or removes, with `command_len == 0`) the server command line for
+/// a language — scoped to a project root when `root_len > 0`, the
+/// defaults otherwise.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_lsp_entry(
+    config: *mut TcConfig,
+    root: *const c_char,
+    root_len: usize,
+    language: *const c_char,
+    language_len: usize,
+    command: *const c_char,
+    command_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let (root, language, command) = unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(language, language_len),
+            str_from_raw(command, command_len),
+        )
+    };
+    let (Some(root), Some(language), Some(command)) = (root, language, command) else {
+        return;
+    };
+    config.inner.set_lsp_entry(
+        (!root.is_empty()).then_some(root),
+        language,
+        (!command.is_empty()).then_some(command),
+    );
+}
+
+/// Applies a server configuration (the JSON from [`tc_config_lsp_json`])
+/// to the pool. Takes effect for instances spawned afterwards and clears
+/// the missing-server memory.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; `json` must point to
+/// `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_configure(app: *mut TcApp, json: *const c_char, len: usize) {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return;
+    };
+    let Some(json) = (unsafe { str_from_raw(json, len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| app.pool.configure(json)));
+}
+
+/// Shuts down every running server instance. The shell re-announces its
+/// open documents afterwards to respawn them under the current
+/// configuration.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_restart_servers(app: *mut TcApp) {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| app.pool.shutdown_all()));
 }
 
 /// Shared implementation of undo/redo entry points.

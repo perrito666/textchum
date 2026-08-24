@@ -33,6 +33,34 @@ pub struct SearchHit {
     pub text: String,
 }
 
+/// What a [`Filter`] applies to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterKind {
+    /// The matching line's text.
+    Line,
+    /// The hit's relative file path.
+    File,
+}
+
+/// A stacked refinement over grep results: hits survive only if the
+/// filtered value does (include) or does not (exclude) contain `pattern`
+/// (case-insensitive substring). File excludes prune whole files before
+/// they are searched, so filtered searches stay as fast as plain ones.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Filter {
+    pub kind: FilterKind,
+    /// true = the value must contain the pattern; false = must not.
+    pub include: bool,
+    pub pattern: String,
+}
+
+impl Filter {
+    fn passes(&self, value: &str) -> bool {
+        let contains = value.to_lowercase().contains(&self.pattern.to_lowercase());
+        contains == self.include
+    }
+}
+
 /// Walks `root` (ignore-aware) collecting relative file paths.
 fn walk(root: &Path) -> Vec<String> {
     let mut paths = Vec::new();
@@ -77,6 +105,7 @@ pub fn grep(
     pattern: &str,
     case_insensitive: bool,
     limit: usize,
+    filters: &[Filter],
 ) -> Result<Vec<SearchHit>, String> {
     let matcher = grep_regex::RegexMatcherBuilder::new()
         .case_insensitive(case_insensitive)
@@ -86,6 +115,18 @@ pub fn grep(
         .binary_detection(BinaryDetection::quit(b'\x00'))
         .line_number(true)
         .build();
+
+    let (file_filters, line_filters): (Vec<&Filter>, Vec<&Filter>) = {
+        let mut files = Vec::new();
+        let mut lines = Vec::new();
+        for filter in filters {
+            match filter.kind {
+                FilterKind::File => files.push(filter),
+                FilterKind::Line => lines.push(filter),
+            }
+        }
+        (files, lines)
+    };
 
     let mut hits = Vec::new();
     for entry in ignore::WalkBuilder::new(root)
@@ -103,15 +144,22 @@ pub fn grep(
             continue;
         };
         let relative = relative.to_string_lossy().into_owned();
+        // File filters prune before the file is even opened.
+        if !file_filters.iter().all(|f| f.passes(&relative)) {
+            continue;
+        }
         let _ = searcher.search_path(
             &matcher,
             entry.path(),
             UTF8(|line, text| {
-                hits.push(SearchHit {
-                    path: relative.clone(),
-                    line,
-                    text: text.trim_end().chars().take(400).collect(),
-                });
+                let text = text.trim_end();
+                if line_filters.iter().all(|f| f.passes(text)) {
+                    hits.push(SearchHit {
+                        path: relative.clone(),
+                        line,
+                        text: text.chars().take(400).collect(),
+                    });
+                }
                 Ok(hits.len() < limit)
             }),
         );
@@ -161,7 +209,7 @@ mod tests {
     #[test]
     fn grep_finds_lines_with_numbers_and_respects_ignores() {
         let root = project("grep_finds_lines_with_numbers_and_respects_ignores");
-        let hits = grep(&root, "needle", false, 10).unwrap();
+        let hits = grep(&root, "needle", false, 10, &[]).unwrap();
         let mut paths: Vec<_> = hits.iter().map(|h| h.path.as_str()).collect();
         paths.sort();
         assert_eq!(paths, ["README.md", "src/main.rs"]);
@@ -173,15 +221,63 @@ mod tests {
     #[test]
     fn grep_case_flag_and_limit() {
         let root = project("grep_case_flag_and_limit");
-        assert!(grep(&root, "NEEDLE", false, 10).unwrap().is_empty());
-        assert_eq!(grep(&root, "NEEDLE", true, 10).unwrap().len(), 2);
-        assert_eq!(grep(&root, "needle", true, 1).unwrap().len(), 1);
+        assert!(grep(&root, "NEEDLE", false, 10, &[]).unwrap().is_empty());
+        assert_eq!(grep(&root, "NEEDLE", true, 10, &[]).unwrap().len(), 2);
+        assert_eq!(grep(&root, "needle", true, 1, &[]).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn stacked_filters_narrow_lines_and_files() {
+        let root = project("stacked_filters_narrow_lines_and_files");
+        std::fs::write(
+            root.join("src/lib.rs"),
+            "foo alone\nfoo with bar\nbar only\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("src/lib_test.rs"), "foo with bar in tests\n").unwrap();
+
+        // The canonical stack: lines with foo where bar also appears,
+        // excluding files with "test" in the name.
+        let filters = [
+            Filter {
+                kind: FilterKind::Line,
+                include: true,
+                pattern: "bar".into(),
+            },
+            Filter {
+                kind: FilterKind::File,
+                include: false,
+                pattern: "test".into(),
+            },
+        ];
+        let hits = grep(&root, "foo", false, 50, &filters).unwrap();
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].path, "src/lib.rs");
+        assert_eq!(hits[0].text, "foo with bar");
+
+        // Filters are case-insensitive substrings.
+        let case = [Filter {
+            kind: FilterKind::Line,
+            include: true,
+            pattern: "BAR".into(),
+        }];
+        assert_eq!(grep(&root, "foo", false, 50, &case).unwrap().len(), 2);
+
+        // File include narrows to matching paths.
+        let only_tests = [Filter {
+            kind: FilterKind::File,
+            include: true,
+            pattern: "test".into(),
+        }];
+        let hits = grep(&root, "foo", false, 50, &only_tests).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].path, "src/lib_test.rs");
     }
 
     #[test]
     fn grep_rejects_bad_patterns_gracefully() {
         let root = project("grep_rejects_bad_patterns_gracefully");
-        let error = grep(&root, "unclosed(", false, 10).unwrap_err();
+        let error = grep(&root, "unclosed(", false, 10, &[]).unwrap_err();
         assert!(error.contains("bad pattern"), "got: {error}");
     }
 }

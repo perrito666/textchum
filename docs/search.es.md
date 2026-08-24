@@ -26,6 +26,21 @@ La consulta es una expresión regular; los resultados llegan como
 resultados tienen tope (200) para seguir siendo instantáneos; refine el
 patrón en lugar de desplazarse.
 
+## Filtros apilados
+
+Bajo la consulta de Buscar en el proyecto, **＋ Add Filter** apila
+refinamientos:
+
+- **line contains / line excludes** — el texto de la línea coincidente;
+- **file contains / file excludes** — la ruta del archivo del resultado.
+
+Los filtros son subcadenas sin distinción de mayúsculas y se combinan con
+*y*: líneas con `foo` donde también aparece `bar`, pero no en archivos
+con `test` en el nombre, es la consulta `foo` más `line contains bar` más
+`file excludes test`. Las exclusiones de archivo podan archivos enteros
+antes siquiera de abrirlos, así que las búsquedas filtradas siguen siendo
+tan rápidas como las simples.
+
 ## Aún no está
 
 - Reemplazar entre archivos.

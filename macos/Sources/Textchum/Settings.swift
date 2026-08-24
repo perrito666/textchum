@@ -22,14 +22,29 @@ struct EditorSettings {
     }
 }
 
-/// Observable bridge between the SwiftUI settings form and the JSON-backed
-/// core configuration: every change writes through to disk immediately and
+/// Observable bridge between the settings UI and the JSON-backed core
+/// configuration: every change writes through to disk immediately and
 /// notifies the app so open editors update live.
 @MainActor
 final class SettingsModel: ObservableObject {
+    /// One language-server configuration row.
+    struct LSPEntry: Identifiable, Equatable {
+        /// Project root path; empty means the defaults section.
+        let scope: String
+        let language: String
+        let command: String
+
+        var id: String { "\(scope)|\(language)" }
+        var scopeLabel: String {
+            scope.isEmpty ? "Default" : (scope as NSString).lastPathComponent
+        }
+    }
+
     private let config: CoreConfig
     /// Called after any setting changed and was persisted.
     var onChange: (() -> Void)?
+    /// Called when the user asks running servers to restart.
+    var onRestartServers: (() -> Void)?
     /// Suppresses write-back while the initial values load.
     private var isLoading = true
 
@@ -48,6 +63,7 @@ final class SettingsModel: ObservableObject {
     @Published var tabWidth: Int {
         didSet { persist { $0.tabWidth = tabWidth } }
     }
+    @Published private(set) var lspEntries: [LSPEntry] = []
 
     init(config: CoreConfig) {
         self.config = config
@@ -57,11 +73,65 @@ final class SettingsModel: ObservableObject {
         self.fontSize = config.fontSize
         self.tabWidth = config.tabWidth
         self.isLoading = false
+        reloadLSPEntries()
     }
 
     var currentSettings: EditorSettings {
         EditorSettings(config: config)
     }
+
+    // MARK: Language servers
+
+    private func reloadLSPEntries() {
+        var entries: [LSPEntry] = []
+        if let data = config.lspJSON.data(using: .utf8),
+            let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        {
+            for (language, command) in parsed["defaults"] as? [String: String] ?? [:] {
+                entries.append(LSPEntry(scope: "", language: language, command: command))
+            }
+            for (root, languages) in parsed["projects"] as? [String: [String: String]] ?? [:] {
+                for (language, command) in languages {
+                    entries.append(LSPEntry(scope: root, language: language, command: command))
+                }
+            }
+        }
+        lspEntries = entries.sorted { ($0.scope, $0.language) < ($1.scope, $1.language) }
+    }
+
+    func addLSPEntry(scope: String, language: String, command: String) {
+        let language = language.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !language.isEmpty, !command.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return
+        }
+        config.setLSPEntry(
+            root: scope.isEmpty ? nil : (scope as NSString).expandingTildeInPath,
+            language: language,
+            command: command
+        )
+        persistLSPChange()
+    }
+
+    func removeLSPEntry(_ entry: LSPEntry) {
+        config.setLSPEntry(
+            root: entry.scope.isEmpty ? nil : entry.scope,
+            language: entry.language,
+            command: nil
+        )
+        persistLSPChange()
+    }
+
+    private func persistLSPChange() {
+        do {
+            try config.save()
+        } catch {
+            NSLog("could not save configuration: \(error)")
+        }
+        reloadLSPEntries()
+        onChange?()
+    }
+
+    var lspJSON: String { config.lspJSON }
 
     private func persist(_ apply: (CoreConfig) -> Void) {
         guard !isLoading else { return }
@@ -75,10 +145,23 @@ final class SettingsModel: ObservableObject {
     }
 }
 
-/// The settings form. Deliberately small: these are the only recognized
-/// settings today, and the JSON file remains the escape hatch for anything
-/// beyond them.
+/// The settings window: General plus Language Servers.
 struct SettingsView: View {
+    @ObservedObject var model: SettingsModel
+
+    var body: some View {
+        TabView {
+            GeneralSettingsTab(model: model)
+                .tabItem { Label("General", systemImage: "gearshape") }
+            LanguageServersTab(model: model)
+                .tabItem { Label("Language Servers", systemImage: "network") }
+        }
+        .frame(width: 620, height: 420)
+        .padding(20)
+    }
+}
+
+private struct GeneralSettingsTab: View {
     @ObservedObject var model: SettingsModel
 
     /// Font families with a fixed-pitch face, plus the platform default.
@@ -116,8 +199,96 @@ struct SettingsView: View {
                 Text("Tab width: \(model.tabWidth) columns")
             }
         }
-        .padding(20)
-        .frame(width: 380)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+private struct LanguageServersTab: View {
+    @ObservedObject var model: SettingsModel
+    @State private var newScope = ""
+    @State private var newLanguage = ""
+    @State private var newCommand = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(
+                "Override which server command runs per language — for every project "
+                    + "(Default) or for one project root. Project entries win over defaults; "
+                    + "unlisted languages use the built-in registry."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            List {
+                if model.lspEntries.isEmpty {
+                    Text("No overrides — the built-in registry serves all languages.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.lspEntries) { entry in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(entry.scopeLabel)
+                                    .fontWeight(.semibold)
+                                Text(entry.language)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(entry.command)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        .help(entry.scope.isEmpty ? "All projects" : entry.scope)
+                        Spacer()
+                        Button {
+                            model.removeLSPEntry(entry)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+            .frame(minHeight: 140)
+
+            GroupBox("Add override") {
+                VStack(spacing: 8) {
+                    TextField(
+                        "Project root (empty = default for all projects)", text: $newScope)
+                    HStack(spacing: 8) {
+                        TextField("Language (e.g. python)", text: $newLanguage)
+                            .frame(width: 180)
+                        TextField(
+                            "Server command (e.g. pyright-langserver --stdio)",
+                            text: $newCommand)
+                        Button("Add") {
+                            model.addLSPEntry(
+                                scope: newScope, language: newLanguage, command: newCommand)
+                            newScope = ""
+                            newLanguage = ""
+                            newCommand = ""
+                        }
+                        .disabled(newLanguage.isEmpty || newCommand.isEmpty)
+                    }
+                }
+                .textFieldStyle(.roundedBorder)
+                .padding(6)
+            }
+
+            HStack {
+                Text("Changes apply to servers started afterwards.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Restart Servers Now") {
+                    model.onRestartServers?()
+                }
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
 }
 

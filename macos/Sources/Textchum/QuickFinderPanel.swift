@@ -34,6 +34,11 @@ final class QuickFinderPanel: NSObject {
     private var mode: Mode = .files
     private let scopeField = NSTextField()
     private let queryField = NSTextField()
+    /// Stacked refinements (grep mode): one row per filter, below the
+    /// query, narrowing by line content or file name.
+    private let filtersStack = NSStackView()
+    private let addFilterButton = NSButton(
+        title: "＋ Add Filter", target: nil, action: nil)
     private let table = NSTableView()
     private var rows: [(display: String, path: String, line: Int)] = []
     private var searchGeneration = 0
@@ -52,6 +57,10 @@ final class QuickFinderPanel: NSObject {
         queryField.stringValue = ""
         rows = []
         table.reloadData()
+        clearFilters()
+        // Filters only make sense over content hits.
+        filtersStack.isHidden = mode == .files
+        addFilterButton.isHidden = mode == .files
 
         if let window {
             var frame = panel.frame
@@ -93,7 +102,16 @@ final class QuickFinderPanel: NSObject {
         scroll.documentView = table
         scroll.hasVerticalScroller = true
 
-        let stack = NSStackView(views: [scopeField, queryField, scroll])
+        filtersStack.orientation = .vertical
+        filtersStack.spacing = 4
+        addFilterButton.target = self
+        addFilterButton.action = #selector(addFilterPressed)
+        addFilterButton.bezelStyle = .inline
+        addFilterButton.font = .systemFont(ofSize: 11)
+        let addRow = NSStackView(views: [addFilterButton, NSView()])
+        addRow.orientation = .horizontal
+
+        let stack = NSStackView(views: [scopeField, queryField, filtersStack, addRow, scroll])
         stack.orientation = .vertical
         stack.spacing = 6
         stack.edgeInsets = NSEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
@@ -101,6 +119,79 @@ final class QuickFinderPanel: NSObject {
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
         panel.contentView = stack
         return panel
+    }
+
+    // MARK: Filters
+
+    /// One filter row: kind popup + pattern field + remove button.
+    private func makeFilterRow() -> NSStackView {
+        let kind = NSPopUpButton()
+        kind.addItems(withTitles: [
+            "line contains", "line excludes", "file contains", "file excludes",
+        ])
+        kind.font = .systemFont(ofSize: 11)
+        kind.target = self
+        kind.action = #selector(filterChanged)
+        let pattern = NSTextField()
+        pattern.placeholderString = "filter text…"
+        pattern.font = .systemFont(ofSize: 12)
+        pattern.delegate = self
+        let remove = NSButton(
+            image: NSImage(systemSymbolName: "minus.circle", accessibilityDescription: "Remove")
+                ?? NSImage(),
+            target: self,
+            action: #selector(removeFilterPressed(_:))
+        )
+        remove.isBordered = false
+        let row = NSStackView(views: [kind, pattern, remove])
+        row.orientation = .horizontal
+        row.spacing = 6
+        return row
+    }
+
+    @objc private func addFilterPressed() {
+        filtersStack.addArrangedSubview(makeFilterRow())
+        if let pattern = (filtersStack.arrangedSubviews.last as? NSStackView)?
+            .arrangedSubviews[1] as? NSTextField
+        {
+            panel?.makeFirstResponder(pattern)
+        }
+    }
+
+    @objc private func removeFilterPressed(_ sender: NSButton) {
+        if let row = sender.superview as? NSStackView {
+            filtersStack.removeArrangedSubview(row)
+            row.removeFromSuperview()
+            scheduleSearch()
+        }
+    }
+
+    @objc private func filterChanged() {
+        scheduleSearch()
+    }
+
+    private func clearFilters() {
+        for view in filtersStack.arrangedSubviews {
+            filtersStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+    }
+
+    /// The current filter rows as core filters (empty patterns skipped).
+    private func currentFilters() -> [CoreSearch.Filter] {
+        filtersStack.arrangedSubviews.compactMap { view in
+            guard let row = view as? NSStackView,
+                let kind = row.arrangedSubviews.first as? NSPopUpButton,
+                let pattern = row.arrangedSubviews.dropFirst().first as? NSTextField,
+                !pattern.stringValue.isEmpty
+            else { return nil }
+            switch kind.indexOfSelectedItem {
+            case 0: return .init(kind: .line, include: true, pattern: pattern.stringValue)
+            case 1: return .init(kind: .line, include: false, pattern: pattern.stringValue)
+            case 2: return .init(kind: .file, include: true, pattern: pattern.stringValue)
+            default: return .init(kind: .file, include: false, pattern: pattern.stringValue)
+            }
+        }
     }
 
     // MARK: Searching
@@ -119,6 +210,7 @@ final class QuickFinderPanel: NSObject {
         let scope = (scopeField.stringValue as NSString).expandingTildeInPath
         let query = queryField.stringValue
         let mode = self.mode
+        let filters = currentFilters()
         searchGeneration += 1
         let generation = searchGeneration
 
@@ -134,7 +226,8 @@ final class QuickFinderPanel: NSObject {
                 if query.isEmpty {
                     results = []
                 } else {
-                    let hits = (try? CoreSearch.grep(root: scope, pattern: query, limit: 200))
+                    let hits = try? CoreSearch.grep(
+                        root: scope, pattern: query, limit: 200, filters: filters)
                     results = (hits ?? []).map {
                         ("\($0.path):\($0.line): \($0.text)", "\(scope)/\($0.path)", $0.line)
                     }
@@ -154,9 +247,23 @@ final class QuickFinderPanel: NSObject {
     }
 
     /// Debug hook: force scope and query and search immediately.
-    func debugSet(scope: String, query: String) {
+    /// `filters` use the compact spec `line+foo`, `line-foo`, `file+foo`,
+    /// `file-foo`.
+    func debugSet(scope: String, query: String, filters: [String] = []) {
         scopeField.stringValue = scope
         queryField.stringValue = query
+        clearFilters()
+        for spec in filters {
+            guard spec.count > 5 else { continue }
+            let kind = String(spec.prefix(4))
+            let include = spec.dropFirst(4).first == "+"
+            let pattern = String(spec.dropFirst(5))
+            let row = makeFilterRow()
+            (row.arrangedSubviews[0] as? NSPopUpButton)?.selectItem(
+                at: (kind == "line" ? 0 : 2) + (include ? 0 : 1))
+            (row.arrangedSubviews[1] as? NSTextField)?.stringValue = pattern
+            filtersStack.addArrangedSubview(row)
+        }
         runSearch()
     }
 

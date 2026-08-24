@@ -213,6 +213,15 @@ final class EditorWindowController: NSWindowController {
         lspOpenPath = current
     }
 
+    /// Re-announces the document after a pool restart, respawning its
+    /// server under the current configuration.
+    func reannounceLSP() {
+        guard let lspApp, let path = lspOpenPath,
+            let language = coreDocument.languageName
+        else { return }
+        lspApp.lspDidOpen(path: path, language: language, text: coreDocument.text)
+    }
+
     /// Debounced full-text didChange, so servers see keystrokes in
     /// human-sized batches.
     private func scheduleLSPChange() {

@@ -44,6 +44,27 @@ Textchum finds servers on `PATH` — it does not install them:
 | Zig | zls | `brew install zls` |
 | Bash | bash-language-server | `npm install -g bash-language-server` |
 
+## Choosing servers yourself
+
+Settings → Language Servers overrides which command serves a language —
+for every project (a *default*) or for a single project root. Project
+entries win over defaults; unlisted languages use the table above. The
+entries live in `config.json` under `"lsp"`, with the file's usual
+hand-editing guarantees:
+
+```json
+{
+  "lsp": {
+    "defaults": {"python": "pylsp"},
+    "projects": {"/work/projA": {"python": "pyright-langserver --stdio"}}
+  }
+}
+```
+
+Changes apply to servers started afterwards; the tab's **Restart Servers
+Now** retires running instances and respawns them under the new
+configuration.
+
 ## Under the hood
 
 The client lives in the core, behind the same boundary as everything
@@ -65,5 +86,3 @@ protocol path is exercised in CI against a scripted server.
 - Automatic restart of crashed servers (a crash is reported; reopening
   the file starts a fresh instance).
 - Idle shutdown of unused instances, and a server-status panel.
-- Custom server configuration (a `servers.json` with the configuration's
-  escape-hatch rules).

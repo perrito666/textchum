@@ -122,6 +122,43 @@ public final class CoreConfig {
         set { tc_config_set_tab_width(handle, UInt32(max(0, newValue))) }
     }
 
+    /// The language-server section, serialized for the pool:
+    /// `{"defaults": {lang: cmdline}, "projects": {root: {lang: cmdline}}}`.
+    public var lspJSON: String {
+        guard let cString = tc_config_lsp_json(handle) else { return "{}" }
+        defer { tc_string_free(cString) }
+        return String(cString: cString)
+    }
+
+    /// Sets (nil removes) the server command line for a language — scoped
+    /// to a project root, or the defaults when `root` is nil.
+    public func setLSPEntry(root: String?, language: String, command: String?) {
+        var root = root ?? ""
+        var language = language
+        var command = command ?? ""
+        root.withUTF8 { rootBytes in
+            language.withUTF8 { languageBytes in
+                command.withUTF8 { commandBytes in
+                    tc_config_set_lsp_entry(
+                        handle,
+                        rootBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(rootBytes.count),
+                        languageBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(languageBytes.count),
+                        commandBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(commandBytes.count)
+                    )
+                }
+            }
+        }
+    }
+
     /// Writes the configuration back to its file (atomic, pretty-printed,
     /// unknown keys preserved).
     public func save() throws {

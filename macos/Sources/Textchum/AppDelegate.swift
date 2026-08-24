@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsModel.onChange = { [weak self] in
             guard let self, let model = self.settingsModel else { return }
             self.applyAppearanceChoice()
+            self.coreApp?.lspConfigure(json: model.lspJSON)
             for editor in self.editors {
                 editor.apply(settings: model.currentSettings)
             }
@@ -62,7 +63,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.handleCoreEvent(event)
         }
         coreApp.ping(sequence: 1)
+        coreApp.lspConfigure(json: config.lspJSON)
         self.coreApp = coreApp
+
+        settingsModel.onRestartServers = { [weak self] in
+            self?.restartLanguageServers()
+        }
 
         // Open files given on the command line — actual files only, not
         // directories, flags, or flag values. With none, defer the
@@ -113,10 +119,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 allArguments[flagIndex + 1] == "grep" ? .grep : .files
             let scope = allArguments[flagIndex + 2]
             let query = allArguments[flagIndex + 3]
+            let filters = Array(allArguments.dropFirst(flagIndex + 4))
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 MainActor.assumeIsolated {
+                    if allArguments[flagIndex + 1] == "settings" {
+                        self?.showSettings(nil)
+                        return
+                    }
                     self?.showQuickFinder(mode: mode)
-                    self?.quickFinder.debugSet(scope: scope, query: query)
+                    self?.quickFinder.debugSet(scope: scope, query: query, filters: filters)
                 }
             }
         }
@@ -218,6 +229,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 alert.informativeText = message
                 alert.runModal()
             }
+        }
+    }
+
+    /// Retires every running server instance and re-announces the open
+    /// documents, respawning them under the current configuration.
+    private func restartLanguageServers() {
+        guard let coreApp else { return }
+        coreApp.lspRestartServers()
+        reportedMissingServers.removeAll()
+        for editor in editors {
+            editor.reannounceLSP()
         }
     }
 

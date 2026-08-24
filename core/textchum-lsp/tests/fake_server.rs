@@ -131,6 +131,53 @@ fn per_project_instances_and_diagnostics() {
 }
 
 #[test]
+fn configured_servers_win_per_project_then_default() {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/fake_lsp.py")
+        .canonicalize()
+        .unwrap();
+    let (root_a, file_a) = project("cfg-a");
+    let (root_b, file_b) = project("cfg-b");
+
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    // Default: a command that does not exist. Project A: the fake server.
+    // Project B falls back to the broken default and reports not-found;
+    // project A runs — proving the per-project entry wins.
+    pool.configure(&format!(
+        r#"{{
+            "defaults": {{"rust": "definitely-not-a-real-binary-xyz"}},
+            "projects": {{"{}": {{"rust": "python3 {}"}}}}
+        }}"#,
+        root_a.display(),
+        script.display()
+    ));
+
+    pool.did_open(&file_a, "rust", "fn main() {}\n");
+    pool.did_open(&file_b, "rust", "fn main() {}\n");
+
+    let mut seen = Vec::new();
+    collect_until(&events, "custom running + default not-found", &mut seen, |seen| {
+        let a_running = seen.iter().any(|e| {
+            matches!(e, Event::ServerStatus { status, server, root, .. }
+                if status == "running" && server.starts_with("custom:python3")
+                    && PathBuf::from(root) == root_a)
+        });
+        let b_missing = seen.iter().any(|e| {
+            matches!(e, Event::ServerStatus { status, root, .. }
+                if status == "not-found" && PathBuf::from(root) == root_b)
+        });
+        a_running && b_missing
+    });
+
+    // The configured instance serves real traffic.
+    collect_until(&events, "diagnostics from configured server", &mut seen, |seen| {
+        seen.iter().any(|e| matches!(e, Event::Diagnostics { path, .. }
+            if PathBuf::from(path) == file_a))
+    });
+}
+
+#[test]
 fn missing_server_reports_once_with_hint() {
     let (tx, events) = mpsc::channel();
     let mut pool = Pool::new(tx);

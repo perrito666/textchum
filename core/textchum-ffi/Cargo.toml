@@ -11,6 +11,7 @@ name = "textchum"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+serde_json = "1.0.151"
 textchum-core = { path = "../textchum-core" }
 textchum-lsp = { path = "../textchum-lsp" }
 

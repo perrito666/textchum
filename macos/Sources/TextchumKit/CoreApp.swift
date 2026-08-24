@@ -163,6 +163,20 @@ public final class CoreApp {
         }
     }
 
+    /// Applies the configuration's `lsp` JSON to the server pool. Affects
+    /// instances spawned afterwards.
+    public func lspConfigure(json: String) {
+        withUTF8(json) { json, jsonLen in
+            tc_lsp_configure(handle, json, jsonLen)
+        }
+    }
+
+    /// Shuts down every running server instance; re-announce open
+    /// documents afterwards to respawn under the current configuration.
+    public func lspRestartServers() {
+        tc_lsp_restart_servers(handle)
+    }
+
     /// Announces a closed document.
     public func lspDidClose(path: String) {
         withUTF8(path) { path, pathLen in

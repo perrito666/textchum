@@ -637,6 +637,7 @@ name = "textchum-ffi"
 version = "0.1.0"
 dependencies = [
  "cbindgen",
+ "serde_json",
  "textchum-core",
  "textchum-lsp",
 ]

@@ -31,21 +31,48 @@ public enum CoreSearch {
         return joined.components(separatedBy: "\n")
     }
 
-    /// Searches file contents under `root` for the regex `pattern`.
-    /// Throws a ``CoreIOError`` with the core's message on a bad pattern.
+    /// A stacked refinement over grep hits: the line's text or the file's
+    /// relative path must (or must not) contain `pattern`, matched as a
+    /// case-insensitive substring.
+    public struct Filter: Codable, Sendable, Equatable {
+        public enum Kind: String, Codable, Sendable {
+            case line
+            case file
+        }
+
+        public var kind: Kind
+        public var include: Bool
+        public var pattern: String
+
+        public init(kind: Kind, include: Bool, pattern: String) {
+            self.kind = kind
+            self.include = include
+            self.pattern = pattern
+        }
+    }
+
+    /// Searches file contents under `root` for the regex `pattern`,
+    /// narrowed by `filters`. Throws a ``CoreIOError`` with the core's
+    /// message on a bad pattern.
     public static func grep(
-        root: String, pattern: String, caseInsensitive: Bool = false, limit: Int = 200
+        root: String, pattern: String, caseInsensitive: Bool = false, limit: Int = 200,
+        filters: [Filter] = []
     ) throws -> [Hit] {
+        let filtersJSON =
+            (try? JSONEncoder().encode(filters)).flatMap { String(data: $0, encoding: .utf8) }
+            ?? "[]"
         var error: UnsafeMutablePointer<CChar>?
         let joined: String? = withUTF8(root) { root, rootLen in
             withUTF8(pattern) { pattern, patternLen in
-                guard
-                    let cString = tc_grep(
-                        root, rootLen, pattern, patternLen, caseInsensitive, UInt(limit),
-                        &error)
-                else { return nil }
-                defer { tc_string_free(cString) }
-                return String(cString: cString)
+                withUTF8(filtersJSON) { filters, filtersLen in
+                    guard
+                        let cString = tc_grep(
+                            root, rootLen, pattern, patternLen, caseInsensitive,
+                            UInt(limit), filters, filtersLen, &error)
+                    else { return nil }
+                    defer { tc_string_free(cString) }
+                    return String(cString: cString)
+                }
             }
         }
         if let error {

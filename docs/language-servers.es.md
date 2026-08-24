@@ -49,6 +49,28 @@ Textchum encuentra los servidores en el `PATH` — no los instala:
 | Zig | zls | `brew install zls` |
 | Bash | bash-language-server | `npm install -g bash-language-server` |
 
+## Elegir los servidores
+
+Settings → Language Servers permite decidir qué comando sirve a un
+lenguaje — para todos los proyectos (un *valor por defecto*) o para una
+raíz de proyecto concreta. Las entradas de proyecto ganan a los valores
+por defecto; los lenguajes sin entrada usan la tabla anterior. Las
+entradas viven en `config.json` bajo `"lsp"`, con las garantías de
+edición a mano habituales del archivo:
+
+```json
+{
+  "lsp": {
+    "defaults": {"python": "pylsp"},
+    "projects": {"/work/projA": {"python": "pyright-langserver --stdio"}}
+  }
+}
+```
+
+Los cambios se aplican a los servidores arrancados después; el botón
+**Restart Servers Now** de la pestaña retira las instancias en marcha y
+las relanza con la nueva configuración.
+
 ## Por debajo
 
 El cliente vive en el núcleo, tras la misma frontera que todo lo demás:
@@ -74,5 +96,3 @@ servidor guionizado.
   el archivo arranca una instancia nueva).
 - Apagado por inactividad de instancias sin uso y un panel de estado de
   servidores.
-- Configuración de servidores propia (un `servers.json` con las reglas de
-  salida de emergencia de la configuración).

@@ -26,6 +26,21 @@ La requête est une expression régulière ; les résultats arrivent en
 Les résultats sont plafonnés (200) pour rester instantanés ; affinez le
 motif plutôt que de faire défiler.
 
+## Filtres empilés
+
+Sous la requête de Chercher dans le projet, **＋ Add Filter** empile des
+raffinements :
+
+- **line contains / line excludes** — le texte de la ligne trouvée ;
+- **file contains / file excludes** — le chemin du fichier du résultat.
+
+Les filtres sont des sous-chaînes insensibles à la casse et se combinent
+par *et* : les lignes avec `foo` où `bar` apparaît aussi, mais pas dans
+les fichiers avec `test` dans le nom, c'est la requête `foo` plus
+`line contains bar` plus `file excludes test`. Les exclusions de fichier
+élaguent des fichiers entiers avant même de les ouvrir ; les recherches
+filtrées restent donc aussi rapides que les simples.
+
 ## Pas encore là
 
 - Le remplacement entre fichiers.

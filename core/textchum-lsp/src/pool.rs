@@ -56,6 +56,9 @@ pub struct Pool {
     failed: HashSet<InstanceKey>,
     /// Test/override servers, consulted before the built-in registry.
     overrides: Vec<ServerConfig>,
+    /// User configuration: `{"defaults": {lang: cmdline}, "projects":
+    /// {root: {lang: cmdline}}}`, consulted before everything else.
+    configured: serde_json::Value,
     /// Next client→server request id. Starts above the lifecycle ids
     /// (1 = initialize, 2 = shutdown).
     next_request_id: u64,
@@ -70,8 +73,38 @@ impl Pool {
             versions: HashMap::new(),
             failed: HashSet::new(),
             overrides: Vec::new(),
+            configured: serde_json::Value::Null,
             next_request_id: 100,
         }
+    }
+
+    /// Applies the user's server configuration (the config file's `lsp`
+    /// section, serialized). Takes effect for instances spawned
+    /// afterwards; call [`Self::shutdown_all`] to also retire running
+    /// ones. Also clears the not-retried failure memory, since a fixed
+    /// command deserves a fresh chance.
+    pub fn configure(&mut self, json: &str) {
+        self.configured = serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
+        self.failed.clear();
+    }
+
+    /// Shuts down every running instance and forgets open-document
+    /// routing; the shell re-announces documents to respawn under the
+    /// current configuration.
+    pub fn shutdown_all(&mut self) {
+        self.instances.clear();
+        self.documents.clear();
+        self.versions.clear();
+    }
+
+    /// A user-configured command line for (root, language): the project
+    /// entry wins over the defaults entry.
+    fn configured_command(&self, root: &Path, language: &str) -> Option<String> {
+        let root_key = root.to_string_lossy();
+        let project = self.configured["projects"][root_key.as_ref()][language].as_str();
+        let value = project.or_else(|| self.configured["defaults"][language].as_str())?;
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_owned())
     }
 
     /// Registers a server consulted before the built-in registry. Used by
@@ -80,7 +113,20 @@ impl Pool {
         self.overrides.push(config);
     }
 
-    fn config_for_language(&self, language: &str) -> Option<ServerConfig> {
+    /// Resolves the server for a (root, language): user project entry →
+    /// user default → programmatic override → built-in registry.
+    fn config_for(&self, root: &Path, language: &str) -> Option<ServerConfig> {
+        if let Some(command_line) = self.configured_command(root, language) {
+            let mut parts = command_line.split_whitespace().map(str::to_owned);
+            let command = parts.next()?;
+            return Some(ServerConfig {
+                id: format!("custom:{command}"),
+                command,
+                args: parts.collect(),
+                languages: vec![language.to_owned()],
+                install_hint: format!("configured in Settings for {language}"),
+            });
+        }
         self.overrides
             .iter()
             .find(|c| c.languages.iter().any(|l| l == language))
@@ -100,10 +146,10 @@ impl Pool {
     /// Announces an opened document, spawning the (server, root) instance
     /// on first use.
     pub fn did_open(&mut self, path: &Path, language: &str, text: &str) {
-        let Some(config) = self.config_for_language(language) else {
+        let root = Self::root_for(path);
+        let Some(config) = self.config_for(&root, language) else {
             return;
         };
-        let root = Self::root_for(path);
         let key = (config.id.clone(), root.clone());
         if self.failed.contains(&key) {
             return;
