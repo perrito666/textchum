@@ -1,35 +1,40 @@
-//! The shell's app-wide machinery: one language-server pool for every
-//! window (the one-instance-per-project behavior comes from the linked
-//! crate), an event pump that marshals server events from their threads
-//! onto the GTK main loop, a registry of open windows by path, and the
-//! response router for request/reply traffic (definitions, and later
-//! hover and completion).
+//! The shell's app-wide machinery: the configuration (the same
+//! `config.json` contract as everywhere else — GUI-managed, hand
+//! editable, broken files never clobbered), one language-server pool
+//! for every window, an event pump that marshals server events from
+//! their threads onto the GTK main loop, a registry of open pages by
+//! path, and the response router for request/reply traffic.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use adw::prelude::*;
 use gtk::glib;
-use textchum_core::Event;
+use textchum_core::{theme, Config, Event};
 use textchum_lsp::Pool;
 
-/// Everything the pump needs to reach one window.
-pub struct WindowHandles {
+/// Everything the pump needs to reach one open document's page.
+pub struct PageHandles {
     pub window: adw::ApplicationWindow,
+    pub tab_view: adw::TabView,
+    pub tab_page: adw::TabPage,
     pub buffer: sourceview5::Buffer,
     pub view: sourceview5::View,
-    pub title: adw::WindowTitle,
     pub toasts: adw::ToastOverlay,
-    /// The subtitle before any problem count is appended.
-    pub base_subtitle: RefCell<String>,
+    pub title: adw::WindowTitle,
+    /// "language" and "N errors" halves of the subtitle.
+    pub language: RefCell<String>,
+    pub problems: RefCell<String>,
 }
 
 pub struct Shell {
+    pub config: RefCell<Config>,
     pub pool: RefCell<Pool>,
     events: RefCell<Receiver<Event>>,
-    pub windows: RefCell<HashMap<String, Rc<WindowHandles>>>,
+    pub pages: RefCell<HashMap<String, Rc<PageHandles>>>,
     callbacks: RefCell<HashMap<u64, Box<dyn FnOnce(&str)>>>,
 }
 
@@ -37,13 +42,23 @@ thread_local! {
     static SHELL: RefCell<Option<Rc<Shell>>> = const { RefCell::new(None) };
 }
 
+/// `~/.config/textchum/config.json` — the Linux home of the same file.
+pub fn config_path() -> PathBuf {
+    glib::user_config_dir().join("textchum/config.json")
+}
+
 impl Shell {
-    /// The process-wide shell, started on first use — which also arms
-    /// the 50 ms pump that drains server events into the main loop.
+    /// The process-wide shell, started on first use — which loads the
+    /// configuration, applies it, and arms the 50 ms pump that drains
+    /// server events into the main loop.
     pub fn instance() -> Rc<Shell> {
         SHELL.with(|cell| {
             if let Some(shell) = cell.borrow().as_ref() {
                 return Rc::clone(shell);
+            }
+            let (config, warning) = Config::load(&config_path());
+            if let Some(warning) = warning {
+                eprintln!("textchum: {warning}");
             }
             let (sender, receiver) = std::sync::mpsc::channel();
             let mut pool = Pool::new(sender);
@@ -58,11 +73,15 @@ impl Shell {
                 });
             }
             let shell = Rc::new(Shell {
+                config: RefCell::new(config),
                 pool: RefCell::new(pool),
                 events: RefCell::new(receiver),
-                windows: RefCell::new(HashMap::new()),
+                pages: RefCell::new(HashMap::new()),
                 callbacks: RefCell::new(HashMap::new()),
             });
+            shell.apply_appearance();
+            shell.apply_theme();
+            shell.reconfigure_pool();
             let pump = Rc::clone(&shell);
             glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
                 pump.pump();
@@ -71,6 +90,49 @@ impl Shell {
             *cell.borrow_mut() = Some(Rc::clone(&shell));
             shell
         })
+    }
+
+    /// Pushes the configuration's `lsp` + `workspace` sections into the
+    /// pool, exactly as the macOS shell does.
+    pub fn reconfigure_pool(&self) {
+        let config = self.config.borrow();
+        let combined = format!(
+            "{{\"lsp\":{},\"workspace\":{}}}",
+            config.lsp_json(),
+            config.workspace_json()
+        );
+        drop(config);
+        self.pool.borrow_mut().configure(&combined);
+    }
+
+    /// Applies the configured appearance through libadwaita.
+    pub fn apply_appearance(&self) {
+        use textchum_core::Appearance;
+        let scheme = match self.config.borrow().appearance() {
+            Appearance::System => adw::ColorScheme::Default,
+            Appearance::Light => adw::ColorScheme::ForceLight,
+            Appearance::Dark => adw::ColorScheme::ForceDark,
+        };
+        adw::StyleManager::default().set_color_scheme(scheme);
+    }
+
+    /// Activates the configured theme (built-ins; theme files join
+    /// later) and recolors every open buffer's tags.
+    pub fn apply_theme(&self) {
+        let name = self.config.borrow().theme();
+        if let Some(chosen) = theme::Theme::builtin(&name) {
+            theme::set_active(chosen);
+        }
+        for handles in self.pages.borrow().values() {
+            crate::page::refresh_style_tags(&handles.buffer);
+            crate::page::recolor(&handles.buffer);
+        }
+    }
+
+    pub fn save_config(&self) {
+        if let Err(error) = self.config.borrow_mut().save() {
+            eprintln!("textchum: could not save configuration: {error}");
+        }
     }
 
     /// Registers a request's continuation; the pump calls it when the
@@ -83,8 +145,8 @@ impl Shell {
 
     fn pump(&self) {
         // Drain first, dispatch after: dispatching can re-enter the
-        // shell (a definition reply opens a window), so no borrow may
-        // be held across it.
+        // shell (a definition reply opens a page), so no borrow may be
+        // held across it.
         let mut drained = Vec::new();
         loop {
             match self.events.borrow().try_recv() {
@@ -95,9 +157,9 @@ impl Shell {
         for event in drained {
             match event {
                 Event::Diagnostics { path, json } => {
-                    let handles = self.windows.borrow().get(&path).cloned();
+                    let handles = self.pages.borrow().get(&path).cloned();
                     if let Some(handles) = handles {
-                        crate::editor::apply_diagnostics(&handles, &json);
+                        crate::page::apply_diagnostics(&handles, &json);
                     }
                 }
                 Event::LspResponse { id, json } => {
@@ -113,7 +175,7 @@ impl Shell {
                         } else {
                             message
                         };
-                        let handles = self.windows.borrow().values().next().cloned();
+                        let handles = self.pages.borrow().values().next().cloned();
                         if let Some(handles) = handles {
                             handles.toasts.add_toast(adw::Toast::new(&text));
                         }

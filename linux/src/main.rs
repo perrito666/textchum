@@ -15,7 +15,7 @@ mod shell;
 use adw::prelude::*;
 use gtk::gio;
 
-const APP_ID: &str = "io.github.perrito666.textchum";
+const APP_ID: &str = "to.perri.textchum";
 
 fn main() -> gtk::glib::ExitCode {
     let smoke_test = std::env::args().any(|argument| argument == "--smoke-test");
