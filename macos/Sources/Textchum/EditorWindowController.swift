@@ -31,6 +31,8 @@ final class EditorWindowController: NSWindowController {
     private var watcherSuppressedUntil = Date.distantPast
     /// Prevents stacking reload prompts when events arrive in bursts.
     private var isPresentingReloadPrompt = false
+    /// Re-colors on system appearance changes (theme colors differ).
+    private var appearanceObservation: NSKeyValueObservation?
 
     init(document: CoreDocument, settings: EditorSettings? = nil) {
         self.coreDocument = document
@@ -71,10 +73,59 @@ final class EditorWindowController: NSWindowController {
         }
         updateChrome()
         startWatchingFile()
+        applyHighlights()
+        appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.applyHighlights() }
+            }
+        }
     }
 
     deinit {
         fileWatcher?.cancel()
+    }
+
+    // MARK: Syntax highlighting
+
+    /// Documents beyond this size (UTF-16 units) are left uncolored until a
+    /// viewport-scoped pass exists; the editor itself stays fast.
+    private static let highlightSizeCap = 256 * 1024
+
+    /// Paints the core's styled spans as TextKit 2 rendering attributes —
+    /// a color-only overlay that never invalidates layout, so coloring is
+    /// cheap and cannot disturb the edit pipeline. (Bold/italic style
+    /// flags are ignored for now: font changes would invalidate layout.)
+    private func applyHighlights() {
+        guard let textView,
+            let layoutManager = textView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager
+        else { return }
+        let documentRange = layoutManager.documentRange
+        layoutManager.removeRenderingAttribute(.foregroundColor, for: documentRange)
+
+        let length = coreDocument.lengthInUTF16
+        guard length > 0, length <= Self.highlightSizeCap else { return }
+        let spans = coreDocument.highlights(in: NSRange(location: 0, length: length))
+        guard !spans.isEmpty else { return }
+
+        let darkAppearance =
+            (window?.effectiveAppearance ?? NSApp.effectiveAppearance)
+                .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        for span in spans {
+            guard
+                let color = HighlightPalette.color(
+                    forStyle: span.styleIndex, darkAppearance: darkAppearance)
+            else { continue }
+            guard
+                let start = contentManager.location(
+                    documentRange.location, offsetBy: span.range.location),
+                let end = contentManager.location(start, offsetBy: span.range.length),
+                let range = NSTextRange(location: start, end: end)
+            else { continue }
+            // `set` replaces within the range, so later spans win — the
+            // ordering contract the core's span list is built around.
+            layoutManager.setRenderingAttributes([.foregroundColor: color], for: range)
+        }
     }
 
     // MARK: External changes
@@ -201,7 +252,11 @@ final class EditorWindowController: NSWindowController {
             window.representedURL = nil
             window.title = "Untitled"
         }
-        window.subtitle = "\(coreDocument.encodingName) · \(coreDocument.lengthInBytes) bytes"
+        var subtitle = "\(coreDocument.encodingName) · \(coreDocument.lengthInBytes) bytes"
+        if let language = coreDocument.languageName {
+            subtitle += " · \(language)"
+        }
+        window.subtitle = subtitle
         window.isDocumentEdited = coreDocument.isDirty
     }
 
@@ -252,6 +307,7 @@ final class EditorWindowController: NSWindowController {
         textView.scrollRangeToVisible(NSRange(location: caret, length: 0))
 
         updateChrome()
+        applyHighlights()
         assertInSync()
     }
 
@@ -284,6 +340,9 @@ final class EditorWindowController: NSWindowController {
             try coreDocument.save(to: url.path)
             noteOwnSave()
             updateChrome()
+            // An untitled document may just have gained a language from
+            // its new extension.
+            applyHighlights()
             return true
         } catch {
             presentError("Could not save to \(url.lastPathComponent).", details: "\(error)")
@@ -396,6 +455,7 @@ extension EditorWindowController: NSTextViewDelegate {
 
     func textDidChange(_ notification: Notification) {
         updateChrome()
+        applyHighlights()
         assertInSync()
     }
 

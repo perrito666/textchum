@@ -87,6 +87,52 @@ public final class CoreDocument {
         String(cString: tc_document_encoding_name(handle))
     }
 
+    /// One syntax-highlight span: a range of the document and an index into
+    /// ``CoreTheme/styles``.
+    public struct HighlightSpan {
+        public let range: NSRange
+        public let styleIndex: Int
+    }
+
+    /// The active syntax language name (e.g. "rust"), or nil for plain
+    /// text. Detected from the file extension on open/save-as.
+    public var languageName: String? {
+        Self.takeString(tc_document_language_name(handle))
+    }
+
+    /// Sets the syntax language by name; nil returns to plain text.
+    /// Returns whether the language was recognized and applied.
+    @discardableResult
+    public func setLanguage(_ name: String?) -> Bool {
+        Self.withUTF8Pointer(name ?? "") { pointer, length in
+            tc_document_set_language(handle, pointer, length)
+        }
+    }
+
+    /// Styled spans over `range`, in application order: where spans
+    /// overlap, apply later ones over earlier ones. Empty for plain text.
+    public func highlights(in range: NSRange) -> [HighlightSpan] {
+        var spans: UnsafeMutablePointer<TcHighlightSpan>?
+        var count: UInt = 0
+        guard
+            tc_document_highlights(
+                handle,
+                UInt(range.location),
+                UInt(range.location + range.length),
+                &spans,
+                &count
+            ), let spans
+        else { return [] }
+        defer { tc_highlight_spans_free(spans, count) }
+        return (0..<Int(count)).map { index in
+            let span = spans[index]
+            return HighlightSpan(
+                range: NSRange(location: Int(span.start), length: Int(span.end - span.start)),
+                styleIndex: Int(span.style)
+            )
+        }
+    }
+
     /// Replaces an `NSRange` of UTF-16 code units with `text`, recording the
     /// edit in the undo history.
     public func replace(utf16Range range: NSRange, with text: String) throws {

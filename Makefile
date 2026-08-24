@@ -1,6 +1,10 @@
 # Single entry point for building, testing and documenting Textchum.
 # See docs/getting-started.md for what each target does.
 
+# Keep C objects (tree-sitter grammars) on the same deployment target as
+# the Swift app, or the linker warns on every build.
+export MACOSX_DEPLOYMENT_TARGET := 14.0
+
 RUST_MANIFEST := core/Cargo.toml
 CORE_LIB      := core/target/release/libtextchum.a
 SWIFT_PKG     := --package-path macos

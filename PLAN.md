@@ -122,10 +122,10 @@ both sides after every edit.
 ### 3.2 Syntax highlighting
 
 - **Engine: tree-sitter.** Incremental parsing (keystroke-time re-parse), highlight/injection
-  /locals queries, and a huge existing grammar collection. Grammars are C code compiled into
-  the core binary via a generated registry (a `grammars/` manifest lists each grammar's git
-  source + revision; a build step vendors and compiles them). Start static; dynamic loading
-  of grammar `.dylib`s is a later option if binary size becomes a problem.
+  /locals queries, and a huge existing grammar collection. Grammars come from crates.io
+  packages (cargo compiles their C sources — zero build machinery, covers the mainstream
+  languages); a vendoring manifest/pipeline joins later for the long tail, and dynamic
+  loading of grammar `.dylib`s is an option if binary size becomes a problem.
 - **Injections** are required early because Markdown depends on them (fenced code blocks
   highlight in their own language), as do HTML/JS/CSS.
 - **Themes** map tree-sitter capture names (`@keyword`, `@string`, …) to colors/weights,

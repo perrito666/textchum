@@ -16,8 +16,10 @@ mod config;
 mod document;
 mod fsutil;
 mod history;
+pub mod syntax;
 
 pub use app::{App, Event};
 pub use buffer::{Buffer, BufferError};
 pub use config::{Config, DEFAULT_FONT_SIZE, DEFAULT_TAB_WIDTH};
 pub use document::{AppliedEdit, Document, DocumentError, Encoding};
+pub use syntax::{theme, HighlightSpan};

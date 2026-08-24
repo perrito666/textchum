@@ -32,6 +32,10 @@ Textchum es joven. Lo que existe y funciona hoy:
   de una ABI en C, con edición por desplazamientos de bytes y por unidades
   UTF-16 (esta última coincide con cómo AppKit y el Language Server Protocol
   direccionan el texto).
+- Coloreado de sintaxis con tree-sitter para catorce lenguajes,
+  incremental con cada edición, con inyecciones de lenguajes (cercos de
+  Markdown, script/style de HTML) y paletas clara/oscura — véase
+  [Coloreado](highlighting.md).
 - Documentos sobre los búferes: abrir y guardar con detección de
   codificación y escrituras atómicas, deshacer/rehacer con fusión de tecleo
   y seguimiento de cambios anclado al último guardado — véase
@@ -52,8 +56,8 @@ Textchum es joven. Lo que existe y funciona hoy:
   Swift ↔ núcleo — edición, deshacer, guardado, reapertura, eventos —,
   usada por la integración continua y por humanos con prisa.
 
-Lo próximo, en orden aproximado: coloreado de sintaxis, servidores de
-lenguaje por proyecto y vista previa de Markdown.
+Lo próximo, en orden aproximado: servidores de lenguaje por proyecto y
+vista previa de Markdown.
 
 ## Por dónde seguir
 
@@ -62,6 +66,7 @@ lenguaje por proyecto y vista previa de Markdown.
 - [Arquitectura](architecture.md) — la división núcleo/carcasa y sus reglas.
 - [Documentos](documents.md) — deshacer, estado de cambios, codificaciones,
   guardados atómicos.
+- [Coloreado](highlighting.md) — lenguajes, inyecciones y el tema.
 - [Configuración](configuration.md) — la ventana de ajustes y su archivo
   JSON.
 - [La frontera C](ffi.md) — convenciones de la interfaz entre ambos.

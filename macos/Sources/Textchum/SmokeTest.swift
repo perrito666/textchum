@@ -118,6 +118,52 @@ func runSmokeTest() -> Int32 {
         return 1
     }
 
+    // Syntax highlighting: detection by extension, styled spans, injections.
+    do {
+        let syntaxDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-smoke-syn-\(ProcessInfo.processInfo.processIdentifier)")
+        try FileManager.default.createDirectory(at: syntaxDir, withIntermediateDirectories: true)
+        let rustPath = syntaxDir.appendingPathComponent("smoke.rs").path
+        try "// comment\nfn main() { let s = \"hi\"; }\n".write(
+            toFile: rustPath, atomically: true, encoding: .utf8)
+
+        guard !CoreTheme.styles.isEmpty else {
+            print("FAIL: style table is empty")
+            return 1
+        }
+        let rustDoc = try CoreDocument(contentsOf: rustPath)
+        guard rustDoc.languageName == "rust" else {
+            print("FAIL: language not detected: \(String(describing: rustDoc.languageName))")
+            return 1
+        }
+        let spans = rustDoc.highlights(in: NSRange(location: 0, length: rustDoc.lengthInUTF16))
+        guard !spans.isEmpty, spans.allSatisfy({ CoreTheme.styles.indices.contains($0.styleIndex) })
+        else {
+            print("FAIL: no spans, or style index out of table bounds")
+            return 1
+        }
+
+        let markdown = CoreDocument()
+        try markdown.replace(
+            utf16Range: NSRange(location: 0, length: 0),
+            with: "# Title\n\n```rust\nfn x() {}\n```\n")
+        guard markdown.setLanguage("markdown") else {
+            print("FAIL: markdown language rejected")
+            return 1
+        }
+        let mdSpans = markdown.highlights(
+            in: NSRange(location: 0, length: markdown.lengthInUTF16))
+        guard mdSpans.count > 2 else {
+            print("FAIL: markdown spans missing (injections broken?)")
+            return 1
+        }
+        print("syntax highlighting ok (\(spans.count) rust spans, \(mdSpans.count) md spans)")
+        try? FileManager.default.removeItem(at: syntaxDir)
+    } catch {
+        print("FAIL: syntax highlighting: \(error)")
+        return 1
+    }
+
     // Configuration: round trip, hand-edit preservation, breakage recovery.
     do {
         let configDir = FileManager.default.temporaryDirectory

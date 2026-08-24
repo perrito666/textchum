@@ -152,6 +152,12 @@ impl Buffer {
         Ok(self.rope.char_to_utf16_cu(char_idx))
     }
 
+    /// Read access to the underlying rope, for subsystems (syntax) that
+    /// iterate chunks without copying.
+    pub(crate) fn rope(&self) -> &Rope {
+        &self.rope
+    }
+
     /// The text in the byte range `start..end` as an owned string.
     pub fn slice_bytes(&self, start: usize, end: usize) -> Result<String, BufferError> {
         if start > end {

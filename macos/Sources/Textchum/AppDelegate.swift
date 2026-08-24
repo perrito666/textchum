@@ -44,7 +44,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coreApp.ping(sequence: 1)
         self.coreApp = coreApp
 
-        newDocument(nil)
+        // Open files given on the command line; otherwise a fresh window.
+        let fileArguments = CommandLine.arguments.dropFirst()
+            .filter { FileManager.default.fileExists(atPath: $0) }
+        if fileArguments.isEmpty {
+            newDocument(nil)
+        } else {
+            for path in fileArguments {
+                open(path: path)
+            }
+        }
         NSApp.activate(ignoringOtherApps: true)
 
         // A config file that exists but could not be used deserves exactly
@@ -103,16 +112,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK else { return }
         for url in panel.urls {
-            do {
-                let document = try CoreDocument(contentsOf: url.path)
-                show(editor: EditorWindowController(document: document, settings: currentSettings))
-            } catch {
-                let alert = NSAlert()
-                alert.alertStyle = .warning
-                alert.messageText = "Could not open “\(url.lastPathComponent)”."
-                alert.informativeText = "\(error)"
-                alert.runModal()
-            }
+            open(path: url.path)
+        }
+    }
+
+    /// Opens `path` in a new editor window, alerting on failure.
+    private func open(path: String) {
+        do {
+            let document = try CoreDocument(contentsOf: path)
+            show(editor: EditorWindowController(document: document, settings: currentSettings))
+        } catch {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Could not open “\((path as NSString).lastPathComponent)”."
+            alert.informativeText = "\(error)"
+            alert.runModal()
         }
     }
 

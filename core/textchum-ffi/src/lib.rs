@@ -770,6 +770,158 @@ pub unsafe extern "C" fn tc_config_save(
     .unwrap_or(false)
 }
 
+/// One styled span, in UTF-16 code units. `style` indexes the table from
+/// [`tc_style_table`].
+#[repr(C)]
+pub struct TcHighlightSpan {
+    pub start: usize,
+    pub end: usize,
+    pub style: u32,
+}
+
+/// One style of the theme. Colors are 0xRRGGBBAA for the light and dark
+/// appearances; `flags` uses [`TC_STYLE_BOLD`]/[`TC_STYLE_ITALIC`].
+#[repr(C)]
+pub struct TcStyle {
+    pub light: u32,
+    pub dark: u32,
+    pub flags: u32,
+}
+
+/// Style flag: render bold.
+pub const TC_STYLE_BOLD: u32 = 1;
+/// Style flag: render italic.
+pub const TC_STYLE_ITALIC: u32 = 2;
+
+/// The theme's style table, indexed by the `style` of a highlight span.
+/// Owned by the core and valid for the process lifetime; do not free.
+///
+/// # Safety
+/// `count_out` must point to a writable slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_style_table(count_out: *mut usize) -> *const TcStyle {
+    static TABLE: std::sync::OnceLock<Vec<TcStyle>> = std::sync::OnceLock::new();
+    let table = TABLE.get_or_init(|| {
+        textchum_core::theme::styles()
+            .map(|style| TcStyle {
+                light: style.light,
+                dark: style.dark,
+                flags: style.flags,
+            })
+            .collect()
+    });
+    if !count_out.is_null() {
+        unsafe { *count_out = table.len() };
+    }
+    table.as_ptr()
+}
+
+/// Sets the document's syntax language by name (`len == 0` clears it back
+/// to plain text). Returns false for unknown names or documents beyond the
+/// syntax size cap.
+///
+/// # Safety
+/// `document` must be a live document pointer; `name` must point to `len`
+/// readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_set_language(
+    document: *mut TcDocument,
+    name: *const c_char,
+    len: usize,
+) -> bool {
+    let Some(document) = (unsafe { document.as_mut() }) else {
+        return false;
+    };
+    let Some(name) = (unsafe { str_from_raw(name, len) }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        document
+            .inner
+            .set_language(if name.is_empty() { None } else { Some(name) })
+    }))
+    .unwrap_or(false)
+}
+
+/// The document's syntax language name, or null for plain text. Release
+/// with [`tc_string_free`].
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_language_name(document: *const TcDocument) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    match document.inner.language_name() {
+        Some(name) => owned_c_string(name.to_owned()),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// Styled spans over the UTF-16 code unit range `start..end`, in
+/// application order — where spans overlap, the later one wins. On success
+/// stores the array in `spans_out`/`count_out` (empty is a success:
+/// null/0); release with [`tc_highlight_spans_free`]. Returns false on
+/// invalid ranges.
+///
+/// # Safety
+/// `document` must be a live document pointer; `spans_out` and `count_out`
+/// must point to writable slots.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_highlights(
+    document: *const TcDocument,
+    start: usize,
+    end: usize,
+    spans_out: *mut *mut TcHighlightSpan,
+    count_out: *mut usize,
+) -> bool {
+    if spans_out.is_null() || count_out.is_null() {
+        return false;
+    }
+    unsafe {
+        *spans_out = std::ptr::null_mut();
+        *count_out = 0;
+    }
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match document.inner.highlights(start, end) {
+            Ok(spans) if spans.is_empty() => true,
+            Ok(spans) => {
+                let boxed: Box<[TcHighlightSpan]> = spans
+                    .into_iter()
+                    .map(|span| TcHighlightSpan {
+                        start: span.start_utf16,
+                        end: span.end_utf16,
+                        style: span.style,
+                    })
+                    .collect();
+                unsafe {
+                    *count_out = boxed.len();
+                    *spans_out = Box::into_raw(boxed) as *mut TcHighlightSpan;
+                }
+                true
+            }
+            Err(_) => false,
+        }
+    }))
+    .unwrap_or(false)
+}
+
+/// Releases a span array from [`tc_document_highlights`].
+///
+/// # Safety
+/// `spans` and `count` must be exactly the pair produced by one highlights
+/// call, not previously freed.
+#[no_mangle]
+pub unsafe extern "C" fn tc_highlight_spans_free(spans: *mut TcHighlightSpan, count: usize) {
+    if !spans.is_null() {
+        drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(spans, count)) });
+    }
+}
+
 /// Shared implementation of undo/redo entry points.
 unsafe fn pop_history(
     document: *mut TcDocument,

@@ -33,6 +33,10 @@ Textchum est jeune. Ce qui existe et fonctionne aujourd'hui :
   travers une ABI C, avec édition par décalages d'octets et par unités
   UTF-16 (cette dernière correspondant à la façon dont AppKit et le Language
   Server Protocol adressent le texte).
+- La coloration syntaxique tree-sitter pour quatorze langages,
+  incrémentale à chaque édition, avec injections de langages (clôtures
+  Markdown, script/style HTML) et palettes claire/sombre — voir
+  [Coloration](highlighting.md).
 - Des documents au-dessus des tampons : ouverture et enregistrement avec
   détection d'encodage et écritures atomiques, annuler/rétablir avec fusion
   des frappes, et suivi des modifications ancré au dernier enregistrement —
@@ -55,8 +59,8 @@ Textchum est jeune. Ce qui existe et fonctionne aujourd'hui :
   événements —, utilisé par l'intégration continue comme par les humains
   pressés.
 
-La suite, dans l'ordre approximatif : coloration syntaxique, serveurs de
-langage par projet et aperçu Markdown.
+La suite, dans l'ordre approximatif : serveurs de langage par projet et
+aperçu Markdown.
 
 ## Pour aller plus loin
 
@@ -65,6 +69,7 @@ langage par projet et aperçu Markdown.
 - [Architecture](architecture.md) — la séparation noyau/coque et ses règles.
 - [Documents](documents.md) — annulation, modifications, encodages,
   enregistrements atomiques.
+- [Coloration](highlighting.md) — langages, injections et le thème.
 - [Configuration](configuration.md) — la fenêtre de réglages et son fichier
   JSON.
 - [La frontière C](ffi.md) — conventions de l'interface entre les deux.

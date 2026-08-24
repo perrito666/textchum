@@ -15,6 +15,16 @@
 #define TC_EVENT_PONG 1
 
 /**
+ * Style flag: render bold.
+ */
+#define TC_STYLE_BOLD 1
+
+/**
+ * Style flag: render italic.
+ */
+#define TC_STYLE_ITALIC 2
+
+/**
  * Root handle for a core instance. Create with [`tc_app_new`], release with
  * [`tc_app_free`].
  */
@@ -72,6 +82,26 @@ typedef struct TcAppliedEdit {
   uintptr_t end;
   char *text;
 } TcAppliedEdit;
+
+/**
+ * One style of the theme. Colors are 0xRRGGBBAA for the light and dark
+ * appearances; `flags` uses [`TC_STYLE_BOLD`]/[`TC_STYLE_ITALIC`].
+ */
+typedef struct TcStyle {
+  uint32_t light;
+  uint32_t dark;
+  uint32_t flags;
+} TcStyle;
+
+/**
+ * One styled span, in UTF-16 code units. `style` indexes the table from
+ * [`tc_style_table`].
+ */
+typedef struct TcHighlightSpan {
+  uintptr_t start;
+  uintptr_t end;
+  uint32_t style;
+} TcHighlightSpan;
 
 #ifdef __cplusplus
 extern "C" {
@@ -491,6 +521,61 @@ void tc_config_set_tab_width(struct TcConfig *config, uint32_t width);
  * non-null, must point to a writable pointer slot.
  */
 bool tc_config_save(struct TcConfig *config, char **error_out);
+
+/**
+ * The theme's style table, indexed by the `style` of a highlight span.
+ * Owned by the core and valid for the process lifetime; do not free.
+ *
+ * # Safety
+ * `count_out` must point to a writable slot.
+ */
+const struct TcStyle *tc_style_table(uintptr_t *count_out);
+
+/**
+ * Sets the document's syntax language by name (`len == 0` clears it back
+ * to plain text). Returns false for unknown names or documents beyond the
+ * syntax size cap.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `name` must point to `len`
+ * readable bytes.
+ */
+bool tc_document_set_language(struct TcDocument *document, const char *name, uintptr_t len);
+
+/**
+ * The document's syntax language name, or null for plain text. Release
+ * with [`tc_string_free`].
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_language_name(const struct TcDocument *document);
+
+/**
+ * Styled spans over the UTF-16 code unit range `start..end`, in
+ * application order — where spans overlap, the later one wins. On success
+ * stores the array in `spans_out`/`count_out` (empty is a success:
+ * null/0); release with [`tc_highlight_spans_free`]. Returns false on
+ * invalid ranges.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `spans_out` and `count_out`
+ * must point to writable slots.
+ */
+bool tc_document_highlights(const struct TcDocument *document,
+                            uintptr_t start,
+                            uintptr_t end,
+                            struct TcHighlightSpan **spans_out,
+                            uintptr_t *count_out);
+
+/**
+ * Releases a span array from [`tc_document_highlights`].
+ *
+ * # Safety
+ * `spans` and `count` must be exactly the pair produced by one highlights
+ * call, not previously freed.
+ */
+void tc_highlight_spans_free(struct TcHighlightSpan *spans, uintptr_t count);
 
 #ifdef __cplusplus
 }  // extern "C"

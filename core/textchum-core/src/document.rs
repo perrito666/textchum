@@ -33,6 +33,7 @@ use std::path::{Path, PathBuf};
 use crate::buffer::{Buffer, BufferError};
 use crate::fsutil::write_atomically;
 use crate::history::{EditRecord, History};
+use crate::syntax::{self, HighlightSpan, SyntaxState, SYNTAX_MAX_BYTES};
 
 /// The on-disk encoding of a document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,6 +101,7 @@ pub struct Document {
     history: History,
     path: Option<PathBuf>,
     encoding: Encoding,
+    syntax: Option<SyntaxState>,
 }
 
 impl Default for Document {
@@ -119,6 +121,7 @@ impl Document {
             history,
             path: None,
             encoding: Encoding::Utf8,
+            syntax: None,
         }
     }
 
@@ -134,9 +137,60 @@ impl Document {
             history: History::default(),
             path: Some(path.to_owned()),
             encoding,
+            syntax: None,
         };
         doc.history.mark_saved();
+        doc.detect_language();
         Ok(doc)
+    }
+
+    /// Picks the syntax language from the file extension, if any.
+    fn detect_language(&mut self) {
+        let language = self
+            .path
+            .as_deref()
+            .and_then(crate::syntax::languages::by_path);
+        if let Some(language) = language {
+            self.set_language(Some(language.spec.name));
+        }
+    }
+
+    /// Sets (or clears, with `None`) the syntax language. Returns false if
+    /// the name is unknown or the document exceeds the syntax size cap.
+    pub fn set_language(&mut self, name: Option<&str>) -> bool {
+        let Some(name) = name else {
+            self.syntax = None;
+            return true;
+        };
+        if self.buffer.len_bytes() > SYNTAX_MAX_BYTES {
+            self.syntax = None;
+            return false;
+        }
+        let Some(language) = crate::syntax::languages::by_name(name) else {
+            return false;
+        };
+        self.syntax = SyntaxState::new(language, self.buffer.rope());
+        self.syntax.is_some()
+    }
+
+    /// The active syntax language name, if any.
+    pub fn language_name(&self) -> Option<&'static str> {
+        self.syntax.as_ref().map(|s| s.language().spec.name)
+    }
+
+    /// Styled spans over the UTF-16 code unit range `start..end`, in
+    /// application order (later spans win where they overlap). Empty for
+    /// plain-text documents.
+    pub fn highlights(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> Result<Vec<HighlightSpan>, BufferError> {
+        let Some(syntax) = &self.syntax else {
+            return Ok(Vec::new());
+        };
+        let (start_byte, end_byte) = self.buffer.utf16_range_to_bytes(start, end)?;
+        Ok(syntax.highlights(self.buffer.rope(), start_byte..end_byte))
     }
 
     pub fn path(&self) -> Option<&Path> {
@@ -181,12 +235,52 @@ impl Document {
     ) -> Result<(), DocumentError> {
         let (start_byte, end_byte) = self.buffer.utf16_range_to_bytes(start, end)?;
         let old = self.buffer.slice_bytes(start_byte, end_byte)?;
-        self.buffer.replace_utf16(start, end, text)?;
+        self.mutate_buffer(start, end, text)?;
         self.history.record(EditRecord {
             start_byte,
             old,
             new: text.to_owned(),
         });
+        Ok(())
+    }
+
+    /// The single choke point for buffer mutation: performs the replacement
+    /// and keeps the syntax tree in sync with an incremental re-parse.
+    fn mutate_buffer(&mut self, start: usize, end: usize, text: &str) -> Result<(), BufferError> {
+        // tree-sitter wants the edit described in bytes and (row, column)
+        // points; start/old-end come from the text before the mutation,
+        // new-end from after.
+        let edit_geometry = if self.syntax.is_some() {
+            let (start_byte, old_end_byte) = self.buffer.utf16_range_to_bytes(start, end)?;
+            Some((
+                start_byte,
+                old_end_byte,
+                syntax::point_at(self.buffer.rope(), start_byte),
+                syntax::point_at(self.buffer.rope(), old_end_byte),
+            ))
+        } else {
+            None
+        };
+
+        self.buffer.replace_utf16(start, end, text)?;
+
+        if let Some((start_byte, old_end_byte, start_position, old_end_position)) = edit_geometry {
+            let new_end_byte = start_byte + text.len();
+            let rope = self.buffer.rope();
+            if let Some(syntax_state) = self.syntax.as_mut() {
+                syntax_state.apply_edit(
+                    rope,
+                    tree_sitter::InputEdit {
+                        start_byte,
+                        old_end_byte,
+                        new_end_byte,
+                        start_position,
+                        old_end_position,
+                        new_end_position: syntax::point_at(rope, new_end_byte),
+                    },
+                );
+            }
+        }
         Ok(())
     }
 
@@ -293,8 +387,7 @@ impl Document {
             .buffer
             .byte_to_utf16(start_byte + remove_len)
             .expect("history record end must be a valid boundary");
-        self.buffer
-            .replace_utf16(start_utf16, end_utf16, &insert)
+        self.mutate_buffer(start_utf16, end_utf16, &insert)
             .expect("history record must describe a valid range");
         AppliedEdit {
             start_utf16,
@@ -310,10 +403,14 @@ impl Document {
         self.save_to(&path)
     }
 
-    /// Saves to `path` and adopts it as the document's path.
+    /// Saves to `path` and adopts it as the document's path. An untitled
+    /// document gains a syntax language from its new extension.
     pub fn save_as(&mut self, path: &Path) -> Result<(), DocumentError> {
         self.save_to(path)?;
         self.path = Some(path.to_owned());
+        if self.syntax.is_none() {
+            self.detect_language();
+        }
         Ok(())
     }
 

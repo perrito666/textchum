@@ -30,6 +30,10 @@ Textchum is young. What exists and works today:
 - A Rust core exposing rope-backed text buffers over a C ABI, with
   byte-offset and UTF-16 based editing (the latter matching how AppKit and
   the Language Server Protocol address text).
+- Tree-sitter syntax highlighting for fourteen languages, incremental on
+  every edit, with language injections (Markdown fences, HTML
+  script/style) and light/dark palettes — see
+  [Highlighting](highlighting.md).
 - Documents on top of buffers: open and save with encoding detection and
   atomic writes, undo/redo with typing coalescing, and dirty-state tracking
   anchored to the last save — see [Documents](documents.md).
@@ -47,13 +51,14 @@ Textchum is young. What exists and works today:
   editing, undo, saving, reopening, events — used both by CI and by humans
   in a hurry.
 
-What is planned next, roughly in order: syntax highlighting, per-project
-language servers, and Markdown preview.
+What is planned next, roughly in order: per-project language servers, and
+Markdown preview.
 
 ## Where to go from here
 
 - [Getting started](getting-started.md) — build and run Textchum from source.
 - [Architecture](architecture.md) — the core/shell split and its rules.
 - [Documents](documents.md) — undo, dirty state, encodings, atomic saves.
+- [Highlighting](highlighting.md) — languages, injections, and the theme.
 - [Configuration](configuration.md) — the settings window and its JSON file.
 - [The C boundary](ffi.md) — conventions of the interface between the two.
