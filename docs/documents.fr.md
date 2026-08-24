@@ -5,6 +5,17 @@ en fait un fichier : un historique d'annulation, un indicateur de
 modifications non enregistrées, un chemin et un encodage. Les fenêtres de
 l'éditeur travaillent toujours avec des documents.
 
+## Nouveaux fichiers
+
+**⌘N** ouvre un tampon sans titre en texte brut ; **File → New with
+Format** liste tous les langages connus, si bien qu'un nouveau fichier
+peut être coloré avant d'avoir un nom (le langage reste jusqu'à ce que
+le premier enregistrement nomme le fichier, qui redétecte par
+l'extension comme d'habitude). Enregistrer sous, pour un document sans
+titre, démarre dans le dossier du fichier qui était au premier plan à
+sa création — un nouveau fichier appartient généralement au projet où
+l'on se trouvait — et suggère l'extension du langage choisi.
+
 ## Frappe
 
 Entrée indente automatiquement : la nouvelle ligne hérite du blanc de

@@ -292,6 +292,26 @@ func runSmokeTest() -> Int32 {
     }
     print("auto-indent ok (inherit, deepen, tab/space styles)")
 
+    // New-with-format plumbing: the language list crosses the FFI, and
+    // an untitled document can speak a language before its first save.
+    guard CoreLanguages.all.contains(where: { $0.name == "rust" && $0.fileExtension == "rs" }),
+        CoreLanguages.all.contains(where: { $0.name == "make" })
+    else {
+        print("FAIL: language list: \(CoreLanguages.all)")
+        return 1
+    }
+    let untitled = CoreDocument()
+    guard untitled.setLanguage("rust") else {
+        print("FAIL: untitled document rejected a known language")
+        return 1
+    }
+    try? untitled.replace(utf16Range: NSRange(location: 0, length: 0), with: "fn main() {}\n")
+    guard !untitled.highlights(in: NSRange(location: 0, length: 13)).isEmpty else {
+        print("FAIL: untitled rust document produced no highlights")
+        return 1
+    }
+    print("new-with-format ok (language list + pre-save highlighting)")
+
     // Jump stack: back retraces origins, forward returns, and a fresh
     // jump rewrites the future from the current point.
     let stack = JumpStack()

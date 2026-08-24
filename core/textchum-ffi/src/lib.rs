@@ -1565,6 +1565,26 @@ pub extern "C" fn tc_theme_template_json() -> *mut c_char {
     owned_c_string(textchum_core::theme::Theme::template_json())
 }
 
+/// The selectable language names with a representative file extension,
+/// one per line as `name \x1f extension` (extension may be empty).
+/// Release with [`tc_string_free`]. For "new file with format" pickers.
+#[no_mangle]
+pub extern "C" fn tc_language_names() -> *mut c_char {
+    let joined = textchum_core::syntax::languages::selectable_names()
+        .into_iter()
+        .filter_map(|name| {
+            let spec = textchum_core::syntax::languages::by_name(name)?.spec;
+            Some(format!(
+                "{}\x1f{}",
+                spec.name,
+                spec.extensions.first().copied().unwrap_or("")
+            ))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    owned_c_string(joined)
+}
+
 /// Sets the document's syntax language by name (`len == 0` clears it back
 /// to plain text). Returns false for unknown names or documents beyond the
 /// syntax size cap.

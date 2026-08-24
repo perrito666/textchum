@@ -125,6 +125,10 @@ final class EditorWindowController: NSWindowController {
     private let resolveProjectRoot: (String) -> String?
     /// The configuration's live `workspace` section, for flag lookups.
     private let workspaceSettingsJSON: () -> String
+    /// Where Save As should start for this (untitled) document: the
+    /// folder of the file that was frontmost when it was created — the
+    /// user was probably adding a file to that project.
+    var suggestedSaveDirectory: URL?
 
     init(
         document: CoreDocument,
@@ -1386,10 +1390,19 @@ final class EditorWindowController: NSWindowController {
     func saveAsInteractively() -> Bool {
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
+        if coreDocument.path == nil, let suggestedSaveDirectory {
+            panel.directoryURL = suggestedSaveDirectory
+        }
         // The bare filename, not the window title — a disambiguated
-        // title carries path components no filename should.
+        // title carries path components no filename should. An untitled
+        // document that already speaks a language suggests its
+        // extension.
+        let untitledName =
+            CoreLanguages.all
+            .first { $0.name == coreDocument.languageName && !$0.fileExtension.isEmpty }
+            .map { "Untitled.\($0.fileExtension)" } ?? "Untitled.txt"
         panel.nameFieldStringValue =
-            coreDocument.path.map { ($0 as NSString).lastPathComponent } ?? "Untitled.txt"
+            coreDocument.path.map { ($0 as NSString).lastPathComponent } ?? untitledName
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         do {
             try coreDocument.save(to: url.path)

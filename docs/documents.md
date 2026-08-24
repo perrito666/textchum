@@ -4,6 +4,16 @@ A *buffer* is raw text; a *document* is a buffer plus everything that makes
 it a file: an undo history, a dirty flag, a path, and an encoding. Editor
 windows always work with documents.
 
+## New files
+
+**⌘N** opens an untitled plain-text buffer; **File → New with Format**
+lists every known language, so a new file can be highlighted before it
+has a name (the language stays until the first save names the file,
+which re-detects from the extension as usual). Save As for an untitled
+document starts in the folder of whatever file was frontmost when it
+was created — a new file usually belongs to the project you were just
+in — and suggests the chosen language's extension.
+
 ## Typing
 
 Return auto-indents: the new line inherits the current line's leading

@@ -932,6 +932,13 @@ bool tc_theme_set_json(const char *json, uintptr_t len, char **error_out);
 char *tc_theme_template_json(void);
 
 /**
+ * The selectable language names with a representative file extension,
+ * one per line as `name \x1f extension` (extension may be empty).
+ * Release with [`tc_string_free`]. For "new file with format" pickers.
+ */
+char *tc_language_names(void);
+
+/**
  * Sets the document's syntax language by name (`len == 0` clears it back
  * to plain text). Returns false for unknown names or documents beyond the
  * syntax size cap.

@@ -1011,15 +1011,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func newDocument(_ sender: Any?) {
-        show(
-            editor: EditorWindowController(
-                document: CoreDocument(),
-                settings: currentSettings,
-                sidebar: sidebarConfiguration,
-                lspApp: coreApp,
-                openLocation: { [weak self] path, line, character in
-                    self?.openLocation(path: path, line: line, character: character)
-                }            ))
+        makeUntitled(language: nil)
+    }
+
+    /// File → New with Format: an untitled document already speaking a
+    /// language, so highlighting works before the first save. The menu
+    /// item's represented object carries the language name.
+    @objc func newDocumentWithFormat(_ sender: Any?) {
+        let language = (sender as? NSMenuItem)?.representedObject as? String
+        makeUntitled(language: language)
+    }
+
+    private func makeUntitled(language: String?) {
+        // The folder of whatever was frontmost is the best guess for
+        // where this new file belongs — Save As starts there.
+        let suggestedDirectory = editors
+            .first { $0.window?.isKeyWindow == true }?
+            .coreDocument.path
+            .map { URL(fileURLWithPath: $0).deletingLastPathComponent() }
+            ?? editors.first?.coreDocument.path
+            .map { URL(fileURLWithPath: $0).deletingLastPathComponent() }
+        let document = CoreDocument()
+        if let language {
+            _ = document.setLanguage(language)
+        }
+        let editor = EditorWindowController(
+            document: document,
+            settings: currentSettings,
+            sidebar: sidebarConfiguration,
+            lspApp: coreApp,
+            openLocation: { [weak self] path, line, character in
+                self?.openLocation(path: path, line: line, character: character)
+            })
+        editor.suggestedSaveDirectory = suggestedDirectory
+        show(editor: editor)
     }
 
     @objc func openDocument(_ sender: Any?) {
@@ -1175,6 +1200,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let fileMenu = NSMenu(title: "File")
         fileMenu.addItem(
             withTitle: "New", action: #selector(newDocument(_:)), keyEquivalent: "n")
+        let formatItem = NSMenuItem(title: "New with Format", action: nil, keyEquivalent: "")
+        let formatMenu = NSMenu(title: "New with Format")
+        for language in CoreLanguages.all {
+            let item = NSMenuItem(
+                title: language.name.capitalized,
+                action: #selector(newDocumentWithFormat(_:)),
+                keyEquivalent: ""
+            )
+            item.representedObject = language.name
+            formatMenu.addItem(item)
+        }
+        formatItem.submenu = formatMenu
+        fileMenu.addItem(formatItem)
         fileMenu.addItem(
             withTitle: "Open…", action: #selector(openDocument(_:)), keyEquivalent: "o")
         fileMenu.addItem(

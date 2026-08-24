@@ -5,6 +5,17 @@ convierte en un archivo: un historial de deshacer, un indicador de cambios
 sin guardar, una ruta y una codificación. Las ventanas del editor trabajan
 siempre con documentos.
 
+## Archivos nuevos
+
+**⌘N** abre un búfer sin título de texto plano; **File → New with
+Format** lista todos los lenguajes conocidos, así que un archivo nuevo
+puede colorearse antes de tener nombre (el lenguaje se mantiene hasta
+que el primer guardado nombre al archivo, que vuelve a detectar por la
+extensión como siempre). Guardar como para un documento sin título
+empieza en la carpeta del archivo que estaba al frente cuando se creó
+— un archivo nuevo suele pertenecer al proyecto en el que se estaba —
+y sugiere la extensión del lenguaje elegido.
+
 ## Escritura
 
 Retorno aplica sangría automática: la línea nueva hereda el espacio en

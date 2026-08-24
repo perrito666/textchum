@@ -281,3 +281,21 @@ public final class CoreDocument {
         }
     }
 }
+
+/// The selectable syntax languages, with a representative file
+/// extension each — for "new file with format" pickers.
+public enum CoreLanguages {
+    public static let all: [(name: String, fileExtension: String)] = {
+        guard let joined = tc_language_names() else { return [] }
+        defer { tc_string_free(joined) }
+        return String(cString: joined)
+            .split(separator: "\n")
+            .compactMap { line in
+                let fields = line.split(
+                    separator: "\u{1f}", omittingEmptySubsequences: false)
+                guard let name = fields.first else { return nil }
+                let ext = fields.count > 1 ? String(fields[1]) : ""
+                return (String(name), ext)
+            }
+    }()
+}
