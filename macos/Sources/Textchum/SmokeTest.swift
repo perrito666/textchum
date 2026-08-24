@@ -36,6 +36,54 @@ func runSmokeTest() -> Int32 {
     }
     print("input validation ok")
 
+    // Document lifecycle: edit, undo, save, reopen — through the C boundary.
+    let smokeDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-smoke-\(ProcessInfo.processInfo.processIdentifier)")
+    do {
+        try FileManager.default.createDirectory(at: smokeDir, withIntermediateDirectories: true)
+        let filePath = smokeDir.appendingPathComponent("smoke.txt").path
+
+        let document = CoreDocument()
+        guard !document.isDirty else {
+            print("FAIL: untitled document born dirty")
+            return 1
+        }
+        try document.replace(utf16Range: NSRange(location: 0, length: 0), with: "hello")
+        // Contiguous typing coalesces into one undo step; break the run so
+        // the two inserts stay separate steps.
+        document.breakUndoCoalescing()
+        try document.replace(utf16Range: NSRange(location: 5, length: 0), with: " world")
+        guard document.isDirty, document.canUndo else {
+            print("FAIL: edits not reflected in dirty/undo state")
+            return 1
+        }
+        guard let undone = document.undo(), undone.replacement.isEmpty else {
+            print("FAIL: undo returned no edit")
+            return 1
+        }
+        guard document.text == "hello", document.redo() != nil, document.text == "hello world"
+        else {
+            print("FAIL: undo/redo walk: got \(document.text.debugDescription)")
+            return 1
+        }
+        try document.save(to: filePath)
+        guard !document.isDirty, document.path == filePath else {
+            print("FAIL: save did not clear dirty state or adopt path")
+            return 1
+        }
+
+        let reopened = try CoreDocument(contentsOf: filePath)
+        guard reopened.text == "hello world", reopened.encodingName == "UTF-8" else {
+            print("FAIL: reopened document mismatch: \(reopened.text.debugDescription)")
+            return 1
+        }
+        print("document lifecycle ok (edit/undo/save/reopen)")
+        try? FileManager.default.removeItem(at: smokeDir)
+    } catch {
+        print("FAIL: document lifecycle: \(error)")
+        return 1
+    }
+
     // Async event round trip: core dispatch thread → main queue.
     var receivedSequence: UInt64?
     let coreApp = CoreApp { event in

@@ -74,7 +74,20 @@ el desmontaje sea seguro de escribir del lado de la carcasa.
 | `tc_buffer_replace_utf16` | Reemplazar un rango de unidades UTF-16 — la forma de una edición de AppKit. |
 | `tc_buffer_text` | Copiar el contenido completo. |
 | `tc_buffer_len_bytes` / `tc_buffer_len_utf16` | Longitudes en ambas unidades. |
+| `tc_document_new` / `tc_document_open` / `tc_document_free` | Crear un documento (vacío o desde un archivo) y destruirlo. |
+| `tc_document_replace_utf16` | Editar un documento registrando el historial de deshacer. |
+| `tc_document_undo` / `tc_document_redo` | Recorrer el historial; un parámetro de salida informa de la edición que la carcasa debe reproducir. |
+| `tc_document_break_undo_group` | Terminar la racha actual de fusión de deshacer. |
+| `tc_document_save` / `tc_document_save_as` | Guardados atómicos; los fallos rellenan un parámetro de salida opcional con un mensaje. |
+| `tc_document_text` / `tc_document_len_bytes` / `tc_document_len_utf16` | Contenido y longitudes. |
+| `tc_document_is_dirty` / `tc_document_can_undo` / `tc_document_can_redo` | Consultas de estado. |
+| `tc_document_path` / `tc_document_encoding_name` | Identidad del archivo y codificación. |
 | `tc_string_free` | Liberar una cadena devuelta por el núcleo. |
+
+Las operaciones de archivo falibles siguen una convención más: devuelven su
+valor de fallo y, cuando quien llama pasó un parámetro de salida no nulo,
+almacenan allí un mensaje UTF-8 legible (que se libera con
+`tc_string_free`) — la carcasa lo muestra tal cual en la alerta.
 
 La superficie es deliberadamente pequeña y crece solo cuando una
 característica de la carcasa lo necesita. Los datos masivos (futuro: tramos

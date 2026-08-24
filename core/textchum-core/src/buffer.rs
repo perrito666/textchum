@@ -128,6 +128,40 @@ impl Buffer {
         Ok(())
     }
 
+    /// Converts a UTF-16 code unit range to a byte range.
+    pub fn utf16_range_to_bytes(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> Result<(usize, usize), BufferError> {
+        if start > end {
+            return Err(BufferError::InvertedRange { start, end });
+        }
+        let start_char = self.utf16_to_char(start)?;
+        let end_char = self.utf16_to_char(end)?;
+        Ok((
+            self.rope.char_to_byte(start_char),
+            self.rope.char_to_byte(end_char),
+        ))
+    }
+
+    /// Converts a byte offset (which must be a character boundary) to a
+    /// UTF-16 code unit offset.
+    pub fn byte_to_utf16(&self, offset: usize) -> Result<usize, BufferError> {
+        let char_idx = self.byte_to_char(offset)?;
+        Ok(self.rope.char_to_utf16_cu(char_idx))
+    }
+
+    /// The text in the byte range `start..end` as an owned string.
+    pub fn slice_bytes(&self, start: usize, end: usize) -> Result<String, BufferError> {
+        if start > end {
+            return Err(BufferError::InvertedRange { start, end });
+        }
+        let start_char = self.byte_to_char(start)?;
+        let end_char = self.byte_to_char(end)?;
+        Ok(self.rope.slice(start_char..end_char).to_string())
+    }
+
     fn byte_to_char(&self, offset: usize) -> Result<usize, BufferError> {
         let len = self.rope.len_bytes();
         if offset > len {

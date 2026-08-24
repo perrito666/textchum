@@ -12,6 +12,9 @@
 
 mod app;
 mod buffer;
+mod document;
+mod history;
 
 pub use app::{App, Event};
 pub use buffer::{Buffer, BufferError};
+pub use document::{AppliedEdit, Document, DocumentError, Encoding};

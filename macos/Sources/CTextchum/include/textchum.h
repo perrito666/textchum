@@ -27,6 +27,13 @@ typedef struct TcApp TcApp;
 typedef struct TcBuffer TcBuffer;
 
 /**
+ * A text document: buffer, undo history, path and encoding. Create with
+ * [`tc_document_new`] or [`tc_document_open`], release with
+ * [`tc_document_free`].
+ */
+typedef struct TcDocument TcDocument;
+
+/**
  * An event delivered from the core to the shell.
  *
  * The struct is only valid for the duration of the callback invocation;
@@ -48,6 +55,17 @@ typedef struct TcEvent {
  * implementations must hop to their UI thread themselves.
  */
 typedef void (*TcEventCallback)(const struct TcEvent *event, void *userdata);
+
+/**
+ * An edit the core performed on itself via undo/redo, for the shell to
+ * replay on its display cache: replace UTF-16 code units `start..end` with
+ * `text`. `text` must be released with [`tc_string_free`].
+ */
+typedef struct TcAppliedEdit {
+  uintptr_t start;
+  uintptr_t end;
+  char *text;
+} TcAppliedEdit;
 
 #ifdef __cplusplus
 extern "C" {
@@ -167,6 +185,169 @@ char *tc_buffer_text(const struct TcBuffer *buffer);
  * released with this call, not previously freed.
  */
 void tc_string_free(char *s);
+
+/**
+ * Creates an empty, pathless document.
+ */
+struct TcDocument *tc_document_new(void);
+
+/**
+ * Opens the file at `path` (`len` bytes of UTF-8). Returns null on failure
+ * and, if `error_out` is non-null, stores a human-readable message there to
+ * be released with [`tc_string_free`].
+ *
+ * # Safety
+ * `path` must point to `len` readable bytes; `error_out`, if non-null, must
+ * point to a writable pointer slot.
+ */
+struct TcDocument *tc_document_open(const char *path, uintptr_t len, char **error_out);
+
+/**
+ * Destroys a document.
+ *
+ * # Safety
+ * `document` must be a pointer from a `tc_document_*` constructor, not
+ * previously freed.
+ */
+void tc_document_free(struct TcDocument *document);
+
+/**
+ * Replaces the UTF-16 code unit range `start..end` with `len` bytes of
+ * UTF-8, recording the edit in the undo history. Returns false, changing
+ * nothing, on invalid input.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `text` must point to `len`
+ * readable bytes.
+ */
+bool tc_document_replace_utf16(struct TcDocument *document,
+                               uintptr_t start,
+                               uintptr_t end,
+                               const char *text,
+                               uintptr_t len);
+
+/**
+ * Full document contents as a nul-terminated UTF-8 string; release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_text(const struct TcDocument *document);
+
+/**
+ * Document length in bytes.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+uintptr_t tc_document_len_bytes(const struct TcDocument *document);
+
+/**
+ * Document length in UTF-16 code units.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+uintptr_t tc_document_len_utf16(const struct TcDocument *document);
+
+/**
+ * Whether the document differs from its last saved state.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+bool tc_document_is_dirty(const struct TcDocument *document);
+
+/**
+ * Whether an undo step is available.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+bool tc_document_can_undo(const struct TcDocument *document);
+
+/**
+ * Whether a redo step is available.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+bool tc_document_can_redo(const struct TcDocument *document);
+
+/**
+ * Ends the current undo coalescing run (call when the caret moves or focus
+ * changes, so the next keystroke starts a fresh undo step).
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+void tc_document_break_undo_group(struct TcDocument *document);
+
+/**
+ * Undoes the newest edit. On success returns true and fills `edit_out` with
+ * the change the shell must replay on its display cache (release its `text`
+ * with [`tc_string_free`]). Returns false when there is nothing to undo.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `edit_out` must point to a
+ * writable [`TcAppliedEdit`].
+ */
+bool tc_document_undo(struct TcDocument *document, struct TcAppliedEdit *edit_out);
+
+/**
+ * Redoes the most recently undone edit; same contract as
+ * [`tc_document_undo`].
+ *
+ * # Safety
+ * `document` must be a live document pointer; `edit_out` must point to a
+ * writable [`TcAppliedEdit`].
+ */
+bool tc_document_redo(struct TcDocument *document, struct TcAppliedEdit *edit_out);
+
+/**
+ * Saves to the document's current path. Returns false on failure and, if
+ * `error_out` is non-null, stores a message there (release with
+ * [`tc_string_free`]). An untitled document fails; use
+ * [`tc_document_save_as`].
+ *
+ * # Safety
+ * `document` must be a live document pointer; `error_out`, if non-null,
+ * must point to a writable pointer slot.
+ */
+bool tc_document_save(struct TcDocument *document, char **error_out);
+
+/**
+ * Saves to `path` (`len` bytes of UTF-8) and adopts it as the document's
+ * path. Same error contract as [`tc_document_save`].
+ *
+ * # Safety
+ * `document` must be a live document pointer; `path` must point to `len`
+ * readable bytes; `error_out`, if non-null, must point to a writable
+ * pointer slot.
+ */
+bool tc_document_save_as(struct TcDocument *document,
+                         const char *path,
+                         uintptr_t len,
+                         char **error_out);
+
+/**
+ * The document's file path as a nul-terminated UTF-8 string, or null for
+ * untitled documents. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_path(const struct TcDocument *document);
+
+/**
+ * The document's encoding as a static human-readable name (e.g. "UTF-8").
+ * Owned by the core; do not free.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+const char *tc_document_encoding_name(const struct TcDocument *document);
 
 #ifdef __cplusplus
 }  // extern "C"

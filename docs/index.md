@@ -30,20 +30,25 @@ Textchum is young. What exists and works today:
 - A Rust core exposing rope-backed text buffers over a C ABI, with
   byte-offset and UTF-16 based editing (the latter matching how AppKit and
   the Language Server Protocol address text).
+- Documents on top of buffers: open and save with encoding detection and
+  atomic writes, undo/redo with typing coalescing, and dirty-state tracking
+  anchored to the last save — see [Documents](documents.md).
 - An asynchronous event channel from core worker threads to the UI, with a
   strict single-thread delivery contract.
-- A minimal macOS app: one window, one editable text view, kept in lockstep
-  with a core buffer through a synchronization protocol that refuses to let
-  the two sides diverge.
-- A headless smoke test that exercises the whole Swift ↔ core round trip,
-  used both by CI and by humans in a hurry.
+- A macOS editor with multiple windows (and native window tabs), open/save
+  panels, and save prompts on close; every text view is kept in lockstep
+  with its core document through a synchronization protocol that refuses to
+  let the two sides diverge.
+- A headless smoke test that exercises the whole Swift ↔ core round trip —
+  editing, undo, saving, reopening, events — used both by CI and by humans
+  in a hurry.
 
-What is planned next, roughly in order: real document handling (open, save,
-encodings, undo), syntax highlighting, per-project language servers, and
-Markdown preview.
+What is planned next, roughly in order: syntax highlighting, per-project
+language servers, and Markdown preview.
 
 ## Where to go from here
 
 - [Getting started](getting-started.md) — build and run Textchum from source.
 - [Architecture](architecture.md) — the core/shell split and its rules.
+- [Documents](documents.md) — undo, dirty state, encodings, atomic saves.
 - [The C boundary](ffi.md) — conventions of the interface between the two.

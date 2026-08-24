@@ -74,7 +74,20 @@ rend le démontage sûr à écrire côté coque.
 | `tc_buffer_replace_utf16` | Remplacer une plage d'unités UTF-16 — la forme d'une édition AppKit. |
 | `tc_buffer_text` | Copier le contenu complet. |
 | `tc_buffer_len_bytes` / `tc_buffer_len_utf16` | Longueurs dans les deux unités. |
+| `tc_document_new` / `tc_document_open` / `tc_document_free` | Créer un document (vide ou depuis un fichier) et le détruire. |
+| `tc_document_replace_utf16` | Éditer un document en alimentant l'historique d'annulation. |
+| `tc_document_undo` / `tc_document_redo` | Parcourir l'historique ; un paramètre de sortie décrit l'édition que la coque doit rejouer. |
+| `tc_document_break_undo_group` | Terminer la séquence de fusion d'annulation en cours. |
+| `tc_document_save` / `tc_document_save_as` | Enregistrements atomiques ; en cas d'échec, un paramètre de sortie optionnel reçoit un message. |
+| `tc_document_text` / `tc_document_len_bytes` / `tc_document_len_utf16` | Contenu et longueurs. |
+| `tc_document_is_dirty` / `tc_document_can_undo` / `tc_document_can_redo` | Requêtes d'état. |
+| `tc_document_path` / `tc_document_encoding_name` | Identité du fichier et encodage. |
 | `tc_string_free` | Libérer une chaîne retournée par le noyau. |
+
+Les opérations de fichier faillibles suivent une convention de plus : elles
+renvoient leur valeur d'échec et, si l'appelant a fourni un paramètre de
+sortie non nul, y déposent un message UTF-8 lisible (libéré avec
+`tc_string_free`) — la coque l'affiche tel quel dans l'alerte.
 
 La surface est volontairement réduite et ne grandit que lorsqu'une
 fonctionnalité de la coque l'exige. Les données volumineuses (à venir :

@@ -44,6 +44,7 @@ plugins:
             Home: Inicio
             Getting started: Primeros pasos
             Architecture: Arquitectura
+            Documents: Documentos
             The C boundary: La frontera C
         - locale: fr
           name: Français
@@ -52,10 +53,12 @@ plugins:
             Home: Accueil
             Getting started: Premiers pas
             Architecture: Architecture
+            Documents: Documents
             The C boundary: La frontière C
 
 nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Architecture: architecture.md
+  - Documents: documents.md
   - The C boundary: ffi.md

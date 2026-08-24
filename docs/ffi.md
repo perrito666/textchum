@@ -67,7 +67,20 @@ to write on the shell side.
 | `tc_buffer_replace_utf16` | Replace a UTF-16 code unit range — the shape of an AppKit edit. |
 | `tc_buffer_text` | Copy out the full contents. |
 | `tc_buffer_len_bytes` / `tc_buffer_len_utf16` | Lengths in both units. |
+| `tc_document_new` / `tc_document_open` / `tc_document_free` | Create a document (empty, or from a file) and destroy it. |
+| `tc_document_replace_utf16` | Edit a document, recording the undo history. |
+| `tc_document_undo` / `tc_document_redo` | Walk the history; an out-parameter reports the edit for the shell to replay. |
+| `tc_document_break_undo_group` | End the current undo coalescing run. |
+| `tc_document_save` / `tc_document_save_as` | Atomic saves; failures fill an optional message out-parameter. |
+| `tc_document_text` / `tc_document_len_bytes` / `tc_document_len_utf16` | Contents and lengths. |
+| `tc_document_is_dirty` / `tc_document_can_undo` / `tc_document_can_redo` | State queries. |
+| `tc_document_path` / `tc_document_encoding_name` | File identity and encoding. |
 | `tc_string_free` | Release a core-returned string. |
+
+Fallible file operations follow one more convention: they return their
+failure value and, when the caller passed a non-null out-parameter, store a
+human-readable UTF-8 message there (released with `tc_string_free`) — the
+shell shows it in the alert verbatim.
 
 The surface is deliberately small and grows only when a shell feature needs
 it. Bulk data (future: highlight spans, diagnostics) will cross as compact

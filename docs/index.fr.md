@@ -33,22 +33,29 @@ Textchum est jeune. Ce qui existe et fonctionne aujourd'hui :
   travers une ABI C, avec édition par décalages d'octets et par unités
   UTF-16 (cette dernière correspondant à la façon dont AppKit et le Language
   Server Protocol adressent le texte).
+- Des documents au-dessus des tampons : ouverture et enregistrement avec
+  détection d'encodage et écritures atomiques, annuler/rétablir avec fusion
+  des frappes, et suivi des modifications ancré au dernier enregistrement —
+  voir [Documents](documents.md).
 - Un canal d'événements asynchrone des fils d'exécution du noyau vers
   l'interface, avec un contrat strict de livraison sur un seul fil.
-- Une application macOS minimale : une fenêtre, une vue de texte éditable,
-  maintenue au pas avec un tampon du noyau par un protocole de
-  synchronisation qui interdit toute divergence entre les deux côtés.
+- Un éditeur macOS à fenêtres multiples (avec onglets natifs), panneaux
+  d'ouverture/enregistrement et invites d'enregistrement à la fermeture ;
+  chaque vue de texte est maintenue au pas avec son document du noyau par un
+  protocole de synchronisation qui interdit toute divergence.
 - Un test de fumée sans interface qui exerce l'aller-retour complet
-  Swift ↔ noyau, utilisé par l'intégration continue comme par les humains
+  Swift ↔ noyau — édition, annulation, enregistrement, réouverture,
+  événements —, utilisé par l'intégration continue comme par les humains
   pressés.
 
-La suite, dans l'ordre approximatif : gestion réelle des documents (ouvrir,
-enregistrer, encodages, annuler), coloration syntaxique, serveurs de langage
-par projet et aperçu Markdown.
+La suite, dans l'ordre approximatif : coloration syntaxique, serveurs de
+langage par projet et aperçu Markdown.
 
 ## Pour aller plus loin
 
 - [Premiers pas](getting-started.md) — compiler et lancer Textchum depuis
   les sources.
 - [Architecture](architecture.md) — la séparation noyau/coque et ses règles.
+- [Documents](documents.md) — annulation, modifications, encodages,
+  enregistrements atomiques.
 - [La frontière C](ffi.md) — conventions de l'interface entre les deux.

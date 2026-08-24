@@ -32,21 +32,28 @@ Textchum es joven. Lo que existe y funciona hoy:
   de una ABI en C, con edición por desplazamientos de bytes y por unidades
   UTF-16 (esta última coincide con cómo AppKit y el Language Server Protocol
   direccionan el texto).
+- Documentos sobre los búferes: abrir y guardar con detección de
+  codificación y escrituras atómicas, deshacer/rehacer con fusión de tecleo
+  y seguimiento de cambios anclado al último guardado — véase
+  [Documentos](documents.md).
 - Un canal de eventos asíncrono desde los hilos de trabajo del núcleo hacia
   la interfaz, con un contrato estricto de entrega en un solo hilo.
-- Una aplicación macOS mínima: una ventana, una vista de texto editable,
-  sincronizada con un búfer del núcleo mediante un protocolo que impide que
-  ambos lados diverjan.
+- Un editor macOS con varias ventanas (y pestañas nativas), paneles de
+  abrir/guardar y avisos de guardado al cerrar; cada vista de texto se
+  mantiene sincronizada con su documento del núcleo mediante un protocolo
+  que impide que ambos lados diverjan.
 - Una prueba de humo sin interfaz que ejercita el ciclo completo
-  Swift ↔ núcleo, usada por la integración continua y por humanos con prisa.
+  Swift ↔ núcleo — edición, deshacer, guardado, reapertura, eventos —,
+  usada por la integración continua y por humanos con prisa.
 
-Lo próximo, en orden aproximado: gestión real de documentos (abrir, guardar,
-codificaciones, deshacer), coloreado de sintaxis, servidores de lenguaje por
-proyecto y vista previa de Markdown.
+Lo próximo, en orden aproximado: coloreado de sintaxis, servidores de
+lenguaje por proyecto y vista previa de Markdown.
 
 ## Por dónde seguir
 
 - [Primeros pasos](getting-started.md) — compilar y ejecutar Textchum desde
   el código fuente.
 - [Arquitectura](architecture.md) — la división núcleo/carcasa y sus reglas.
+- [Documentos](documents.md) — deshacer, estado de cambios, codificaciones,
+  guardados atómicos.
 - [La frontera C](ffi.md) — convenciones de la interfaz entre ambos.
