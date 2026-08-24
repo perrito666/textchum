@@ -52,12 +52,12 @@ Les très grands documents (au-delà de quelques mégaoctets) sautent
 délibérément la coloration ; l'éditeur lui-même reste rapide à toute
 taille.
 
+La palette elle-même est un thème — trois sont fournis d'origine, et les
+thèmes de l'utilisateur sont des fichiers JSON ; voir
+[les thèmes dans la configuration](configuration.fr.md).
+
 ## Pas encore là
 
-- Les thèmes définis par l'utilisateur (la palette est intégrée pour
-  l'instant ; quand les thèmes arriveront, ce seront des fichiers JSON
-  avec les mêmes règles de secours que la
-  [configuration](configuration.md)).
 - Les nuances gras/italique — la surcouche est couleur seule pour le
   moment.
 - Le choix manuel du langage depuis l'interface pour les fichiers aux

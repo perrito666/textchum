@@ -700,8 +700,9 @@ final class EditorWindowController: NSWindowController {
 
     /// Rendering attributes are one overlay: highlight spans *set*
     /// attributes (replacing anything in their range), so diagnostics must
-    /// re-add their underlines afterwards.
-    private func refreshDecorations() {
+    /// re-add their underlines afterwards. Internal because theme
+    /// switches recolor every window from the app delegate.
+    func refreshDecorations() {
         applyHighlights()
         renderDiagnostics()
     }

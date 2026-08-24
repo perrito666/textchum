@@ -11,6 +11,7 @@ reads and writes it; nothing lives only inside the app.
 
 - **Appearance** — follow the system (switching live when macOS does), or
   force light or dark.
+- **Theme** — the syntax palette; see [Themes](#themes) below.
 - **Open files in** — tabs of the current window (the default) or
   separate windows. With separate windows, each window's navigator lists
   only its own tab group's documents.
@@ -67,6 +68,48 @@ Two guarantees make hand editing safe:
 Out-of-range or mistyped values do not count as breakage: a `font_size` of
 `4000` is clamped to the valid range, a `font_family` of `42` is ignored,
 and the rest of the file works normally.
+
+## Themes
+
+The **Theme** picker in the General tab selects the syntax palette.
+Three ship built in — **Textchum** (the default), **Textchum High
+Contrast**, and **Graphite**, a muted near-monochrome. Every theme
+carries a light and a dark palette in one file, so one theme serves
+both appearance modes.
+
+User themes are JSON files in:
+
+```
+~/Library/Application Support/Textchum/themes/
+```
+
+selected by file name (without `.json`); a file named after a built-in
+overrides it. The fastest way to start one is to generate a complete
+starter — every styled capture name, filled with the default palette —
+and just change colors:
+
+```bash
+Textchum --emit-theme ~/Library/Application\ Support/Textchum/themes/Mine.json
+```
+
+Entries map tree-sitter capture names to styles:
+
+```json
+{
+  "name": "Mine",
+  "styles": {
+    "keyword": {"light": "#AD3DA4", "dark": "#FC5FA3", "bold": true},
+    "comment": {"light": "#707F8C", "dark": "#7F8C98", "italic": true}
+  }
+}
+```
+
+Colors are `#RRGGBB` or `#RRGGBBAA`. Anything omitted — a color, a
+flag, a whole capture — keeps the default palette's value, so a theme
+only needs to say what it changes. The escape-hatch rules match the
+configuration's: a theme that fails to parse falls back to the default
+with one warning and is never overwritten, and unknown keys survive.
+Theme files are read at launch and when the selection changes.
 
 ## Projects
 

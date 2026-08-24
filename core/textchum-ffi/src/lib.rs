@@ -1059,6 +1059,41 @@ pub unsafe extern "C" fn tc_config_set_appearance(config: *mut TcConfig, appeara
     }
 }
 
+/// The configured theme name (the default theme's name when unset).
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_theme(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(config.inner.theme())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Sets the theme choice (`len` bytes of UTF-8; the default theme's name
+/// removes the key).
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `name` must point to
+/// `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_theme(
+    config: *mut TcConfig,
+    name: *const c_char,
+    len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(name) = (unsafe { str_from_raw(name, len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_theme(name)));
+}
+
 /// The project root for a file or directory path (`len` bytes of UTF-8),
 /// resolved under the workspace settings passed as JSON (`settings_len`
 /// bytes; may be empty for defaults — the configuration's `workspace`
@@ -1302,27 +1337,123 @@ pub const TC_STYLE_BOLD: u32 = 1;
 /// Style flag: render italic.
 pub const TC_STYLE_ITALIC: u32 = 2;
 
-/// The theme's style table, indexed by the `style` of a highlight span.
-/// Owned by the core and valid for the process lifetime; do not free.
+/// The current style table pointer. Tables are leaked on purpose: a
+/// handful of bytes per theme switch buys pointers that stay valid for
+/// the process lifetime, so shells can hold one across redraws.
+static STYLE_TABLE: std::sync::RwLock<Option<&'static [TcStyle]>> =
+    std::sync::RwLock::new(None);
+
+fn refresh_style_table() {
+    let table: Vec<TcStyle> = textchum_core::theme::styles()
+        .into_iter()
+        .map(|style| TcStyle {
+            light: style.light,
+            dark: style.dark,
+            flags: style.flags,
+        })
+        .collect();
+    if let Ok(mut current) = STYLE_TABLE.write() {
+        *current = Some(Box::leak(table.into_boxed_slice()));
+    }
+}
+
+/// The active theme's style table, indexed by the `style` of a highlight
+/// span. Owned by the core and valid for the process lifetime; do not
+/// free. Superseded (but not invalidated) by `tc_theme_set_*` — re-fetch
+/// after switching themes.
 ///
 /// # Safety
 /// `count_out` must point to a writable slot.
 #[no_mangle]
 pub unsafe extern "C" fn tc_style_table(count_out: *mut usize) -> *const TcStyle {
-    static TABLE: std::sync::OnceLock<Vec<TcStyle>> = std::sync::OnceLock::new();
-    let table = TABLE.get_or_init(|| {
-        textchum_core::theme::styles()
-            .map(|style| TcStyle {
-                light: style.light,
-                dark: style.dark,
-                flags: style.flags,
-            })
-            .collect()
-    });
+    if STYLE_TABLE.read().map(|t| t.is_none()).unwrap_or(true) {
+        refresh_style_table();
+    }
+    let table = STYLE_TABLE
+        .read()
+        .ok()
+        .and_then(|current| *current)
+        .unwrap_or(&[]);
     if !count_out.is_null() {
         unsafe { *count_out = table.len() };
     }
     table.as_ptr()
+}
+
+/// Built-in theme names, newline-joined, in presentation order. Release
+/// with [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_theme_builtin_names() -> *mut c_char {
+    owned_c_string(
+        textchum_core::theme::builtin_names()
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
+/// Activates a built-in theme by name; false for unknown names. Re-fetch
+/// [`tc_style_table`] and redraw afterwards.
+///
+/// # Safety
+/// `name` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_theme_set_builtin(name: *const c_char, len: usize) -> bool {
+    let Some(name) = (unsafe { str_from_raw(name, len) }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::theme::Theme::builtin(name) {
+            Some(theme) => {
+                textchum_core::theme::set_active(theme);
+                refresh_style_table();
+                true
+            }
+            None => false,
+        }
+    }))
+    .unwrap_or(false)
+}
+
+/// Activates a user theme from its JSON. On failure returns false, sets
+/// `*error_out` (release with [`tc_string_free`]), and leaves the active
+/// theme unchanged — same escape-hatch spirit as the configuration.
+///
+/// # Safety
+/// `json` must point to `len` readable bytes; `error_out` may be null.
+#[no_mangle]
+pub unsafe extern "C" fn tc_theme_set_json(
+    json: *const c_char,
+    len: usize,
+    error_out: *mut *mut c_char,
+) -> bool {
+    if !error_out.is_null() {
+        unsafe { *error_out = std::ptr::null_mut() };
+    }
+    let Some(json) = (unsafe { str_from_raw(json, len) }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::theme::Theme::from_json(json) {
+            Ok(theme) => {
+                textchum_core::theme::set_active(theme);
+                refresh_style_table();
+                true
+            }
+            Err(error) => {
+                unsafe { write_error(error_out, &error) };
+                false
+            }
+        }
+    }))
+    .unwrap_or(false)
+}
+
+/// A complete starter theme (every styled capture, default palette) as
+/// pretty-printed JSON — what `--emit-theme` writes. Release with
+/// [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_theme_template_json() -> *mut c_char {
+    owned_c_string(textchum_core::theme::Theme::template_json())
 }
 
 /// Sets the document's syntax language by name (`len == 0` clears it back

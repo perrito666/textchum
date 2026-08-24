@@ -234,6 +234,30 @@ impl Config {
 
     /// Whether the editor shows a line-number gutter
     /// (`editor.line_numbers`, default true).
+    /// The chosen theme name (a built-in or a user theme file's name);
+    /// absent means the default theme.
+    pub fn theme(&self) -> String {
+        self.root
+            .get("theme")
+            .and_then(Value::as_str)
+            .unwrap_or(crate::theme::DEFAULT_THEME)
+            .to_owned()
+    }
+
+    /// Sets the theme choice. The default removes the key, like
+    /// [`Self::set_appearance`].
+    pub fn set_theme(&mut self, name: &str) {
+        let root = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        if name == crate::theme::DEFAULT_THEME {
+            root.remove("theme");
+        } else {
+            root.insert("theme".into(), Value::String(name.to_owned()));
+        }
+    }
+
     pub fn line_numbers(&self) -> bool {
         self.editor()
             .get("line_numbers")

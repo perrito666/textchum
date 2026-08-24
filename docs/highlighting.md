@@ -46,11 +46,11 @@ each.
 Very large documents (beyond a few megabytes) deliberately skip
 highlighting; the editor itself stays fast at any size.
 
+The palette itself is a theme — three ship built in, and user themes are
+JSON files; see [themes in the configuration](configuration.md).
+
 ## Not there yet
 
-- User-defined themes (the palette is built in for now; when themes land
-  they will be JSON files with the same escape-hatch rules as the
-  [configuration](configuration.md)).
 - Bold/italic style nuances — the overlay is currently color only.
 - Manual language selection from the UI for files with odd extensions.
 - Viewport-scoped queries for documents in the hundreds of kilobytes

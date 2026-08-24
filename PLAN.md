@@ -339,8 +339,8 @@ Prove the architecture end to end before writing real features.
 - Grammar set to ~40 languages; server defaults to ~12.
 - Content search (⇧⌘F, ripgrep crates) and fuzzy file-open (⌘T, nucleo) with the shared
   editable-scope-path design (§3.5); command palette; document outline (LSP symbols).
-- Themes (§3.7): JSON theme format, built-in curated set, selection in Settings, and the
-  `--emit-theme` vanilla theme generator.
+- ~~Themes (§3.7)~~ done: JSON theme format, built-in curated set (default, high
+  contrast, Graphite), selection in Settings, and the `--emit-theme` generator.
 - Navigation drawer polish: rename/reveal actions, gitignore-aware filtering options,
   drag to reorder buffer groups; `.textchum.json` per-project config.
 - **Session restore: reopen where you left off.** Quitting remembers the open files and

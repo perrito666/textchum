@@ -128,6 +128,27 @@ public final class CoreConfig {
         set { tc_config_set_line_numbers(handle, newValue) }
     }
 
+    /// The chosen theme name (the default theme's name when unset).
+    public var theme: String {
+        get {
+            guard let cString = tc_config_theme(handle) else { return "Textchum" }
+            defer { tc_string_free(cString) }
+            return String(cString: cString)
+        }
+        set {
+            var name = newValue
+            name.withUTF8 { bytes in
+                tc_config_set_theme(
+                    handle,
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count)
+                )
+            }
+        }
+    }
+
     /// Keyboard-shortcut overrides as JSON: `{action: "modifiers+key"}`.
     public var keysJSON: String {
         guard let cString = tc_config_keys_json(handle) else { return "{}" }

@@ -238,6 +238,39 @@ func runSmokeTest() -> Int32 {
         return 1
     }
 
+    // Themes: built-ins switch the style table, user JSON applies, the
+    // template round-trips, breakage reports instead of applying.
+    let builtins = CoreTheme.builtinNames
+    let defaultStyles = CoreTheme.styles
+    guard builtins.count >= 3, builtins.first == "Textchum", !defaultStyles.isEmpty else {
+        print("FAIL: built-in theme set (\(builtins))")
+        return 1
+    }
+    guard CoreTheme.setBuiltin(named: "Graphite"),
+        CoreTheme.styles.first?.lightRGBA != defaultStyles.first?.lightRGBA
+    else {
+        print("FAIL: switching themes did not change the style table")
+        return 1
+    }
+    guard
+        CoreTheme.setJSON(
+            ##"{"name": "T", "styles": {"attribute": {"light": "#123456"}}}"##) == nil,
+        CoreTheme.styles.first?.lightRGBA == 0x123456FF,
+        CoreTheme.setJSON("{ nope") != nil,
+        CoreTheme.styles.first?.lightRGBA == 0x123456FF
+    else {
+        print("FAIL: user theme JSON handling")
+        return 1
+    }
+    guard CoreTheme.setJSON(CoreTheme.templateJSON) == nil,
+        CoreTheme.styles.first?.lightRGBA == defaultStyles.first?.lightRGBA,
+        CoreTheme.setBuiltin(named: "Textchum")
+    else {
+        print("FAIL: theme template does not reproduce the default palette")
+        return 1
+    }
+    print("themes ok (\(builtins.count) built-ins, user JSON, template)")
+
     // Async event round trip: core dispatch thread → main queue.
     var receivedSequence: UInt64?
     let coreApp = CoreApp { event in

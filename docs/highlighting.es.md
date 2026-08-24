@@ -53,12 +53,12 @@ Los documentos muy grandes (más allá de unos pocos megabytes) omiten el
 coloreado deliberadamente; el editor sigue siendo rápido a cualquier
 tamaño.
 
+La propia paleta es un tema — se incluyen tres de serie, y los temas de
+la persona usuaria son archivos JSON; véanse
+[los temas en la configuración](configuration.es.md).
+
 ## Aún no está
 
-- Temas definidos por la persona usuaria (la paleta va incorporada por
-  ahora; cuando lleguen los temas serán archivos JSON con las mismas
-  reglas de salida de emergencia que la
-  [configuración](configuration.md)).
 - Matices de negrita/cursiva — la capa es solo de color por ahora.
 - Selección manual del lenguaje desde la interfaz para archivos con
   extensiones raras.

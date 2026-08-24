@@ -12,6 +12,7 @@ uniquement à l'intérieur de l'application.
 
 - **Apparence** — suivre le système (en changeant en direct quand macOS le
   fait) ou forcer le clair ou le sombre.
+- **Thème** — la palette de syntaxe ; voir [Thèmes](#thèmes) plus bas.
 - **Ouvrir les fichiers dans** — des onglets de la fenêtre courante (le
   défaut) ou des fenêtres séparées. Avec des fenêtres séparées, le
   navigateur de chaque fenêtre ne liste que les documents de son propre
@@ -72,6 +73,52 @@ Deux garanties rendent l'édition à la main sûre :
 Les valeurs hors limites ou mal typées ne comptent pas comme une casse : un
 `font_size` de `4000` est ramené dans la plage valide, un `font_family` de
 `42` est ignoré, et le reste du fichier fonctionne normalement.
+
+## Thèmes
+
+Le sélecteur **Theme** de l'onglet General choisit la palette de
+syntaxe. Trois sont fournis d'origine — **Textchum** (par défaut),
+**Textchum High Contrast** et **Graphite**, un thème feutré presque
+monochrome. Chaque thème porte une palette claire et une palette sombre
+dans un même fichier, si bien qu'un thème sert aux deux modes
+d'apparence.
+
+Les thèmes personnels sont des fichiers JSON dans :
+
+```
+~/Library/Application Support/Textchum/themes/
+```
+
+sélectionnés par nom de fichier (sans `.json`) ; un fichier portant le
+nom d'un thème intégré le remplace. Le plus rapide pour en commencer un
+est de générer un point de départ complet — chaque nom de capture
+stylée, rempli avec la palette par défaut — et de ne changer que les
+couleurs :
+
+```bash
+Textchum --emit-theme ~/Library/Application\ Support/Textchum/themes/Mien.json
+```
+
+Les entrées associent des noms de capture tree-sitter à des styles :
+
+```json
+{
+  "name": "Mien",
+  "styles": {
+    "keyword": {"light": "#AD3DA4", "dark": "#FC5FA3", "bold": true},
+    "comment": {"light": "#707F8C", "dark": "#7F8C98", "italic": true}
+  }
+}
+```
+
+Les couleurs s'écrivent `#RRGGBB` ou `#RRGGBBAA`. Tout ce qui est omis
+— une couleur, un drapeau, une capture entière — garde la valeur de la
+palette par défaut : un thème n'a besoin de dire que ce qu'il change.
+Les règles de secours sont celles de la configuration : un thème qui ne
+se laisse pas analyser retombe sur le thème par défaut avec un seul
+avertissement et n'est jamais écrasé, et les clés inconnues survivent.
+Les fichiers de thème sont lus au lancement et au changement de
+sélection.
 
 ## Projets
 

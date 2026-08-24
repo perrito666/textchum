@@ -56,6 +56,9 @@ final class SettingsModel: ObservableObject {
     @Published var appearance: CoreAppearance {
         didSet { persist { $0.appearance = appearance } }
     }
+    @Published var theme: String {
+        didSet { persist { $0.theme = theme } }
+    }
     @Published var openTarget: CoreOpenTarget {
         didSet { persist { $0.openTarget = openTarget } }
     }
@@ -109,9 +112,20 @@ final class SettingsModel: ObservableObject {
     }
     @Published private(set) var workspaceEntries: [WorkspaceEntry] = []
 
+    /// Built-ins plus the user's theme files; a user file sharing a
+    /// built-in's name shows once (the file wins when applied).
+    var availableThemes: [String] {
+        var names = CoreTheme.builtinNames
+        for user in ThemeFiles.names where !names.contains(user) {
+            names.append(user)
+        }
+        return names
+    }
+
     init(config: CoreConfig) {
         self.config = config
         self.appearance = config.appearance
+        self.theme = config.theme
         self.openTarget = config.openTarget
         self.fontFamily = config.fontFamily ?? ""
         self.fontSize = config.fontSize
@@ -295,6 +309,11 @@ private struct GeneralSettingsTab: View {
                 Text("Dark").tag(CoreAppearance.dark)
             }
             .pickerStyle(.segmented)
+            Picker("Theme:", selection: $model.theme) {
+                ForEach(model.availableThemes, id: \.self) { name in
+                    Text(name).tag(name)
+                }
+            }
             Picker("Open files in:", selection: $model.openTarget) {
                 Text("Tabs").tag(CoreOpenTarget.tab)
                 Text("Windows").tag(CoreOpenTarget.window)

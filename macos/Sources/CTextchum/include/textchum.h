@@ -700,6 +700,25 @@ uint32_t tc_config_appearance(const struct TcConfig *config);
 void tc_config_set_appearance(struct TcConfig *config, uint32_t appearance);
 
 /**
+ * The configured theme name (the default theme's name when unset).
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_theme(const struct TcConfig *config);
+
+/**
+ * Sets the theme choice (`len` bytes of UTF-8; the default theme's name
+ * removes the key).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `name` must point to
+ * `len` readable bytes.
+ */
+void tc_config_set_theme(struct TcConfig *config, const char *name, uintptr_t len);
+
+/**
  * The project root for a file or directory path (`len` bytes of UTF-8),
  * resolved under the workspace settings passed as JSON (`settings_len`
  * bytes; may be empty for defaults — the configuration's `workspace`
@@ -816,13 +835,47 @@ void tc_config_set_tab_width(struct TcConfig *config, uint32_t width);
 bool tc_config_save(struct TcConfig *config, char **error_out);
 
 /**
- * The theme's style table, indexed by the `style` of a highlight span.
- * Owned by the core and valid for the process lifetime; do not free.
+ * The active theme's style table, indexed by the `style` of a highlight
+ * span. Owned by the core and valid for the process lifetime; do not
+ * free. Superseded (but not invalidated) by `tc_theme_set_*` — re-fetch
+ * after switching themes.
  *
  * # Safety
  * `count_out` must point to a writable slot.
  */
 const struct TcStyle *tc_style_table(uintptr_t *count_out);
+
+/**
+ * Built-in theme names, newline-joined, in presentation order. Release
+ * with [`tc_string_free`].
+ */
+char *tc_theme_builtin_names(void);
+
+/**
+ * Activates a built-in theme by name; false for unknown names. Re-fetch
+ * [`tc_style_table`] and redraw afterwards.
+ *
+ * # Safety
+ * `name` must point to `len` readable bytes.
+ */
+bool tc_theme_set_builtin(const char *name, uintptr_t len);
+
+/**
+ * Activates a user theme from its JSON. On failure returns false, sets
+ * `*error_out` (release with [`tc_string_free`]), and leaves the active
+ * theme unchanged — same escape-hatch spirit as the configuration.
+ *
+ * # Safety
+ * `json` must point to `len` readable bytes; `error_out` may be null.
+ */
+bool tc_theme_set_json(const char *json, uintptr_t len, char **error_out);
+
+/**
+ * A complete starter theme (every styled capture, default palette) as
+ * pretty-printed JSON — what `--emit-theme` writes. Release with
+ * [`tc_string_free`].
+ */
+char *tc_theme_template_json(void);
 
 /**
  * Sets the document's syntax language by name (`len == 0` clears it back

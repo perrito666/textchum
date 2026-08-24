@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsModel.onChange = { [weak self] in
             guard let self, let model = self.settingsModel else { return }
             self.applyAppearanceChoice()
+            self.applyThemeChoice()
             self.coreApp?.lspConfigure(json: self.combinedLSPConfiguration)
             for editor in self.editors {
                 editor.refreshProjectRoot()
@@ -42,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         self.settingsModel = settingsModel
         applyAppearanceChoice()
+        applyThemeChoice()
 
         NotificationCenter.default.addObserver(
             forName: .textchumDocumentsChanged, object: nil, queue: .main
@@ -411,6 +413,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .system: NSApp.appearance = nil
         case .light: NSApp.appearance = NSAppearance(named: .aqua)
         case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+
+    /// One warning per launch when the chosen theme cannot be used.
+    private var warnedBrokenTheme = false
+    /// The theme name currently applied, to skip redundant recolors.
+    private var appliedTheme: String?
+
+    /// Applies the configured theme: a user file of that name (which
+    /// overrides a same-named built-in), else the built-in, else the
+    /// default — with one warning when the choice cannot be honored,
+    /// never overwriting the broken file.
+    private func applyThemeChoice() {
+        let name = config?.theme ?? "Textchum"
+        guard name != appliedTheme else { return }
+        var problem: String?
+        if let json = ThemeFiles.json(named: name) {
+            problem = CoreTheme.setJSON(json)
+        } else if !CoreTheme.setBuiltin(named: name) {
+            problem = "no theme file or built-in theme has this name"
+        }
+        if let problem {
+            CoreTheme.setBuiltin(named: "Textchum")
+            if !warnedBrokenTheme {
+                warnedBrokenTheme = true
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "Theme “\(name)” could not be used"
+                alert.informativeText = "\(problem) — using the default theme instead."
+                alert.runModal()
+            }
+        }
+        appliedTheme = name
+        HighlightPalette.reload()
+        for editor in editors {
+            editor.refreshDecorations()
         }
     }
 

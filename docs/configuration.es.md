@@ -12,6 +12,7 @@ aplicación.
 
 - **Apariencia** — seguir al sistema (cambiando en vivo cuando macOS lo
   hace) o forzar claro u oscuro.
+- **Tema** — la paleta de sintaxis; véase [Temas](#temas) más abajo.
 - **Abrir archivos en** — pestañas de la ventana actual (el valor por
   defecto) o ventanas separadas. Con ventanas separadas, el navegador de
   cada ventana lista solo los documentos de su propio grupo de pestañas.
@@ -71,6 +72,49 @@ Dos garantías hacen segura la edición a mano:
 Los valores fuera de rango o con tipo incorrecto no cuentan como rotura: un
 `font_size` de `4000` se recorta al rango válido, un `font_family` de `42`
 se ignora y el resto del archivo funciona con normalidad.
+
+## Temas
+
+El selector **Theme** de la pestaña General elige la paleta de
+sintaxis. Se incluyen tres de serie — **Textchum** (el predeterminado),
+**Textchum High Contrast** y **Graphite**, uno apagado casi
+monocromo. Cada tema lleva una paleta clara y una oscura en un mismo
+archivo, de modo que un tema sirve para ambos modos de apariencia.
+
+Los temas propios son archivos JSON en:
+
+```
+~/Library/Application Support/Textchum/themes/
+```
+
+seleccionados por nombre de archivo (sin `.json`); un archivo con el
+nombre de un tema incorporado lo reemplaza. La forma más rápida de
+empezar uno es generar un arranque completo — cada nombre de captura
+con estilo, relleno con la paleta por defecto — y solo cambiar colores:
+
+```bash
+Textchum --emit-theme ~/Library/Application\ Support/Textchum/themes/Mio.json
+```
+
+Las entradas asocian nombres de captura de tree-sitter a estilos:
+
+```json
+{
+  "name": "Mio",
+  "styles": {
+    "keyword": {"light": "#AD3DA4", "dark": "#FC5FA3", "bold": true},
+    "comment": {"light": "#707F8C", "dark": "#7F8C98", "italic": true}
+  }
+}
+```
+
+Los colores son `#RRGGBB` o `#RRGGBBAA`. Todo lo omitido — un color,
+un indicador, una captura entera — conserva el valor de la paleta por
+defecto, así que un tema solo necesita decir lo que cambia. Las reglas
+de salida de emergencia son las de la configuración: un tema que no se
+puede analizar cae al predeterminado con un único aviso y nunca se
+sobrescribe, y las claves desconocidas sobreviven. Los archivos de tema
+se leen al arrancar y al cambiar la selección.
 
 ## Proyectos
 
