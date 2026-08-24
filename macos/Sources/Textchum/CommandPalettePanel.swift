@@ -101,34 +101,12 @@ final class CommandPalettePanel: NSObject {
 
     // MARK: Filtering
 
-    /// Subsequence match with a light preference for tight, early
-    /// matches — the fzf spirit at palette scale.
-    private static func score(_ title: String, query: String) -> Int? {
-        if query.isEmpty { return 0 }
-        let haystack = Array(title.lowercased())
-        let needle = Array(query.lowercased())
-        var position = 0
-        var first = -1
-        var last = -1
-        for character in needle {
-            while position < haystack.count, haystack[position] != character {
-                position += 1
-            }
-            guard position < haystack.count else { return nil }
-            if first < 0 { first = position }
-            last = position
-            position += 1
-        }
-        // Smaller span and earlier start rank higher.
-        return -(last - first) * 4 - first
-    }
-
     private func applyFilter() {
         let query = queryField.stringValue
         rows =
             all
             .compactMap { command in
-                Self.score(command.title, query: query).map { (command, $0) }
+                Fuzzy.score(command.title, query: query).map { (command, $0) }
             }
             .sorted { $0.1 > $1.1 }
             .map(\.0)

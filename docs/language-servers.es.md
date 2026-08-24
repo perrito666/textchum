@@ -44,6 +44,9 @@ nadie.
 - **Formatear documento** (⌥⇧⌘F) reformatea a través del servidor,
   conservando tabuladores si el documento sangra con tabuladores y
   espacios en caso contrario.
+- **Esquema del documento** (⇧⌘O) lista los símbolos del archivo — el
+  anidamiento se muestra con sangría, filtrable de forma difusa — y ⏎
+  salta a la selección.
 - Un servidor ausente se informa una sola vez, con el comando que lo
   instala; todo lo demás del editor sigue funcionando sin él.
 
@@ -142,6 +145,13 @@ salir de Textchum nunca puede quedarse colgado por un servidor que se
 porta mal. Toda la ruta del protocolo se ejercita en la CI contra un
 servidor guionizado.
 
+Las instancias también se cuidan solas: un servidor que **cae** a mitad
+de sesión se reinicia automáticamente con retroceso (1 → 2 → 4 → 8
+segundos; cuatro fallos seguidos y se queda abajo hasta un reinicio o
+un cambio de configuración), y una instancia que **ningún documento
+abierto ha necesitado en cinco minutos** se apaga — la siguiente
+apertura arranca una fresca.
+
 ## Aún no está
 
 - Los marcadores de fragmento (snippets) en el autocompletado se
@@ -149,7 +159,4 @@ servidor guionizado.
 - ⌘-clic como disparador alternativo de Saltar a la definición.
 - El renderizado de Markdown en los globos de *hover* (muestran el texto
   en crudo).
-- Reinicio automático de servidores caídos (una caída se informa; reabrir
-  el archivo arranca una instancia nueva).
-- Apagado por inactividad de instancias sin uso y un panel de estado de
-  servidores.
+- Un panel de estado de servidores.

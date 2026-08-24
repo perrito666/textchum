@@ -266,6 +266,16 @@ uint64_t tc_lsp_definition(struct TcApp *app,
                            uint32_t character);
 
 /**
+ * Requests the document's symbol tree; same contract as
+ * [`tc_lsp_hover`]. The response's `result` is an LSP
+ * `DocumentSymbol[]` (hierarchical) or `SymbolInformation[]` (flat).
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_document_symbols(struct TcApp *app, const char *path, uintptr_t path_len);
+
+/**
  * Requests every reference to the symbol at an LSP position, the
  * declaration included; same contract as [`tc_lsp_hover`]. The
  * response's `result` is an LSP `Location[]`.
@@ -1061,6 +1071,20 @@ void tc_lsp_configure(struct TcApp *app, const char *json, uintptr_t len);
  * `path` must point to `len` readable bytes.
  */
 void tc_lsp_set_log_path(const char *path, uintptr_t len);
+
+/**
+ * Forgets one (server, root) instance after a crash; the shell
+ * re-announces the affected documents to spawn a replacement.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; the pointer/length
+ * pairs must describe readable bytes.
+ */
+void tc_lsp_retire(struct TcApp *app,
+                   const char *server,
+                   uintptr_t server_len,
+                   const char *root,
+                   uintptr_t root_len);
 
 /**
  * Shuts down every running server instance. The shell re-announces its

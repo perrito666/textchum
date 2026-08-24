@@ -150,6 +150,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self?.togglePathDisplay(nil)
                         return
                     }
+                    if allArguments[flagIndex + 1] == "outline" {
+                        // Give the language server time to hand-shake.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            MainActor.assumeIsolated {
+                                self?.editors.first?.showDocumentOutline(nil)
+                            }
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "palette" {
                         // scope doubles as the initial query.
                         self?.showCommandPalette(nil)
@@ -226,11 +235,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         guard let path else { return }
         NSApp.activate(ignoringOtherApps: true)
+        recordJumpOrigin()
         open(path: path, target: target, revealLine: line)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(goBack(_:)):
+            return jumpStack.canGoBack
+        case #selector(goForward(_:)):
+            return jumpStack.canGoForward
+        default:
+            return true
+        }
     }
 
     // MARK: Session
@@ -307,6 +328,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 alert.informativeText = message
                 alert.runModal()
             }
+            // A healthy server that stops running gets restarted with
+            // backoff; "closed" is our own orderly shutdown and needs
+            // nothing.
+            if status == "running" {
+                crashRestarts[server + "|" + root] = nil
+            }
+            if status == "exited", message.isEmpty {
+                scheduleCrashRestart(server: server, root: root)
+            }
             // A server that starts but dies before (or during) the
             // handshake deserves one loud notice too — with a pointer to
             // the log that holds its stderr.
@@ -345,6 +375,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return true
     }
 
+    /// Crash-restart attempts per (server, root), for backoff. Cleared
+    /// when the instance reaches "running" again.
+    private var crashRestarts: [String: Int] = [:]
+
+    /// A server that died mid-session comes back on its own: retire the
+    /// dead instance, wait 1 → 2 → 4 → 8 seconds across attempts, then
+    /// re-announce the documents that were talking to it. Four failures
+    /// in a row and it stays down until a restart or config change.
+    private func scheduleCrashRestart(server: String, root: String) {
+        let key = server + "|" + root
+        let attempt = crashRestarts[key, default: 0]
+        guard attempt < 4 else {
+            NSLog("lsp \(server) [\(root)]: giving up after \(attempt) restarts")
+            return
+        }
+        crashRestarts[key] = attempt + 1
+        coreApp?.lspRetire(server: server, root: root)
+        let delay = TimeInterval(1 << attempt)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                NSLog("lsp \(server) [\(root)]: restart attempt \(attempt + 1)")
+                for editor in self.editors {
+                    let documentRoot =
+                        editor.projectRoot
+                        ?? editor.coreDocument.path.map {
+                            ($0 as NSString).deletingLastPathComponent
+                        }
+                    if documentRoot == root {
+                        editor.reannounceLSP()
+                    }
+                }
+            }
+        }
+    }
+
     /// Retires every running server instance and re-announces the open
     /// documents, respawning them under the current configuration.
     private func restartLanguageServers() {
@@ -377,6 +443,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.performUndo(_:)): "undo",
             #selector(EditorWindowController.performRedo(_:)): "redo",
             #selector(EditorWindowController.jumpToDefinition(_:)): "jumpToDefinition",
+            #selector(goBack(_:)): "goBack",
+            #selector(goForward(_:)): "goForward",
             #selector(EditorWindowController.findReferences(_:)): "findReferences",
             #selector(EditorWindowController.renameSymbol(_:)): "renameSymbol",
             #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
@@ -389,6 +457,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
             #selector(togglePathDisplay(_:)): "togglePathDisplay",
             #selector(EditorWindowController.redrawDocument(_:)): "redraw",
+            #selector(EditorWindowController.showDocumentOutline(_:)): "documentOutline",
             #selector(showCommandPalette(_:)): "commandPalette",
             #selector(showSettings(_:)): "settings",
         ]
@@ -582,14 +651,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Cross-file navigation: front (or open) `path` and put the caret at
     /// an LSP position. Used by go-to-definition.
     private func openLocation(path: String, line: Int, character: Int) {
-        if let existing = editors.first(where: { $0.coreDocument.path == path }) {
+        recordJumpOrigin()
+        navigate(to: JumpLocation(path: path, line: line, character: character))
+    }
+
+    /// Raw navigation — jump-stack traversal uses this directly so that
+    /// going back is not itself a jump.
+    private func navigate(to location: JumpLocation) {
+        if let existing = editors.first(where: { $0.coreDocument.path == location.path }) {
             existing.window?.makeKeyAndOrderFront(nil)
-            existing.reveal(line: line, character: character)
+            existing.reveal(line: location.line, character: location.character)
         } else {
-            open(path: path)
-            editors.first { $0.coreDocument.path == path }?
-                .reveal(line: line, character: character)
+            open(path: location.path)
+            editors.first { $0.coreDocument.path == location.path }?
+                .reveal(line: location.line, character: location.character)
         }
+    }
+
+    // MARK: Jump stack
+
+    let jumpStack = JumpStack()
+
+    /// The key editor's file and caret, as a jump-stack entry.
+    private func currentJumpLocation() -> JumpLocation? {
+        let editor =
+            editors.first { $0.window?.isKeyWindow == true } ?? editors.first
+        guard let editor, let path = editor.coreDocument.path else { return nil }
+        let caret = editor.caretLSPPosition
+        return JumpLocation(path: path, line: caret.line, character: caret.character)
+    }
+
+    /// Called by everything that jumps, before it navigates.
+    func recordJumpOrigin() {
+        if let origin = currentJumpLocation() {
+            jumpStack.noteJump(from: origin)
+        }
+    }
+
+    @objc func goBack(_ sender: Any?) {
+        guard let current = currentJumpLocation(),
+            let target = jumpStack.goBack(from: current)
+        else {
+            NSSound.beep()
+            return
+        }
+        navigate(to: target)
+    }
+
+    @objc func goForward(_ sender: Any?) {
+        guard let current = currentJumpLocation(),
+            let target = jumpStack.goForward(from: current)
+        else {
+            NSSound.beep()
+            return
+        }
+        navigate(to: target)
     }
 
     /// One explorer state for the whole app: the tree looks the same
@@ -666,12 +782,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             if line > 0 {
                 self.openLocation(path: path, line: line - 1, character: 0)
-            } else if let existing = self.editors.first(where: {
-                $0.coreDocument.path == path
-            }) {
-                existing.window?.makeKeyAndOrderFront(nil)
             } else {
-                self.open(path: path)
+                // A whole-file open is a jump too.
+                self.recordJumpOrigin()
+                if let existing = self.editors.first(where: {
+                    $0.coreDocument.path == path
+                }) {
+                    existing.window?.makeKeyAndOrderFront(nil)
+                } else {
+                    self.open(path: path)
+                }
             }
         }
         quickFinder.show(mode: mode, scope: currentScope, over: NSApp.keyWindow)
@@ -1002,6 +1122,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         jump.keyEquivalentModifierMask = [.command, .control]
         editMenu.addItem(jump)
+        let backItem = NSMenuItem(
+            title: "Go Back",
+            action: #selector(goBack(_:)),
+            keyEquivalent: String(UnicodeScalar(NSLeftArrowFunctionKey)!)
+        )
+        backItem.keyEquivalentModifierMask = [.control, .command]
+        editMenu.addItem(backItem)
+        let forwardItem = NSMenuItem(
+            title: "Go Forward",
+            action: #selector(goForward(_:)),
+            keyEquivalent: String(UnicodeScalar(NSRightArrowFunctionKey)!)
+        )
+        forwardItem.keyEquivalentModifierMask = [.control, .command]
+        editMenu.addItem(forwardItem)
         let references = NSMenuItem(
             title: "Find References",
             action: #selector(EditorWindowController.findReferences(_:)),
@@ -1113,6 +1247,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         pathDisplayItem.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(pathDisplayItem)
+        let outlineItem = NSMenuItem(
+            title: "Document Outline…",
+            action: #selector(EditorWindowController.showDocumentOutline(_:)),
+            keyEquivalent: "o"
+        )
+        outlineItem.keyEquivalentModifierMask = [.command, .shift]
+        viewMenu.addItem(outlineItem)
         let redrawItem = NSMenuItem(
             title: "Redraw",
             action: #selector(EditorWindowController.redrawDocument(_:)),

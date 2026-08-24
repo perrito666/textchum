@@ -195,6 +195,16 @@ public final class CoreApp {
         tc_lsp_restart_servers(handle)
     }
 
+    /// Forgets one crashed (server, root) instance; re-announce the
+    /// affected documents afterwards to spawn a replacement.
+    public func lspRetire(server: String, root: String) {
+        withUTF8(server) { server, serverLen in
+            withUTF8(root) { root, rootLen in
+                tc_lsp_retire(handle, server, serverLen, root, rootLen)
+            }
+        }
+    }
+
     /// Announces a closed document.
     public func lspDidClose(path: String) {
         withUTF8(path) { path, pathLen in
@@ -233,6 +243,21 @@ public final class CoreApp {
         let id = withUTF8(path) { path, pathLen in
             tc_lsp_definition(
                 handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
+    /// Requests the document's symbol tree; same contract as
+    /// ``lspHover(path:line:character:completion:)``. The JSON is an LSP
+    /// `DocumentSymbol[]` (hierarchical) or `SymbolInformation[]` (flat).
+    @MainActor
+    public func lspDocumentSymbols(
+        path: String,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_document_symbols(handle, path, pathLen)
         }
         guard id != 0 else { return }
         router.register(id, completion)

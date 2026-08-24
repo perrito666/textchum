@@ -36,6 +36,8 @@ never join someone else's workspace either.
   are rewritten on disk.
 - **Format Document** (⌥⇧⌘F) reformats through the server, keeping tabs
   if the document indents with tabs and spaces otherwise.
+- **Document Outline** (⇧⌘O) lists the file's symbols — nesting shown
+  by indentation, fuzzy-filterable — and ⏎ jumps to the selection.
 - A missing server is reported once, with the command that installs it;
   everything else about the editor keeps working without it.
 
@@ -128,11 +130,15 @@ process gets a bounded grace period at shutdown and is then killed, so
 quitting Textchum can never hang on a misbehaving server. The whole
 protocol path is exercised in CI against a scripted server.
 
+Instances also look after themselves: a server that **crashes**
+mid-session is restarted automatically with backoff (1 → 2 → 4 → 8
+seconds; four failures in a row and it stays down until a restart or a
+configuration change), and an instance **no open document has needed
+for five minutes** is shut down — the next open starts a fresh one.
+
 ## Not there yet
 
 - Snippet placeholders in completions are flattened to plain text.
 - ⌘-click as an alternative trigger for Jump to Definition.
 - Markdown rendering in hover popovers (they show the raw text).
-- Automatic restart of crashed servers (a crash is reported; reopening
-  the file starts a fresh instance).
-- Idle shutdown of unused instances, and a server-status panel.
+- A server-status panel.

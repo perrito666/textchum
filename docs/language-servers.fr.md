@@ -45,6 +45,9 @@ quelqu'un d'autre.
 - **Formater le document** (⌥⇧⌘F) reformate via le serveur, en gardant
   les tabulations si le document indente avec des tabulations, des
   espaces sinon.
+- **Plan du document** (⇧⌘O) liste les symboles du fichier —
+  l'imbrication rendue par l'indentation, filtrable en flou — et ⏎
+  saute vers la sélection.
 - Un serveur manquant est signalé une seule fois, avec la commande qui
   l'installe ; tout le reste de l'éditeur continue de fonctionner sans
   lui.
@@ -144,6 +147,13 @@ tué, si bien que quitter Textchum ne peut jamais rester suspendu à un
 serveur défaillant. Tout le chemin du protocole est exercé en CI contre
 un serveur scripté.
 
+Les instances prennent aussi soin d'elles-mêmes : un serveur qui
+**plante** en cours de session est relancé automatiquement avec recul
+(1 → 2 → 4 → 8 secondes ; quatre échecs d'affilée et il reste à terre
+jusqu'à un redémarrage ou un changement de configuration), et une
+instance dont **aucun document ouvert n'a eu besoin depuis cinq
+minutes** est arrêtée — l'ouverture suivante en lance une fraîche.
+
 ## Pas encore là
 
 - Les marqueurs de fragments (snippets) dans la complétion sont aplanis
@@ -151,7 +161,4 @@ un serveur scripté.
 - ⌘-clic comme déclencheur alternatif d'Aller à la définition.
 - Le rendu Markdown dans les bulles de survol (elles montrent le texte
   brut).
-- Le redémarrage automatique des serveurs plantés (un plantage est
-  signalé ; rouvrir le fichier lance une instance neuve).
-- L'arrêt d'inactivité des instances inutilisées et un panneau d'état des
-  serveurs.
+- Un panneau d'état des serveurs.

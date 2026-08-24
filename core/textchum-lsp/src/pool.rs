@@ -62,6 +62,8 @@ pub struct Pool {
     configured: serde_json::Value,
     /// Workspace behavior (manifest-project and recursive-config flags).
     workspace_settings: WorkspaceSettings,
+    /// When each instance last did anything, for the idle sweep.
+    last_activity: HashMap<InstanceKey, std::time::Instant>,
     /// Next client→server request id. Starts above the lifecycle ids
     /// (1 = initialize, 2 = shutdown).
     next_request_id: u64,
@@ -78,6 +80,7 @@ impl Pool {
             overrides: Vec::new(),
             configured: serde_json::Value::Null,
             workspace_settings: WorkspaceSettings::default(),
+            last_activity: HashMap::new(),
             next_request_id: 100,
         }
     }
@@ -122,6 +125,64 @@ impl Pool {
         self.instances.clear();
         self.documents.clear();
         self.versions.clear();
+        self.last_activity.clear();
+    }
+
+    /// Forgets one instance (and its document routing) — the cleanup
+    /// half of crash recovery. The shell re-announces the affected
+    /// documents afterwards to spawn a replacement; the crash memory is
+    /// intentionally not marked "failed", because a crash is not a
+    /// missing binary.
+    pub fn retire(&mut self, server: &str, root: &str) {
+        let key = (server.to_owned(), PathBuf::from(root));
+        if self.instances.remove(&key).is_some() {
+            crate::log::log(&format!("retired {server} at {root}"));
+        }
+        self.last_activity.remove(&key);
+        self.documents.retain(|path, routed| {
+            if *routed == key {
+                self.versions.remove(path);
+                false
+            } else {
+                true
+            }
+        });
+    }
+
+    /// Instances no document has needed for a while are shut down; the
+    /// next open starts a fresh one. Swept lazily from open/close, which
+    /// is exactly when the population changes.
+    const IDLE_SHUTDOWN: std::time::Duration = std::time::Duration::from_secs(300);
+
+    fn sweep_idle(&mut self) {
+        let now = std::time::Instant::now();
+        let in_use: HashSet<&InstanceKey> = self.documents.values().collect();
+        let idle: Vec<InstanceKey> = self
+            .instances
+            .keys()
+            .filter(|key| !in_use.contains(key))
+            .filter(|key| {
+                self.last_activity
+                    .get(*key)
+                    .map(|last| now.duration_since(*last) > Self::IDLE_SHUTDOWN)
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .collect();
+        for key in idle {
+            crate::log::log(&format!(
+                "idle shutdown: {} at {} (no open documents)",
+                key.0,
+                key.1.display()
+            ));
+            self.instances.remove(&key);
+            self.last_activity.remove(&key);
+        }
+    }
+
+    fn touch(&mut self, key: &InstanceKey) {
+        self.last_activity
+            .insert(key.clone(), std::time::Instant::now());
     }
 
     /// A user-configured command line for (root, language): the exact
@@ -276,11 +337,13 @@ impl Pool {
             version,
             text: text.to_owned(),
         });
+        self.touch(&key);
+        self.sweep_idle();
     }
 
     /// Announces new document contents (full-text sync).
     pub fn did_change(&mut self, path: &Path, text: &str) {
-        let Some(key) = self.documents.get(path) else {
+        let Some(key) = self.documents.get(path).cloned() else {
             return;
         };
         let version = self
@@ -288,11 +351,14 @@ impl Pool {
             .entry(path.to_owned())
             .and_modify(|v| *v += 1)
             .or_insert(1);
-        self.instances[key].send(Command::DidChange {
-            path: path.to_owned(),
-            version: *version,
-            text: text.to_owned(),
-        });
+        if let Some(instance) = self.instances.get(&key) {
+            instance.send(Command::DidChange {
+                path: path.to_owned(),
+                version: *version,
+                text: text.to_owned(),
+            });
+        }
+        self.touch(&key);
     }
 
     /// Announces a closed document. The instance stays warm for the next
@@ -300,10 +366,14 @@ impl Pool {
     pub fn did_close(&mut self, path: &Path) {
         if let Some(key) = self.documents.remove(path) {
             self.versions.remove(path);
-            self.instances[&key].send(Command::DidClose {
-                path: path.to_owned(),
-            });
+            if let Some(instance) = self.instances.get(&key) {
+                instance.send(Command::DidClose {
+                    path: path.to_owned(),
+                });
+            }
+            self.touch(&key);
         }
+        self.sweep_idle();
     }
 
     /// Requests hover information at an LSP position (zero-based line,
@@ -391,19 +461,38 @@ impl Pool {
         )
     }
 
+    /// Requests the document's symbol tree; same contract as
+    /// [`Self::hover`]. The response's `result` is an LSP
+    /// `DocumentSymbol[]` (hierarchical) or `SymbolInformation[]` (flat).
+    pub fn document_symbols(&mut self, path: &Path) -> u64 {
+        self.request(
+            path,
+            "textDocument/documentSymbol",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+            }),
+        )
+    }
+
     /// Sends a request to the document's instance; the response arrives as
     /// an [`Event::LspResponse`] with the returned id (0 = no instance).
     fn request(&mut self, path: &Path, method: &str, params: serde_json::Value) -> u64 {
-        let Some(key) = self.documents.get(path) else {
+        let Some(key) = self.documents.get(path).cloned() else {
+            return 0;
+        };
+        // A retired (crashed) instance may still be routed until the
+        // shell re-announces; a request to it has no one to answer.
+        let Some(instance) = self.instances.get(&key) else {
             return 0;
         };
         let id = self.next_request_id;
         self.next_request_id += 1;
-        self.instances[key].send(Command::Request {
+        instance.send(Command::Request {
             id,
             method: method.to_owned(),
             params,
         });
+        self.touch(&key);
         id
     }
 

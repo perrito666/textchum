@@ -319,6 +319,14 @@ final class EditorWindowController: NSWindowController {
 
     /// Character offset → LSP (line, UTF-16 column): walk line ranges
     /// until the one containing the offset.
+    /// The caret as an LSP position, for the jump stack.
+    var caretLSPPosition: (line: Int, character: Int) {
+        guard let textView else { return (0, 0) }
+        let text = textView.string as NSString
+        let index = min(textView.selectedRange().location, text.length)
+        return Self.lspPosition(ofIndex: index, in: text)
+    }
+
     private static func lspPosition(ofIndex index: Int, in text: NSString) -> (Int, Int) {
         var line = 0
         var lineStart = 0
@@ -474,6 +482,26 @@ final class EditorWindowController: NSWindowController {
         for edit in LSPEdits.bottomUp(textEdits) {
             let range = LSPEdits.nsRange(of: edit, in: textView.string as NSString)
             textView.insertText(edit.newText, replacementRange: range)
+        }
+    }
+
+    /// View → Document Outline (⇧⌘O): the file's symbols from its
+    /// server, fuzzy-filterable; selecting one jumps (via the jump
+    /// stack, so Go Back returns here).
+    @objc func showDocumentOutline(_ sender: Any?) {
+        guard let lspApp, let path = lspOpenPath else { return }
+        lspApp.lspDocumentSymbols(path: path) { [weak self] json in
+            guard let self else { return }
+            let symbols = OutlinePanel.symbols(fromResultJSON: json)
+            guard !symbols.isEmpty else {
+                NSSound.beep()
+                return
+            }
+            OutlinePanel.shared.show(symbols: symbols, over: self.window) {
+                [weak self] symbol in
+                guard let self, let path = self.coreDocument.path else { return }
+                self.openLocation?(path, symbol.line, symbol.character)
+            }
         }
     }
 
@@ -1593,7 +1621,7 @@ extension EditorWindowController: NSMenuItemValidation {
         case #selector(jumpToDefinition(_:)):
             return lspOpenPath != nil || ctagsFallbackEnabled
         case #selector(findReferences(_:)), #selector(renameSymbol(_:)),
-            #selector(formatDocument(_:)):
+            #selector(formatDocument(_:)), #selector(showDocumentOutline(_:)):
             return lspOpenPath != nil
         case #selector(goToBlockStart(_:)), #selector(goToBlockEnd(_:)):
             return coreDocument.languageName != nil

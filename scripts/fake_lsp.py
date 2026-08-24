@@ -52,6 +52,10 @@ def main():
         elif method in ("textDocument/didOpen", "textDocument/didChange"):
             seen += 1
             uri = message["params"]["textDocument"]["uri"]
+            # Crash on demand, for the client's restart tests.
+            changes = message["params"].get("contentChanges", [])
+            if any(change.get("text") == "die" for change in changes):
+                sys.exit(1)
             send({
                 "jsonrpc": "2.0",
                 "method": "textDocument/publishDiagnostics",
@@ -107,6 +111,26 @@ def main():
                          "detail": "let fake_variable", "sortText": "0002"},
                     ],
                 },
+            })
+        elif method == "textDocument/documentSymbol":
+            def sym(name, kind, line, children=None):
+                node = {
+                    "name": name, "kind": kind,
+                    "range": {"start": {"line": line, "character": 0},
+                              "end": {"line": line, "character": 10}},
+                    "selectionRange": {"start": {"line": line, "character": 3},
+                                       "end": {"line": line, "character": 8}},
+                }
+                if children:
+                    node["children"] = children
+                return node
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": [
+                    sym("FakeStruct", 23, 0, [sym("fake_method", 6, 1)]),
+                    sym("fake_function", 12, 4),
+                ],
             })
         elif method == "textDocument/references":
             uri = message["params"]["textDocument"]["uri"]

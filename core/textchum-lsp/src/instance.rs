@@ -223,11 +223,16 @@ fn run_manager(
     status(&events, &server_id, &root, "running", "");
 
     // --- Reader thread -------------------------------------------------
+    // Set before the orderly shutdown sequence, so the reader can tell
+    // "we closed it" (status `closed`) from "it died" (status `exited`)
+    // — the restart logic must only chase the latter.
+    let orderly = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let reader = {
         let stdin = Arc::clone(&stdin);
         let events = events.clone();
         let server_id = server_id.clone();
         let root = root.clone();
+        let orderly = Arc::clone(&orderly);
         std::thread::Builder::new()
             .name(format!("lsp-{server_id}-reader"))
             .spawn(move || loop {
@@ -258,7 +263,14 @@ fn run_manager(
                     // EOF or a broken pipe both mean the server is gone;
                     // the shell decides what to tell the user.
                     Ok(None) | Err(_) => {
-                        status(&events, &server_id, &root, "exited", "");
+                        let expected = orderly.load(std::sync::atomic::Ordering::SeqCst);
+                        status(
+                            &events,
+                            &server_id,
+                            &root,
+                            if expected { "closed" } else { "exited" },
+                            "",
+                        );
                         return;
                     }
                 }
@@ -314,6 +326,7 @@ fn run_manager(
     }
 
     // --- Orderly exit --------------------------------------------------
+    orderly.store(true, std::sync::atomic::Ordering::SeqCst);
     let shutdown = json!({"jsonrpc": "2.0", "id": 2, "method": "shutdown", "params": null});
     let exit = json!({"jsonrpc": "2.0", "method": "exit", "params": null});
     {

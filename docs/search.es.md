@@ -53,6 +53,17 @@ con `test` en el nombre, es la consulta `foo` más `line contains bar` más
 antes siquiera de abrirlos, así que las búsquedas filtradas siguen siendo
 tan rápidas como las simples.
 
+## La pila de saltos
+
+Cada salto — un resultado de búsqueda, Ir a la Definición, una
+referencia, una entrada del esquema, un `chum` — recuerda de dónde
+partió. **Go Back** (⌃⌘←) recorre esos orígenes; **Go Forward** (⌃⌘→)
+los desanda. La historia se reescribe desde el punto actual: saltar a
+un sitio nuevo descarta el rastro hacia adelante, exactamente como la
+jumplist de vim. Las posiciones sobreviven a las ediciones como
+línea/columna, así que volver tras un cambio aterriza cerca, no
+perdido.
+
 ## Aún no está
 
 - Reemplazar entre archivos.

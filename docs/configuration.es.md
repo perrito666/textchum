@@ -185,6 +185,7 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
 `jumpToDefinition`, `findReferences`, `renameSymbol`, `formatDocument`,
+`documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
 `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —

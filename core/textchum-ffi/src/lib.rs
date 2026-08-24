@@ -313,6 +313,30 @@ pub unsafe extern "C" fn tc_lsp_definition(
     .unwrap_or(0)
 }
 
+/// Requests the document's symbol tree; same contract as
+/// [`tc_lsp_hover`]. The response's `result` is an LSP
+/// `DocumentSymbol[]` (hierarchical) or `SymbolInformation[]` (flat).
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_document_symbols(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool.document_symbols(std::path::Path::new(path))
+    }))
+    .unwrap_or(0)
+}
+
 /// Requests every reference to the symbol at an LSP position, the
 /// declaration included; same contract as [`tc_lsp_hover`]. The
 /// response's `result` is an LSP `Location[]`.
@@ -1862,6 +1886,31 @@ pub unsafe extern "C" fn tc_lsp_set_log_path(path: *const c_char, len: usize) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         textchum_lsp::log::set_path(std::path::Path::new(path));
     }));
+}
+
+/// Forgets one (server, root) instance after a crash; the shell
+/// re-announces the affected documents to spawn a replacement.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; the pointer/length
+/// pairs must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_retire(
+    app: *mut TcApp,
+    server: *const c_char,
+    server_len: usize,
+    root: *const c_char,
+    root_len: usize,
+) {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return;
+    };
+    let (server, root) =
+        unsafe { (str_from_raw(server, server_len), str_from_raw(root, root_len)) };
+    let (Some(server), Some(root)) = (server, root) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| app.pool.retire(server, root)));
 }
 
 /// Shuts down every running server instance. The shell re-announces its

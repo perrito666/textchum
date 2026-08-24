@@ -133,6 +133,16 @@ fn per_project_instances_and_diagnostics() {
                 && json.contains("fake_variable")))
     });
 
+    // Document symbols: a hierarchical tree with children.
+    let symbols_id = pool.document_symbols(&file_b);
+    collect_until(&events, "documentSymbol response", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == symbols_id
+                && json.contains("FakeStruct")
+                && json.contains("fake_method")
+                && json.contains("children")))
+    });
+
     // References: the declaration and one use, both in this file.
     let references_id = pool.references(&file_b, 0, 3);
     collect_until(&events, "references response", &mut seen, |seen| {
@@ -338,5 +348,59 @@ fn dying_server_stderr_and_missing_args_hint_reach_the_log() {
             "log lacks stderr capture or args hint:\n{log}"
         );
         std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn crashes_report_exited_and_retire_allows_a_fresh_instance() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (root, file) = project("proj-crash");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    let mut seen = Vec::new();
+    let running_count = |seen: &[Event]| {
+        seen.iter()
+            .filter(|event| {
+                matches!(event, Event::ServerStatus { status, .. } if status == "running")
+            })
+            .count()
+    };
+    collect_until(&events, "first running", &mut seen, |seen| running_count(seen) >= 1);
+
+    // The scripted server exits on this change — a crash, not a close.
+    pool.did_change(&file, "die");
+    collect_until(&events, "crash reported as exited", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::ServerStatus { status, message, .. }
+            if status == "exited" && message.is_empty()))
+    });
+
+    // Retire the corpse; the next open spawns a replacement.
+    pool.retire("fake", root.to_string_lossy().as_ref());
+    assert!(pool.running().is_empty(), "retired instance forgotten");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    collect_until(&events, "replacement running", &mut seen, |seen| {
+        running_count(seen) >= 2
+    });
+
+    // Our own shutdown is "closed", never "exited" — the restart logic
+    // must not chase it.
+    drop(pool);
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        match events.recv_timeout(Duration::from_millis(100)) {
+            Ok(Event::ServerStatus { status, .. }) if status == "closed" => break,
+            Ok(Event::ServerStatus { status, message, .. }) => {
+                assert!(
+                    !(status == "exited" && message.is_empty()),
+                    "orderly shutdown must not look like a crash"
+                );
+            }
+            Ok(_) => {}
+            Err(_) => assert!(
+                std::time::Instant::now() < deadline,
+                "no closed status after drop"
+            ),
+        }
     }
 }

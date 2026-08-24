@@ -292,6 +292,29 @@ func runSmokeTest() -> Int32 {
     }
     print("auto-indent ok (inherit, deepen, tab/space styles)")
 
+    // Jump stack: back retraces origins, forward returns, and a fresh
+    // jump rewrites the future from the current point.
+    let stack = JumpStack()
+    let locA = JumpLocation(path: "/a", line: 1, character: 0)
+    let locB = JumpLocation(path: "/b", line: 2, character: 0)
+    let locC = JumpLocation(path: "/c", line: 3, character: 0)
+    stack.noteJump(from: locA)  // a → b
+    stack.noteJump(from: locB)  // b → c
+    guard stack.goBack(from: locC) == locB,
+        stack.goBack(from: locB) == locA,
+        stack.goForward(from: locA) == locB,
+        stack.canGoForward
+    else {
+        print("FAIL: jump stack traversal")
+        return 1
+    }
+    stack.noteJump(from: locB)  // a new jump from here…
+    guard !stack.canGoForward, stack.goBack(from: locC) == locB else {
+        print("FAIL: a fresh jump must discard the forward trail")
+        return 1
+    }
+    print("jump stack ok (back, forward, truncation on new jump)")
+
     // Async event round trip: core dispatch thread → main queue.
     var receivedSequence: UInt64?
     let coreApp = CoreApp { event in

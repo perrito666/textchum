@@ -54,6 +54,16 @@ les fichiers avec `test` dans le nom, c'est la requête `foo` plus
 élaguent des fichiers entiers avant même de les ouvrir ; les recherches
 filtrées restent donc aussi rapides que les simples.
 
+## La pile de sauts
+
+Chaque saut — un résultat de recherche, Aller à la Définition, une
+référence, une entrée du plan, un `chum` — retient d'où il est parti.
+**Go Back** (⌃⌘←) remonte ces origines ; **Go Forward** (⌃⌘→) les
+redescend. L'histoire se réécrit depuis le point courant : sauter vers
+un nouvel endroit jette la piste avant, exactement comme la jumplist de
+vim. Les positions survivent aux éditions en ligne/colonne : revenir
+après un changement atterrit près, pas perdu.
+
 ## Pas encore là
 
 - Le remplacement entre fichiers.

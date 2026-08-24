@@ -322,7 +322,9 @@ Prove the architecture end to end before writing real features.
 - LSP client (JSON-RPC over stdio, incremental didChange) and the **instance pool** keyed by
   `(server, root)` with idle shutdown, crash restart + backoff, and a server-status UI.
 - Features in order: diagnostics → hover → completion → go-to-definition → references →
-  rename → formatting (all done) → document symbols.
+  rename → formatting → document symbols (all done). Pool hardening (idle shutdown,
+  crash restart with backoff) done; a jump stack (Go Back/Go Forward, vim-jumplist
+  semantics) records every cross-file jump.
 - Server registry + curated defaults; "server missing" guidance.
 - **Exit — the acceptance test is the original requirement:** open files from two separate
   Python projects and observe two pyright instances, each reporting project-correct
@@ -339,7 +341,7 @@ Prove the architecture end to end before writing real features.
 - Grammar set to ~40 languages; server defaults to ~12.
 - Content search (⇧⌘F, ripgrep crates) and fuzzy file-open (⌘T, nucleo) with the shared
   editable-scope-path design (§3.5); command palette (done — ⇧⌘P, fuzzy over every
-  menu action); document outline (LSP symbols).
+  menu action); document outline (done — ⇧⌘O, LSP symbols, fuzzy-filterable).
 - ~~Themes (§3.7)~~ done: JSON theme format, built-in curated set (default, high
   contrast, Graphite), selection in Settings, and the `--emit-theme` generator.
 - Navigation drawer polish: rename/reveal actions, gitignore-aware filtering options,

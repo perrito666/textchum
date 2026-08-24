@@ -48,6 +48,15 @@ name, is the query `foo` plus `line contains bar` plus
 `file excludes test`. File excludes prune whole files before they are
 even opened, so filtered searches stay as fast as plain ones.
 
+## The jump stack
+
+Every jump — a search result, Jump to Definition, a reference, an
+outline entry, a `chum` open — records where it left from. **Go Back**
+(⌃⌘←) walks those origins; **Go Forward** (⌃⌘→) retraces. The history
+is rewritten from the current point: jumping somewhere new discards the
+forward trail, exactly as vim's jumplist does. Positions survive edits
+as line/column, so going back after a change lands close, not lost.
+
 ## Not there yet
 
 - Replace across files.
