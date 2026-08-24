@@ -93,6 +93,9 @@ defecto solo para esa raíz.
   apliquen a los proyectos anidados dentro de ella, con prioridad para
   el ancestro más cercano. Útil en monorepos: una configuración arriba,
   muchos proyectos debajo.
+- **Ctags fallback** — responde Ir a la Definición desde un índice de
+  Universal Ctags cuando no hay servidor de lenguaje disponible; véase
+  [servidores de lenguaje](language-servers.es.md).
 
 En el archivo, esto vive en una sección `workspace`:
 
@@ -101,6 +104,7 @@ En el archivo, esto vive en una sección `workspace`:
   "workspace": {
     "manifest_projects": false,
     "recursive_config": false,
+    "ctags_fallback": false,
     "projects": {
       "/Users/you/code/monorepo": {
         "manifest_projects": true,

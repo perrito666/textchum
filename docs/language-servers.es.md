@@ -75,6 +75,38 @@ Los cambios se aplican a los servidores arrancados después; el botón
 **Restart Servers Now** de la pestaña retira las instancias en marcha y
 las relanza con la nueva configuración.
 
+## Cuando no hay servidor
+
+Dos redes de seguridad cubren el caso sin servidor:
+
+- **El respaldo con ctags.** Con **Ctags fallback** activado en
+  Ajustes → Projects (como valor por defecto o por proyecto, igual que
+  todos los indicadores de proyecto), Ir a la Definición se responde
+  desde un índice de [Universal Ctags](https://ctags.io) del proyecto
+  siempre que no haya servidor de lenguaje disponible — y también cuando
+  un servidor en marcha no tiene respuesta. El índice se construye en el
+  primer uso y se refresca mientras se sigue saltando; ctags conoce
+  nombres, no semántica, así que es un respaldo, no un reemplazo.
+- **El registro de depuración.** Cada decisión en el camino de «archivo
+  abierto» a «servidor en marcha» — la raíz de proyecto resuelta, qué
+  servidor se eligió y por qué, los fallos de arranque con el `PATH`
+  exacto consultado y cada transición de estado — se añade a:
+
+  ```
+  ~/Library/Logs/Textchum/lsp.log
+  ```
+
+  Cuando un proyecto se queda misteriosamente sin soporte de lenguaje,
+  este archivo nombra la pieza que falta.
+
+Una causa clásica merece nota aparte: las aplicaciones lanzadas desde el
+Finder heredaban el `PATH` mínimo de macOS, que no contiene ninguno de
+los lugares donde realmente viven los servidores de lenguaje (Homebrew,
+npm, cargo, go). Textchum ahora adopta al arrancar el `PATH` de la shell
+de inicio de sesión — más algunos directorios de herramientas
+convencionales — de modo que un servidor que funciona desde la terminal
+funciona también desde el Dock.
+
 ## Por debajo
 
 El cliente vive en el núcleo, tras la misma frontera que todo lo demás:

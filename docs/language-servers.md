@@ -68,6 +68,37 @@ Changes apply to servers started afterwards; the tab's **Restart Servers
 Now** retires running instances and respawns them under the new
 configuration.
 
+## When there is no server
+
+Two safety nets cover the no-server case:
+
+- **The ctags fallback.** With **Ctags fallback** enabled in
+  Settings → Projects (as a default or per project, like every project
+  flag), Jump to Definition is answered from a
+  [Universal Ctags](https://ctags.io) index of the project whenever no
+  language server is available — and whenever a running server has no
+  answer. The index is built on first use and refreshed as you keep
+  jumping; ctags knows names, not semantics, so it is a fallback, not a
+  replacement.
+- **The debug log.** Every decision on the road from "file opened" to
+  "server running" — the resolved project root, which server was chosen
+  and why, spawn failures with the exact `PATH` searched, and every
+  status transition — is appended to:
+
+  ```
+  ~/Library/Logs/Textchum/lsp.log
+  ```
+
+  When a project mysteriously has no language support, this file names
+  the missing piece.
+
+One classic cause deserves a note: apps launched from Finder used to
+inherit macOS's minimal `PATH`, which contains none of the places
+language servers actually live (Homebrew, npm, cargo, go). Textchum now
+adopts the login shell's `PATH` at startup — plus a few conventional
+tool directories — so a server that works from the terminal works from
+the Dock too.
+
 ## Under the hood
 
 The client lives in the core, behind the same boundary as everything

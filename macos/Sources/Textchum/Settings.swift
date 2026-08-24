@@ -73,11 +73,12 @@ final class SettingsModel: ObservableObject {
     }
     @Published private(set) var lspEntries: [LSPEntry] = []
 
-    /// One workspace-behavior row (a project root and its two flags).
+    /// One workspace-behavior row (a project root and its flags).
     struct WorkspaceEntry: Identifiable, Equatable {
         let scope: String
         var manifestProjects: Bool
         var recursiveConfig: Bool
+        var ctagsFallback: Bool
         var id: String { scope }
         var scopeLabel: String { (scope as NSString).lastPathComponent }
     }
@@ -95,6 +96,14 @@ final class SettingsModel: ObservableObject {
             guard !isLoading else { return }
             config.setWorkspaceFlag(
                 root: nil, key: "recursive_config", value: recursiveConfigDefault)
+            persistLSPChange()
+        }
+    }
+    @Published var ctagsFallbackDefault = false {
+        didSet {
+            guard !isLoading else { return }
+            config.setWorkspaceFlag(
+                root: nil, key: "ctags_fallback", value: ctagsFallbackDefault)
             persistLSPChange()
         }
     }
@@ -124,6 +133,7 @@ final class SettingsModel: ObservableObject {
         {
             manifestProjectsDefault = parsed["manifest_projects"] as? Bool ?? false
             recursiveConfigDefault = parsed["recursive_config"] as? Bool ?? false
+            ctagsFallbackDefault = parsed["ctags_fallback"] as? Bool ?? false
             for (root, raw) in parsed["projects"] as? [String: [String: Any]] ?? [:] {
                 entries.append(
                     WorkspaceEntry(
@@ -131,7 +141,9 @@ final class SettingsModel: ObservableObject {
                         manifestProjects: raw["manifest_projects"] as? Bool
                             ?? manifestProjectsDefault,
                         recursiveConfig: raw["recursive_config"] as? Bool
-                            ?? recursiveConfigDefault
+                            ?? recursiveConfigDefault,
+                        ctagsFallback: raw["ctags_fallback"] as? Bool
+                            ?? ctagsFallbackDefault
                     ))
             }
         }
@@ -145,6 +157,8 @@ final class SettingsModel: ObservableObject {
             root: scope, key: "manifest_projects", value: manifestProjectsDefault)
         config.setWorkspaceFlag(
             root: scope, key: "recursive_config", value: recursiveConfigDefault)
+        config.setWorkspaceFlag(
+            root: scope, key: "ctags_fallback", value: ctagsFallbackDefault)
         persistWorkspaceChange()
     }
 
@@ -156,6 +170,7 @@ final class SettingsModel: ObservableObject {
     func removeWorkspaceEntry(_ entry: WorkspaceEntry) {
         config.setWorkspaceFlag(root: entry.scope, key: "manifest_projects", value: nil)
         config.setWorkspaceFlag(root: entry.scope, key: "recursive_config", value: nil)
+        config.setWorkspaceFlag(root: entry.scope, key: "ctags_fallback", value: nil)
         persistWorkspaceChange()
     }
 
@@ -317,7 +332,8 @@ private struct ProjectsTab: View {
                     + "\"manifest projects\" lets nested language manifests (pyproject.toml, "
                     + "Cargo.toml, …) split it into sub-projects, and \"recursive config\" "
                     + "makes a root's per-project settings apply to the nested projects "
-                    + "beneath it."
+                    + "beneath it. \"Ctags fallback\" answers Jump to Definition from a "
+                    + "Universal Ctags index when no language server is available."
             )
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -327,6 +343,7 @@ private struct ProjectsTab: View {
                 HStack(spacing: 24) {
                     Toggle("Manifest projects", isOn: $model.manifestProjectsDefault)
                     Toggle("Recursive config", isOn: $model.recursiveConfigDefault)
+                    Toggle("Ctags fallback", isOn: $model.ctagsFallbackDefault)
                     Spacer()
                 }
                 .padding(6)
@@ -360,6 +377,16 @@ private struct ProjectsTab: View {
                                 set: {
                                     model.setWorkspaceFlag(
                                         scope: entry.scope, key: "recursive_config",
+                                        value: $0)
+                                }
+                            ))
+                        Toggle(
+                            "Ctags fallback",
+                            isOn: Binding(
+                                get: { entry.ctagsFallback },
+                                set: {
+                                    model.setWorkspaceFlag(
+                                        scope: entry.scope, key: "ctags_fallback",
                                         value: $0)
                                 }
                             ))

@@ -7,6 +7,7 @@
 //! channel; nothing here blocks the caller.
 
 mod instance;
+pub mod log;
 pub mod pool;
 pub mod registry;
 mod transport;

@@ -63,6 +63,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
+        // Language-server debug trail: every pool decision and status
+        // transition, for when "why is there no server?" needs an answer.
+        let logDirectory = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)
+            .first?.appendingPathComponent("Logs/Textchum", isDirectory: true)
+        if let logFile = logDirectory?.appendingPathComponent("lsp.log") {
+            CoreWorkspace.setLSPLogPath(logFile.path)
+        }
+
         // The core's event channel; ping once on launch so a broken
         // channel is caught immediately.
         let coreApp = CoreApp { [weak self] event in
@@ -499,6 +507,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 CoreWorkspace.projectRoot(
                     forPath: path, settingsJSON: self?.config?.workspaceJSON ?? "{}")
             },
+            workspaceSettingsJSON: { [weak self] in self?.config?.workspaceJSON ?? "{}" },
             selectDocument: { [weak self] id in
                 guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
                 else { return }

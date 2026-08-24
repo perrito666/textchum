@@ -716,6 +716,23 @@ char *tc_project_root_for_path(const char *path,
                                uintptr_t settings_len);
 
 /**
+ * A boolean workspace flag for a project root, resolved with the
+ * standard rules (the root's own entry, else the top-level default,
+ * else false) against the workspace settings JSON. Shell-owned flags
+ * (like the ctags fallback) resolve here so the semantics stay in one
+ * place.
+ *
+ * # Safety
+ * All pointer/length pairs must describe readable bytes.
+ */
+bool tc_workspace_flag(const char *settings,
+                       uintptr_t settings_len,
+                       const char *root,
+                       uintptr_t root_len,
+                       const char *key,
+                       uintptr_t key_len);
+
+/**
  * The configuration's `workspace` section, serialized (`{}` when
  * unset). Release with [`tc_string_free`]. Feed it to
  * [`tc_project_root_for_path`] and, combined with the `lsp` section, to
@@ -932,6 +949,17 @@ void tc_config_set_lsp_entry(struct TcConfig *config,
  * `len` readable bytes.
  */
 void tc_lsp_configure(struct TcApp *app, const char *json, uintptr_t len);
+
+/**
+ * Points the LSP debug log at a file (`len` bytes of UTF-8 path),
+ * created (with parent directories) and appended to. Every pool
+ * decision and server status transition is recorded there. Global, not
+ * per-app; an unopenable path silently disables logging.
+ *
+ * # Safety
+ * `path` must point to `len` readable bytes.
+ */
+void tc_lsp_set_log_path(const char *path, uintptr_t len);
 
 /**
  * Shuts down every running server instance. The shell re-announces its

@@ -33,7 +33,8 @@ static SERVERS: &[ServerSpec] = &[
         command: "pyright-langserver",
         args: &["--stdio"],
         languages: &["python"],
-        install_hint: "npm install -g pyright",
+        install_hint: "npm install -g pyright — or pip install python-lsp-server \
+                       and set python to pylsp in Settings → Language Servers",
     },
     ServerSpec {
         id: "gopls",

@@ -118,6 +118,10 @@ impl Drop for Instance {
 }
 
 fn status(events: &EventSender, server: &str, root: &Path, status: &str, message: &str) {
+    crate::log::log(&format!(
+        "status {server} [{}]: {status} {message}",
+        root.display()
+    ));
     let _ = events.send(Event::ServerStatus {
         server: server.to_owned(),
         root: root.to_string_lossy().into_owned(),

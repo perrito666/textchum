@@ -94,6 +94,9 @@ Browse…) remplace les valeurs par défaut pour cette racine seulement.
   s'appliquent aux projets imbriqués qu'elle contient, l'ancêtre le plus
   proche d'abord. Utile pour les monorepos : une configuration en haut,
   beaucoup de projets en dessous.
+- **Ctags fallback** — répond à Aller à la Définition depuis un index
+  Universal Ctags quand aucun serveur de langage n'est disponible ; voir
+  [serveurs de langage](language-servers.fr.md).
 
 Dans le fichier, tout cela vit dans une section `workspace` :
 
@@ -102,6 +105,7 @@ Dans le fichier, tout cela vit dans une section `workspace` :
   "workspace": {
     "manifest_projects": false,
     "recursive_config": false,
+    "ctags_fallback": false,
     "projects": {
       "/Users/you/code/monorepo": {
         "manifest_projects": true,

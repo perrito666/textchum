@@ -86,6 +86,9 @@ for that root only.
   language-server commands, and these very switches) apply to the nested
   projects inside it, closest ancestor first. Useful for monorepos: one
   configuration at the top, many projects underneath.
+- **Ctags fallback** — answers Jump to Definition from a Universal
+  Ctags index when no language server is available; see
+  [language servers](language-servers.md).
 
 In the file, these live in a `workspace` section:
 
@@ -94,6 +97,7 @@ In the file, these live in a `workspace` section:
   "workspace": {
     "manifest_projects": false,
     "recursive_config": false,
+    "ctags_fallback": false,
     "projects": {
       "/Users/you/code/monorepo": {
         "manifest_projects": true,

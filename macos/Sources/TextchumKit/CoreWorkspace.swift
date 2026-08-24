@@ -29,4 +29,47 @@ public enum CoreWorkspace {
         defer { tc_string_free(cString) }
         return String(cString: cString)
     }
+
+    /// A boolean workspace flag for a project root, resolved with the
+    /// standard rules: the root's own entry, else the top-level default,
+    /// else false.
+    public static func flag(_ key: String, root: String, settingsJSON: String) -> Bool {
+        var key = key
+        var root = root
+        var settings = settingsJSON
+        return settings.withUTF8 { settingsBytes in
+            root.withUTF8 { rootBytes in
+                key.withUTF8 { keyBytes in
+                    tc_workspace_flag(
+                        settingsBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(settingsBytes.count),
+                        rootBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(rootBytes.count),
+                        keyBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(keyBytes.count)
+                    )
+                }
+            }
+        }
+    }
+
+    /// Points the language-server debug log at a file, created (with
+    /// parent directories) on first write and appended to.
+    public static func setLSPLogPath(_ path: String) {
+        var path = path
+        path.withUTF8 { bytes in
+            tc_lsp_set_log_path(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count)
+            )
+        }
+    }
 }

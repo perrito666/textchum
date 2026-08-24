@@ -50,7 +50,10 @@ impl WorkspaceSettings {
         }
     }
 
-    fn flag(&self, root: &Path, key: &str) -> bool {
+    /// A named boolean: the project's own entry when present, else the
+    /// top-level default, else false. Public because shells resolve their
+    /// own flags (like the ctags fallback) with the same rules.
+    pub fn flag(&self, root: &Path, key: &str) -> bool {
         let per_project =
             self.parsed["projects"][root.to_string_lossy().as_ref()][key].as_bool();
         per_project.unwrap_or_else(|| self.parsed[key].as_bool().unwrap_or(false))

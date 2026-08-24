@@ -37,6 +37,9 @@ struct SidebarConfiguration {
     let treeState: FileTreeState
     /// Settings-aware project-root resolution (workspace toggles apply).
     let resolveProjectRoot: (String) -> String?
+    /// The configuration's current `workspace` section, for flags the
+    /// editor resolves itself (the ctags fallback).
+    var workspaceSettingsJSON: () -> String = { "{}" }
     let selectDocument: (ObjectIdentifier) -> Void
     let openFile: (String) -> Void
 }
@@ -106,6 +109,8 @@ final class EditorWindowController: NSWindowController {
     private let openLocation: ((String, Int, Int) -> Void)?
     /// Settings-aware project-root resolution from the app.
     private let resolveProjectRoot: (String) -> String?
+    /// The configuration's live `workspace` section, for flag lookups.
+    private let workspaceSettingsJSON: () -> String
 
     init(
         document: CoreDocument,
@@ -119,6 +124,7 @@ final class EditorWindowController: NSWindowController {
         self.openLocation = openLocation
         self.resolveProjectRoot =
             sidebar?.resolveProjectRoot ?? { CoreWorkspace.projectRoot(forPath: $0) }
+        self.workspaceSettingsJSON = sidebar?.workspaceSettingsJSON ?? { "{}" }
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 480),
@@ -343,19 +349,67 @@ final class EditorWindowController: NSWindowController {
 
     // MARK: Go to definition
 
-    /// Jumps to the definition of the symbol under the caret.
+    /// Jumps to the definition of the symbol under the caret: the
+    /// language server's answer, or the ctags index for projects that
+    /// opted into the fallback (also consulted when the server has no
+    /// answer).
     @objc func jumpToDefinition(_ sender: Any?) {
-        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        guard let textView else { return }
+        guard let lspApp, let path = lspOpenPath else {
+            if !ctagsJump() { NSSound.beep() }
+            return
+        }
         let text = textView.string as NSString
         let index = min(textView.selectedRange().location, text.length)
         let (line, character) = Self.lspPosition(ofIndex: index, in: text)
         lspApp.lspDefinition(path: path, line: line, character: character) { [weak self] json in
-            guard let location = Self.firstLocation(fromResultJSON: json) else {
+            guard let self else { return }
+            if let location = Self.firstLocation(fromResultJSON: json) {
+                self.openLocation?(location.path, location.line, location.character)
+            } else if !self.ctagsJump() {
                 NSSound.beep()
-                return
             }
-            self?.openLocation?(location.path, location.line, location.character)
         }
+    }
+
+    /// Whether this document's project opted into the ctags fallback.
+    var ctagsFallbackEnabled: Bool {
+        guard let projectRoot else { return false }
+        return CoreWorkspace.flag(
+            "ctags_fallback", root: projectRoot, settingsJSON: workspaceSettingsJSON())
+    }
+
+    /// Jump via the ctags index; false when disabled, or nothing matched.
+    @discardableResult
+    private func ctagsJump() -> Bool {
+        guard ctagsFallbackEnabled, let projectRoot,
+            let name = symbolUnderCaret(),
+            let target = CtagsIndex.shared.definition(of: name, in: projectRoot)
+        else { return false }
+        openLocation?(target.path, target.line, 0)
+        return true
+    }
+
+    /// The identifier around the caret (letters, digits, underscore).
+    private func symbolUnderCaret() -> String? {
+        guard let textView else { return nil }
+        let text = textView.string as NSString
+        var identifier = CharacterSet.alphanumerics
+        identifier.insert("_")
+        let isWord: (Int) -> Bool = { index in
+            guard index >= 0, index < text.length,
+                let scalar = UnicodeScalar(text.character(at: index))
+            else { return false }
+            return identifier.contains(scalar)
+        }
+        var start = min(textView.selectedRange().location, text.length)
+        // A caret just past the last character of a word still means it.
+        if !isWord(start), isWord(start - 1) { start -= 1 }
+        guard isWord(start) else { return nil }
+        var end = start + 1
+        while isWord(start - 1) { start -= 1 }
+        while isWord(end) { end += 1 }
+        return text.substring(with: NSRange(location: start, length: end - start))
     }
 
     /// Extracts the first target from an LSP definition result: a
@@ -1342,7 +1396,7 @@ extension EditorWindowController: NSMenuItemValidation {
         case #selector(performRedo(_:)):
             return coreDocument.canRedo
         case #selector(jumpToDefinition(_:)):
-            return lspOpenPath != nil
+            return lspOpenPath != nil || ctagsFallbackEnabled
         case #selector(goToBlockStart(_:)), #selector(goToBlockEnd(_:)):
             return coreDocument.languageName != nil
         case #selector(togglePreview(_:)):

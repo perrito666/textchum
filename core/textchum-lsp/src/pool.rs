@@ -102,6 +102,17 @@ impl Pool {
             self.configured = parsed;
         }
         self.failed.clear();
+        let keys = |section: &str| -> Vec<String> {
+            self.configured[section]
+                .as_object()
+                .map(|o| o.keys().cloned().collect())
+                .unwrap_or_default()
+        };
+        crate::log::log(&format!(
+            "configure: default languages {:?}, project entries {:?}",
+            keys("defaults"),
+            keys("projects"),
+        ));
     }
 
     /// Shuts down every running instance and forgets open-document
@@ -182,11 +193,29 @@ impl Pool {
     /// on first use.
     pub fn did_open(&mut self, path: &Path, language: &str, text: &str) {
         let root = self.root_for(path);
+        crate::log::log(&format!(
+            "open {} language={language} root={}",
+            path.display(),
+            root.display()
+        ));
         let Some(config) = self.config_for(&root, language) else {
+            crate::log::log(&format!(
+                "no server for language {language}: not configured and not in the registry"
+            ));
             return;
         };
+        crate::log::log(&format!(
+            "server for {language}: {} ({} {:?})",
+            config.id, config.command, config.args
+        ));
         let key = (config.id.clone(), root.clone());
         if self.failed.contains(&key) {
+            crate::log::log(&format!(
+                "{} at {} failed earlier this session; not retrying until \
+                 restart or configuration change",
+                config.id,
+                root.display()
+            ));
             return;
         }
         if !self.instances.contains_key(&key) {
@@ -194,7 +223,13 @@ impl Pool {
                 Ok(instance) => {
                     self.instances.insert(key.clone(), instance);
                 }
-                Err(_) => {
+                Err(error) => {
+                    crate::log::log(&format!(
+                        "spawn failed for {} ({}): {error}; PATH={}",
+                        config.id,
+                        config.command,
+                        std::env::var("PATH").unwrap_or_default()
+                    ));
                     self.failed.insert(key);
                     let _ = self.events.send(Event::ServerStatus {
                         server: config.id.clone(),

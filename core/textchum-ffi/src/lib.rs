@@ -1091,6 +1091,40 @@ pub unsafe extern "C" fn tc_project_root_for_path(
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// A boolean workspace flag for a project root, resolved with the
+/// standard rules (the root's own entry, else the top-level default,
+/// else false) against the workspace settings JSON. Shell-owned flags
+/// (like the ctags fallback) resolve here so the semantics stay in one
+/// place.
+///
+/// # Safety
+/// All pointer/length pairs must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_workspace_flag(
+    settings: *const c_char,
+    settings_len: usize,
+    root: *const c_char,
+    root_len: usize,
+    key: *const c_char,
+    key_len: usize,
+) -> bool {
+    let (settings, root, key) = unsafe {
+        (
+            str_from_raw(settings, settings_len),
+            str_from_raw(root, root_len),
+            str_from_raw(key, key_len),
+        )
+    };
+    let (Some(settings_json), Some(root), Some(key)) = (settings, root, key) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::workspace::WorkspaceSettings::from_json(settings_json)
+            .flag(std::path::Path::new(root), key)
+    }))
+    .unwrap_or(false)
+}
+
 /// The configuration's `workspace` section, serialized (`{}` when
 /// unset). Release with [`tc_string_free`]. Feed it to
 /// [`tc_project_root_for_path`] and, combined with the `lsp` section, to
@@ -1585,6 +1619,23 @@ pub unsafe extern "C" fn tc_lsp_configure(app: *mut TcApp, json: *const c_char, 
         return;
     };
     let _ = catch_unwind(AssertUnwindSafe(|| app.pool.configure(json)));
+}
+
+/// Points the LSP debug log at a file (`len` bytes of UTF-8 path),
+/// created (with parent directories) and appended to. Every pool
+/// decision and server status transition is recorded there. Global, not
+/// per-app; an unopenable path silently disables logging.
+///
+/// # Safety
+/// `path` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_set_log_path(path: *const c_char, len: usize) {
+    let Some(path) = (unsafe { str_from_raw(path, len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        textchum_lsp::log::set_path(std::path::Path::new(path));
+    }));
 }
 
 /// Shuts down every running server instance. The shell re-announces its
