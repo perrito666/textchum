@@ -1,0 +1,61 @@
+site_name: Textchum
+site_description: A fast, native text editor for macOS with a portable compiled core.
+repo_url: https://github.com/perrito666/textchum
+repo_name: perrito666/textchum
+
+theme:
+  name: material
+  features:
+    - navigation.footer
+    - navigation.sections
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.highlight
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: es
+          name: Español
+          build: true
+          nav_translations:
+            Home: Inicio
+            Getting started: Primeros pasos
+            Architecture: Arquitectura
+            The C boundary: La frontera C
+        - locale: fr
+          name: Français
+          build: true
+          nav_translations:
+            Home: Accueil
+            Getting started: Premiers pas
+            Architecture: Architecture
+            The C boundary: La frontière C
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Architecture: architecture.md
+  - The C boundary: ffi.md
