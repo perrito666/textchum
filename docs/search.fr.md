@@ -26,6 +26,19 @@ La requête est une expression régulière ; les résultats arrivent en
 Les résultats sont plafonnés (200) pour rester instantanés ; affinez le
 motif plutôt que de faire défiler.
 
+La casse suit la règle **smart case** popularisée par ripgrep : une
+requête tout en minuscules correspond à n'importe quelle casse, tandis
+qu'une requête contenant une majuscule est cherchée telle quelle. Ainsi
+`todo` trouve `TODO`, et `TODO` ne trouve que `TODO`.
+
+Une ligne sous les résultats dit ce qu'a fait la recherche — « 18
+matches in 4 files · 812 searched », « No matches in 812 files
+searched », ou la raison pour laquelle rien n'a pu être cherché (une
+portée inexistante, une où tout est ignoré, ou un motif invalide, cité).
+Un résultat vide n'est jamais muet : un motif mal tapé ou une portée
+erronée s'annoncent au lieu de ressembler à une absence de
+correspondances.
+
 ## Filtres empilés
 
 Sous la requête de Chercher dans le projet, **＋ Add Filter** empile des

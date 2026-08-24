@@ -23,6 +23,18 @@ The query is a regular expression; results stream in as
 `path:line: text`. ⏎ jumps straight to the matching line. Results are
 capped (200) to stay instant; refine the pattern rather than scrolling.
 
+Case follows the **smart-case** rule ripgrep made familiar: an all
+lowercase query matches any case, while a query containing an uppercase
+letter is matched exactly. So `todo` finds `TODO`, and `TODO` finds
+only `TODO`.
+
+A line under the results says what the search did — "18 matches in 4
+files · 812 searched", "No matches in 812 files searched", or the
+reason nothing could be searched at all (a scope that does not exist,
+one where everything is ignored, or a bad pattern, quoted). An empty
+result is never mute, so a mistyped pattern or a wrong scope announces
+itself instead of looking like an absence of matches.
+
 ## Stacked filters
 
 Under the Find in Project query, **＋ Add Filter** stacks refinements:
@@ -39,6 +51,6 @@ even opened, so filtered searches stay as fast as plain ones.
 ## Not there yet
 
 - Replace across files.
-- Case/whole-word toggles in the panel (the pattern itself can express
-  both).
+- Explicit case/whole-word toggles in the panel (smart case covers the
+  common case, and the pattern itself can express both).
 - Persisted search history.

@@ -40,6 +40,8 @@ final class QuickFinderPanel: NSObject {
     private let addFilterButton = NSButton(
         title: "＋ Add Filter", target: nil, action: nil)
     private let table = NSTableView()
+    /// Says what the last search did, so an empty list is never mute.
+    private let statusLabel = NSTextField(labelWithString: "")
     private var rows: [(display: String, path: String, line: Int)] = []
     private var searchGeneration = 0
     private var debounce: Timer?
@@ -111,7 +113,13 @@ final class QuickFinderPanel: NSObject {
         let addRow = NSStackView(views: [addFilterButton, NSView()])
         addRow.orientation = .horizontal
 
-        let stack = NSStackView(views: [scopeField, queryField, filtersStack, addRow, scroll])
+        statusLabel.font = .systemFont(ofSize: 11)
+        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.lineBreakMode = .byTruncatingTail
+
+        let stack = NSStackView(views: [
+            scopeField, queryField, filtersStack, addRow, scroll, statusLabel,
+        ])
         stack.orientation = .vertical
         stack.spacing = 6
         stack.edgeInsets = NSEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
@@ -217,26 +225,54 @@ final class QuickFinderPanel: NSObject {
         // Pure core functions, run off the main thread; stale results
         // (an older generation) are dropped on arrival.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let results: [(String, String, Int)]
+            var results: [(String, String, Int)] = []
+            var status = ""
             switch mode {
             case .files:
-                results = CoreSearch.fuzzyFiles(root: scope, query: query, limit: 100)
-                    .map { ($0, "\(scope)/\($0)", 0) }
+                let names = CoreSearch.fuzzyFiles(root: scope, query: query, limit: 100)
+                results = names.map { ($0, "\(scope)/\($0)", 0) }
+                if names.isEmpty {
+                    status =
+                        FileManager.default.fileExists(atPath: scope)
+                        ? "No files match — is the scope right?"
+                        : "That scope does not exist."
+                }
             case .grep:
                 if query.isEmpty {
-                    results = []
+                    status = "Type to search."
                 } else {
-                    let hits = try? CoreSearch.grep(
-                        root: scope, pattern: query, limit: 200, filters: filters)
-                    results = (hits ?? []).map {
-                        ("\($0.path):\($0.line): \($0.text)", "\(scope)/\($0.path)", $0.line)
+                    do {
+                        // Smart case, as ripgrep does it: a lowercase
+                        // query matches any case, a query with an
+                        // uppercase letter is taken literally.
+                        let smartCase = query == query.lowercased()
+                        let found = try CoreSearch.grep(
+                            root: scope, pattern: query, caseInsensitive: smartCase,
+                            limit: 200, filters: filters)
+                        results = found.hits.map {
+                            ("\($0.path):\($0.line): \($0.text)", "\(scope)/\($0.path)", $0.line)
+                        }
+                        status = Self.status(for: found, scope: scope)
+                    } catch let error as CoreIOError {
+                        // A bad pattern used to read as "no results".
+                        // The regex crate's message spans lines with a
+                        // caret diagram; one line fits the status strip.
+                        status = error.message
+                            .components(separatedBy: .newlines)
+                            .map { $0.trimmingCharacters(in: .whitespaces) }
+                            .filter { !$0.isEmpty && $0 != "^" }
+                            .joined(separator: " ")
+                    } catch {
+                        status = "\(error)"
                     }
                 }
             }
+            let finalStatus = status
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self, self.searchGeneration == generation else { return }
                     self.rows = results
+                    self.statusLabel.stringValue = finalStatus
                     self.table.reloadData()
                     if !results.isEmpty {
                         self.table.selectRowIndexes([0], byExtendingSelection: false)
@@ -244,6 +280,26 @@ final class QuickFinderPanel: NSObject {
                 }
             }
         }
+    }
+
+    /// One line explaining what the search did — the difference between
+    /// "your query matched nothing" and "nothing was read at all".
+    private static func status(for results: CoreSearch.Results, scope: String) -> String {
+        let stats = results.stats
+        if !results.hits.isEmpty {
+            let files = Set(results.hits.map(\.path)).count
+            return "\(results.hits.count) matches in \(files) "
+                + "file\(files == 1 ? "" : "s") · \(stats.filesSearched) searched"
+        }
+        if !FileManager.default.fileExists(atPath: scope) {
+            return "That scope does not exist."
+        }
+        if stats.filesSearched == 0 {
+            return stats.unreadable > 0
+                ? "Nothing readable in this scope (\(stats.unreadable) entries denied)."
+                : "No files to search here — everything is ignored or the scope is empty."
+        }
+        return "No matches in \(stats.filesSearched) files searched."
     }
 
     /// Debug hook: force scope and query and search immediately.

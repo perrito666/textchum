@@ -100,12 +100,50 @@ pub fn fuzzy_files(root: &Path, query: &str, limit: usize) -> Vec<String> {
 /// Searches file contents under `root` for `pattern` (a regex), returning
 /// up to `limit` hits. Binary files quit at the first NUL; unreadable
 /// files are skipped. Errors are bad patterns, phrased for humans.
+/// What a search actually did, so an empty result can explain itself:
+/// "no matches in 4,000 files" is a query problem, "0 files" is a scope
+/// or permission problem.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SearchStats {
+    /// Files the walker offered (before filters).
+    pub files_seen: usize,
+    /// Files actually opened and searched.
+    pub files_searched: usize,
+    /// Entries the walker could not read (permissions, broken links).
+    pub errors: usize,
+}
+
+/// [`grep`] with the counts of what was walked and read.
+pub fn grep_with_stats(
+    root: &Path,
+    pattern: &str,
+    case_insensitive: bool,
+    limit: usize,
+    filters: &[Filter],
+) -> Result<(Vec<SearchHit>, SearchStats), String> {
+    let mut stats = SearchStats::default();
+    let hits = grep_inner(root, pattern, case_insensitive, limit, filters, &mut stats)?;
+    Ok((hits, stats))
+}
+
 pub fn grep(
     root: &Path,
     pattern: &str,
     case_insensitive: bool,
     limit: usize,
     filters: &[Filter],
+) -> Result<Vec<SearchHit>, String> {
+    let mut stats = SearchStats::default();
+    grep_inner(root, pattern, case_insensitive, limit, filters, &mut stats)
+}
+
+fn grep_inner(
+    root: &Path,
+    pattern: &str,
+    case_insensitive: bool,
+    limit: usize,
+    filters: &[Filter],
+    stats: &mut SearchStats,
 ) -> Result<Vec<SearchHit>, String> {
     let matcher = grep_regex::RegexMatcherBuilder::new()
         .case_insensitive(case_insensitive)
@@ -132,14 +170,24 @@ pub fn grep(
     for entry in ignore::WalkBuilder::new(root)
         .max_filesize(Some(MAX_FILE_SIZE))
         .build()
-        .flatten()
     {
         if hits.len() >= limit {
             break;
         }
+        // Unreadable entries are counted rather than silently dropped:
+        // a scope that yields nothing but errors is a permissions
+        // problem, and the caller can say so.
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => {
+                stats.errors += 1;
+                continue;
+            }
+        };
         if !entry.file_type().is_some_and(|t| t.is_file()) {
             continue;
         }
+        stats.files_seen += 1;
         let Ok(relative) = entry.path().strip_prefix(root) else {
             continue;
         };
@@ -148,6 +196,7 @@ pub fn grep(
         if !file_filters.iter().all(|f| f.passes(&relative)) {
             continue;
         }
+        stats.files_searched += 1;
         let _ = searcher.search_path(
             &matcher,
             entry.path(),
@@ -279,5 +328,33 @@ mod tests {
         let root = project("grep_rejects_bad_patterns_gracefully");
         let error = grep(&root, "unclosed(", false, 10, &[]).unwrap_err();
         assert!(error.contains("bad pattern"), "got: {error}");
+    }
+
+    #[test]
+    fn stats_separate_no_matches_from_nothing_searched() {
+        let root = project("stats_separate_no_matches_from_nothing_searched");
+        // A query that matches nothing still reports the files it read.
+        let (hits, stats) =
+            grep_with_stats(&root, "zzz-not-here-zzz", false, 10, &[]).unwrap();
+        assert!(hits.is_empty());
+        assert!(stats.files_searched > 0, "files were searched: {stats:?}");
+        assert_eq!(stats.files_seen, stats.files_searched, "no filters, no pruning");
+
+        // An empty scope reads nothing at all — the case that used to be
+        // indistinguishable from "no matches".
+        let empty = root.join("empty-dir");
+        std::fs::create_dir_all(&empty).unwrap();
+        let (hits, stats) = grep_with_stats(&empty, "anything", false, 10, &[]).unwrap();
+        assert!(hits.is_empty());
+        assert_eq!(stats.files_searched, 0, "nothing to search: {stats:?}");
+
+        // File filters prune before opening, which the counts show.
+        let filters = [Filter {
+            kind: FilterKind::File,
+            include: true,
+            pattern: "no-such-name".into(),
+        }];
+        let (_, stats) = grep_with_stats(&root, "fn", false, 10, &filters).unwrap();
+        assert!(stats.files_seen > 0 && stats.files_searched == 0, "{stats:?}");
     }
 }

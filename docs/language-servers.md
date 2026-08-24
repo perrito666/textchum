@@ -88,7 +88,11 @@ Two safety nets cover the no-server case:
   language server is available — and whenever a running server has no
   answer. The index is built on first use and refreshed as you keep
   jumping; ctags knows names, not semantics, so it is a fallback, not a
-  replacement.
+  replacement. It must be *Universal* Ctags (`brew install
+  universal-ctags`) — the `ctags` macOS ships in `/usr/bin` is a
+  different, much older program that cannot emit the JSON index this
+  reads. Textchum looks past that one to find a real Universal Ctags
+  further along your `PATH`.
 - **The debug log.** Every decision on the road from "file opened" to
   "server running" — the resolved project root, which server was chosen
   and why, spawn failures with the exact `PATH` searched, and every

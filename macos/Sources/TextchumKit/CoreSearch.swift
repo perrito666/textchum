@@ -51,13 +51,28 @@ public enum CoreSearch {
         }
     }
 
+    /// What a search did, beyond what it found — an empty result set
+    /// with `filesSearched == 0` is a scope or permissions problem, not
+    /// a query that matched nothing.
+    public struct Stats: Sendable, Equatable {
+        public var filesSeen = 0
+        public var filesSearched = 0
+        public var unreadable = 0
+    }
+
+    /// Hits plus the statistics of the search that produced them.
+    public struct Results: Sendable, Equatable {
+        public var hits: [Hit] = []
+        public var stats = Stats()
+    }
+
     /// Searches file contents under `root` for the regex `pattern`,
     /// narrowed by `filters`. Throws a ``CoreIOError`` with the core's
     /// message on a bad pattern.
     public static func grep(
         root: String, pattern: String, caseInsensitive: Bool = false, limit: Int = 200,
         filters: [Filter] = []
-    ) throws -> [Hit] {
+    ) throws -> Results {
         let filtersJSON =
             (try? JSONEncoder().encode(filters)).flatMap { String(data: $0, encoding: .utf8) }
             ?? "[]"
@@ -80,12 +95,23 @@ public enum CoreSearch {
             tc_string_free(error)
             throw CoreIOError(message: message)
         }
-        guard let joined, !joined.isEmpty else { return [] }
-        return joined.components(separatedBy: "\n").compactMap { row in
+        guard let joined, !joined.isEmpty else { return Results() }
+        var rows = joined.components(separatedBy: "\n")
+        // The first record is the search's own account of itself.
+        var stats = Stats()
+        let header = rows.removeFirst().components(separatedBy: "\u{1f}")
+        if header.count >= 3 {
+            stats = Stats(
+                filesSeen: Int(header[0]) ?? 0,
+                filesSearched: Int(header[1]) ?? 0,
+                unreadable: Int(header[2]) ?? 0)
+        }
+        let hits = rows.compactMap { row -> Hit? in
             let fields = row.components(separatedBy: "\u{1f}")
             guard fields.count >= 3, let line = Int(fields[1]) else { return nil }
             return Hit(path: fields[0], line: line, text: fields[2])
         }
+        return Results(hits: hits, stats: stats)
     }
 }
 

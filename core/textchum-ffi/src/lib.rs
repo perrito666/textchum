@@ -1677,11 +1677,15 @@ pub unsafe extern "C" fn tc_fuzzy_files(
     .unwrap_or(std::ptr::null_mut())
 }
 
-/// Searches file contents under `root` for the regex `pattern`. Each hit
-/// is `path \x1f line \x1f text`, hits joined by `\n`, as one string
-/// (release with [`tc_string_free`]); empty string for no hits. On a bad
-/// pattern returns null and fills the optional `error_out` (release with
-/// [`tc_string_free`]). Pure function — callable from any thread.
+/// Searches file contents under `root` for the regex `pattern`. Returns
+/// one string (release with [`tc_string_free`]) of `\n`-joined records:
+/// the **first line is always statistics** —
+/// `files_seen \x1f files_searched \x1f unreadable` — and each line after
+/// it is a hit, `path \x1f line \x1f text`. A search with no hits still
+/// returns its statistics line, so callers can tell "nothing matched"
+/// from "nothing was readable". On a bad pattern returns null and fills
+/// the optional `error_out` (release with [`tc_string_free`]). Pure
+/// function — callable from any thread.
 ///
 /// `filters` (`filters_len` bytes; may be empty) is a JSON array of
 /// stacked refinements applied case-insensitively as substrings:
@@ -1717,18 +1721,24 @@ pub unsafe extern "C" fn tc_grep(
     };
     let filters = parse_filters(filters_json);
     catch_unwind(AssertUnwindSafe(|| {
-        match textchum_core::search::grep(
+        match textchum_core::search::grep_with_stats(
             std::path::Path::new(root),
             pattern,
             case_insensitive,
             limit,
             &filters,
         ) {
-            Ok(hits) => {
-                let joined: Vec<String> = hits
-                    .into_iter()
-                    .map(|hit| format!("{}\x1f{}\x1f{}", hit.path, hit.line, hit.text))
-                    .collect();
+            Ok((hits, stats)) => {
+                // The first line is always the search's own account of
+                // itself: files seen, files searched, unreadable entries.
+                let mut joined = vec![format!(
+                    "{}\x1f{}\x1f{}",
+                    stats.files_seen, stats.files_searched, stats.errors
+                )];
+                joined.extend(
+                    hits.into_iter()
+                        .map(|hit| format!("{}\x1f{}\x1f{}", hit.path, hit.line, hit.text)),
+                );
                 owned_c_string(joined.join("\n"))
             }
             Err(error) => {

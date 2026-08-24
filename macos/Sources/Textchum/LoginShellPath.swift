@@ -8,10 +8,8 @@ import Foundation
 /// appending a few conventional tool directories fixes that for the
 /// whole process, language servers and ctags alike.
 func adoptLoginShellPath() {
-    var components = (ProcessInfo.processInfo.environment["PATH"] ?? "")
-        .split(separator: ":")
-        .map(String.init)
-    var seen = Set(components)
+    var components: [String] = []
+    var seen = Set<String>()
     func add(_ directory: String) {
         guard !seen.contains(directory),
             FileManager.default.fileExists(atPath: directory)
@@ -20,6 +18,9 @@ func adoptLoginShellPath() {
         components.append(directory)
     }
 
+    // Order matters as much as membership: the login shell's PATH goes
+    // first, so a tool the user installed (Homebrew's ctags, say) wins
+    // over the older system copy in /usr/bin that shares its name.
     for directory in loginShellPath()?.split(separator: ":").map(String.init) ?? [] {
         add(directory)
     }
@@ -28,6 +29,13 @@ func adoptLoginShellPath() {
         "/opt/homebrew/bin", "/usr/local/bin",
         "\(home)/.cargo/bin", "\(home)/go/bin", "\(home)/.local/bin",
     ] {
+        add(directory)
+    }
+    // The inherited (Finder-minimal) PATH last: it is the fallback, not
+    // the authority.
+    for directory in (ProcessInfo.processInfo.environment["PATH"] ?? "")
+        .split(separator: ":").map(String.init)
+    {
         add(directory)
     }
     setenv("PATH", components.joined(separator: ":"), 1)

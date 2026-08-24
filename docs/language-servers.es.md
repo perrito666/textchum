@@ -98,7 +98,11 @@ Dos redes de seguridad cubren el caso sin servidor:
   siempre que no haya servidor de lenguaje disponible — y también cuando
   un servidor en marcha no tiene respuesta. El índice se construye en el
   primer uso y se refresca mientras se sigue saltando; ctags conoce
-  nombres, no semántica, así que es un respaldo, no un reemplazo.
+  nombres, no semántica, así que es un respaldo, no un reemplazo. Debe
+  ser *Universal* Ctags (`brew install universal-ctags`): el `ctags` que
+  macOS trae en `/usr/bin` es otro programa, mucho más antiguo, que no
+  puede emitir el índice JSON que esto lee. Textchum mira más allá de
+  ese para encontrar un Universal Ctags real en el `PATH`.
 - **El registro de depuración.** Cada decisión en el camino de «archivo
   abierto» a «servidor en marcha» — la raíz de proyecto resuelta, qué
   servidor se eligió y por qué, los fallos de arranque con el `PATH`

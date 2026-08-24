@@ -173,7 +173,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         return
                     }
                     self?.showQuickFinder(mode: mode)
-                    self?.quickFinder.debugSet(scope: scope, query: query, filters: filters)
+                    // "-" means "leave the scope the app chose", so the
+                    // debug path exercises the real default.
+                    self?.quickFinder.debugSet(
+                        scope: scope == "-" ? (self?.currentScope ?? "") : scope,
+                        query: query, filters: filters)
                 }
             }
         }
@@ -648,7 +652,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// The search scope for the key window: its project, else its file's
     /// directory, else home — always shown editable in the panel.
-    private var currentScope: String {
+    var currentScope: String {
         let keyEditor = editors.first { $0.window?.isKeyWindow == true } ?? editors.first
         if let root = keyEditor?.projectRoot { return root }
         if let path = keyEditor?.coreDocument.path {

@@ -26,6 +26,18 @@ La consulta es una expresión regular; los resultados llegan como
 resultados tienen tope (200) para seguir siendo instantáneos; refine el
 patrón en lugar de desplazarse.
 
+Las mayúsculas siguen la regla **smart case** que popularizó ripgrep:
+una consulta toda en minúsculas coincide con cualquier caja, mientras
+que una consulta con alguna mayúscula se busca tal cual. Así `todo`
+encuentra `TODO`, y `TODO` solo encuentra `TODO`.
+
+Una línea bajo los resultados dice qué hizo la búsqueda — «18 matches
+in 4 files · 812 searched», «No matches in 812 files searched» o el
+motivo de que no se pudiera buscar nada (un ámbito inexistente, uno
+donde todo está ignorado o un patrón inválido, citado). Un resultado
+vacío nunca es mudo: un patrón mal escrito o un ámbito equivocado se
+anuncian en vez de parecer una ausencia de coincidencias.
+
 ## Filtros apilados
 
 Bajo la consulta de Buscar en el proyecto, **＋ Add Filter** apila

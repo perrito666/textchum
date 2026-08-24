@@ -100,7 +100,11 @@ Deux filets de sécurité couvrent le cas sans serveur :
   langage n'est disponible — et aussi quand un serveur en marche n'a pas
   de réponse. L'index se construit au premier usage et se rafraîchit au
   fil des sauts ; ctags connaît des noms, pas la sémantique : c'est un
-  repli, pas un remplacement.
+  repli, pas un remplacement. Il faut *Universal* Ctags (`brew install
+  universal-ctags`) : le `ctags` livré par macOS dans `/usr/bin` est un
+  autre programme, bien plus ancien, incapable de produire l'index JSON
+  que ceci lit. Textchum regarde au-delà de celui-ci pour trouver un
+  vrai Universal Ctags plus loin dans le `PATH`.
 - **Le journal de débogage.** Chaque décision sur le chemin de « fichier
   ouvert » à « serveur en marche » — la racine de projet résolue, quel
   serveur a été choisi et pourquoi, les échecs de lancement avec le
