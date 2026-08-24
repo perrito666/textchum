@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var config: CoreConfig?
     private var settingsModel: SettingsModel?
     private var settingsWindowController: SettingsWindowController?
+    private let sidebarModel = SidebarModel()
     /// Strong references to open editors; windows do not retain their
     /// controllers. Entries are removed as their windows close.
     private var editors: [EditorWindowController] = []
@@ -28,11 +29,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsModel = SettingsModel(config: config)
         settingsModel.onChange = { [weak self] in
             guard let self, let model = self.settingsModel else { return }
+            self.applyAppearanceChoice()
             for editor in self.editors {
                 editor.apply(settings: model.currentSettings)
             }
         }
         self.settingsModel = settingsModel
+        applyAppearanceChoice()
+
+        NotificationCenter.default.addObserver(
+            forName: .textchumDocumentsChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            // Deferred a runloop turn: the notification can fire while
+            // AppKit is mid-layout (e.g. from a window-title update), and
+            // rebuilding the list reentrantly trips NSTableView.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.rebuildSidebar() }
+            }
+        }
 
         // The core's event channel (diagnostics and more will arrive here);
         // ping once on launch so a broken channel is caught immediately.
@@ -84,6 +98,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateNow
     }
 
+    // MARK: Appearance & sidebar
+
+    /// Applies the configured appearance app-wide. `system` (nil override)
+    /// keeps following macOS live; the existing effective-appearance
+    /// observation recolors syntax either way.
+    private func applyAppearanceChoice() {
+        switch config?.appearance ?? .system {
+        case .system: NSApp.appearance = nil
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+
+    private func rebuildSidebar() {
+        sidebarModel.rebuild(
+            entries: editors.map { editor in
+                (
+                    document: SidebarDocument(
+                        id: ObjectIdentifier(editor),
+                        title: editor.window?.title ?? "Untitled",
+                        path: editor.coreDocument.path,
+                        isDirty: editor.coreDocument.isDirty
+                    ),
+                    projectRoot: editor.projectRoot
+                )
+            })
+    }
+
+    private var sidebarConfiguration: SidebarConfiguration {
+        SidebarConfiguration(
+            model: sidebarModel,
+            selectDocument: { [weak self] id in
+                guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
+                else { return }
+                editor.window?.makeKeyAndOrderFront(nil)
+            },
+            openFile: { [weak self] path in
+                guard let self else { return }
+                // Focus an existing window for the file rather than
+                // opening it twice.
+                if let existing = self.editors.first(where: { $0.coreDocument.path == path }) {
+                    existing.window?.makeKeyAndOrderFront(nil)
+                } else {
+                    self.open(path: path)
+                }
+            }
+        )
+    }
+
     // MARK: Settings
 
     @objc func showSettings(_ sender: Any?) {
@@ -103,7 +166,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func newDocument(_ sender: Any?) {
-        show(editor: EditorWindowController(document: CoreDocument(), settings: currentSettings))
+        show(
+            editor: EditorWindowController(
+                document: CoreDocument(),
+                settings: currentSettings,
+                sidebar: sidebarConfiguration
+            ))
     }
 
     @objc func openDocument(_ sender: Any?) {
@@ -118,9 +186,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Opens `path` in a new editor window, alerting on failure.
     private func open(path: String) {
+        // Absolute, standardized paths throughout: relative paths (e.g.
+        // from the command line) would corrupt project-root resolution
+        // and defeat open-file deduplication.
+        let path = URL(fileURLWithPath: path).standardizedFileURL.path
         do {
             let document = try CoreDocument(contentsOf: path)
-            show(editor: EditorWindowController(document: document, settings: currentSettings))
+            show(
+                editor: EditorWindowController(
+                    document: document,
+                    settings: currentSettings,
+                    sidebar: sidebarConfiguration
+                ))
         } catch {
             let alert = NSAlert()
             alert.alertStyle = .warning
@@ -142,9 +219,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MainActor.assumeIsolated {
                     self?.editors.removeAll { $0.window === closing }
                 }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self?.rebuildSidebar() }
+                }
             }
         }
         editor.showWindow(nil)
+        // No direct rebuild here: the controller publishes its state (via
+        // updateChrome) and the deferred notification handler rebuilds —
+        // rebuilding synchronously mid-presentation trips NSTableView.
     }
 
     // MARK: Menu
@@ -258,6 +341,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let editMenuItem = NSMenuItem()
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
+
+        let viewMenu = NSMenu(title: "View")
+        let toggleNavigator = NSMenuItem(
+            title: "Toggle Navigator",
+            action: #selector(NSSplitViewController.toggleSidebar(_:)),
+            keyEquivalent: "0"
+        )
+        viewMenu.addItem(toggleNavigator)
+        let viewMenuItem = NSMenuItem()
+        viewMenuItem.submenu = viewMenu
+        mainMenu.addItem(viewMenuItem)
 
         let windowMenu = NSMenu(title: "Window")
         windowMenu.addItem(

@@ -1,6 +1,13 @@
 import CTextchum
 import Foundation
 
+/// The user's appearance choice: follow the system, or force a mode.
+public enum CoreAppearance: CaseIterable {
+    case system
+    case light
+    case dark
+}
+
 /// The application's configuration, backed by a JSON file the core owns.
 ///
 /// The shell decides where the file lives (platform convention) and hands
@@ -43,6 +50,27 @@ public final class CoreConfig {
 
     deinit {
         tc_config_free(handle)
+    }
+
+    /// Appearance choice. `system` is the default and keeps the app
+    /// following macOS light/dark switches live.
+    public var appearance: CoreAppearance {
+        get {
+            switch tc_config_appearance(handle) {
+            case UInt32(TC_APPEARANCE_LIGHT): return .light
+            case UInt32(TC_APPEARANCE_DARK): return .dark
+            default: return .system
+            }
+        }
+        set {
+            let raw: UInt32
+            switch newValue {
+            case .system: raw = UInt32(TC_APPEARANCE_SYSTEM)
+            case .light: raw = UInt32(TC_APPEARANCE_LIGHT)
+            case .dark: raw = UInt32(TC_APPEARANCE_DARK)
+            }
+            tc_config_set_appearance(handle, raw)
+        }
     }
 
     /// Editor font family; nil means "use the platform monospaced font".

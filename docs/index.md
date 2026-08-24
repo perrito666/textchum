@@ -37,9 +37,14 @@ Textchum is young. What exists and works today:
 - Documents on top of buffers: open and save with encoding detection and
   atomic writes, undo/redo with typing coalescing, and dirty-state tracking
   anchored to the last save — see [Documents](documents.md).
+- A navigation drawer in every window: open documents grouped by project
+  (nearest root marker — the grouping language servers will share), with
+  the current project's folder tree below — see
+  [The navigator](navigator.md).
 - JSON-backed configuration with a GUI settings window writing through to
-  the file: hand edits survive, broken files fall back to defaults and are
-  backed up rather than clobbered — see [Configuration](configuration.md).
+  the file — including the appearance choice (system/light/dark): hand
+  edits survive, broken files fall back to defaults and are backed up
+  rather than clobbered — see [Configuration](configuration.md).
 - An asynchronous event channel from core worker threads to the UI, with a
   strict single-thread delivery contract.
 - A macOS editor with multiple windows (and native window tabs), open/save

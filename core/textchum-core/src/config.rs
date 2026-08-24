@@ -35,6 +35,35 @@ pub const FONT_SIZE_RANGE: (f64, f64) = (6.0, 72.0);
 pub const DEFAULT_TAB_WIDTH: u32 = 4;
 pub const TAB_WIDTH_RANGE: (u32, u32) = (1, 16);
 
+/// The user's appearance choice: follow the system, or force one mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Appearance {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl Appearance {
+    /// The value as stored in `config.json`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Light => "light",
+            Self::Dark => "dark",
+        }
+    }
+
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "system" => Some(Self::System),
+            "light" => Some(Self::Light),
+            "dark" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+}
+
 /// The application's configuration: the parsed JSON document plus the path
 /// it round-trips through.
 pub struct Config {
@@ -122,6 +151,33 @@ impl Config {
             .and_then(Value::as_u64)
             .map(|width| (width as u32).clamp(TAB_WIDTH_RANGE.0, TAB_WIDTH_RANGE.1))
             .unwrap_or(DEFAULT_TAB_WIDTH)
+    }
+
+    /// The appearance choice (top-level `"appearance"` key). Unknown or
+    /// missing values mean "follow the system".
+    pub fn appearance(&self) -> Appearance {
+        self.root
+            .get("appearance")
+            .and_then(Value::as_str)
+            .and_then(Appearance::parse)
+            .unwrap_or_default()
+    }
+
+    /// Sets the appearance choice. `System` removes the key (it is the
+    /// default, and an absent key reads most naturally in the file).
+    pub fn set_appearance(&mut self, appearance: Appearance) {
+        let root = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        match appearance {
+            Appearance::System => {
+                root.remove("appearance");
+            }
+            other => {
+                root.insert("appearance".into(), Value::String(other.as_str().to_owned()));
+            }
+        }
     }
 
     /// Sets the font family; `None` (or empty) removes the key, returning
@@ -297,6 +353,28 @@ mod tests {
         assert_eq!(config.font_family(), None);
         assert_eq!(config.font_size(), FONT_SIZE_RANGE.1);
         assert_eq!(config.tab_width(), TAB_WIDTH_RANGE.0);
+    }
+
+    #[test]
+    fn appearance_round_trips_and_tolerates_junk() {
+        let path = temp_path("appearance.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.appearance(), Appearance::System);
+
+        config.set_appearance(Appearance::Dark);
+        config.save().unwrap();
+        let (reloaded, _) = Config::load(&path);
+        assert_eq!(reloaded.appearance(), Appearance::Dark);
+
+        // Back to system removes the key entirely.
+        config.set_appearance(Appearance::System);
+        config.save().unwrap();
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("appearance"));
+
+        std::fs::write(&path, r#"{"appearance": "solarized-disco"}"#).unwrap();
+        let (weird, warning) = Config::load(&path);
+        assert!(warning.is_none());
+        assert_eq!(weird.appearance(), Appearance::System);
     }
 
     #[test]

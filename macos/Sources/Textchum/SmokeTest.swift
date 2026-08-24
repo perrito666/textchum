@@ -164,6 +164,34 @@ func runSmokeTest() -> Int32 {
         return 1
     }
 
+    // Workspace: project roots resolve to the nearest marker.
+    do {
+        let wsDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-smoke-ws-\(ProcessInfo.processInfo.processIdentifier)")
+        let project = wsDir.appendingPathComponent("proj")
+        let nested = project.appendingPathComponent("src/deep")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        try "".write(
+            toFile: project.appendingPathComponent("Cargo.toml").path,
+            atomically: true, encoding: .utf8)
+        let file = nested.appendingPathComponent("main.rs").path
+        try "fn main() {}".write(toFile: file, atomically: true, encoding: .utf8)
+
+        guard CoreWorkspace.projectRoot(forPath: file) == project.path else {
+            print("FAIL: project root resolution")
+            return 1
+        }
+        guard CoreWorkspace.projectRoot(forPath: "/") == nil else {
+            print("FAIL: filesystem root must be loose")
+            return 1
+        }
+        print("workspace ok (nearest-marker project roots)")
+        try? FileManager.default.removeItem(at: wsDir)
+    } catch {
+        print("FAIL: workspace: \(error)")
+        return 1
+    }
+
     // Configuration: round trip, hand-edit preservation, breakage recovery.
     do {
         let configDir = FileManager.default.temporaryDirectory
@@ -178,9 +206,12 @@ func runSmokeTest() -> Int32 {
         }
         config.fontFamily = "Menlo"
         config.tabWidth = 8
+        config.appearance = .dark
         try config.save()
         let reloaded = CoreConfig(path: configPath)
-        guard reloaded.fontFamily == "Menlo", reloaded.tabWidth == 8 else {
+        guard reloaded.fontFamily == "Menlo", reloaded.tabWidth == 8,
+            reloaded.appearance == .dark
+        else {
             print("FAIL: config round trip")
             return 1
         }

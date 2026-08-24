@@ -40,10 +40,15 @@ Textchum es joven. Lo que existe y funciona hoy:
   codificación y escrituras atómicas, deshacer/rehacer con fusión de tecleo
   y seguimiento de cambios anclado al último guardado — véase
   [Documentos](documents.md).
+- Un cajón de navegación en cada ventana: documentos abiertos agrupados
+  por proyecto (marcador de raíz más cercano — la misma agrupación que
+  compartirán los servidores de lenguaje), con el árbol de carpetas del
+  proyecto actual debajo — véase [El navegador](navigator.md).
 - Configuración respaldada en JSON con una ventana de ajustes gráfica que
-  escribe directamente en el archivo: las ediciones a mano sobreviven y los
-  archivos rotos recurren a los valores por defecto y se respaldan en lugar
-  de pisarse — véase [Configuración](configuration.md).
+  escribe directamente en el archivo — incluida la elección de apariencia
+  (sistema/clara/oscura): las ediciones a mano sobreviven y los archivos
+  rotos recurren a los valores por defecto y se respaldan en lugar de
+  pisarse — véase [Configuración](configuration.md).
 - Un canal de eventos asíncrono desde los hilos de trabajo del núcleo hacia
   la interfaz, con un contrato estricto de entrega en un solo hilo.
 - Un editor macOS con varias ventanas (y pestañas nativas), paneles de

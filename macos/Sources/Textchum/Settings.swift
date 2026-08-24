@@ -33,6 +33,9 @@ final class SettingsModel: ObservableObject {
     /// Suppresses write-back while the initial values load.
     private var isLoading = true
 
+    @Published var appearance: CoreAppearance {
+        didSet { persist { $0.appearance = appearance } }
+    }
     @Published var fontFamily: String {
         didSet { persist { $0.fontFamily = fontFamily.isEmpty ? nil : fontFamily } }
     }
@@ -45,6 +48,7 @@ final class SettingsModel: ObservableObject {
 
     init(config: CoreConfig) {
         self.config = config
+        self.appearance = config.appearance
         self.fontFamily = config.fontFamily ?? ""
         self.fontSize = config.fontSize
         self.tabWidth = config.tabWidth
@@ -83,6 +87,12 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Picker("Appearance:", selection: $model.appearance) {
+                Text("System").tag(CoreAppearance.system)
+                Text("Light").tag(CoreAppearance.light)
+                Text("Dark").tag(CoreAppearance.dark)
+            }
+            .pickerStyle(.segmented)
             Picker("Font:", selection: $model.fontFamily) {
                 Text("System Monospaced").tag("")
                 Divider()

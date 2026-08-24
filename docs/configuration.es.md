@@ -10,6 +10,8 @@ aplicación.
 
 **Textchum → Settings…** (⌘,) edita los ajustes reconocidos:
 
+- **Apariencia** — seguir al sistema (cambiando en vivo cuando macOS lo
+  hace) o forzar claro u oscuro.
 - **Tipografía** — cualquier familia de ancho fijo instalada en el sistema,
   o la tipografía monoespaciada de la plataforma.
 - **Tamaño de letra** — de 6 a 72 puntos.
@@ -31,6 +33,7 @@ Un archivo editado a mano podría verse así:
 
 ```json
 {
+  "appearance": "dark",
   "editor": {
     "font_family": "JetBrains Mono",
     "font_size": 13,
@@ -38,6 +41,9 @@ Un archivo editado a mano podría verse así:
   }
 }
 ```
+
+`appearance` acepta `"system"`, `"light"` u `"dark"`; si se omite (el
+valor por defecto), se sigue al sistema.
 
 Todo es opcional: un archivo, una sección o una clave ausentes significan
 simplemente el valor por defecto. Las escrituras son atómicas (archivo

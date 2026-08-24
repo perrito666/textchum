@@ -695,6 +695,65 @@ pub unsafe extern "C" fn tc_config_tab_width(config: *const TcConfig) -> u32 {
     unsafe { config.as_ref() }.map_or(textchum_core::DEFAULT_TAB_WIDTH, |c| c.inner.tab_width())
 }
 
+/// Appearance choice: follow the system.
+pub const TC_APPEARANCE_SYSTEM: u32 = 0;
+/// Appearance choice: always light.
+pub const TC_APPEARANCE_LIGHT: u32 = 1;
+/// Appearance choice: always dark.
+pub const TC_APPEARANCE_DARK: u32 = 2;
+
+/// The configured appearance, as a `TC_APPEARANCE_*` value.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_appearance(config: *const TcConfig) -> u32 {
+    use textchum_core::Appearance;
+    match unsafe { config.as_ref() }.map(|c| c.inner.appearance()) {
+        Some(Appearance::Light) => TC_APPEARANCE_LIGHT,
+        Some(Appearance::Dark) => TC_APPEARANCE_DARK,
+        _ => TC_APPEARANCE_SYSTEM,
+    }
+}
+
+/// Sets the appearance choice (`TC_APPEARANCE_*`; unknown values mean
+/// system).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_appearance(config: *mut TcConfig, appearance: u32) {
+    use textchum_core::Appearance;
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_appearance(match appearance {
+            TC_APPEARANCE_LIGHT => Appearance::Light,
+            TC_APPEARANCE_DARK => Appearance::Dark,
+            _ => Appearance::System,
+        });
+    }
+}
+
+/// The project root for a file or directory path (`len` bytes of UTF-8):
+/// the nearest ancestor with a root marker (VCS directory or
+/// build/manifest file). Returns null for loose files outside any
+/// project; release non-null results with [`tc_string_free`].
+///
+/// # Safety
+/// `path` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_project_root_for_path(path: *const c_char, len: usize) -> *mut c_char {
+    let Some(path) = (unsafe { str_from_raw(path, len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::workspace::project_root_for(std::path::Path::new(path)) {
+            Some(root) => owned_c_string(root.to_string_lossy().into_owned()),
+            None => std::ptr::null_mut(),
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Sets the editor font family; `len == 0` clears it back to the platform
 /// default.
 ///

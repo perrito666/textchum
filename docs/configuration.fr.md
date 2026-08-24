@@ -10,6 +10,8 @@ uniquement à l'intérieur de l'application.
 
 **Textchum → Settings…** (⌘,) édite les réglages reconnus :
 
+- **Apparence** — suivre le système (en changeant en direct quand macOS le
+  fait) ou forcer le clair ou le sombre.
 - **Police** — toute famille à chasse fixe installée sur le système, ou la
   police à chasse fixe de la plateforme.
 - **Taille de police** — de 6 à 72 points.
@@ -31,6 +33,7 @@ Un fichier édité à la main pourrait ressembler à :
 
 ```json
 {
+  "appearance": "dark",
   "editor": {
     "font_family": "JetBrains Mono",
     "font_size": 13,
@@ -38,6 +41,9 @@ Un fichier édité à la main pourrait ressembler à :
   }
 }
 ```
+
+`appearance` accepte `"system"`, `"light"` ou `"dark"` ; en son absence
+(le défaut), le système est suivi.
 
 Tout est optionnel — fichier, section ou clé manquants signifient
 simplement la valeur par défaut. Les écritures sont atomiques (fichier

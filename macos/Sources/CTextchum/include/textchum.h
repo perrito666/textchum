@@ -15,6 +15,21 @@
 #define TC_EVENT_PONG 1
 
 /**
+ * Appearance choice: follow the system.
+ */
+#define TC_APPEARANCE_SYSTEM 0
+
+/**
+ * Appearance choice: always light.
+ */
+#define TC_APPEARANCE_LIGHT 1
+
+/**
+ * Appearance choice: always dark.
+ */
+#define TC_APPEARANCE_DARK 2
+
+/**
  * Style flag: render bold.
  */
 #define TC_STYLE_BOLD 1
@@ -482,6 +497,34 @@ double tc_config_font_size(const struct TcConfig *config);
  * `config` must be a live configuration pointer.
  */
 uint32_t tc_config_tab_width(const struct TcConfig *config);
+
+/**
+ * The configured appearance, as a `TC_APPEARANCE_*` value.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+uint32_t tc_config_appearance(const struct TcConfig *config);
+
+/**
+ * Sets the appearance choice (`TC_APPEARANCE_*`; unknown values mean
+ * system).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_appearance(struct TcConfig *config, uint32_t appearance);
+
+/**
+ * The project root for a file or directory path (`len` bytes of UTF-8):
+ * the nearest ancestor with a root marker (VCS directory or
+ * build/manifest file). Returns null for loose files outside any
+ * project; release non-null results with [`tc_string_free`].
+ *
+ * # Safety
+ * `path` must point to `len` readable bytes.
+ */
+char *tc_project_root_for_path(const char *path, uintptr_t len);
 
 /**
  * Sets the editor font family; `len == 0` clears it back to the platform

@@ -41,10 +41,15 @@ Textchum est jeune. Ce qui existe et fonctionne aujourd'hui :
   détection d'encodage et écritures atomiques, annuler/rétablir avec fusion
   des frappes, et suivi des modifications ancré au dernier enregistrement —
   voir [Documents](documents.md).
+- Un tiroir de navigation dans chaque fenêtre : les documents ouverts
+  groupés par projet (marqueur de racine le plus proche — le groupement
+  que partageront les serveurs de langage), avec l'arborescence du projet
+  courant en dessous — voir [Le navigateur](navigator.md).
 - Une configuration adossée à un fichier JSON, avec une fenêtre de réglages
-  graphique qui écrit directement dans le fichier : les éditions à la main
-  survivent, les fichiers cassés retombent sur les valeurs par défaut et
-  sont sauvegardés plutôt qu'écrasés — voir
+  graphique qui écrit directement dans le fichier — y compris le choix
+  d'apparence (système/claire/sombre) : les éditions à la main survivent,
+  les fichiers cassés retombent sur les valeurs par défaut et sont
+  sauvegardés plutôt qu'écrasés — voir
   [Configuration](configuration.md).
 - Un canal d'événements asynchrone des fils d'exécution du noyau vers
   l'interface, avec un contrat strict de livraison sur un seul fil.

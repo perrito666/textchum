@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import TextchumKit
 import UniformTypeIdentifiers
 
@@ -17,9 +18,29 @@ import UniformTypeIdentifiers
 ///    the text view's storage directly (which bypasses the delegate, so it
 ///    is not routed to the core a second time).
 /// 4. Debug builds assert both sides are byte-identical after every change.
+/// Everything a window needs to host the shared navigation drawer.
+struct SidebarConfiguration {
+    let model: SidebarModel
+    let selectDocument: (ObjectIdentifier) -> Void
+    let openFile: (String) -> Void
+}
+
+/// Per-window observable state feeding the sidebar's folder tree.
+@MainActor
+final class WindowSidebarContext: ObservableObject {
+    @Published var projectRoot: String?
+}
+
 final class EditorWindowController: NSWindowController {
     // Named to avoid NSWindowController's own `document` property.
     let coreDocument: CoreDocument
+    /// This document's project root (nearest root marker), cached and
+    /// refreshed when the path changes.
+    private(set) var projectRoot: String?
+    private let sidebarContext = WindowSidebarContext()
+    /// The (title, dirty, path) triple last published to the sidebar, to
+    /// avoid rebuilding it on every keystroke.
+    private var publishedState: (String, Bool, String?) = ("", false, nil)
     private var textView: NSTextView?
     /// True while the next selection change is caused by an edit we already
     /// know about, so it should not break undo coalescing.
@@ -34,7 +55,11 @@ final class EditorWindowController: NSWindowController {
     /// Re-colors on system appearance changes (theme colors differ).
     private var appearanceObservation: NSKeyValueObservation?
 
-    init(document: CoreDocument, settings: EditorSettings? = nil) {
+    init(
+        document: CoreDocument,
+        settings: EditorSettings? = nil,
+        sidebar: SidebarConfiguration? = nil
+    ) {
         self.coreDocument = document
 
         let window = NSWindow(
@@ -67,7 +92,40 @@ final class EditorWindowController: NSWindowController {
         self.textView = textView
 
         textView.string = coreDocument.text
-        window.contentView = scrollView
+
+        if let sidebar {
+            // Sidebar + editor in a split view controller; the sidebar item
+            // brings native collapse behavior and the toggleSidebar action.
+            let editorController = NSViewController()
+            editorController.view = scrollView
+
+            let splitController = NSSplitViewController()
+            let sidebarView = SidebarView(
+                model: sidebar.model,
+                currentDocumentID: ObjectIdentifier(self),
+                context: sidebarContext,
+                onSelectDocument: sidebar.selectDocument,
+                onOpenFile: sidebar.openFile
+            )
+            let sidebarHost = NSHostingController(rootView: sidebarView)
+            // Without this, the list inherits a phantom titlebar inset and
+            // its first row starts scrolled out of view.
+            sidebarHost.safeAreaRegions = []
+            let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarHost)
+            sidebarItem.minimumThickness = 180
+            sidebarItem.maximumThickness = 400
+            // Full-height layout slides the list under the title bar and
+            // hides the first section header; keep the sidebar below it.
+            sidebarItem.allowsFullHeightLayout = false
+            splitController.addSplitViewItem(sidebarItem)
+            splitController.addSplitViewItem(NSSplitViewItem(viewController: editorController))
+            window.contentViewController = splitController
+            window.setContentSize(NSSize(width: 920, height: 480))
+            window.center()
+        } else {
+            window.contentView = scrollView
+        }
+
         if let settings {
             apply(settings: settings)
         }
@@ -258,6 +316,20 @@ final class EditorWindowController: NSWindowController {
         }
         window.subtitle = subtitle
         window.isDocumentEdited = coreDocument.isDirty
+        publishSidebarState()
+    }
+
+    /// Publishes title/dirty/path changes to the sidebar — but only actual
+    /// changes, so per-keystroke chrome updates stay cheap.
+    private func publishSidebarState() {
+        let state = (window?.title ?? "Untitled", coreDocument.isDirty, coreDocument.path)
+        guard state != publishedState else { return }
+        if state.2 != publishedState.2 {
+            projectRoot = state.2.flatMap { CoreWorkspace.projectRoot(forPath: $0) }
+            sidebarContext.projectRoot = projectRoot
+        }
+        publishedState = state
+        NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
     }
 
     /// Debug-only invariant check: the display cache must equal the core.

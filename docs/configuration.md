@@ -9,6 +9,8 @@ reads and writes it; nothing lives only inside the app.
 
 **Textchum → Settings…** (⌘,) edits the recognized settings:
 
+- **Appearance** — follow the system (switching live when macOS does), or
+  force light or dark.
 - **Font** — any fixed-pitch family installed on the system, or the
   platform's monospaced font.
 - **Font size** — 6 to 72 points.
@@ -29,6 +31,7 @@ A file edited by hand might look like:
 
 ```json
 {
+  "appearance": "dark",
   "editor": {
     "font_family": "JetBrains Mono",
     "font_size": 13,
@@ -36,6 +39,9 @@ A file edited by hand might look like:
   }
 }
 ```
+
+`appearance` accepts `"system"`, `"light"`, or `"dark"`; omitting it (the
+default) follows the system.
 
 Everything is optional — a missing file, a missing section, or a missing
 key simply means the default. Writes are atomic (temporary file plus

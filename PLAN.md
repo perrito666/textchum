@@ -129,7 +129,7 @@ both sides after every edit.
 - **Injections** are required early because Markdown depends on them (fenced code blocks
   highlight in their own language), as do HTML/JS/CSS.
 - **Themes** map tree-sitter capture names (`@keyword`, `@string`, …) to colors/weights,
-  defined in JSON. Ship light + dark defaults; follow the system appearance.
+  defined in JSON — see §3.7 for the full theme/appearance design.
 - **Long tail:** tree-sitter covers the important ~60 languages. If coverage of exotic types
   matters later, an optional TextMate-grammar fallback engine (e.g. `syntect`-style) can sit
   behind the same "styled spans" interface — noted as a stretch item, not planned work.
@@ -215,6 +215,31 @@ The workspace model exists chiefly to serve the "one LSP per project group" requ
   backed up, unknown keys survive GUI saves) —
   read by the core, with a Preferences UI writing through. Per-project overrides via
   `.textchum.json` at the project root (tab width, server choice).
+
+### 3.7 Appearance & themes
+
+- **Appearance mode is a user choice**: `system` (default — follow macOS and switch live
+  when the system does), `light`, or `dark`. Stored in `config.json`
+  (`"appearance": "system" | "light" | "dark"`), settable from the Settings window, applied
+  app-wide immediately (windows, chrome, and syntax palette together).
+- **Themes are JSON files** in `~/Library/Application Support/Textchum/themes/`, selected
+  by name in `config.json`. A theme defines the syntax style table — capture name →
+  {color, bold, italic} — with a light and a dark palette in one file, so one theme serves
+  both appearance modes. Editor chrome colors (background, caret, selection) join the
+  format when the editor grows beyond system colors.
+- **Sane defaults ship built in**: the current default palette plus a small curated set
+  (at minimum a high-contrast pair). Built-ins are compiled into the core and selectable
+  like user themes; user files with the same name override built-ins.
+- **A vanilla theme generator** bootstraps new themes: `Textchum --emit-theme <file>`
+  (headless, like `--smoke-test`) writes a complete starter theme — every styled capture
+  name enumerated with the default palette's values — so making a theme is "generate,
+  open, change colors", never "guess the schema".
+- **Same escape-hatch rules as configuration**: a theme that fails to parse falls back to
+  the default with one warning, is never overwritten, and unknown keys survive tooling.
+
+Scheduling: appearance mode lands with the configuration work (small); the theme file
+format, built-in set, selection UI, and generator land in Phase 5 alongside the other
+customization polish.
 
 ## 4. Repository layout & build
 
@@ -303,6 +328,8 @@ Prove the architecture end to end before writing real features.
 ### Phase 5 — Breadth & polish (~4–6 weeks, then ongoing)
 - Grammar set to ~40 languages; server defaults to ~12.
 - Fuzzy file-open (⌘T), command palette, project-wide search, document outline (LSP symbols).
+- Themes (§3.7): JSON theme format, built-in curated set, selection in Settings, and the
+  `--emit-theme` vanilla theme generator.
 - Navigation drawer polish: rename/reveal actions, gitignore-aware filtering options,
   drag to reorder buffer groups; session restore; `.textchum.json` per-project config.
 - Performance pass (startup time budget: < 300 ms to first window), crash reporting, app
