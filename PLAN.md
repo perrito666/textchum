@@ -378,9 +378,10 @@ Prove the architecture end to end before writing real features.
   path against the scripted server. Tabs (AdwTabView), the file-tree
   sidebar, and a preferences window over the same config.json (appearance, theme,
   editor, per-language servers) are in. The buffer-list half of the drawer, the
-  grep panel (smart case + status line), completion, and hover are in too — the
-  GTK shell now covers the daily-driver set. Next: session restore, chum-style
-  opens over D-Bus, drag-reorder tabs.
+  grep panel (smart case + status line + stacked filters), completion, hover,
+  the Markdown preview, and full preferences are in too — the GTK shell covers
+  the daily-driver set. The remaining delta against macOS is tracked feature by
+  feature in `PLAN_linux.md`.
 
 **Linux shell design (decided ahead of need):** GTK4 + libadwaita, editor view via
 GtkSourceView, preview via WebKitGTK, written in Rust with gtk4-rs — the same shape
