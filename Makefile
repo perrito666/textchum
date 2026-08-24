@@ -42,8 +42,12 @@ header-check: core
 ## Everything CI runs.
 check: test smoke header-check
 
+# Newest available Python: patched versions of the docs toolchain's
+# transitive dependencies require >= 3.10.
+PYTHON := $(shell command -v python3.13 || command -v python3.12 || command -v python3.11 || command -v python3)
+
 $(DOCS_VENV): docs/requirements.txt
-	python3 -m venv $(DOCS_VENV)
+	$(PYTHON) -m venv $(DOCS_VENV)
 	$(DOCS_VENV)/bin/pip install --quiet -r docs/requirements.txt
 	touch $(DOCS_VENV)
 

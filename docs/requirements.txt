@@ -1,2 +1,7 @@
 mkdocs-material>=9.5
 mkdocs-static-i18n>=1.2
+# Security floors for transitive dependencies (PYSEC-2026-3654,
+# PYSEC-2026-2275, PYSEC-2026-141/142).
+pymdown-extensions>=11.0.1
+requests>=2.33.0
+urllib3>=2.7.0

@@ -342,7 +342,19 @@ Prove the architecture end to end before writing real features.
 - Themes (§3.7): JSON theme format, built-in curated set, selection in Settings, and the
   `--emit-theme` vanilla theme generator.
 - Navigation drawer polish: rename/reveal actions, gitignore-aware filtering options,
-  drag to reorder buffer groups; session restore; `.textchum.json` per-project config.
+  drag to reorder buffer groups; `.textchum.json` per-project config.
+- **Session restore: reopen where you left off.** Quitting remembers the open files and
+  relaunching restores them — including each document's caret position and scroll
+  offset, window/tab arrangement, and which window was frontmost. State lives in a plain
+  JSON file next to the configuration (`session.json`), written atomically on quit and on
+  window close, following the same escape-hatch rules as everything else: hand-readable,
+  never a cache you cannot inspect. Files that no longer exist at restore time are
+  skipped silently; per-file positions are also remembered for files reopened later via
+  Open Recent, so "continue where I left off" works per document, not just per session.
+  **Opening without memory is a first-class path, for debugging:** launch with
+  `--fresh` (or hold ⇧ at launch) to ignore the saved session, and since the state is
+  one deletable JSON file, `rm session.json` is always a complete reset — the app must
+  start correctly from nothing, and that path is exercised by tests.
 - Performance pass (startup time budget: < 300 ms to first window), crash reporting, app
   icon, notarized DMG/Sparkle or TestFlight distribution.
 - **Exit:** you've stopped opening other editors for day-to-day work; a v0.1 build is
