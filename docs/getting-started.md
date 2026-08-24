@@ -34,6 +34,11 @@ Other useful targets:
 | `make docs` | Builds this documentation site into `site/`. |
 | `make clean` | Removes all build products. |
 
+Prefer not to build? Every `v*` tag publishes a
+[GitHub release](https://github.com/perrito666/textchum/releases) with a
+ready-made `Textchum.app` zip (and its SHA-256). The app is not
+code-signed, so on first launch right-click it and choose Open.
+
 ## Repository layout
 
 ```

@@ -35,6 +35,12 @@ Autres cibles utiles :
 | `make docs` | Construit ce site de documentation dans `site/`. |
 | `make clean` | Supprime tous les produits de compilation. |
 
+Pas envie de compiler ? Chaque étiquette `v*` publie une
+[release GitHub](https://github.com/perrito666/textchum/releases) avec
+un zip de `Textchum.app` prêt à l'emploi (et son SHA-256).
+L'application n'est pas signée : au premier lancement, faites un clic
+droit dessus et choisissez Ouvrir.
+
 ## Structure du dépôt
 
 ```

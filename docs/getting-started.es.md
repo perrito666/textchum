@@ -35,6 +35,12 @@ Otros objetivos útiles:
 | `make docs` | Genera este sitio de documentación en `site/`. |
 | `make clean` | Elimina todos los productos de compilación. |
 
+¿Sin ganas de compilar? Cada etiqueta `v*` publica una
+[release de GitHub](https://github.com/perrito666/textchum/releases) con
+un zip de `Textchum.app` listo para usar (y su SHA-256). La aplicación
+no está firmada, así que en el primer arranque haga clic derecho sobre
+ella y elija Abrir.
+
 ## Estructura del repositorio
 
 ```
