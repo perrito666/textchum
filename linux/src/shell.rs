@@ -11,7 +11,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
-use adw::prelude::*;
 use gtk::glib;
 use textchum_core::{theme, Config, Event};
 use textchum_lsp::Pool;

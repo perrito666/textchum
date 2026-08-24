@@ -95,16 +95,17 @@ registrarlo.
 
 El mismo núcleo impulsa una carcasa nativa GTK4/libadwaita, enlazada
 como crate de Rust en lugar de a través de la cabecera C (allí ambos
-lados son Rust). Es joven — una ventana por archivo, edición y deshacer
-propiedad del núcleo, un menú en la barra de cabecera que lista todo lo
-disponible, coloreado tree-sitter desde la tabla de temas
-compartida, abrir/guardar, búsqueda en el archivo (Ctrl+F), apertura
-difusa en el proyecto (Ctrl+P) y el pool de servidores de lenguaje
-conectado: diagnósticos como subrayados ondulados con recuento de
-problemas en el título, salto a la definición (F12) y problemas de
-servidor como avisos — pero es la arquitectura real, no una
-adaptación: el protocolo de sincronización y sus aserciones de
-depuración son los de macOS traducidos.
+lados son Rust). Es más joven que la aplicación de macOS pero ya no es
+un juguete: pestañas (AdwTabView) que enfocan en vez de duplicar, un
+árbol de archivos del proyecto en barra lateral (F9), edición y
+deshacer propiedad del núcleo, coloreado tree-sitter desde la tabla de
+temas compartida, búsqueda en el archivo (Ctrl+F), apertura difusa
+(Ctrl+P), el pool de servidores de lenguaje conectado (diagnósticos
+subrayados con recuento de problemas, salto a la definición con F12,
+problemas de servidor como avisos) y una ventana de preferencias
+(Ctrl+,) sobre el mismo contrato de `config.json` — apariencia, tema,
+ajustes del editor y comandos de servidor por lenguaje, guardado en
+`~/.config/textchum/config.json`.
 
 ```sh
 sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev

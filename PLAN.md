@@ -375,8 +375,10 @@ Prove the architecture end to end before writing real features.
   quick-open over the core matcher, and the language-server pool wired through a
   main-loop event pump: diagnostics as squiggles + problem counts, jump to
   definition, server status as toasts. The smoke test exercises the whole server
-  path against the scripted server. Next: tabs (AdwTabView), the drawer, grep
-  panel, completion and hover.
+  path against the scripted server. Tabs (AdwTabView), the file-tree
+  sidebar, and a preferences window over the same config.json (appearance, theme,
+  editor, per-language servers) are in. Next: the buffer-list half of the drawer,
+  grep panel, completion and hover.
 
 **Linux shell design (decided ahead of need):** GTK4 + libadwaita, editor view via
 GtkSourceView, preview via WebKitGTK, written in Rust with gtk4-rs — the same shape

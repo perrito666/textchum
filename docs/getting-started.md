@@ -89,14 +89,15 @@ It works through the `textchum://` URL scheme, so the app bundle
 
 The same core drives a native GTK4/libadwaita shell, linked as a Rust
 crate rather than through the C header (both sides are Rust there). It
-is young — one window per file, core-owned editing and undo, a header-bar menu listing everything available, tree-sitter
-highlighting from the shared theme table, open/save, in-file search
-(Ctrl+F), project-wide fuzzy open (Ctrl+P), and the language-server
-pool wired in: diagnostics as squiggles with a problem count in the
-title, jump to definition (F12), and server trouble surfaced as toasts
-— but it is the real
-architecture, not a port: the sync protocol and its debug assertions are
-the macOS ones translated.
+is younger than the macOS app but no longer a toy: tabs (AdwTabView)
+with focus-not-duplicate opens, a project file-tree sidebar (F9),
+core-owned editing and undo, tree-sitter highlighting from the shared
+theme table, in-file search (Ctrl+F), fuzzy Open Quickly (Ctrl+P), the
+language-server pool wired in (squiggled diagnostics with problem
+counts, jump to definition on F12, server trouble as toasts), and a
+preferences window (Ctrl+,) over the same `config.json` contract —
+appearance, theme, editor settings, and per-language server commands,
+stored at `~/.config/textchum/config.json`.
 
 ```sh
 sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev

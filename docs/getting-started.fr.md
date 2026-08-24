@@ -96,15 +96,16 @@ pour l'enregistrer.
 
 Le même noyau anime une coque native GTK4/libadwaita, liée comme crate
 Rust plutôt qu'à travers l'en-tête C (là, les deux côtés sont Rust).
-C'est jeune — une fenêtre par fichier, édition et annulation propriété
-du noyau, un menu de barre d'en-tête listant tout ce qui existe, coloration tree-sitter depuis la table de thèmes partagée,
-ouvrir/enregistrer, recherche dans le fichier (Ctrl+F), ouverture
-floue dans le projet (Ctrl+P) et le pool de serveurs de langage
-branché : diagnostics en soulignés ondulés avec compte de problèmes
-dans le titre, saut à la définition (F12) et ennuis de serveur en
-avis — mais c'est la vraie architecture, pas un portage :
-le protocole de synchronisation et ses assertions de débogage sont ceux
-de macOS traduits.
+Plus jeune que l'application macOS mais plus un jouet : onglets
+(AdwTabView) qui focalisent au lieu de dupliquer, arbre de fichiers du
+projet en barre latérale (F9), édition et annulation propriété du
+noyau, coloration tree-sitter depuis la table de thèmes partagée,
+recherche dans le fichier (Ctrl+F), ouverture floue (Ctrl+P), le pool
+de serveurs de langage branché (diagnostics soulignés avec compte de
+problèmes, saut à la définition en F12, ennuis de serveur en avis) et
+une fenêtre de préférences (Ctrl+,) sur le même contrat `config.json`
+— apparence, thème, réglages d'éditeur et commandes de serveur par
+langage, rangé dans `~/.config/textchum/config.json`.
 
 ```sh
 sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev

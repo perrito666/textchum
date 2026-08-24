@@ -149,7 +149,8 @@ impl Page {
                     });
                 }
                 // Announce to the server pool, debounced while typing.
-                if let Some(path) = page.path.borrow().clone() {
+                let document_path = page.path.borrow().clone();
+                if let Some(path) = document_path {
                     if let Some(previous) = lsp_timer.take() {
                         previous.remove();
                     }
