@@ -178,10 +178,30 @@ The workspace model exists chiefly to serve the "one LSP per project group" requ
 
 ### 3.5 Shell (Swift app)
 
-- AppKit backbone: `NSWindow`/`NSDocument`-style lifecycle, tabs via native window tabbing,
-  the editor as an AppKit view. SwiftUI for chrome where it's strong: preferences,
-  sidebars, status popovers, command palette.
-- File navigator sidebar scoped to project roots (thin: open/rename/reveal, not a file manager).
+- AppKit backbone: `NSWindow`/`NSDocument`-style lifecycle, the editor as an AppKit view.
+  SwiftUI for chrome where it's strong: preferences, sidebars, status popovers, command
+  palette.
+- **Tabs are a requirement**, not a nicety: many buffers per window is the normal working
+  mode. Start with native `NSWindow` tabbing (free, Mission Control friendly); if it fights
+  the sidebar model below (native tabs are one-window-per-tab, so each tab would carry its
+  own sidebar), replace with an in-window tab bar over a single editor pane, driven by the
+  same open-buffer list the navigator shows.
+- **File navigation drawer** (toggleable left sidebar), two stacked panes:
+  1. **Open buffers, grouped by project.** The top pane lists every open buffer in the
+     window, grouped under the project they belong to (project = the workspace model's
+     root for that file — git repo root or root-marker directory, the same grouping that
+     scopes LSP instances; loose files gather under a "Other" group). Click to switch to
+     that buffer; the dirty dot and filename mirror the tab/window state.
+  2. **Folder tree of the selected buffer's project.** Below a split, the bottom pane
+     shows the directory tree the selected buffer lives in, scoped to its project root
+     (typically the enclosing git repo). Selecting a different buffer above retargets this
+     tree to that buffer's project. Gitignore-aware listing; click to open files as new
+     buffers in the same window. Thin by design: open/rename/reveal-in-Finder, not a file
+     manager.
+  - The drawer is a view over core-owned state (open documents + workspace roots + a
+    directory listing API); the shell contributes only the outline views and the split.
+    Buffer→project grouping therefore needs the Phase 3 workspace model — until then the
+    tree scopes to the enclosing git repo as a stopgap.
 - Command palette (⇧⌘P-style) and fuzzy file-open (⌘T, TextMate's beloved feature) backed by
   core-side indexes.
 - Diagnostics UI: underlines + gutter marks, a per-buffer issues list, jump-to-next-error.
@@ -258,6 +278,12 @@ Prove the architecture end to end before writing real features.
 
 ### Phase 3 — Projects & LSP (~6–8 weeks, the heart of the project)
 - Workspace model: root detection, loose-file grouping, manual re-rooting UI.
+- First version of the **file navigation drawer** (§3.5): open buffers grouped by the
+  workspace model's projects on top, the selected buffer's project folder tree below.
+  It doubles as the workspace model's debug view — the grouping the drawer shows is the
+  grouping the LSP pool keys on, so a wrong tree is visible before a wrong server is.
+- Settle the tab question: native window tabs vs in-window tab bar (§3.5), decided by how
+  tabs and the per-window drawer coexist in practice.
 - LSP client (JSON-RPC over stdio, incremental didChange) and the **instance pool** keyed by
   `(server, root)` with idle shutdown, crash restart + backoff, and a server-status UI.
 - Features in order: diagnostics → hover → completion → go-to-definition → references →
@@ -277,7 +303,8 @@ Prove the architecture end to end before writing real features.
 ### Phase 5 — Breadth & polish (~4–6 weeks, then ongoing)
 - Grammar set to ~40 languages; server defaults to ~12.
 - Fuzzy file-open (⌘T), command palette, project-wide search, document outline (LSP symbols).
-- File navigator sidebar, session restore, `.textchum.json` per-project config.
+- Navigation drawer polish: rename/reveal actions, gitignore-aware filtering options,
+  drag to reorder buffer groups; session restore; `.textchum.json` per-project config.
 - Performance pass (startup time budget: < 300 ms to first window), crash reporting, app
   icon, notarized DMG/Sparkle or TestFlight distribution.
 - **Exit:** you've stopped opening other editors for day-to-day work; a v0.1 build is
