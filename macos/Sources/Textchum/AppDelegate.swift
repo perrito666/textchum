@@ -1,16 +1,38 @@
 import AppKit
 import TextchumKit
 
-/// Application lifecycle: the main menu, the core instance, and the set of
-/// open editor windows.
+/// Application lifecycle: the main menu, the core instance, configuration,
+/// and the set of open editor windows.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coreApp: CoreApp?
+    private var config: CoreConfig?
+    private var settingsModel: SettingsModel?
+    private var settingsWindowController: SettingsWindowController?
     /// Strong references to open editors; windows do not retain their
     /// controllers. Entries are removed as their windows close.
     private var editors: [EditorWindowController] = []
 
+    /// `~/Library/Application Support/Textchum/config.json` — GUI-managed,
+    /// hand-editable JSON.
+    private static var configPath: String {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Textchum/config.json").path
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = Self.makeMainMenu()
+
+        let config = CoreConfig(path: Self.configPath)
+        self.config = config
+        let settingsModel = SettingsModel(config: config)
+        settingsModel.onChange = { [weak self] in
+            guard let self, let model = self.settingsModel else { return }
+            for editor in self.editors {
+                editor.apply(settings: model.currentSettings)
+            }
+        }
+        self.settingsModel = settingsModel
 
         // The core's event channel (diagnostics and more will arrive here);
         // ping once on launch so a broken channel is caught immediately.
@@ -24,6 +46,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         newDocument(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        // A config file that exists but could not be used deserves exactly
+        // one loud notice — the app is running on defaults meanwhile, and
+        // the broken file is preserved for hand fixing.
+        if let warning = config.loadWarning {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Settings file could not be read"
+            alert.informativeText = warning
+            alert.runModal()
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -42,10 +75,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateNow
     }
 
+    // MARK: Settings
+
+    @objc func showSettings(_ sender: Any?) {
+        guard let settingsModel else { return }
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController(model: settingsModel)
+            settingsWindowController?.window?.center()
+        }
+        settingsWindowController?.showWindow(nil)
+        settingsWindowController?.window?.makeKeyAndOrderFront(nil)
+    }
+
     // MARK: Document actions
 
+    private var currentSettings: EditorSettings? {
+        settingsModel?.currentSettings
+    }
+
     @objc func newDocument(_ sender: Any?) {
-        show(editor: EditorWindowController(document: CoreDocument()))
+        show(editor: EditorWindowController(document: CoreDocument(), settings: currentSettings))
     }
 
     @objc func openDocument(_ sender: Any?) {
@@ -56,7 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for url in panel.urls {
             do {
                 let document = try CoreDocument(contentsOf: url.path)
-                show(editor: EditorWindowController(document: document))
+                show(editor: EditorWindowController(document: document, settings: currentSettings))
             } catch {
                 let alert = NSAlert()
                 alert.alertStyle = .warning
@@ -97,6 +146,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             withTitle: "About Textchum",
             action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
             keyEquivalent: ""
+        )
+        appMenu.addItem(.separator())
+        appMenu.addItem(
+            withTitle: "Settings…",
+            action: #selector(showSettings(_:)),
+            keyEquivalent: ","
         )
         appMenu.addItem(.separator())
         appMenu.addItem(

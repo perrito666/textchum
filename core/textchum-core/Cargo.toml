@@ -7,3 +7,4 @@ description = "Platform-independent editor core: buffers, documents, and events.
 
 [dependencies]
 ropey = "1"
+serde_json = "1"

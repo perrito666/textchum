@@ -37,6 +37,11 @@ Textchum est jeune. Ce qui existe et fonctionne aujourd'hui :
   détection d'encodage et écritures atomiques, annuler/rétablir avec fusion
   des frappes, et suivi des modifications ancré au dernier enregistrement —
   voir [Documents](documents.md).
+- Une configuration adossée à un fichier JSON, avec une fenêtre de réglages
+  graphique qui écrit directement dans le fichier : les éditions à la main
+  survivent, les fichiers cassés retombent sur les valeurs par défaut et
+  sont sauvegardés plutôt qu'écrasés — voir
+  [Configuration](configuration.md).
 - Un canal d'événements asynchrone des fils d'exécution du noyau vers
   l'interface, avec un contrat strict de livraison sur un seul fil.
 - Un éditeur macOS à fenêtres multiples (avec onglets natifs), panneaux
@@ -58,4 +63,6 @@ langage par projet et aperçu Markdown.
 - [Architecture](architecture.md) — la séparation noyau/coque et ses règles.
 - [Documents](documents.md) — annulation, modifications, encodages,
   enregistrements atomiques.
+- [Configuration](configuration.md) — la fenêtre de réglages et son fichier
+  JSON.
 - [La frontière C](ffi.md) — conventions de l'interface entre les deux.

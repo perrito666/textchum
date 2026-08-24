@@ -129,7 +129,7 @@ both sides after every edit.
 - **Injections** are required early because Markdown depends on them (fenced code blocks
   highlight in their own language), as do HTML/JS/CSS.
 - **Themes** map tree-sitter capture names (`@keyword`, `@string`, …) to colors/weights,
-  defined in TOML. Ship light + dark defaults; follow the system appearance.
+  defined in JSON. Ship light + dark defaults; follow the system appearance.
 - **Long tail:** tree-sitter covers the important ~60 languages. If coverage of exotic types
   matters later, an optional TextMate-grammar fallback engine (e.g. `syntect`-style) can sit
   behind the same "styled spans" interface — noted as a stretch item, not planned work.
@@ -151,7 +151,7 @@ The workspace model exists chiefly to serve the "one LSP per project group" requ
   sometimes guess wrong (monorepos, symlinks) and must be correctable, not magical.
 - **Server registry:** declarative config mapping language → server command, args, root
   markers, initialization options. Ship curated defaults (pyright, rust-analyzer, gopls,
-  typescript-language-server, clangd, zls, …); user config extends/overrides in TOML.
+  typescript-language-server, clangd, zls, …); user config extends/overrides in JSON.
   Textchum does **not** install servers in v1 — it finds them on PATH and gives actionable
   "server not found, install with …" messages.
 - **Client scope for v1:** initialize/shutdown, didOpen/didChange (incremental)/didSave/
@@ -190,9 +190,11 @@ The workspace model exists chiefly to serve the "one LSP per project group" requ
 
 ### 3.6 Configuration
 
-- TOML in `~/Library/Application Support/Textchum/` (`config.toml`, `themes/`, `servers.toml`),
+- JSON in `~/Library/Application Support/Textchum/` (`config.json`, `themes/`, `servers.json`) —
+  GUI-managed, hand-editable as the escape hatch (broken files are preserved and
+  backed up, unknown keys survive GUI saves) —
   read by the core, with a Preferences UI writing through. Per-project overrides via
-  `.textchum.toml` at the project root (tab width, server choice).
+  `.textchum.json` at the project root (tab width, server choice).
 
 ## 4. Repository layout & build
 
@@ -275,7 +277,7 @@ Prove the architecture end to end before writing real features.
 ### Phase 5 — Breadth & polish (~4–6 weeks, then ongoing)
 - Grammar set to ~40 languages; server defaults to ~12.
 - Fuzzy file-open (⌘T), command palette, project-wide search, document outline (LSP symbols).
-- File navigator sidebar, session restore, `.textchum.toml` per-project config.
+- File navigator sidebar, session restore, `.textchum.json` per-project config.
 - Performance pass (startup time budget: < 300 ms to first window), crash reporting, app
   icon, notarized DMG/Sparkle or TestFlight distribution.
 - **Exit:** you've stopped opening other editors for day-to-day work; a v0.1 build is

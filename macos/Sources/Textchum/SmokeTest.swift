@@ -84,6 +84,49 @@ func runSmokeTest() -> Int32 {
         return 1
     }
 
+    // Configuration: round trip, hand-edit preservation, breakage recovery.
+    do {
+        let configDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-smoke-cfg-\(ProcessInfo.processInfo.processIdentifier)")
+        try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        let configPath = configDir.appendingPathComponent("config.json").path
+
+        let config = CoreConfig(path: configPath)
+        guard config.loadWarning == nil, config.fontSize == 13, config.tabWidth == 4 else {
+            print("FAIL: fresh config did not load defaults")
+            return 1
+        }
+        config.fontFamily = "Menlo"
+        config.tabWidth = 8
+        try config.save()
+        let reloaded = CoreConfig(path: configPath)
+        guard reloaded.fontFamily == "Menlo", reloaded.tabWidth == 8 else {
+            print("FAIL: config round trip")
+            return 1
+        }
+
+        // Break the file by hand; the app must fall back to defaults,
+        // warn, preserve the broken content, and back it up on next save.
+        try "{ broken".write(toFile: configPath, atomically: true, encoding: .utf8)
+        let broken = CoreConfig(path: configPath)
+        guard broken.loadWarning != nil, broken.tabWidth == 4 else {
+            print("FAIL: broken config not detected or defaults not applied")
+            return 1
+        }
+        broken.tabWidth = 2
+        try broken.save()
+        let backup = try String(contentsOfFile: configPath + ".bak", encoding: .utf8)
+        guard backup == "{ broken", CoreConfig(path: configPath).tabWidth == 2 else {
+            print("FAIL: broken config not backed up before overwrite")
+            return 1
+        }
+        print("configuration ok (round trip, breakage recovery, backup)")
+        try? FileManager.default.removeItem(at: configDir)
+    } catch {
+        print("FAIL: configuration: \(error)")
+        return 1
+    }
+
     // Async event round trip: core dispatch thread → main queue.
     var receivedSequence: UInt64?
     let coreApp = CoreApp { event in

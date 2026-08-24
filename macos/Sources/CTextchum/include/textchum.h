@@ -27,6 +27,12 @@ typedef struct TcApp TcApp;
 typedef struct TcBuffer TcBuffer;
 
 /**
+ * The application's JSON-backed configuration. Create with
+ * [`tc_config_load`], release with [`tc_config_free`].
+ */
+typedef struct TcConfig TcConfig;
+
+/**
  * A text document: buffer, undo history, path and encoding. Create with
  * [`tc_document_new`] or [`tc_document_open`], release with
  * [`tc_document_free`].
@@ -348,6 +354,92 @@ char *tc_document_path(const struct TcDocument *document);
  * `document` must be a live document pointer.
  */
 const char *tc_document_encoding_name(const struct TcDocument *document);
+
+/**
+ * Loads the configuration file at `path` (`len` bytes of UTF-8). Always
+ * returns a usable handle (defaults apply for anything missing or
+ * unusable); if the file existed but could not be used and `warning_out`
+ * is non-null, a human-readable warning is stored there for the shell to
+ * surface once (release with [`tc_string_free`]).
+ *
+ * # Safety
+ * `path` must point to `len` readable bytes; `warning_out`, if non-null,
+ * must point to a writable pointer slot.
+ */
+struct TcConfig *tc_config_load(const char *path, uintptr_t len, char **warning_out);
+
+/**
+ * Destroys a configuration handle. Does not save.
+ *
+ * # Safety
+ * `config` must be a pointer from [`tc_config_load`], not previously
+ * freed.
+ */
+void tc_config_free(struct TcConfig *config);
+
+/**
+ * The configured editor font family, or null when the platform default
+ * should be used. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_font_family(const struct TcConfig *config);
+
+/**
+ * The editor font size in points (already clamped to the valid range).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+double tc_config_font_size(const struct TcConfig *config);
+
+/**
+ * The tab width in columns (already clamped to the valid range).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+uint32_t tc_config_tab_width(const struct TcConfig *config);
+
+/**
+ * Sets the editor font family; `len == 0` clears it back to the platform
+ * default.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `family` must point to
+ * `len` readable bytes.
+ */
+void tc_config_set_font_family(struct TcConfig *config, const char *family, uintptr_t len);
+
+/**
+ * Sets the editor font size in points (clamped to the valid range).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_font_size(struct TcConfig *config, double size);
+
+/**
+ * Sets the tab width in columns (clamped to the valid range).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_tab_width(struct TcConfig *config, uint32_t width);
+
+/**
+ * Writes the configuration back to its file: pretty-printed JSON, written
+ * atomically, preserving keys this version does not recognize. If the
+ * on-disk file was unparseable at load time it is first copied to
+ * `<name>.bak`. Returns false on failure and fills the optional
+ * `error_out` (release with [`tc_string_free`]).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `error_out`, if
+ * non-null, must point to a writable pointer slot.
+ */
+bool tc_config_save(struct TcConfig *config, char **error_out);
 
 #ifdef __cplusplus
 }  // extern "C"

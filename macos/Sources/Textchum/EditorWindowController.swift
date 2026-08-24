@@ -25,7 +25,7 @@ final class EditorWindowController: NSWindowController {
     /// know about, so it should not break undo coalescing.
     private var selectionChangeIsFromEditing = false
 
-    init(document: CoreDocument) {
+    init(document: CoreDocument, settings: EditorSettings? = nil) {
         self.coreDocument = document
 
         let window = NSWindow(
@@ -54,7 +54,36 @@ final class EditorWindowController: NSWindowController {
 
         textView.string = coreDocument.text
         window.contentView = scrollView
+        if let settings {
+            apply(settings: settings)
+        }
         updateChrome()
+    }
+
+    /// Applies configuration-derived settings to the view: the font, and
+    /// tab stops sized to the configured width in that font.
+    func apply(settings: EditorSettings) {
+        guard let textView else { return }
+        let paragraphStyle = NSMutableParagraphStyle()
+        let spaceWidth = (" " as NSString).size(withAttributes: [.font: settings.font]).width
+        paragraphStyle.tabStops = []
+        paragraphStyle.defaultTabInterval = spaceWidth * CGFloat(settings.tabWidth)
+
+        textView.font = settings.font
+        textView.defaultParagraphStyle = paragraphStyle
+        textView.typingAttributes = [
+            .font: settings.font,
+            .paragraphStyle: paragraphStyle,
+            .foregroundColor: NSColor.textColor,
+        ]
+        // Restyle existing text too; the document is plain text, so
+        // uniform attributes are correct by definition.
+        if let storage = textView.textStorage {
+            storage.setAttributes(
+                textView.typingAttributes,
+                range: NSRange(location: 0, length: storage.length)
+            )
+        }
     }
 
     @available(*, unavailable)

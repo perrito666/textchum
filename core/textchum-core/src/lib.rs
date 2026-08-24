@@ -12,9 +12,12 @@
 
 mod app;
 mod buffer;
+mod config;
 mod document;
+mod fsutil;
 mod history;
 
 pub use app::{App, Event};
 pub use buffer::{Buffer, BufferError};
+pub use config::{Config, DEFAULT_FONT_SIZE, DEFAULT_TAB_WIDTH};
 pub use document::{AppliedEdit, Document, DocumentError, Encoding};

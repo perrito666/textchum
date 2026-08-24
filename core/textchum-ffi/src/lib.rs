@@ -17,7 +17,7 @@
 use std::ffi::{c_char, c_void, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use textchum_core::{App, Buffer, Document, Event};
+use textchum_core::{App, Buffer, Config, Document, Event};
 
 /// Event kind: reply to `tc_app_ping`.
 pub const TC_EVENT_PONG: u32 = 1;
@@ -520,6 +520,164 @@ pub unsafe extern "C" fn tc_document_encoding_name(document: *const TcDocument) 
         "ISO-8859-1" => "ISO-8859-1\0".as_ptr() as *const c_char,
         _ => "UTF-8\0".as_ptr() as *const c_char,
     }
+}
+
+/// The application's JSON-backed configuration. Create with
+/// [`tc_config_load`], release with [`tc_config_free`].
+pub struct TcConfig {
+    inner: Config,
+}
+
+/// Loads the configuration file at `path` (`len` bytes of UTF-8). Always
+/// returns a usable handle (defaults apply for anything missing or
+/// unusable); if the file existed but could not be used and `warning_out`
+/// is non-null, a human-readable warning is stored there for the shell to
+/// surface once (release with [`tc_string_free`]).
+///
+/// # Safety
+/// `path` must point to `len` readable bytes; `warning_out`, if non-null,
+/// must point to a writable pointer slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_load(
+    path: *const c_char,
+    len: usize,
+    warning_out: *mut *mut c_char,
+) -> *mut TcConfig {
+    if !warning_out.is_null() {
+        unsafe { *warning_out = std::ptr::null_mut() };
+    }
+    let Some(path) = (unsafe { str_from_raw(path, len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let (config, warning) = Config::load(std::path::Path::new(path));
+        if let Some(warning) = warning {
+            unsafe { write_error(warning_out, &warning) };
+        }
+        Box::into_raw(Box::new(TcConfig { inner: config }))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Destroys a configuration handle. Does not save.
+///
+/// # Safety
+/// `config` must be a pointer from [`tc_config_load`], not previously
+/// freed.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_free(config: *mut TcConfig) {
+    if !config.is_null() {
+        drop(unsafe { Box::from_raw(config) });
+    }
+}
+
+/// The configured editor font family, or null when the platform default
+/// should be used. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_font_family(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    match config.inner.font_family() {
+        Some(family) => owned_c_string(family.to_owned()),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// The editor font size in points (already clamped to the valid range).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_font_size(config: *const TcConfig) -> f64 {
+    unsafe { config.as_ref() }.map_or(textchum_core::DEFAULT_FONT_SIZE, |c| c.inner.font_size())
+}
+
+/// The tab width in columns (already clamped to the valid range).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_tab_width(config: *const TcConfig) -> u32 {
+    unsafe { config.as_ref() }.map_or(textchum_core::DEFAULT_TAB_WIDTH, |c| c.inner.tab_width())
+}
+
+/// Sets the editor font family; `len == 0` clears it back to the platform
+/// default.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `family` must point to
+/// `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_font_family(
+    config: *mut TcConfig,
+    family: *const c_char,
+    len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(family) = (unsafe { str_from_raw(family, len) }) else {
+        return;
+    };
+    config
+        .inner
+        .set_font_family(if family.is_empty() { None } else { Some(family) });
+}
+
+/// Sets the editor font size in points (clamped to the valid range).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_font_size(config: *mut TcConfig, size: f64) {
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_font_size(size);
+    }
+}
+
+/// Sets the tab width in columns (clamped to the valid range).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_tab_width(config: *mut TcConfig, width: u32) {
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_tab_width(width);
+    }
+}
+
+/// Writes the configuration back to its file: pretty-printed JSON, written
+/// atomically, preserving keys this version does not recognize. If the
+/// on-disk file was unparseable at load time it is first copied to
+/// `<name>.bak`. Returns false on failure and fills the optional
+/// `error_out` (release with [`tc_string_free`]).
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `error_out`, if
+/// non-null, must point to a writable pointer slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_save(
+    config: *mut TcConfig,
+    error_out: *mut *mut c_char,
+) -> bool {
+    if !error_out.is_null() {
+        unsafe { *error_out = std::ptr::null_mut() };
+    }
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| match config.inner.save() {
+        Ok(()) => true,
+        Err(error) => {
+            unsafe { write_error(error_out, &error.to_string()) };
+            false
+        }
+    }))
+    .unwrap_or(false)
 }
 
 /// Shared implementation of undo/redo entry points.
