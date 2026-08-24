@@ -284,7 +284,11 @@ final class QuickFinderPanel: NSObject {
 
     /// One line explaining what the search did — the difference between
     /// "your query matched nothing" and "nothing was read at all".
-    private static func status(for results: CoreSearch.Results, scope: String) -> String {
+    /// Pure (results in, string out), so it runs on the search queue —
+    /// `nonisolated` opts it out of the class's main-actor isolation.
+    private nonisolated static func status(
+        for results: CoreSearch.Results, scope: String
+    ) -> String {
         let stats = results.stats
         if !results.hits.isEmpty {
             let files = Set(results.hits.map(\.path)).count
