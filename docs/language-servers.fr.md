@@ -82,7 +82,10 @@ habituelles du fichier :
 }
 ```
 
-Les changements s'appliquent aux serveurs démarrés ensuite ; le bouton
+La commande d'une entrée s'édite sur place — corriger une coquille ou
+ajouter un `--stdio` manquant se fait dans la ligne elle-même, avec ⏎
+ou en cliquant ailleurs, sans supprimer puis recréer. Les changements
+s'appliquent aux serveurs démarrés ensuite ; le bouton
 **Restart Servers Now** de l'onglet retire les instances en cours et les
 relance sous la nouvelle configuration.
 

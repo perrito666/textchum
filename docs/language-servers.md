@@ -71,6 +71,8 @@ hand-editing guarantees:
 }
 ```
 
+An entry's command is editable in place — fix a typo or add a missing
+`--stdio` right in the row, press ⏎ or click away, no delete-and-re-add.
 Changes apply to servers started afterwards; the tab's **Restart Servers
 Now** retires running instances and respawns them under the new
 configuration.

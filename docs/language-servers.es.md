@@ -80,9 +80,12 @@ edición a mano habituales del archivo:
 }
 ```
 
-Los cambios se aplican a los servidores arrancados después; el botón
-**Restart Servers Now** de la pestaña retira las instancias en marcha y
-las relanza con la nueva configuración.
+El comando de una entrada se edita en el sitio — corregir una errata o
+añadir un `--stdio` que faltaba se hace en la propia fila, con ⏎ o
+haciendo clic fuera, sin borrar y volver a crear. Los cambios se
+aplican a los servidores arrancados después; el botón **Restart Servers
+Now** de la pestaña retira las instancias en marcha y las relanza con
+la nueva configuración.
 
 ## Cuando no hay servidor
 

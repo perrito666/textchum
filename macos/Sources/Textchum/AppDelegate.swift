@@ -14,9 +14,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var editors: [EditorWindowController] = []
 
     /// `~/Library/Application Support/Textchum/config.json` — GUI-managed,
-    /// hand-editable JSON.
+    /// hand-editable JSON. A hidden `--config <path>` points elsewhere,
+    /// for tests that must not touch the real settings.
     private static var configPath: String {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let arguments = CommandLine.arguments
+        if let flag = arguments.firstIndex(of: "--config"), arguments.count > flag + 1 {
+            return arguments[flag + 1]
+        }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Textchum/config.json").path
     }
 
@@ -94,6 +99,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var flagValueIndexes: Set<Int> = []
         if let flag = arguments.firstIndex(of: "--debug-panel") {
             flagValueIndexes = [flag + 1, flag + 2, flag + 3]
+        }
+        if let flag = arguments.firstIndex(of: "--config") {
+            flagValueIndexes.insert(flag + 1)
         }
         let fileArguments = arguments.enumerated()
             .filter { index, argument in

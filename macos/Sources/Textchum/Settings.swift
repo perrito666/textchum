@@ -236,6 +236,19 @@ final class SettingsModel: ObservableObject {
         persistLSPChange()
     }
 
+    /// Rewrites an existing override's command in place — same (scope,
+    /// language) key, new command line.
+    func updateLSPEntry(_ entry: LSPEntry, command: String) {
+        let command = command.trimmingCharacters(in: .whitespaces)
+        guard !command.isEmpty else { return }
+        config.setLSPEntry(
+            root: entry.scope.isEmpty ? nil : entry.scope,
+            language: entry.language,
+            command: command
+        )
+        persistLSPChange()
+    }
+
     func removeLSPEntry(_ entry: LSPEntry) {
         config.setLSPEntry(
             root: entry.scope.isEmpty ? nil : entry.scope,
@@ -437,6 +450,45 @@ private struct ProjectsTab: View {
     }
 }
 
+/// One override row's command line, editable in place. Commits on ⏎ or
+/// when focus leaves; an emptied field reverts (removal has its own
+/// button). Local state buffers typing so the file is written once per
+/// edit, not once per keystroke.
+private struct CommandField: View {
+    let entry: SettingsModel.LSPEntry
+    let commit: (String) -> Void
+    @State private var text: String
+    @FocusState private var focused: Bool
+
+    init(entry: SettingsModel.LSPEntry, commit: @escaping (String) -> Void) {
+        self.entry = entry
+        self.commit = commit
+        _text = State(initialValue: entry.command)
+    }
+
+    var body: some View {
+        TextField("server command", text: $text)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(.caption, design: .monospaced))
+            .focused($focused)
+            .onSubmit(commitIfChanged)
+            .onChange(of: focused) { _, isFocused in
+                if !isFocused { commitIfChanged() }
+            }
+            .onDisappear(perform: commitIfChanged)
+    }
+
+    private func commitIfChanged() {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            text = entry.command
+            return
+        }
+        guard trimmed != entry.command else { return }
+        commit(trimmed)
+    }
+}
+
 private struct LanguageServersTab: View {
     @ObservedObject var model: SettingsModel
     @State private var newScope = ""
@@ -460,7 +512,7 @@ private struct LanguageServersTab: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.lspEntries) { entry in
-                    HStack {
+                    HStack(alignment: .center, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
                                 Text(entry.scopeLabel)
@@ -468,9 +520,12 @@ private struct LanguageServersTab: View {
                                 Text(entry.language)
                                     .foregroundStyle(.secondary)
                             }
-                            Text(entry.command)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(.secondary)
+                            // Editable in place: ⏎ or clicking away
+                            // applies; scope and language are the entry's
+                            // identity and stay fixed.
+                            CommandField(entry: entry) { command in
+                                model.updateLSPEntry(entry, command: command)
+                            }
                         }
                         .help(entry.scope.isEmpty ? "All projects" : entry.scope)
                         Spacer()
