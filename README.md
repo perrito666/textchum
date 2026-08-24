@@ -26,6 +26,12 @@ make docs     # build the documentation site (en/es/fr) into site/
 Full documentation lives in [`docs/`](docs/index.md), built with MkDocs —
 see [Getting started](docs/getting-started.md).
 
+## The icon
+
+The app icon is a tulip photographed by Horacio Duran in the flower
+fields near Lisse, the Netherlands (52°19'54.1"N 4°37'25.9"E) on
+21 April 2026 at 11:25.
+
 ## License
 
 MIT

@@ -89,8 +89,19 @@ directory, flushes it, and renames it over the target. A crash mid-save can
 never leave a truncated file, and other programs watching the file see the
 old content or the new — never a mixture.
 
+## Session restore
+
+Relaunching Textchum reopens the files you had open, each with its caret
+and scroll position, fronting the one you were in. The state is a plain
+JSON file (`session.json`, next to the configuration), written
+continuously — not just at quit — so a crash loses at most a moment of
+position, never the file list. Files that no longer exist are skipped.
+
+To start without memory (handy when chasing a bug): launch with
+`--fresh`, hold ⇧ while the app starts, or delete `session.json` —
+any of the three is a complete reset.
+
 ## Not there yet
 
 - Encodings beyond UTF-8 and Latin-1.
-- Reopening windows and documents from the previous session.
 - Project-wide search across files.

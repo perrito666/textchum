@@ -99,8 +99,21 @@ cible. Un plantage en plein enregistrement ne peut jamais laisser un fichier
 tronqué, et les autres programmes qui observent le fichier voient l'ancien
 contenu ou le nouveau — jamais un mélange.
 
+## Restauration de session
+
+Relancer Textchum rouvre les fichiers qui étaient ouverts, chacun avec sa
+position de curseur et de défilement, en ramenant au premier plan celui
+qui était utilisé. L'état est un simple fichier JSON (`session.json`, à
+côté de la configuration), écrit en continu — pas seulement à la
+fermeture — de sorte qu'un plantage perd au plus un instant de position,
+jamais la liste des fichiers. Les fichiers disparus sont ignorés.
+
+Pour démarrer sans mémoire (utile en chassant un bogue) : lancer avec
+`--fresh`, maintenir ⇧ pendant le démarrage, ou supprimer
+`session.json` — chacune des trois options est une remise à zéro
+complète.
+
 ## Pas encore là
 
 - Les encodages au-delà d'UTF-8 et de Latin-1.
-- Rouvrir les fenêtres et documents de la session précédente.
 - La recherche à l'échelle du projet, entre fichiers.

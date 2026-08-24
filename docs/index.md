@@ -72,4 +72,10 @@ and fuzzy file opening, and session restore.
 - [Documents](documents.md) — undo, dirty state, encodings, atomic saves.
 - [Highlighting](highlighting.md) — languages, injections, and the theme.
 - [Configuration](configuration.md) — the settings window and its JSON file.
+
+## About the icon
+
+The app icon is a tulip photographed by Horacio Duran in the flower
+fields near Lisse, the Netherlands (52°19'54.1"N 4°37'25.9"E) on
+21 April 2026 at 11:25.
 - [The C boundary](ffi.md) — conventions of the interface between the two.

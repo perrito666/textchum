@@ -31,6 +31,7 @@ Otros objetivos útiles:
 | `make test` | Ejecuta la batería de pruebas de Rust. |
 | `make smoke` | Compila todo y ejecuta la prueba de humo sin interfaz. |
 | `make check` | Todo lo que ejecuta la CI: pruebas, prueba de humo y verificación de la cabecera. |
+| `make app` | Construye un `Textchum.app` de doble clic (con icono) en `dist/`. |
 | `make docs` | Genera este sitio de documentación en `site/`. |
 | `make clean` | Elimina todos los productos de compilación. |
 

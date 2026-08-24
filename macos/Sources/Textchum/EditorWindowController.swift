@@ -331,6 +331,29 @@ final class EditorWindowController: NSWindowController {
         return (url.path, line, character)
     }
 
+    // MARK: Session position
+
+    /// The caret (UTF-16 offset) and vertical scroll, for session saving.
+    var sessionPosition: (caret: Int, scroll: Double) {
+        let caret = textView?.selectedRange().location ?? 0
+        let scroll = Double(textView?.enclosingScrollView?.contentView.bounds.origin.y ?? 0)
+        return (caret, scroll)
+    }
+
+    /// Restores a saved caret and scroll position (clamped to the text).
+    func restoreSessionPosition(caret: Int, scroll: Double) {
+        guard let textView else { return }
+        let length = (textView.string as NSString).length
+        selectionChangeIsFromEditing = false
+        textView.setSelectedRange(NSRange(location: min(caret, length), length: 0))
+        if let scrollView = textView.enclosingScrollView {
+            scrollView.contentView.scroll(to: NSPoint(x: 0, y: max(0, scroll)))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        } else {
+            textView.scrollRangeToVisible(textView.selectedRange())
+        }
+    }
+
     /// Moves the caret to an LSP position and reveals it.
     func reveal(line: Int, character: Int) {
         guard let textView else { return }

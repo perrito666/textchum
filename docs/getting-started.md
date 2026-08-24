@@ -30,6 +30,7 @@ Other useful targets:
 | `make test` | Runs the Rust test suite. |
 | `make smoke` | Builds everything, then runs the headless smoke test. |
 | `make check` | Everything CI runs: tests, smoke test, header drift check. |
+| `make app` | Builds a double-clickable `Textchum.app` (with icon) into `dist/`. |
 | `make docs` | Builds this documentation site into `site/`. |
 | `make clean` | Removes all build products. |
 

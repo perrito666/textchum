@@ -11,7 +11,7 @@ SWIFT_PKG     := --package-path macos
 # Outside docs/ so MkDocs does not scan it as content.
 DOCS_VENV     := .docs-venv
 
-.PHONY: all build core run test smoke header-check check docs docs-serve clean
+.PHONY: all build core run test smoke header-check check app docs docs-serve clean
 
 all: build
 
@@ -42,6 +42,27 @@ header-check: core
 ## Everything CI runs.
 check: test smoke header-check
 
+APP_BUNDLE := dist/Textchum.app
+
+## A double-clickable application bundle in dist/, with the icon.
+app: core
+	swift build -c release $(SWIFT_PKG)
+	rm -rf $(APP_BUNDLE)
+	mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources
+	cp macos/.build/release/Textchum $(APP_BUNDLE)/Contents/MacOS/
+	cp macos/Info.plist $(APP_BUNDLE)/Contents/
+	rm -rf dist/Textchum.iconset
+	mkdir -p dist/Textchum.iconset
+	for size in 16 32 128 256 512; do \
+	  sips -z $$size $$size macos/AppIcon/icon-1024.png \
+	    --out dist/Textchum.iconset/icon_$${size}x$${size}.png >/dev/null; \
+	  sips -z $$((size*2)) $$((size*2)) macos/AppIcon/icon-1024.png \
+	    --out dist/Textchum.iconset/icon_$${size}x$${size}@2x.png >/dev/null; \
+	done
+	iconutil -c icns dist/Textchum.iconset -o $(APP_BUNDLE)/Contents/Resources/Textchum.icns
+	rm -rf dist/Textchum.iconset
+	@echo "Built $(APP_BUNDLE) — open it, or copy to /Applications"
+
 # Newest available Python: patched versions of the docs toolchain's
 # transitive dependencies require >= 3.10.
 PYTHON := $(shell command -v python3.13 || command -v python3.12 || command -v python3.11 || command -v python3)
@@ -61,4 +82,4 @@ docs-serve: $(DOCS_VENV)
 
 clean:
 	cargo clean --manifest-path $(RUST_MANIFEST)
-	rm -rf macos/.build site
+	rm -rf macos/.build site dist

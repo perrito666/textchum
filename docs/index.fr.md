@@ -86,4 +86,10 @@ de session.
 - [Coloration](highlighting.md) — langages, injections et le thème.
 - [Configuration](configuration.md) — la fenêtre de réglages et son fichier
   JSON.
+
+## À propos de l'icône
+
+L'icône de l'application est une tulipe photographiée par Horacio Duran
+dans les champs de fleurs près de Lisse, aux Pays-Bas (52°19'54.1"N
+4°37'25.9"E), le 21 avril 2026 à 11 h 25.
 - [La frontière C](ffi.md) — conventions de l'interface entre les deux.

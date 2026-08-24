@@ -11,3 +11,4 @@ site/
 
 # macOS noise
 .DS_Store
+dist/

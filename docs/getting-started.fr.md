@@ -31,6 +31,7 @@ Autres cibles utiles :
 | `make test` | Exécute la suite de tests Rust. |
 | `make smoke` | Compile tout puis exécute le test de fumée sans interface. |
 | `make check` | Tout ce que lance la CI : tests, test de fumée, contrôle de dérive de l'en-tête. |
+| `make app` | Construit un `Textchum.app` double-cliquable (avec icône) dans `dist/`. |
 | `make docs` | Construit ce site de documentation dans `site/`. |
 | `make clean` | Supprime tous les produits de compilation. |
 

@@ -98,8 +98,20 @@ fallo a mitad de guardado no puede dejar nunca un archivo truncado, y otros
 programas que observen el archivo ven el contenido viejo o el nuevo — nunca
 una mezcla.
 
+## Restauración de sesión
+
+Relanzar Textchum reabre los archivos que estaban abiertos, cada uno con
+su posición de cursor y de desplazamiento, trayendo al frente el que se
+estaba usando. El estado es un archivo JSON plano (`session.json`, junto
+a la configuración), escrito continuamente — no solo al salir —, así que
+un fallo pierde como mucho un instante de posición, nunca la lista de
+archivos. Los archivos que ya no existen se omiten.
+
+Para arrancar sin memoria (útil persiguiendo un error): lanzar con
+`--fresh`, mantener ⇧ mientras arranca la aplicación o borrar
+`session.json` — cualquiera de las tres es un reinicio completo.
+
 ## Aún no está
 
 - Codificaciones más allá de UTF-8 y Latin-1.
-- Reabrir ventanas y documentos de la sesión anterior.
 - Búsqueda en todo el proyecto, entre archivos.

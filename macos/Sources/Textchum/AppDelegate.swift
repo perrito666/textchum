@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self?.rebuildSidebar()
+                    self?.saveSession()
                     // Save-as gives untitled documents a path; recents
                     // track it (the controller cannot reach this list).
                     if let path = changedEditor?.coreDocument.path {
@@ -63,14 +64,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         coreApp.ping(sequence: 1)
         self.coreApp = coreApp
 
-        // Open files given on the command line; otherwise a fresh window.
+        // Open files given on the command line. With none, defer the
+        // decision one runloop turn: Finder-open events may still be in
+        // flight, and session restore should not race them.
         let fileArguments = CommandLine.arguments.dropFirst()
             .filter { FileManager.default.fileExists(atPath: $0) }
-        if fileArguments.isEmpty {
-            newDocument(nil)
-        } else {
-            for path in fileArguments {
-                open(path: path)
+        for path in fileArguments {
+            open(path: path)
+        }
+        let skipRestore =
+            !fileArguments.isEmpty
+            || CommandLine.arguments.contains("--fresh")
+            || NSEvent.modifierFlags.contains(.shift)
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.editors.isEmpty else { return }
+                if !skipRestore {
+                    self.restoreSession()
+                }
+                if self.editors.isEmpty {
+                    self.newDocument(nil)
+                }
             }
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -87,13 +101,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Files opened from Finder (double-click, Open With, drag to icon).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.isFileURL {
+            open(path: url.path)
+        }
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
 
+    // MARK: Session
+
+    /// Writes the current session: open files with their positions.
+    /// Called eagerly on document changes and window closes, and at quit
+    /// (which captures the freshest caret positions).
+    private func saveSession() {
+        var state = SessionState()
+        for editor in editors {
+            guard let path = editor.coreDocument.path else { continue }
+            let position = editor.sessionPosition
+            state.windows.append(
+                SessionState.Window(
+                    path: path, caret: position.caret, scroll: position.scroll))
+        }
+        state.frontmost =
+            editors.first { $0.window?.isKeyWindow == true }?.coreDocument.path
+            ?? state.windows.last?.path
+        SessionStore.save(state)
+    }
+
+    /// Reopens the saved session's files and positions.
+    private func restoreSession() {
+        guard let state = SessionStore.load() else { return }
+        var frontmostEditor: EditorWindowController?
+        for window in state.windows
+        where FileManager.default.fileExists(atPath: window.path) {
+            open(path: window.path)
+            guard let editor = editors.first(where: { $0.coreDocument.path == window.path })
+            else { continue }
+            editor.restoreSessionPosition(caret: window.caret, scroll: window.scroll)
+            if window.path == state.frontmost {
+                frontmostEditor = editor
+            }
+        }
+        frontmostEditor?.window?.makeKeyAndOrderFront(nil)
+    }
+
     /// Quitting reviews every dirty window through the same save/discard
-    /// flow as closing it by hand.
+    /// flow as closing it by hand, then records the session with the
+    /// freshest positions.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        saveSession()
         for editor in editors {
             guard let window = editor.window else { continue }
             if !editor.windowShouldClose(window) {
@@ -367,7 +427,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self?.editors.removeAll { $0.window === closing }
                 }
                 DispatchQueue.main.async {
-                    MainActor.assumeIsolated { self?.rebuildSidebar() }
+                    MainActor.assumeIsolated {
+                        self?.rebuildSidebar()
+                        self?.saveSession()
+                    }
                 }
             }
         }

@@ -82,4 +82,10 @@ proyecto y apertura difusa de archivos, y restauración de sesión.
 - [Coloreado](highlighting.md) — lenguajes, inyecciones y el tema.
 - [Configuración](configuration.md) — la ventana de ajustes y su archivo
   JSON.
+
+## Sobre el icono
+
+El icono de la aplicación es un tulipán fotografiado por Horacio Duran en
+los campos de flores cerca de Lisse, Países Bajos (52°19'54.1"N
+4°37'25.9"E) el 21 de abril de 2026 a las 11:25.
 - [La frontera C](ffi.md) — convenciones de la interfaz entre ambos.
