@@ -173,8 +173,10 @@ Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `undo`, `redo`, `find`, `findAndReplace`, `findNext`, `findPrevious`,
 `useSelectionForFind`, `findInProject`, `jumpToDefinition`,
 `goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
-`toggleLineNumbers`, `settings` — an unknown name is logged with the
-full list. Go to Block Start/End (⌃⌥↑/⌃⌥↓ by default) jump over the
+`toggleLineNumbers`, `commandPalette`, `settings` — an unknown name is
+logged with the full list. And when a shortcut escapes memory entirely,
+the **Command Palette** (⇧⌘P) fuzzy-searches every menu action by name
+and runs the selection. Go to Block Start/End (⌃⌥↑/⌃⌥↓ by default) jump over the
 innermost multi-line syntax block around the caret, courtesy of the
 same tree that powers highlighting.
 

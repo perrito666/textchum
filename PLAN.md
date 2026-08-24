@@ -338,7 +338,8 @@ Prove the architecture end to end before writing real features.
 ### Phase 5 — Breadth & polish (~4–6 weeks, then ongoing)
 - Grammar set to ~40 languages; server defaults to ~12.
 - Content search (⇧⌘F, ripgrep crates) and fuzzy file-open (⌘T, nucleo) with the shared
-  editable-scope-path design (§3.5); command palette; document outline (LSP symbols).
+  editable-scope-path design (§3.5); command palette (done — ⇧⌘P, fuzzy over every
+  menu action); document outline (LSP symbols).
 - ~~Themes (§3.7)~~ done: JSON theme format, built-in curated set (default, high
   contrast, Graphite), selection in Settings, and the `--emit-theme` generator.
 - Navigation drawer polish: rename/reveal actions, gitignore-aware filtering options,

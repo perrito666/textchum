@@ -138,6 +138,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let filters = Array(allArguments.dropFirst(flagIndex + 4))
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 MainActor.assumeIsolated {
+                    if allArguments[flagIndex + 1] == "palette" {
+                        // scope doubles as the initial query.
+                        self?.showCommandPalette(nil)
+                        self?.commandPalette.debugSet(query: scope == "x" ? "" : scope)
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "settings" {
                         // scope names the tab tag for this mode.
                         self?.settingsModel?.selectedTab = scope
@@ -327,6 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(NSSplitViewController.toggleSidebar(_:)): "toggleNavigator",
             #selector(EditorWindowController.togglePreview(_:)): "togglePreview",
             #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
+            #selector(showCommandPalette(_:)): "commandPalette",
             #selector(showSettings(_:)): "settings",
         ]
         let finderNames: [Int: String] = [
@@ -567,6 +574,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Quick search
 
     private let quickFinder = QuickFinderPanel()
+    private let commandPalette = CommandPalettePanel()
+
+    /// ⇧⌘P: the fuzzy-searchable menu.
+    @objc func showCommandPalette(_ sender: Any?) {
+        commandPalette.show(over: NSApp.keyWindow)
+    }
 
     /// The search scope for the key window: its project, else its file's
     /// directory, else home — always shown editable in the panel.
@@ -993,6 +1006,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         lineNumbersItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(lineNumbersItem)
+        viewMenu.addItem(.separator())
+        let paletteItem = NSMenuItem(
+            title: "Command Palette…",
+            action: #selector(showCommandPalette(_:)),
+            keyEquivalent: "p"
+        )
+        paletteItem.keyEquivalentModifierMask = [.command, .shift]
+        viewMenu.addItem(paletteItem)
         let viewMenuItem = NSMenuItem()
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)

@@ -185,11 +185,14 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
 `jumpToDefinition`, `goToBlockStart`, `goToBlockEnd`,
-`toggleNavigator`, `togglePreview`, `toggleLineNumbers`, `settings` —
+`toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
+`commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à
 la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique
 multiligne le plus interne autour du curseur, grâce à l'arbre qui
-alimente déjà la coloration.
+alimente déjà la coloration. Et quand un raccourci échappe tout à fait
+à la mémoire, la **palette de commandes** (⇧⌘P) cherche floue n'importe
+quelle action de menu par son nom et exécute la sélection.
 
 ## Pas encore là
 

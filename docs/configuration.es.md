@@ -181,11 +181,14 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
 `jumpToDefinition`, `goToBlockStart`, `goToBlockEnd`,
-`toggleNavigator`, `togglePreview`, `toggleLineNumbers`, `settings` —
+`toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
+`commandPalette`, `settings` —
 un nombre desconocido se registra junto a la lista completa. Ir al
 inicio/fin de bloque (⌃⌥↑/⌃⌥↓ por defecto) salta sobre el bloque
 sintáctico multilínea más interno alrededor del cursor, cortesía del
-mismo árbol que alimenta el coloreado.
+mismo árbol que alimenta el coloreado. Y cuando un atajo se escapa de
+la memoria por completo, la **paleta de comandos** (⇧⌘P) busca de forma
+difusa cualquier acción de menú por su nombre y ejecuta la selección.
 
 ## Aún no está
 
