@@ -1,26 +1,65 @@
 # Textchum
 
-A text editor for macOS in the spirit of TextMate: native, fast, and focused
-on **editing and validating a vast range of file types** — not on being an
+A text editor in the spirit of TextMate: native, fast, and focused on
+**editing and validating a vast range of file types** — not on being an
 IDE.
 
 Textchum is built as a portable compiled core (Rust) behind a fully native
-shell (Swift + AppKit), meeting at a C interface. The core owns the text;
-the shell owns the platform.
+shell — Swift + AppKit on macOS, with a young GTK4/libadwaita shell for
+Linux — meeting at a C interface. The core owns the text; the shell owns
+the platform.
 
-## Status
+## What it does today
 
-Early. Today: rope-backed buffers behind a C ABI, an async core→UI event
-channel, and a minimal editor window whose text view is kept in verified
-lockstep with a core buffer. Next up: documents (open/save/undo), syntax
-highlighting, per-project language servers, Markdown preview.
+- **Documents the core owns**: rope-backed buffers, undo/redo with
+  coalescing, atomic saves, external-change detection, and session
+  restore down to caret positions (`--fresh` to skip it).
+- **Syntax highlighting** via tree-sitter across 15 languages, with
+  injections (Markdown fences, HTML script/style), incremental re-parse
+  on every edit, and auto-indent on return.
+- **Themes**: seven built in — including Molokai, Solarized, Dracula,
+  and Gruvbox — each with light and dark palettes; user themes are JSON
+  files, and `--emit-theme` writes a complete starter to recolor.
+- **One language server per project**: opening files from two projects
+  spawns two independent server instances, each scoped to its own root.
+  Diagnostics, hover, completion, jump to definition, references,
+  rename across files, formatting, and a document outline (⇧⌘O) —
+  with crash restart, idle shutdown, a ctags fallback for projects
+  without a server, and a debug log
+  (`~/Library/Logs/Textchum/lsp.log`) that explains every decision.
+- **Navigation**: a per-window drawer (open buffers grouped by project
+  over the project's file tree), window tabs or separate windows with
+  project-level split/gather, fuzzy file open (⌘T) and ripgrep-style
+  project search (⇧⌘F) with stacked filters and smart case, a command
+  palette (⇧⌘P), and a jump stack — Go Back/Go Forward across every
+  jump, vim-jumplist style.
+- **Markdown**: live split-pane preview with DOM-patch updates and
+  scroll sync.
+- **`chum`**: a terminal command (`chum +42 main.rs`) installable from
+  the app menu.
+- **Configuration** that is GUI-driven but plainly hand-editable JSON —
+  broken files are never clobbered, unknown keys survive, and every
+  shortcut is rebindable.
 
-## Quick start
+## Install
+
+Grab `Textchum.app` from the
+[releases](https://github.com/perrito666/textchum/releases) (unsigned:
+right-click → Open on first launch; Apple Silicon, macOS 14+), or build
+from source:
 
 ```sh
 make run      # build the core + app and launch the editor
+make app      # a double-clickable Textchum.app in dist/
 make check    # what CI runs: tests, smoke test, header drift check
 make docs     # build the documentation site (en/es/fr) into site/
+```
+
+On Linux (experimental — core-owned editing, highlighting, open/save):
+
+```sh
+sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+cargo build --release --manifest-path linux/Cargo.toml
 ```
 
 Full documentation lives in [`docs/`](docs/index.md), built with MkDocs —
