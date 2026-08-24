@@ -7,7 +7,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>Textchum</string>
 	<key>CFBundleIdentifier</key>
-	<string>eu.dumontix.textchum</string>
+	<string>io.github.perrito666.textchum</string>
 	<key>CFBundleVersion</key>
 	<string>0.1.0</string>
 	<key>CFBundleShortVersionString</key>
@@ -30,7 +30,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>eu.dumontix.textchum</string>
+			<string>io.github.perrito666.textchum</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>textchum</string>
