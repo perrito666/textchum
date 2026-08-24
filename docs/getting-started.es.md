@@ -100,18 +100,21 @@ un juguete: pestañas (AdwTabView) que enfocan en vez de duplicar, un
 árbol de archivos del proyecto en barra lateral (F9), edición y
 deshacer propiedad del núcleo, coloreado tree-sitter desde la tabla de
 temas compartida, búsqueda en el archivo (Ctrl+F), búsqueda en el proyecto
-(Ctrl+Shift+F, regex con smart case y línea de estado que dice qué
-hizo), apertura difusa (Ctrl+P), una lista de archivos abiertos
+(Ctrl+Shift+F, regex con smart case, filtros apilables de línea y
+archivo, y línea de estado que dice qué hizo), apertura difusa (Ctrl+P), una lista de archivos abiertos
 agrupada por proyecto sobre el árbol, el pool de servidores de
 lenguaje conectado (diagnósticos subrayados con recuento de problemas,
 autocompletado al escribir, hover, salto a la definición con F12,
-problemas de servidor como avisos) y una ventana de preferencias
+problemas de servidor como avisos), un panel de vista previa de
+Markdown en vivo (Ctrl+Alt+P) y una ventana de preferencias
 (Ctrl+,) sobre el mismo contrato de `config.json` — apariencia, tema,
-ajustes del editor y comandos de servidor por lenguaje, guardado en
+ajustes del editor y servidores de lenguaje — valores por defecto,
+anulaciones por proyecto y los interruptores de espacio de trabajo —,
+guardado en
 `~/.config/textchum/config.json`.
 
 ```sh
-sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libwebkitgtk-6.0-dev
 cargo build --release --manifest-path linux/Cargo.toml
 linux/target/release/textchum-gtk notas.md
 ```

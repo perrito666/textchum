@@ -71,6 +71,7 @@ impl Workbench {
         let go_section = gtk::gio::Menu::new();
         go_section.append(Some("Jump to Definition"), Some("win.definition"));
         go_section.append(Some("Toggle File Tree"), Some("win.sidebar"));
+        go_section.append(Some("Toggle Markdown Preview"), Some("win.preview"));
         let app_section = gtk::gio::Menu::new();
         app_section.append(Some("Preferences…"), Some("win.preferences"));
         app_section.append(Some("Close Tab"), Some("win.close-tab"));
@@ -140,6 +141,7 @@ impl Workbench {
             .content(&toasts)
             .build();
         search_bar.set_key_capture_widget(Some(&window));
+        apply_font_size(Shell::instance().config.borrow().font_size());
         // Screenshot-driven verification hooks.
         if std::env::var_os("TEXTCHUM_DEBUG_SIDEBAR").is_some() {
             sidebar_toggle.set_active(true);
@@ -230,13 +232,18 @@ impl Workbench {
         })
     }
 
+    /// Something the user should hear about, softly.
+    pub fn toast(&self, text: &str) {
+        self.toasts.add_toast(adw::Toast::new(text));
+    }
+
     pub fn selected(&self) -> Option<Rc<Page>> {
         let selected = self.tab_view.selected_page()?;
         self.pages
             .borrow()
             .iter()
             .find(|page| {
-                self.tab_view.page(&page.scrolled).as_ptr() == selected.as_ptr()
+                self.tab_view.page(&page.root).as_ptr() == selected.as_ptr()
             })
             .cloned()
     }
@@ -257,7 +264,7 @@ impl Workbench {
             }
         }
         let page = Page::new(path);
-        let tab_page = self.tab_view.append(&page.scrolled);
+        let tab_page = self.tab_view.append(&page.root);
         tab_page.set_title(&page.display_name());
         self.pages.borrow_mut().push(Rc::clone(&page));
         if let Some(path) = page.path.borrow().clone() {
@@ -297,7 +304,7 @@ impl Workbench {
         let mut pages = self.pages.borrow_mut();
         if let Some(index) = pages
             .iter()
-            .position(|page| self.tab_view.page(&page.scrolled).as_ptr() == tab_page.as_ptr())
+            .position(|page| self.tab_view.page(&page.root).as_ptr() == tab_page.as_ptr())
         {
             let page = pages.remove(index);
             let path = page.path.borrow().clone();
@@ -455,7 +462,7 @@ impl Workbench {
                     .cloned()
                     .flatten();
                 if let Some(page) = page {
-                    let tab_page = workbench.tab_view.page(&page.scrolled);
+                    let tab_page = workbench.tab_view.page(&page.root);
                     workbench.tab_view.set_selected_page(&tab_page);
                 }
             });
@@ -730,6 +737,16 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         workbench.search_bar.set_search_mode(true);
         workbench.search_entry.grab_focus();
     });
+    add("preview", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        match &page.preview {
+            Some(web) => {
+                web.set_visible(!web.is_visible());
+                page.update_preview_now();
+            }
+            None => workbench.toast("Not a Markdown document."),
+        }
+    });
     add("sidebar", workbench, |workbench, _| {
         workbench
             .split
@@ -740,17 +757,30 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.tab_view.close_page(&selected);
         }
     });
-    add("definition", workbench, |workbench, app| {
+    add("definition", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
-        let Some(path) = page.path.borrow().clone() else { return };
+        let Some(path) = page.path.borrow().clone() else {
+            workbench.toast("Save the file first — untitled documents have no server.");
+            return;
+        };
         let (line, character) = page::lsp_caret(&page.buffer);
         let shell = Shell::instance();
         let id = shell
             .pool
             .borrow_mut()
             .definition(Path::new(&path), line, character);
-        let app = app.clone();
-        shell.expect_response(id, move |json| open_definition(&app, json));
+        if id == 0 {
+            // Silence was the old behavior; a jump that cannot happen
+            // should say why.
+            workbench.toast("No language server is running for this document.");
+            return;
+        }
+        let weak = Rc::downgrade(workbench);
+        shell.expect_response(id, move |json| {
+            if let Some(workbench) = weak.upgrade() {
+                open_definition(&workbench, json);
+            }
+        });
     });
     add("find-in-project", workbench, |workbench, _| {
         let root = workbench
@@ -811,9 +841,10 @@ fn replay(workbench: &Rc<Workbench>, is_undo: bool) {
 }
 
 /// Parses a definition result (Location, Location[], or LocationLink[])
-/// and navigates there.
-fn open_definition(_app: &adw::Application, json: &str) {
+/// and navigates there — or says why it cannot.
+fn open_definition(workbench: &Rc<Workbench>, json: &str) {
     let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
+        workbench.toast("No definition found.");
         return;
     };
     let candidate = match &parsed {
@@ -821,7 +852,10 @@ fn open_definition(_app: &adw::Application, json: &str) {
         serde_json::Value::Object(_) => Some(parsed.clone()),
         _ => None,
     };
-    let Some(candidate) = candidate else { return };
+    let Some(candidate) = candidate else {
+        workbench.toast("No definition found.");
+        return;
+    };
     let uri = candidate["uri"]
         .as_str()
         .or_else(|| candidate["targetUri"].as_str());
@@ -833,13 +867,34 @@ fn open_definition(_app: &adw::Application, json: &str) {
         &candidate["targetRange"]
     };
     let Some(path) = uri.and_then(|uri| uri.strip_prefix("file://")) else {
+        workbench.toast("No definition found.");
         return;
     };
+    // Servers percent-encode paths (a space is %20); decode before use.
+    let path = percent_decode(path);
     let line = range["start"]["line"].as_i64().unwrap_or(0) as i32;
     let character = range["start"]["character"].as_u64().unwrap_or(0) as usize;
-    if let Some(workbench) = Workbench::active() {
-        workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+    workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+}
+
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let Ok(byte) =
+                u8::from_str_radix(std::str::from_utf8(&bytes[index + 1..index + 3]).unwrap_or(""), 16)
+            {
+                decoded.push(byte);
+                index += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[index]);
+        index += 1;
     }
+    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 // MARK: Open Quickly
@@ -922,7 +977,20 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
             }
         });
     }
+    wire_escape(&dialog, &entry);
+    dialog.present();
+    entry.grab_focus();
+}
+
+/// ⎋ must close a search dialog from anywhere — including the entry,
+/// which consumes Escape as its own stop-search signal.
+fn wire_escape(dialog: &adw::Window, entry: &gtk::SearchEntry) {
+    {
+        let dialog = dialog.clone();
+        entry.connect_stop_search(move |_| dialog.close());
+    }
     let escape = gtk::EventControllerKey::new();
+    escape.set_propagation_phase(gtk::PropagationPhase::Capture);
     {
         let dialog = dialog.clone();
         escape.connect_key_pressed(move |_, key, _, _| {
@@ -934,8 +1002,6 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
         });
     }
     dialog.add_controller(escape);
-    dialog.present();
-    entry.grab_focus();
 }
 
 // MARK: Find in Project
@@ -947,6 +1013,12 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
 fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
     let entry = gtk::SearchEntry::new();
     entry.set_placeholder_text(Some("regular expression…"));
+    let filters_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let add_button = gtk::Button::with_label("＋ Add Filter");
+    add_button.set_halign(gtk::Align::Start);
+    add_button.add_css_class("flat");
+    let add_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    add_row.append(&add_button);
     let status = gtk::Label::new(None);
     status.set_xalign(0.0);
     status.add_css_class("dim-label");
@@ -963,6 +1035,8 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
     content.set_margin_start(10);
     content.set_margin_end(10);
     content.append(&entry);
+    content.append(&filters_box);
+    content.append(&add_row);
     content.append(&scrolled);
     content.append(&status);
 
@@ -982,6 +1056,7 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
         let status = status.clone();
         let root = root.clone();
         let hits = Rc::clone(&hits);
+        let filters_box = filters_box.clone();
         move |query: &str| {
             while let Some(child) = list.first_child() {
                 list.remove(&child);
@@ -994,7 +1069,7 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
             // Smart case: lowercase queries match any case.
             let smart_case = query == query.to_lowercase();
             match textchum_core::search::grep_with_stats(
-                &root, query, smart_case, 200, &[],
+                &root, query, smart_case, 200, &grep_filters(&filters_box),
             ) {
                 Ok((found, stats)) => {
                     for hit in &found {
@@ -1034,12 +1109,13 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
         }
     };
     run("");
-    // Debounced while typing.
+    // One debounced rerun, shared by the query and every filter row.
     let pending: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
-    {
+    let rerun: Rc<dyn Fn()> = {
         let run = run.clone();
+        let entry = entry.clone();
         let pending = Rc::clone(&pending);
-        entry.connect_search_changed(move |entry| {
+        Rc::new(move || {
             if let Some(previous) = pending.borrow_mut().take() {
                 previous.remove();
             }
@@ -1054,7 +1130,16 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
                 },
             );
             *pending.borrow_mut() = Some(source);
-        });
+        })
+    };
+    {
+        let rerun = Rc::clone(&rerun);
+        entry.connect_search_changed(move |_| rerun());
+    }
+    {
+        let filters_box = filters_box.clone();
+        let rerun = Rc::clone(&rerun);
+        add_button.connect_clicked(move |_| add_filter_row(&filters_box, &rerun));
     }
 
     let open_row = {
@@ -1085,20 +1170,83 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
             }
         });
     }
-    let escape = gtk::EventControllerKey::new();
-    {
-        let dialog = dialog.clone();
-        escape.connect_key_pressed(move |_, key, _, _| {
-            if key == gtk::gdk::Key::Escape {
-                dialog.close();
-                return glib::Propagation::Stop;
-            }
-            glib::Propagation::Proceed
-        });
-    }
-    dialog.add_controller(escape);
+    wire_escape(&dialog, &entry);
     dialog.present();
     entry.grab_focus();
+}
+
+/// One stacked refinement: kind dropdown + pattern + remove — the
+/// macOS panel's filters, GTK edition. Case-insensitive substrings,
+/// combined with *and*.
+fn add_filter_row(filters_box: &gtk::Box, rerun: &Rc<dyn Fn()>) {
+    let kinds = gtk::StringList::new(&[
+        "line contains",
+        "line excludes",
+        "file contains",
+        "file excludes",
+    ]);
+    let kind = gtk::DropDown::new(Some(kinds), gtk::Expression::NONE);
+    let pattern = gtk::Entry::new();
+    pattern.set_placeholder_text(Some("filter text…"));
+    pattern.set_hexpand(true);
+    let remove = gtk::Button::from_icon_name("list-remove-symbolic");
+    remove.add_css_class("flat");
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    row.append(&kind);
+    row.append(&pattern);
+    row.append(&remove);
+    {
+        let rerun = Rc::clone(rerun);
+        kind.connect_selected_notify(move |_| rerun());
+    }
+    {
+        let rerun = Rc::clone(rerun);
+        pattern.connect_changed(move |_| rerun());
+    }
+    {
+        let filters_box = filters_box.clone();
+        let rerun = Rc::clone(rerun);
+        let this_row = row.clone();
+        remove.connect_clicked(move |_| {
+            filters_box.remove(&this_row);
+            rerun();
+        });
+    }
+    filters_box.append(&row);
+    pattern.grab_focus();
+}
+
+/// The current filter rows as core filters (empty patterns skipped).
+fn grep_filters(filters_box: &gtk::Box) -> Vec<textchum_core::search::Filter> {
+    use textchum_core::search::{Filter, FilterKind};
+    let mut filters = Vec::new();
+    let mut child = filters_box.first_child();
+    while let Some(widget) = child {
+        child = widget.next_sibling();
+        let Ok(row) = widget.downcast::<gtk::Box>() else { continue };
+        let Some(kind) = row.first_child().and_downcast::<gtk::DropDown>() else {
+            continue;
+        };
+        let Some(pattern) = kind.next_sibling().and_downcast::<gtk::Entry>() else {
+            continue;
+        };
+        let text = pattern.text().to_string();
+        if text.is_empty() {
+            continue;
+        }
+        let (kind, include) = match kind.selected() {
+            0 => (FilterKind::Line, true),
+            1 => (FilterKind::Line, false),
+            2 => (FilterKind::File, true),
+            _ => (FilterKind::File, false),
+        };
+        filters.push(Filter {
+            kind,
+            include,
+            pattern: text,
+        });
+    }
+    filters
 }
 
 // MARK: Preferences
@@ -1168,6 +1316,18 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
 
     let editor_group = adw::PreferencesGroup::new();
     editor_group.set_title("Editor");
+    let font_row = adw::SpinRow::with_range(6.0, 72.0, 1.0);
+    font_row.set_title("Font size");
+    font_row.set_value(shell.config.borrow().font_size());
+    {
+        let shell = Rc::clone(&shell);
+        font_row.connect_value_notify(move |row| {
+            shell.config.borrow_mut().set_font_size(row.value());
+            shell.save_config();
+            apply_font_size(row.value());
+        });
+    }
+    editor_group.add(&font_row);
     let tab_row = adw::SpinRow::with_range(1.0, 16.0, 1.0);
     tab_row.set_title("Tab width");
     tab_row.set_value(shell.config.borrow().tab_width() as f64);
@@ -1246,6 +1406,96 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         servers_group.add(&row);
     }
 
+    let projects_group = adw::PreferencesGroup::new();
+    projects_group.set_title("Per-project overrides");
+    projects_group.set_description(Some(
+        "A project root's own command wins over the defaults above.",
+    ));
+    let project_entries: Vec<(String, String, String)> =
+        serde_json::from_str::<serde_json::Value>(&shell.config.borrow().lsp_json())
+            .ok()
+            .and_then(|parsed| {
+                parsed["projects"].as_object().map(|projects| {
+                    projects
+                        .iter()
+                        .flat_map(|(root, languages)| {
+                            let root = root.clone();
+                            languages
+                                .as_object()
+                                .into_iter()
+                                .flatten()
+                                .filter_map(|(language, command)| {
+                                    command.as_str().map(|command| {
+                                        (
+                                            root.clone(),
+                                            language.clone(),
+                                            command.to_string(),
+                                        )
+                                    })
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect()
+                })
+            })
+            .unwrap_or_default();
+    for (root, language, command) in project_entries {
+        let row = adw::EntryRow::new();
+        let basename = std::path::Path::new(&root)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| root.clone());
+        row.set_title(&format!("{language} — {basename}"));
+        row.set_tooltip_text(Some(&root));
+        row.set_text(&command);
+        row.set_show_apply_button(true);
+        let shell = Rc::clone(&shell);
+        row.connect_apply(move |row| {
+            let text = row.text();
+            let trimmed = text.trim();
+            shell.config.borrow_mut().set_lsp_entry(
+                Some(&root),
+                &language,
+                if trimmed.is_empty() { None } else { Some(trimmed) },
+            );
+            shell.save_config();
+            shell.reconfigure_pool();
+        });
+        projects_group.add(&row);
+    }
+    let add_root = adw::EntryRow::new();
+    add_root.set_title("project root path");
+    let add_project_language = adw::EntryRow::new();
+    add_project_language.set_title("language");
+    let add_project_command = adw::EntryRow::new();
+    add_project_command.set_title("command");
+    add_project_command.set_show_apply_button(true);
+    {
+        let shell = Rc::clone(&shell);
+        let root_row = add_root.clone();
+        let language_row = add_project_language.clone();
+        add_project_command.connect_apply(move |row| {
+            let root = root_row.text().trim().to_string();
+            let language = language_row.text().trim().to_lowercase();
+            let command = row.text().trim().to_string();
+            if root.is_empty() || language.is_empty() || command.is_empty() {
+                return;
+            }
+            shell
+                .config
+                .borrow_mut()
+                .set_lsp_entry(Some(&root), &language, Some(&command));
+            shell.save_config();
+            shell.reconfigure_pool();
+            root_row.set_text("");
+            language_row.set_text("");
+            row.set_text("");
+        });
+    }
+    projects_group.add(&add_root);
+    projects_group.add(&add_project_language);
+    projects_group.add(&add_project_command);
+
     let add_language = adw::EntryRow::new();
     add_language.set_title("language (e.g. python)");
     let add_command = adw::EntryRow::new();
@@ -1273,9 +1523,125 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     servers_group.add(&add_language);
     servers_group.add(&add_command);
     servers.add(&servers_group);
+    servers.add(&projects_group);
     window.add(&servers);
 
+    // Projects: how roots are detected, defaults plus per-root
+    // overrides — the same workspace section the macOS Settings edit.
+    let projects_page = adw::PreferencesPage::new();
+    projects_page.set_title("Projects");
+    projects_page.set_icon_name(Some("folder-symbolic"));
+    let workspace_defaults = adw::PreferencesGroup::new();
+    workspace_defaults.set_title("Defaults (all projects)");
+    workspace_defaults.set_description(Some(
+        "Manifest projects splits a repository at language manifests; \
+         recursive config cascades a root's settings into nested projects.",
+    ));
+    let workspace: serde_json::Value =
+        serde_json::from_str(&shell.config.borrow().workspace_json())
+            .unwrap_or(serde_json::Value::Null);
+    for (key, title) in [
+        ("manifest_projects", "Manifest projects"),
+        ("recursive_config", "Recursive config"),
+    ] {
+        let row = adw::SwitchRow::new();
+        row.set_title(title);
+        row.set_active(workspace[key].as_bool().unwrap_or(false));
+        let shell = Rc::clone(&shell);
+        row.connect_active_notify(move |row| {
+            shell
+                .config
+                .borrow_mut()
+                .set_workspace_flag(None, key, Some(row.is_active()));
+            shell.save_config();
+            shell.reconfigure_pool();
+        });
+        workspace_defaults.add(&row);
+    }
+    projects_page.add(&workspace_defaults);
+
+    let workspace_overrides = adw::PreferencesGroup::new();
+    workspace_overrides.set_title("Per-project overrides");
+    if let Some(projects) = workspace["projects"].as_object() {
+        for (root, flags) in projects {
+            let expander = adw::ExpanderRow::new();
+            let basename = std::path::Path::new(root)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| root.clone());
+            expander.set_title(&basename);
+            expander.set_subtitle(root);
+            for (key, title) in [
+                ("manifest_projects", "Manifest projects"),
+                ("recursive_config", "Recursive config"),
+            ] {
+                let row = adw::SwitchRow::new();
+                row.set_title(title);
+                row.set_active(flags[key].as_bool().unwrap_or(false));
+                let shell = Rc::clone(&shell);
+                let root = root.clone();
+                row.connect_active_notify(move |row| {
+                    shell.config.borrow_mut().set_workspace_flag(
+                        Some(&root),
+                        key,
+                        Some(row.is_active()),
+                    );
+                    shell.save_config();
+                    shell.reconfigure_pool();
+                });
+                expander.add_row(&row);
+            }
+            workspace_overrides.add(&expander);
+        }
+    }
+    let add_workspace_root = adw::EntryRow::new();
+    add_workspace_root.set_title("add project root path");
+    add_workspace_root.set_show_apply_button(true);
+    {
+        let shell = Rc::clone(&shell);
+        add_workspace_root.connect_apply(move |row| {
+            let root = row.text().trim().to_string();
+            if root.is_empty() {
+                return;
+            }
+            shell
+                .config
+                .borrow_mut()
+                .set_workspace_flag(Some(&root), "manifest_projects", Some(false));
+            shell
+                .config
+                .borrow_mut()
+                .set_workspace_flag(Some(&root), "recursive_config", Some(false));
+            shell.save_config();
+            shell.reconfigure_pool();
+            row.set_text("");
+        });
+    }
+    workspace_overrides.add(&add_workspace_root);
+    projects_page.add(&workspace_overrides);
+    window.add(&projects_page);
+
     window.present();
+}
+
+/// One app-wide CSS provider carrying the editor font size.
+fn apply_font_size(points: f64) {
+    thread_local! {
+        static PROVIDER: gtk::CssProvider = {
+            let provider = gtk::CssProvider::new();
+            if let Some(display) = gtk::gdk::Display::default() {
+                gtk::style_context_add_provider_for_display(
+                    &display,
+                    &provider,
+                    gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                );
+            }
+            provider
+        };
+    }
+    PROVIDER.with(|provider| {
+        provider.load_from_string(&format!("textview {{ font-size: {points}pt; }}"));
+    });
 }
 
 fn for_all_views(apply: impl Fn(&sourceview5::View)) {

@@ -50,6 +50,7 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.quick-open", &["<Ctrl>p"]);
     app.set_accels_for_action("win.definition", &["F12"]);
     app.set_accels_for_action("win.sidebar", &["F9"]);
+    app.set_accels_for_action("win.preview", &["<Ctrl><Alt>p"]);
     app.set_accels_for_action("win.open", &["<Ctrl>o"]);
     app.set_accels_for_action("win.save", &["<Ctrl>s"]);
     app.set_accels_for_action("win.save-as", &["<Ctrl><Shift>s"]);
@@ -112,6 +113,12 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
     workbench.window.present();
     if workbench.tab_view.n_pages() != 2 {
         eprintln!("FAIL: expected 2 tabs, have {}", workbench.tab_view.n_pages());
+        return 1;
+    }
+    // The markdown tab carries a preview paned; the rust one does not.
+    let markdown_child = workbench.tab_view.nth_page(1).child();
+    if markdown_child.downcast_ref::<gtk::Paned>().is_none() {
+        eprintln!("FAIL: markdown tab has no preview paned");
         return 1;
     }
     // Re-opening focuses the existing tab instead of duplicating it.

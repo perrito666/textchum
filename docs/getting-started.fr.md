@@ -101,18 +101,20 @@ Plus jeune que l'application macOS mais plus un jouet : onglets
 projet en barre latérale (F9), édition et annulation propriété du
 noyau, coloration tree-sitter depuis la table de thèmes partagée,
 recherche dans le fichier (Ctrl+F), recherche dans le projet
-(Ctrl+Shift+F, regex avec smart case et ligne d'état qui dit ce
-qu'elle a fait), ouverture floue (Ctrl+P), une liste de fichiers
+(Ctrl+Shift+F, regex avec smart case, filtres empilables ligne/fichier
+et ligne d'état qui dit ce qu'elle a fait), ouverture floue (Ctrl+P), une liste de fichiers
 ouverts groupée par projet au-dessus de l'arbre, le pool de serveurs
 de langage branché (diagnostics soulignés avec compte de problèmes,
 complétion pendant la frappe, survol, saut à la définition en F12,
-ennuis de serveur en avis) et
+ennuis de serveur en avis), un volet d'aperçu Markdown en direct
+(Ctrl+Alt+P) et
 une fenêtre de préférences (Ctrl+,) sur le même contrat `config.json`
-— apparence, thème, réglages d'éditeur et commandes de serveur par
-langage, rangé dans `~/.config/textchum/config.json`.
+— apparence, thème, réglages d'éditeur et serveurs de langage —
+défauts, surcharges par projet et interrupteurs d'espace de travail —,
+rangé dans `~/.config/textchum/config.json`.
 
 ```sh
-sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libwebkitgtk-6.0-dev
 cargo build --release --manifest-path linux/Cargo.toml
 linux/target/release/textchum-gtk notes.md
 ```

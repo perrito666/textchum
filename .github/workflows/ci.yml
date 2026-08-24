@@ -51,7 +51,7 @@ jobs:
       - name: GTK toolchain
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev xvfb
+          sudo apt-get install -yq libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libwebkitgtk-6.0-dev xvfb
       - name: Build
         run: cargo build --manifest-path linux/Cargo.toml
       - name: Smoke test (headless)

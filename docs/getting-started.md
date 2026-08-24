@@ -93,17 +93,20 @@ is younger than the macOS app but no longer a toy: tabs (AdwTabView)
 with focus-not-duplicate opens, a project file-tree sidebar (F9),
 core-owned editing and undo, tree-sitter highlighting from the shared
 theme table, in-file search (Ctrl+F), Find in Project (Ctrl+Shift+F, regex with
-smart case and a says-what-it-did status line), fuzzy Open Quickly
+smart case, stacked line/file filters, and a says-what-it-did status
+line), fuzzy Open Quickly
 (Ctrl+P), an Open Files list grouped by project over the tree, the
 language-server pool wired in (squiggled diagnostics with problem
 counts, completion as you type, hover, jump to definition on F12,
-server trouble as toasts), and a
+server trouble as toasts), a live Markdown preview pane
+(Ctrl+Alt+P), and a
 preferences window (Ctrl+,) over the same `config.json` contract —
-appearance, theme, editor settings, and per-language server commands,
+appearance, theme, editor settings, and language servers — defaults,
+per-project overrides, and the workspace toggles —
 stored at `~/.config/textchum/config.json`.
 
 ```sh
-sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libwebkitgtk-6.0-dev
 cargo build --release --manifest-path linux/Cargo.toml
 linux/target/release/textchum-gtk notes.md
 ```

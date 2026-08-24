@@ -19,6 +19,7 @@ use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
 use textchum_core::{theme, Document};
+use webkit6::prelude::*;
 
 use crate::shell::{PageHandles, Shell};
 
@@ -34,10 +35,14 @@ pub struct Page {
     pub state: Rc<RefCell<State>>,
     pub buffer: sourceview5::Buffer,
     pub view: sourceview5::View,
-    pub scrolled: gtk::ScrolledWindow,
     pub search_settings: sourceview5::SearchSettings,
     pub search_context: sourceview5::SearchContext,
     pub path: RefCell<Option<String>>,
+    /// The whole tab child: the scrolled view alone, or a paned with
+    /// the Markdown preview beside it.
+    pub root: gtk::Widget,
+    /// Present for Markdown documents: the live preview.
+    pub preview: Option<webkit6::WebView>,
     /// The completion popup and its current candidates.
     completion: CompletionState,
 }
@@ -87,6 +92,24 @@ impl Page {
             .hexpand(true)
             .vexpand(true)
             .build();
+
+        // Markdown gets a live preview pane beside the text — the
+        // core's HTML, reloaded shortly after edits settle.
+        let is_markdown = state.borrow().document.language_name() == Some("markdown");
+        let (root, preview) = if is_markdown {
+            let web = webkit6::WebView::new();
+            web.set_hexpand(true);
+            web.set_vexpand(true);
+            let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
+            paned.set_start_child(Some(&scrolled));
+            paned.set_end_child(Some(&web));
+            paned.set_position(480);
+            paned.set_resize_start_child(true);
+            paned.set_resize_end_child(true);
+            (paned.upcast::<gtk::Widget>(), Some(web))
+        } else {
+            (scrolled.clone().upcast::<gtk::Widget>(), None)
+        };
 
         let search_settings = sourceview5::SearchSettings::new();
         search_settings.set_wrap_around(true);
@@ -149,10 +172,11 @@ impl Page {
             state,
             buffer: buffer.clone(),
             view: view.clone(),
-            scrolled,
             search_settings,
             search_context,
             path: RefCell::new(document_path),
+            root,
+            preview,
             completion: CompletionState {
                 popover: completion_popover,
                 list: completion_list,
@@ -188,9 +212,10 @@ impl Page {
                         apply_highlights(&page.buffer, &page.state.borrow().document);
                     });
                 }
-                // Announce to the server pool, debounced while typing.
+                // Once the burst settles: announce to the server pool
+                // and refresh the Markdown preview.
                 let document_path = page.path.borrow().clone();
-                if let Some(path) = document_path {
+                if document_path.is_some() || page.preview.is_some() {
                     if let Some(previous) = lsp_timer.take() {
                         previous.remove();
                     }
@@ -200,11 +225,14 @@ impl Page {
                         std::time::Duration::from_millis(300),
                         move || {
                             timer.set(None);
-                            let text = page.state.borrow().document.text();
-                            Shell::instance()
-                                .pool
-                                .borrow_mut()
-                                .did_change(Path::new(&path), &text);
+                            if let Some(path) = page.path.borrow().clone() {
+                                let text = page.state.borrow().document.text();
+                                Shell::instance()
+                                    .pool
+                                    .borrow_mut()
+                                    .did_change(Path::new(&path), &text);
+                            }
+                            update_preview(&page);
                         },
                     );
                     lsp_timer.set(Some(source));
@@ -226,6 +254,7 @@ impl Page {
             });
         }
         apply_highlights(&buffer, &page.state.borrow().document);
+        update_preview(&page);
 
         // The pool learns about the document.
         if let (Some(path), Some(language)) = (
@@ -239,6 +268,11 @@ impl Page {
                 .did_open(Path::new(&path), language, &text);
         }
         page
+    }
+
+    /// Reloads the Markdown preview from the core's HTML.
+    pub fn update_preview_now(self: &Rc<Self>) {
+        update_preview(self);
     }
 
     pub fn display_name(&self) -> String {
@@ -827,4 +861,15 @@ pub fn hover_text(json: &str) -> Option<String> {
     };
     let trimmed = text.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+
+fn update_preview(page: &Rc<Page>) {
+    let Some(web) = &page.preview else { return };
+    if !web.is_visible() {
+        return;
+    }
+    if let Some(html) = page.state.borrow().document.markdown_html() {
+        web.load_html(&html, None);
+    }
 }
