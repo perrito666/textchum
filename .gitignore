@@ -1,0 +1,13 @@
+# Rust
+core/target/
+
+# SwiftPM
+macos/.build/
+macos/.swiftpm/
+
+# Docs build output
+site/
+.docs-venv/
+
+# macOS noise
+.DS_Store

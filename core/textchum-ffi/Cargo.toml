@@ -1,0 +1,17 @@
+[package]
+name = "textchum-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "C ABI over textchum-core, consumed by platform shells."
+build = "build.rs"
+
+[lib]
+name = "textchum"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+textchum-core = { path = "../textchum-core" }
+
+[build-dependencies]
+cbindgen = "0.29"

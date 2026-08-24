@@ -1,0 +1,9 @@
+[package]
+name = "textchum-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Platform-independent editor core: buffers, documents, and events."
+
+[dependencies]
+ropey = "1"
