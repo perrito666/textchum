@@ -16,11 +16,12 @@ mod config;
 mod document;
 mod fsutil;
 mod history;
+pub mod markdown;
 pub mod syntax;
 pub mod workspace;
 
 pub use app::{App, Event, EventSender};
 pub use buffer::{Buffer, BufferError};
-pub use config::{Appearance, Config, DEFAULT_FONT_SIZE, DEFAULT_TAB_WIDTH};
+pub use config::{Appearance, Config, OpenTarget, DEFAULT_FONT_SIZE, DEFAULT_TAB_WIDTH};
 pub use document::{AppliedEdit, Document, DocumentError, Encoding};
 pub use syntax::{theme, HighlightSpan};

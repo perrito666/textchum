@@ -2,6 +2,19 @@ import AppKit
 import SwiftUI
 import TextchumKit
 import UniformTypeIdentifiers
+import WebKit
+
+/// Forwards script messages to a weak target, so the web view's user
+/// content controller (which retains its handlers) cannot create a cycle.
+private final class ScriptMessageProxy: NSObject, WKScriptMessageHandler {
+    weak var target: EditorWindowController?
+
+    func userContentController(
+        _ controller: WKUserContentController, didReceive message: WKScriptMessage
+    ) {
+        target?.previewDidScroll(message: message)
+    }
+}
 
 /// One editor window: a text view kept in lockstep with a core document.
 ///
@@ -18,9 +31,8 @@ import UniformTypeIdentifiers
 ///    the text view's storage directly (which bypasses the delegate, so it
 ///    is not routed to the core a second time).
 /// 4. Debug builds assert both sides are byte-identical after every change.
-/// Everything a window needs to host the shared navigation drawer.
+/// Everything a window needs to host its navigation drawer.
 struct SidebarConfiguration {
-    let model: SidebarModel
     let selectDocument: (ObjectIdentifier) -> Void
     let openFile: (String) -> Void
 }
@@ -34,6 +46,8 @@ final class WindowSidebarContext: ObservableObject {
 final class EditorWindowController: NSWindowController {
     // Named to avoid NSWindowController's own `document` property.
     let coreDocument: CoreDocument
+    /// This window's sidebar state (buffer list scoped to its tab group).
+    let sidebarModel = SidebarModel()
     /// This document's project root (nearest root marker), cached and
     /// refreshed when the path changes.
     private(set) var projectRoot: String?
@@ -66,6 +80,14 @@ final class EditorWindowController: NSWindowController {
     private var hoverTimer: Timer?
     /// The popover currently showing hover content, if any.
     private var hoverPopover: NSPopover?
+    /// The window's split view controller (sidebar · editor · preview).
+    private var splitController: NSSplitViewController?
+    /// The Markdown preview pane, present while the preview is shown.
+    private var previewItem: NSSplitViewItem?
+    private var previewWebView: WKWebView?
+    private var previewUpdateTimer: Timer?
+    /// Suppresses scroll-sync echo: which side drove the last sync, when.
+    private var lastScrollSync: (fromPreview: Bool, at: Date) = (false, .distantPast)
 
     /// Opens (or fronts) a file at a position — cross-file navigation,
     /// provided by the app.
@@ -129,7 +151,7 @@ final class EditorWindowController: NSWindowController {
 
             let splitController = NSSplitViewController()
             let sidebarView = SidebarView(
-                model: sidebar.model,
+                model: sidebarModel,
                 currentDocumentID: ObjectIdentifier(self),
                 context: sidebarContext,
                 onSelectDocument: sidebar.selectDocument,
@@ -150,6 +172,7 @@ final class EditorWindowController: NSWindowController {
             window.contentViewController = splitController
             window.setContentSize(NSSize(width: 920, height: 480))
             window.center()
+            self.splitController = splitController
         } else {
             window.contentView = scrollView
         }
@@ -161,6 +184,10 @@ final class EditorWindowController: NSWindowController {
         startWatchingFile()
         refreshDecorations()
         syncLSPOpenState()
+        // Markdown documents open with the live preview beside them.
+        if coreDocument.languageName == "markdown" {
+            showPreview()
+        }
         appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.refreshDecorations() }
@@ -376,6 +403,173 @@ final class EditorWindowController: NSWindowController {
 
     deinit {
         fileWatcher?.cancel()
+    }
+
+    // MARK: Markdown preview
+
+    private static let previewTemplate = """
+        <!DOCTYPE html><html><head><meta charset="utf-8">
+        <style>
+        :root { color-scheme: light dark; }
+        body { font: 15px/1.6 -apple-system, sans-serif; margin: 0;
+               padding: 1.5em 2em; background: transparent; }
+        @media (prefers-color-scheme: light) { body { color: #24292e; } }
+        @media (prefers-color-scheme: dark)  { body { color: #dfdfe0; } }
+        h1, h2 { border-bottom: 1px solid rgba(128,128,128,.3);
+                 padding-bottom: .3em; }
+        code { font-family: ui-monospace, monospace; font-size: .9em;
+               background: rgba(128,128,128,.15); border-radius: 4px;
+               padding: .1em .35em; }
+        pre { background: rgba(128,128,128,.12); border-radius: 6px;
+              padding: .8em 1em; overflow-x: auto; }
+        pre code { background: none; padding: 0; }
+        blockquote { border-left: 4px solid rgba(128,128,128,.4);
+                     margin-left: 0; padding-left: 1em; opacity: .85; }
+        table { border-collapse: collapse; }
+        th, td { border: 1px solid rgba(128,128,128,.4);
+                 padding: .3em .7em; }
+        img { max-width: 100%; }
+        a { color: #0b60a0; } @media (prefers-color-scheme: dark) { a { color: #6bdfff; } }
+        </style></head><body><div id="content"></div>
+        <script>
+        function setContent(html) { document.getElementById("content").innerHTML = html; }
+        function scrollToFraction(f) {
+          const max = document.body.scrollHeight - window.innerHeight;
+          window.__syncing = true;
+          window.scrollTo(0, Math.max(0, f * max));
+          setTimeout(() => { window.__syncing = false; }, 80);
+        }
+        addEventListener("scroll", () => {
+          if (window.__syncing) { return; }
+          const max = document.body.scrollHeight - window.innerHeight;
+          const f = max > 0 ? window.scrollY / max : 0;
+          webkit.messageHandlers.scrolled.postMessage(f);
+        }, { passive: true });
+        </script></body></html>
+        """
+
+    /// Shows or hides the preview pane (markdown documents only).
+    @objc func togglePreview(_ sender: Any?) {
+        if previewItem != nil {
+            hidePreview()
+        } else {
+            showPreview()
+        }
+    }
+
+    private func showPreview() {
+        guard previewItem == nil, let splitController,
+            coreDocument.languageName == "markdown"
+        else { return }
+
+        let proxy = ScriptMessageProxy()
+        proxy.target = self
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.add(proxy, name: "scrolled")
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.navigationDelegate = self
+        webView.loadHTMLString(Self.previewTemplate, baseURL: nil)
+
+        let controller = NSViewController()
+        controller.view = webView
+        let item = NSSplitViewItem(viewController: controller)
+        item.minimumThickness = 240
+        // The editor must never be squeezed out: it keeps its space
+        // (higher holding priority, real minimum); the preview yields.
+        item.holdingPriority = NSLayoutConstraint.Priority(240)
+        if splitController.splitViewItems.count > 1 {
+            let editorItem = splitController.splitViewItems[1]
+            editorItem.minimumThickness = 340
+            editorItem.holdingPriority = NSLayoutConstraint.Priority(260)
+        }
+        splitController.addSplitViewItem(item)
+        previewItem = item
+        previewWebView = webView
+
+        // Editor scrolling drives the preview.
+        if let clipView = textView?.enclosingScrollView?.contentView {
+            clipView.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(editorDidScroll(_:)),
+                name: NSView.boundsDidChangeNotification,
+                object: clipView
+            )
+        }
+        // Deferred: resizing during window setup gets overridden by the
+        // content controller's initial layout pass.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let window = self?.window, window.frame.width < 1200 else { return }
+                window.setContentSize(
+                    NSSize(width: 1360, height: max(window.frame.height, 540)))
+                window.center()
+            }
+        }
+    }
+
+    private func hidePreview() {
+        guard let previewItem, let splitController else { return }
+        splitController.removeSplitViewItem(previewItem)
+        self.previewItem = nil
+        previewWebView = nil
+        if let clipView = textView?.enclosingScrollView?.contentView {
+            NotificationCenter.default.removeObserver(
+                self, name: NSView.boundsDidChangeNotification, object: clipView)
+        }
+    }
+
+    /// Pushes the rendered document into the page (no reload: the DOM is
+    /// patched, so the preview never flickers and keeps its scroll).
+    private func updatePreview() {
+        guard let previewWebView, let html = coreDocument.markdownHTML,
+            let encoded = try? JSONEncoder().encode(html),
+            let literal = String(data: encoded, encoding: .utf8)
+        else { return }
+        previewWebView.evaluateJavaScript("setContent(\(literal))")
+    }
+
+    /// Debounced preview refresh, called from every text-changing path.
+    private func schedulePreviewUpdate() {
+        guard previewItem != nil else { return }
+        previewUpdateTimer?.invalidate()
+        previewUpdateTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.updatePreview() }
+            }
+        }
+    }
+
+    @objc private func editorDidScroll(_ notification: Notification) {
+        guard let previewWebView, let scrollView = textView?.enclosingScrollView else { return }
+        // Ignore echoes of a preview-driven sync.
+        if lastScrollSync.fromPreview, Date().timeIntervalSince(lastScrollSync.at) < 0.15 {
+            return
+        }
+        let visible = scrollView.contentView.bounds
+        let total = scrollView.documentView?.frame.height ?? 0
+        let maximum = max(total - visible.height, 1)
+        let fraction = max(0, min(1, visible.origin.y / maximum))
+        lastScrollSync = (false, Date())
+        previewWebView.evaluateJavaScript("scrollToFraction(\(fraction))")
+    }
+
+    /// The preview scrolled (user-driven); mirror it in the editor.
+    func previewDidScroll(message: WKScriptMessage) {
+        guard let fraction = message.body as? Double,
+            let scrollView = textView?.enclosingScrollView
+        else { return }
+        if !lastScrollSync.fromPreview, Date().timeIntervalSince(lastScrollSync.at) < 0.15 {
+            return
+        }
+        let visible = scrollView.contentView.bounds
+        let total = scrollView.documentView?.frame.height ?? 0
+        let target = max(0, (total - visible.height) * fraction)
+        lastScrollSync = (true, Date())
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: target))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
     // MARK: Decorations (syntax colors + diagnostic underlines)
@@ -694,6 +888,7 @@ final class EditorWindowController: NSWindowController {
         updateChrome()
         refreshDecorations()
         scheduleLSPChange()
+        schedulePreviewUpdate()
         assertInSync()
     }
 
@@ -727,9 +922,13 @@ final class EditorWindowController: NSWindowController {
             noteOwnSave()
             updateChrome()
             // An untitled document may just have gained a language from
-            // its new extension — recolor and announce it to the pool.
+            // its new extension — recolor, announce it to the pool, and
+            // open the preview if it became markdown.
             refreshDecorations()
             syncLSPOpenState()
+            if coreDocument.languageName == "markdown", previewItem == nil {
+                showPreview()
+            }
             return true
         } catch {
             presentError("Could not save to \(url.lastPathComponent).", details: "\(error)")
@@ -754,6 +953,15 @@ final class EditorWindowController: NSWindowController {
     }
 }
 
+// MARK: - Preview navigation
+
+extension EditorWindowController: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // The template page is ready; push the first render.
+        updatePreview()
+    }
+}
+
 // MARK: - Window lifecycle
 
 extension EditorWindowController: NSWindowDelegate {
@@ -763,6 +971,12 @@ extension EditorWindowController: NSWindowDelegate {
             lspApp?.lspDidClose(path: path)
             lspOpenPath = nil
         }
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        // Tab membership may have changed (drags, merges); the per-window
+        // buffer lists rebuild from it.
+        NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
     }
 
     /// Standard dirty-document close flow: Save / Cancel / Don't Save.
@@ -852,6 +1066,7 @@ extension EditorWindowController: NSTextViewDelegate {
         updateChrome()
         refreshDecorations()
         scheduleLSPChange()
+        schedulePreviewUpdate()
         assertInSync()
     }
 
@@ -877,6 +1092,9 @@ extension EditorWindowController: NSMenuItemValidation {
             return coreDocument.canRedo
         case #selector(jumpToDefinition(_:)):
             return lspOpenPath != nil
+        case #selector(togglePreview(_:)):
+            menuItem.state = previewItem != nil ? .on : .off
+            return coreDocument.languageName == "markdown"
         default:
             return true
         }

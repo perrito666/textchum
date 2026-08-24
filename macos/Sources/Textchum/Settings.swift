@@ -36,6 +36,9 @@ final class SettingsModel: ObservableObject {
     @Published var appearance: CoreAppearance {
         didSet { persist { $0.appearance = appearance } }
     }
+    @Published var openTarget: CoreOpenTarget {
+        didSet { persist { $0.openTarget = openTarget } }
+    }
     @Published var fontFamily: String {
         didSet { persist { $0.fontFamily = fontFamily.isEmpty ? nil : fontFamily } }
     }
@@ -49,6 +52,7 @@ final class SettingsModel: ObservableObject {
     init(config: CoreConfig) {
         self.config = config
         self.appearance = config.appearance
+        self.openTarget = config.openTarget
         self.fontFamily = config.fontFamily ?? ""
         self.fontSize = config.fontSize
         self.tabWidth = config.tabWidth
@@ -91,6 +95,11 @@ struct SettingsView: View {
                 Text("System").tag(CoreAppearance.system)
                 Text("Light").tag(CoreAppearance.light)
                 Text("Dark").tag(CoreAppearance.dark)
+            }
+            .pickerStyle(.segmented)
+            Picker("Open files in:", selection: $model.openTarget) {
+                Text("Tabs").tag(CoreOpenTarget.tab)
+                Text("Windows").tag(CoreOpenTarget.window)
             }
             .pickerStyle(.segmented)
             Picker("Font:", selection: $model.fontFamily) {

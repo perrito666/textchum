@@ -803,6 +803,26 @@ pub unsafe extern "C" fn tc_document_path(document: *const TcDocument) -> *mut c
     }
 }
 
+/// The document rendered as an HTML fragment for the live preview, or
+/// null unless the document's language is markdown. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_markdown_html(document: *const TcDocument) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match document.inner.markdown_html() {
+            Some(html) => owned_c_string(html),
+            None => std::ptr::null_mut(),
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// The document's encoding as a static human-readable name (e.g. "UTF-8").
 /// Owned by the core; do not free.
 ///
@@ -961,6 +981,39 @@ pub unsafe extern "C" fn tc_project_root_for_path(path: *const c_char, len: usiz
         }
     }))
     .unwrap_or(std::ptr::null_mut())
+}
+
+/// Open-target choice: files open as tabs of the current window group.
+pub const TC_OPEN_IN_TAB: u32 = 0;
+/// Open-target choice: files open as separate windows.
+pub const TC_OPEN_IN_WINDOW: u32 = 1;
+
+/// Where opened files go, as a `TC_OPEN_IN_*` value.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_open_target(config: *const TcConfig) -> u32 {
+    use textchum_core::OpenTarget;
+    match unsafe { config.as_ref() }.map(|c| c.inner.open_target()) {
+        Some(OpenTarget::Window) => TC_OPEN_IN_WINDOW,
+        _ => TC_OPEN_IN_TAB,
+    }
+}
+
+/// Sets the open-target choice (`TC_OPEN_IN_*`; unknown values mean tab).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_open_target(config: *mut TcConfig, target: u32) {
+    use textchum_core::OpenTarget;
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_open_target(match target {
+            TC_OPEN_IN_WINDOW => OpenTarget::Window,
+            _ => OpenTarget::Tab,
+        });
+    }
 }
 
 /// Sets the editor font family; `len == 0` clears it back to the platform

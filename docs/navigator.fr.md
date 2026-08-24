@@ -6,8 +6,12 @@ volets empilés.
 
 ## Tampons ouverts, groupés par projet
 
-Le volet supérieur liste tous les documents ouverts dans l'application,
-groupés par le **projet** auquel ils appartiennent. Le projet d'un fichier
+Le volet supérieur liste les documents ouverts du **groupe d'onglets de
+cette fenêtre** — les fichiers ouverts en onglets partagent une même
+liste, tandis que les fenêtres séparées gardent des mondes séparés (que
+les fichiers s'ouvrent en onglets ou en fenêtres est un
+[réglage](configuration.md)). Les documents sont groupés par le
+**projet** auquel ils appartiennent. Le projet d'un fichier
 est le répertoire ancêtre le plus proche qui ressemble à une racine de
 projet : un répertoire de contrôle de versions (`.git`, `.hg`, `.svn`) ou
 un fichier de build/manifeste (`Cargo.toml`, `go.mod`, `package.json`,

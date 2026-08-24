@@ -9,7 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var config: CoreConfig?
     private var settingsModel: SettingsModel?
     private var settingsWindowController: SettingsWindowController?
-    private let sidebarModel = SidebarModel()
     /// Strong references to open editors; windows do not retain their
     /// controllers. Entries are removed as their windows close.
     private var editors: [EditorWindowController] = []
@@ -143,19 +142,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Rebuilds every window's sidebar: each buffer list shows only the
+    /// documents of that window's tab group, so separate windows keep
+    /// separate worlds.
     private func rebuildSidebar() {
-        sidebarModel.rebuild(
-            entries: editors.map { editor in
-                (
-                    document: SidebarDocument(
-                        id: ObjectIdentifier(editor),
-                        title: editor.window?.title ?? "Untitled",
-                        path: editor.coreDocument.path,
-                        isDirty: editor.coreDocument.isDirty
-                    ),
-                    projectRoot: editor.projectRoot
-                )
-            })
+        for editor in editors {
+            let group: [NSWindow]
+            if let window = editor.window {
+                group = window.tabGroup?.windows ?? [window]
+            } else {
+                group = []
+            }
+            let entries = editors
+                .filter { peer in peer.window.map(group.contains) ?? false }
+                .map { peer in
+                    (
+                        document: SidebarDocument(
+                            id: ObjectIdentifier(peer),
+                            title: peer.window?.title ?? "Untitled",
+                            path: peer.coreDocument.path,
+                            isDirty: peer.coreDocument.isDirty
+                        ),
+                        projectRoot: peer.projectRoot
+                    )
+                }
+            editor.sidebarModel.rebuild(entries: entries)
+        }
     }
 
     /// Cross-file navigation: front (or open) `path` and put the caret at
@@ -173,7 +185,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var sidebarConfiguration: SidebarConfiguration {
         SidebarConfiguration(
-            model: sidebarModel,
             selectDocument: { [weak self] id in
                 guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
                 else { return }
@@ -318,7 +329,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 lspApp: coreApp,
                 openLocation: { [weak self] path, line, character in
                     self?.openLocation(path: path, line: line, character: character)
-                }                ))
+                }                ),
+                placeAsConfigured: true)
         } catch {
             let alert = NSAlert()
             alert.alertStyle = .warning
@@ -328,7 +340,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func show(editor: EditorWindowController) {
+    /// Attaches `editor` per the configured open target: as a tab of the
+    /// key editor window's group, or as its own window.
+    private func place(editor: EditorWindowController) {
+        guard config?.openTarget == .tab,
+            let newWindow = editor.window,
+            let anchor = editors.first(where: { $0 !== editor && $0.window?.isKeyWindow == true })
+                ?? editors.first(where: { $0 !== editor && $0.window != nil })
+        else { return }
+        anchor.window?.addTabbedWindow(newWindow, ordered: .above)
+    }
+
+    private func show(editor: EditorWindowController, placeAsConfigured: Bool = false) {
+        if placeAsConfigured {
+            place(editor: editor)
+        }
         editors.append(editor)
         if let window = editor.window {
             NotificationCenter.default.addObserver(
@@ -484,6 +510,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyEquivalent: "0"
         )
         viewMenu.addItem(toggleNavigator)
+        let togglePreview = NSMenuItem(
+            title: "Toggle Markdown Preview",
+            action: #selector(EditorWindowController.togglePreview(_:)),
+            keyEquivalent: "p"
+        )
+        togglePreview.keyEquivalentModifierMask = [.command, .option]
+        viewMenu.addItem(togglePreview)
         let viewMenuItem = NSMenuItem()
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)

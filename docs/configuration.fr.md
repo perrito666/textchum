@@ -12,6 +12,10 @@ uniquement à l'intérieur de l'application.
 
 - **Apparence** — suivre le système (en changeant en direct quand macOS le
   fait) ou forcer le clair ou le sombre.
+- **Ouvrir les fichiers dans** — des onglets de la fenêtre courante (le
+  défaut) ou des fenêtres séparées. Avec des fenêtres séparées, le
+  navigateur de chaque fenêtre ne liste que les documents de son propre
+  groupe d'onglets.
 - **Police** — toute famille à chasse fixe installée sur le système, ou la
   police à chasse fixe de la plateforme.
 - **Taille de police** — de 6 à 72 points.

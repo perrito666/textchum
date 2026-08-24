@@ -12,6 +12,9 @@ aplicación.
 
 - **Apariencia** — seguir al sistema (cambiando en vivo cuando macOS lo
   hace) o forzar claro u oscuro.
+- **Abrir archivos en** — pestañas de la ventana actual (el valor por
+  defecto) o ventanas separadas. Con ventanas separadas, el navegador de
+  cada ventana lista solo los documentos de su propio grupo de pestañas.
 - **Tipografía** — cualquier familia de ancho fijo instalada en el sistema,
   o la tipografía monoespaciada de la plataforma.
 - **Tamaño de letra** — de 6 a 72 puntos.

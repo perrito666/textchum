@@ -46,6 +46,7 @@ plugins:
             Architecture: Arquitectura
             Documents: Documentos
             Highlighting: Coloreado
+            Markdown: Markdown
             Language servers: Servidores de lenguaje
             The navigator: El navegador
             Configuration: Configuración
@@ -59,6 +60,7 @@ plugins:
             Architecture: Architecture
             Documents: Documents
             Highlighting: Coloration
+            Markdown: Markdown
             Language servers: Serveurs de langage
             The navigator: Le navigateur
             Configuration: Configuration
@@ -70,6 +72,7 @@ nav:
   - Architecture: architecture.md
   - Documents: documents.md
   - Highlighting: highlighting.md
+  - Markdown: markdown.md
   - Language servers: language-servers.md
   - The navigator: navigator.md
   - Configuration: configuration.md

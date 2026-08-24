@@ -5,8 +5,11 @@ Every editor window carries a navigation drawer on its left (toggle with
 
 ## Open buffers, grouped by project
 
-The top pane lists every open document in the application, grouped by the
-**project** it belongs to. A file's project is the nearest ancestor
+The top pane lists the open documents of **this window's tab group** —
+files opened as tabs share one list, while separate windows keep separate
+worlds (whether files open as tabs or windows is a
+[setting](configuration.md)). Documents are grouped by the **project**
+they belong to. A file's project is the nearest ancestor
 directory that looks like a project root — a version-control directory
 (`.git`, `.hg`, `.svn`) or a build/manifest file (`Cargo.toml`, `go.mod`,
 `package.json`, `pyproject.toml`, `Package.swift`, `build.zig`,

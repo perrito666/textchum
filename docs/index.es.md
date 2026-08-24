@@ -40,6 +40,9 @@ Textchum es joven. Lo que existe y funciona hoy:
   codificación y escrituras atómicas, deshacer/rehacer con fusión de tecleo
   y seguimiento de cambios anclado al último guardado — véase
   [Documentos](documents.md).
+- Una vista previa de Markdown en vivo junto al código fuente — parcheada
+  en su sitio mientras se escribe, con desplazamiento sincronizado en
+  ambos sentidos — véase [Markdown](markdown.md).
 - Validación con servidores de lenguaje y **una instancia de servidor por
   proyecto**: diagnósticos mientras se escribe, marcados en el texto y
   contados en el subtítulo de la ventana, desde procesos de servidor
@@ -66,9 +69,8 @@ Textchum es joven. Lo que existe y funciona hoy:
   Swift ↔ núcleo — edición, deshacer, guardado, reapertura, eventos —,
   usada por la integración continua y por humanos con prisa.
 
-Lo próximo, en orden aproximado: más capacidades de los servidores de
-lenguaje (autocompletado, *hover*, ir a definición) y vista previa de
-Markdown.
+Lo próximo, en orden aproximado: autocompletado, búsqueda en todo el
+proyecto y apertura difusa de archivos, y restauración de sesión.
 
 ## Por dónde seguir
 

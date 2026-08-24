@@ -35,6 +35,24 @@ pub const FONT_SIZE_RANGE: (f64, f64) = (6.0, 72.0);
 pub const DEFAULT_TAB_WIDTH: u32 = 4;
 pub const TAB_WIDTH_RANGE: (u32, u32) = (1, 16);
 
+/// Where opening a file puts it: a tab of the current window's group, or
+/// a separate window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OpenTarget {
+    #[default]
+    Tab,
+    Window,
+}
+
+impl OpenTarget {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Tab => "tab",
+            Self::Window => "window",
+        }
+    }
+}
+
 /// The user's appearance choice: follow the system, or force one mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Appearance {
@@ -178,6 +196,19 @@ impl Config {
                 root.insert("appearance".into(), Value::String(other.as_str().to_owned()));
             }
         }
+    }
+
+    /// Where opened files go (`editor.open_files_in`): tabs by default.
+    pub fn open_target(&self) -> OpenTarget {
+        match self.editor().get("open_files_in").and_then(Value::as_str) {
+            Some("window") => OpenTarget::Window,
+            _ => OpenTarget::Tab,
+        }
+    }
+
+    pub fn set_open_target(&mut self, target: OpenTarget) {
+        self.editor_mut()
+            .insert("open_files_in".into(), Value::String(target.as_str().into()));
     }
 
     /// Sets the font family; `None` (or empty) removes the key, returning

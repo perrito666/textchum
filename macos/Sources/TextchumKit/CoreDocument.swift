@@ -133,6 +133,12 @@ public final class CoreDocument {
         }
     }
 
+    /// The document rendered as an HTML fragment for the live preview, or
+    /// nil unless the document's language is markdown.
+    public var markdownHTML: String? {
+        Self.takeString(tc_document_markdown_html(handle))
+    }
+
     /// Replaces an `NSRange` of UTF-16 code units with `text`, recording the
     /// edit in the undo history.
     public func replace(utf16Range range: NSRange, with text: String) throws {

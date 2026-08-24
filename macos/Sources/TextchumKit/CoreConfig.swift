@@ -8,6 +8,13 @@ public enum CoreAppearance: CaseIterable {
     case dark
 }
 
+/// Where opening a file puts it: a tab of the current window's group, or
+/// a separate window.
+public enum CoreOpenTarget: CaseIterable {
+    case tab
+    case window
+}
+
 /// The application's configuration, backed by a JSON file the core owns.
 ///
 /// The shell decides where the file lives (platform convention) and hands
@@ -70,6 +77,18 @@ public final class CoreConfig {
             case .dark: raw = UInt32(TC_APPEARANCE_DARK)
             }
             tc_config_set_appearance(handle, raw)
+        }
+    }
+
+    /// Where opened files go; tabs by default.
+    public var openTarget: CoreOpenTarget {
+        get {
+            tc_config_open_target(handle) == UInt32(TC_OPEN_IN_WINDOW) ? .window : .tab
+        }
+        set {
+            tc_config_set_open_target(
+                handle,
+                newValue == .window ? UInt32(TC_OPEN_IN_WINDOW) : UInt32(TC_OPEN_IN_TAB))
         }
     }
 

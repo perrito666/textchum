@@ -37,6 +37,8 @@ Textchum is young. What exists and works today:
 - Documents on top of buffers: open and save with encoding detection and
   atomic writes, undo/redo with typing coalescing, and dirty-state tracking
   anchored to the last save — see [Documents](documents.md).
+- A live Markdown preview beside the source — patched in place as you
+  type, scroll-synced both ways — see [Markdown](markdown.md).
 - Language-server validation with **one server instance per project**:
   diagnostics as you type, marked in the text and counted in the window
   subtitle, from independent per-project server processes — see
@@ -60,8 +62,8 @@ Textchum is young. What exists and works today:
   editing, undo, saving, reopening, events — used both by CI and by humans
   in a hurry.
 
-What is planned next, roughly in order: more language-server features
-(completion, hover, go-to-definition), and Markdown preview.
+What is planned next, roughly in order: completion, project-wide search
+and fuzzy file opening, and session restore.
 
 ## Where to go from here
 

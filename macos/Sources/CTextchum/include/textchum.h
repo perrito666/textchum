@@ -52,6 +52,16 @@
 #define TC_APPEARANCE_DARK 2
 
 /**
+ * Open-target choice: files open as tabs of the current window group.
+ */
+#define TC_OPEN_IN_TAB 0
+
+/**
+ * Open-target choice: files open as separate windows.
+ */
+#define TC_OPEN_IN_WINDOW 1
+
+/**
  * Style flag: render bold.
  */
 #define TC_STYLE_BOLD 1
@@ -552,6 +562,16 @@ bool tc_document_save_as(struct TcDocument *document,
 char *tc_document_path(const struct TcDocument *document);
 
 /**
+ * The document rendered as an HTML fragment for the live preview, or
+ * null unless the document's language is markdown. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_markdown_html(const struct TcDocument *document);
+
+/**
  * The document's encoding as a static human-readable name (e.g. "UTF-8").
  * Owned by the core; do not free.
  *
@@ -634,6 +654,22 @@ void tc_config_set_appearance(struct TcConfig *config, uint32_t appearance);
  * `path` must point to `len` readable bytes.
  */
 char *tc_project_root_for_path(const char *path, uintptr_t len);
+
+/**
+ * Where opened files go, as a `TC_OPEN_IN_*` value.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+uint32_t tc_config_open_target(const struct TcConfig *config);
+
+/**
+ * Sets the open-target choice (`TC_OPEN_IN_*`; unknown values mean tab).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_open_target(struct TcConfig *config, uint32_t target);
 
 /**
  * Sets the editor font family; `len == 0` clears it back to the platform

@@ -30,9 +30,9 @@ struct SidebarProjectGroup: Identifiable, Hashable {
     }
 }
 
-/// App-wide sidebar state: every window's sidebar shows the same buffer
-/// list; the folder tree is per-window (each window tracks its own
-/// document's project).
+/// Per-window sidebar state: the buffer list shows the documents of this
+/// window's tab group only, so separate windows keep separate worlds; the
+/// folder tree tracks the window's own document's project.
 @MainActor
 final class SidebarModel: ObservableObject {
     @Published var groups: [SidebarProjectGroup] = []

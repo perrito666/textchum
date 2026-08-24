@@ -11,6 +11,9 @@ reads and writes it; nothing lives only inside the app.
 
 - **Appearance** — follow the system (switching live when macOS does), or
   force light or dark.
+- **Open files in** — tabs of the current window (the default) or
+  separate windows. With separate windows, each window's navigator lists
+  only its own tab group's documents.
 - **Font** — any fixed-pitch family installed on the system, or the
   platform's monospaced font.
 - **Font size** — 6 to 72 points.

@@ -178,6 +178,15 @@ impl Document {
         self.syntax.as_ref().map(|s| s.language().spec.name)
     }
 
+    /// The document rendered as an HTML fragment, for the live preview.
+    /// `None` unless the document's language is markdown.
+    pub fn markdown_html(&self) -> Option<String> {
+        if self.language_name() != Some("markdown") {
+            return None;
+        }
+        Some(crate::markdown::to_html(&self.buffer.text()))
+    }
+
     /// Styled spans over the UTF-16 code unit range `start..end`, in
     /// application order (later spans win where they overlap). Empty for
     /// plain-text documents.

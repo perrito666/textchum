@@ -6,8 +6,12 @@ apilados.
 
 ## Búferes abiertos, agrupados por proyecto
 
-El panel superior lista todos los documentos abiertos en la aplicación,
-agrupados por el **proyecto** al que pertenecen. El proyecto de un archivo
+El panel superior lista los documentos abiertos del **grupo de pestañas de
+esta ventana** — los archivos abiertos como pestañas comparten una lista,
+mientras que las ventanas separadas mantienen mundos separados (que los
+archivos se abran como pestañas o ventanas es un
+[ajuste](configuration.md)). Los documentos se agrupan por el **proyecto**
+al que pertenecen. El proyecto de un archivo
 es el directorio ancestro más cercano que parece una raíz de proyecto: un
 directorio de control de versiones (`.git`, `.hg`, `.svn`) o un archivo de
 construcción/manifiesto (`Cargo.toml`, `go.mod`, `package.json`,
