@@ -27,6 +27,36 @@ Les enregistrements fusionnent pour qu'annuler avance à pas humains :
 - **Déplacer le curseur** (clic, flèches) termine la séquence en cours ; la
   frappe suivante ouvre un nouveau pas.
 
+Les opérations composées s'enregistrent comme des groupes explicites :
+Tout remplacer réécrit chaque occurrence mais s'annule en un seul pas, et
+un rechargement depuis le disque (ci-dessous) est lui aussi un seul pas.
+
+## Rechercher et remplacer
+
+**⌘F** ouvre la barre de recherche native (**⌥⌘F** avec le champ de
+remplacement, **⌘G** / **⇧⌘G** occurrence suivante et précédente, **⌘E**
+recherche la sélection). Le menu d'options de la barre propose la
+correspondance par sous-chaîne, mot entier et **expression régulière**.
+Les remplacements sont des éditions ordinaires : ils passent par le noyau,
+entrent dans l'historique d'annulation — Tout remplacer en un seul pas —
+et marquent le document comme modifié, comme la frappe.
+
+## Modifications externes
+
+Textchum surveille le fichier de chaque document ouvert. Si un autre
+programme le modifie :
+
+- un document **propre** suit le disque en silence — la fenêtre montre
+  simplement le nouveau contenu ;
+- un document **modifié** pose la question : garder vos changements non
+  enregistrés, ou recharger depuis le disque. Recharger abandonne le
+  tampon au profit du fichier, mais le rechargement est lui-même un pas
+  d'annulation : ⌘Z ramène votre version (et marque de nouveau le document
+  comme modifié, puisqu'il diffère alors du disque).
+
+Un fichier qui disparaît du disque est laissé tranquille : le tampon
+reste, et enregistrer recrée le fichier.
+
 ## Modifications non enregistrées
 
 Un document connaît le point exact de son historique où il a été enregistré
@@ -71,7 +101,6 @@ contenu ou le nouveau — jamais un mélange.
 
 ## Pas encore là
 
-- Détecter les modifications externes des fichiers ouverts (éditez le
-  fichier ailleurs et Textchum ne s'en apercevra pas encore).
 - Les encodages au-delà d'UTF-8 et de Latin-1.
 - Rouvrir les fenêtres et documents de la session précédente.
+- La recherche à l'échelle du projet, entre fichiers.

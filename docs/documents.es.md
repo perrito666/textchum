@@ -27,6 +27,36 @@ humana:
 - **Mover el cursor** (clic, flechas) termina la racha actual; la siguiente
   tecla inicia un paso nuevo.
 
+Las operaciones compuestas se registran como grupos explícitos: Reemplazar
+todo reescribe cada coincidencia pero se deshace como un solo paso, y una
+recarga desde disco (más abajo) también es un solo paso.
+
+## Buscar y reemplazar
+
+**⌘F** abre la barra de búsqueda nativa (**⌥⌘F** con el campo de
+reemplazo, **⌘G** / **⇧⌘G** coincidencia siguiente y anterior, **⌘E** busca
+la selección). El menú de opciones de la barra ofrece coincidencia por
+subcadena, palabra completa y **expresión regular**. Los reemplazos son
+ediciones normales: pasan por el núcleo, entran en el historial de
+deshacer — Reemplazar todo como un solo paso — y marcan el documento como
+modificado igual que el tecleo.
+
+## Cambios externos
+
+Textchum vigila el archivo de cada documento abierto. Si otro programa lo
+cambia:
+
+- un documento **limpio** sigue al disco en silencio — la ventana muestra
+  simplemente el contenido nuevo;
+- un documento **modificado** pregunta: conservar los cambios sin guardar o
+  recargar desde disco. Recargar descarta el búfer en favor del archivo,
+  pero la recarga es en sí misma un paso de deshacer, así que ⌘Z devuelve
+  su versión (y vuelve a marcar el documento como modificado, pues entonces
+  difiere del disco).
+
+Un archivo que desaparece del disco se deja en paz: el búfer permanece y
+guardar recrea el archivo.
+
 ## Estado de cambios sin guardar
 
 Un documento conoce el punto exacto de su historial en el que se guardó por
@@ -70,7 +100,6 @@ una mezcla.
 
 ## Aún no está
 
-- Detectar cambios externos en archivos abiertos (si el archivo se edita en
-  otro sitio, Textchum todavía no lo nota).
 - Codificaciones más allá de UTF-8 y Latin-1.
 - Reabrir ventanas y documentos de la sesión anterior.
+- Búsqueda en todo el proyecto, entre archivos.

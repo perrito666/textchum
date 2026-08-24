@@ -110,15 +110,47 @@ public final class CoreDocument {
         tc_document_break_undo_group(handle)
     }
 
-    /// Undoes the newest edit, returning the change to replay on the display
-    /// cache, or nil if there was nothing to undo.
-    public func undo() -> AppliedEdit? {
+    /// Starts an explicit edit group: every edit until
+    /// ``endEditGroup()`` undoes as one step (e.g. a replace-all).
+    public func beginEditGroup() {
+        tc_document_begin_edit_group(handle)
+    }
+
+    /// Commits the open edit group.
+    public func endEditGroup() {
+        tc_document_end_edit_group(handle)
+    }
+
+    /// Undoes the newest step, returning the changes to replay on the
+    /// display cache **in order**; empty if there was nothing to undo.
+    public func undo() -> [AppliedEdit] {
         popHistory(tc_document_undo)
     }
 
-    /// Redoes the most recently undone edit; same contract as ``undo()``.
-    public func redo() -> AppliedEdit? {
+    /// Redoes the most recently undone step; same contract as ``undo()``.
+    public func redo() -> [AppliedEdit] {
         popHistory(tc_document_redo)
+    }
+
+    /// Re-reads the document from its file. Returns the single replacement
+    /// to replay on the display cache, or nil if the buffer already matched
+    /// the disk. The reload is one undo step; the document counts as clean
+    /// afterwards.
+    public func reload() throws -> AppliedEdit? {
+        var edit = TcAppliedEdit(start: 0, end: 0, text: nil)
+        var error: UnsafeMutablePointer<CChar>?
+        guard tc_document_reload(handle, &edit, &error) else {
+            throw CoreIOError(message: Self.takeString(error) ?? "unknown reload error")
+        }
+        let applied = AppliedEdit(
+            range: NSRange(location: Int(edit.start), length: Int(edit.end - edit.start)),
+            replacement: Self.takeString(edit.text) ?? ""
+        )
+        // Empty range and empty text: the file and buffer already agreed.
+        if applied.range.length == 0 && applied.replacement.isEmpty {
+            return nil
+        }
+        return applied
     }
 
     /// Saves to the document's path. Untitled documents fail; use
@@ -142,14 +174,25 @@ public final class CoreDocument {
     }
 
     private func popHistory(
-        _ operation: (OpaquePointer?, UnsafeMutablePointer<TcAppliedEdit>?) -> Bool
-    ) -> AppliedEdit? {
-        var edit = TcAppliedEdit(start: 0, end: 0, text: nil)
-        guard operation(handle, &edit) else { return nil }
-        return AppliedEdit(
-            range: NSRange(location: Int(edit.start), length: Int(edit.end - edit.start)),
-            replacement: Self.takeString(edit.text) ?? ""
-        )
+        _ operation: (
+            OpaquePointer?,
+            UnsafeMutablePointer<UnsafeMutablePointer<TcAppliedEdit>?>?,
+            UnsafeMutablePointer<UInt>?
+        ) -> Bool
+    ) -> [AppliedEdit] {
+        var edits: UnsafeMutablePointer<TcAppliedEdit>?
+        var count: UInt = 0
+        guard operation(handle, &edits, &count), let edits else { return [] }
+        defer { tc_applied_edits_free(edits, count) }
+        return (0..<Int(count)).map { index in
+            let edit = edits[index]
+            return AppliedEdit(
+                range: NSRange(location: Int(edit.start), length: Int(edit.end - edit.start)),
+                // The string is copied here; tc_applied_edits_free releases
+                // the originals afterwards.
+                replacement: edit.text.map { String(cString: $0) } ?? ""
+            )
+        }
     }
 
     /// Consumes a core-owned C string: copies it into a Swift string and

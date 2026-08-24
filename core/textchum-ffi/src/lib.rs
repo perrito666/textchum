@@ -421,33 +421,123 @@ pub unsafe extern "C" fn tc_document_break_undo_group(document: *mut TcDocument)
     }
 }
 
-/// Undoes the newest edit. On success returns true and fills `edit_out` with
-/// the change the shell must replay on its display cache (release its `text`
-/// with [`tc_string_free`]). Returns false when there is nothing to undo.
+/// Starts an explicit edit group: every edit until
+/// [`tc_document_end_edit_group`] undoes as a single step (e.g. a
+/// replace-all).
 ///
 /// # Safety
-/// `document` must be a live document pointer; `edit_out` must point to a
-/// writable [`TcAppliedEdit`].
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_begin_edit_group(document: *mut TcDocument) {
+    if let Some(document) = unsafe { document.as_mut() } {
+        document.inner.begin_edit_group();
+    }
+}
+
+/// Commits the open edit group.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_end_edit_group(document: *mut TcDocument) {
+    if let Some(document) = unsafe { document.as_mut() } {
+        document.inner.end_edit_group();
+    }
+}
+
+/// Undoes the newest step. On success returns true and stores an array of
+/// edits — to be replayed on the display cache **in array order** — in
+/// `edits_out`/`count_out`; release the array with
+/// [`tc_applied_edits_free`]. Returns false (leaving the outputs zeroed)
+/// when there is nothing to undo.
+///
+/// # Safety
+/// `document` must be a live document pointer; `edits_out` and `count_out`
+/// must point to writable slots.
 #[no_mangle]
 pub unsafe extern "C" fn tc_document_undo(
     document: *mut TcDocument,
-    edit_out: *mut TcAppliedEdit,
+    edits_out: *mut *mut TcAppliedEdit,
+    count_out: *mut usize,
 ) -> bool {
-    unsafe { pop_history(document, edit_out, |d| d.undo()) }
+    unsafe { pop_history(document, edits_out, count_out, |d| d.undo()) }
 }
 
-/// Redoes the most recently undone edit; same contract as
+/// Redoes the most recently undone step; same contract as
 /// [`tc_document_undo`].
 ///
 /// # Safety
-/// `document` must be a live document pointer; `edit_out` must point to a
-/// writable [`TcAppliedEdit`].
+/// `document` must be a live document pointer; `edits_out` and `count_out`
+/// must point to writable slots.
 #[no_mangle]
 pub unsafe extern "C" fn tc_document_redo(
     document: *mut TcDocument,
-    edit_out: *mut TcAppliedEdit,
+    edits_out: *mut *mut TcAppliedEdit,
+    count_out: *mut usize,
 ) -> bool {
-    unsafe { pop_history(document, edit_out, |d| d.redo()) }
+    unsafe { pop_history(document, edits_out, count_out, |d| d.redo()) }
+}
+
+/// Releases an edit array returned by [`tc_document_undo`] or
+/// [`tc_document_redo`], including the strings it owns.
+///
+/// # Safety
+/// `edits` and `count` must be exactly the pair produced by one undo/redo
+/// call, not previously freed.
+#[no_mangle]
+pub unsafe extern "C" fn tc_applied_edits_free(edits: *mut TcAppliedEdit, count: usize) {
+    if edits.is_null() {
+        return;
+    }
+    let slice = unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(edits, count)) };
+    for edit in slice.iter() {
+        unsafe { tc_string_free(edit.text) };
+    }
+}
+
+/// Re-reads the document from its file. On success fills `edit_out` with
+/// the single replacement to replay on the display cache (an empty range
+/// and empty text means the buffer already matched the disk; release its
+/// `text` with [`tc_string_free`]). The reload is one undo step, and the
+/// document counts as clean afterwards. Returns false on failure and fills
+/// the optional `error_out`.
+///
+/// # Safety
+/// `document` must be a live document pointer; `edit_out` must point to a
+/// writable [`TcAppliedEdit`]; `error_out`, if non-null, must point to a
+/// writable pointer slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_reload(
+    document: *mut TcDocument,
+    edit_out: *mut TcAppliedEdit,
+    error_out: *mut *mut c_char,
+) -> bool {
+    if !error_out.is_null() {
+        unsafe { *error_out = std::ptr::null_mut() };
+    }
+    let Some(document) = (unsafe { document.as_mut() }) else {
+        return false;
+    };
+    if edit_out.is_null() {
+        return false;
+    }
+    catch_unwind(AssertUnwindSafe(|| match document.inner.reload() {
+        Ok(edit) => {
+            unsafe {
+                *edit_out = TcAppliedEdit {
+                    start: edit.start_utf16,
+                    end: edit.end_utf16,
+                    text: owned_c_string(edit.text),
+                };
+            }
+            true
+        }
+        Err(error) => {
+            unsafe { write_error(error_out, &error.to_string()) };
+            false
+        }
+    }))
+    .unwrap_or(false)
 }
 
 /// Saves to the document's current path. Returns false on failure and, if
@@ -683,29 +773,38 @@ pub unsafe extern "C" fn tc_config_save(
 /// Shared implementation of undo/redo entry points.
 unsafe fn pop_history(
     document: *mut TcDocument,
-    edit_out: *mut TcAppliedEdit,
-    operation: impl Fn(&mut Document) -> Option<textchum_core::AppliedEdit>,
+    edits_out: *mut *mut TcAppliedEdit,
+    count_out: *mut usize,
+    operation: impl Fn(&mut Document) -> Vec<textchum_core::AppliedEdit>,
 ) -> bool {
+    if edits_out.is_null() || count_out.is_null() {
+        return false;
+    }
+    unsafe {
+        *edits_out = std::ptr::null_mut();
+        *count_out = 0;
+    }
     let Some(document) = (unsafe { document.as_mut() }) else {
         return false;
     };
-    if edit_out.is_null() {
-        return false;
-    }
     catch_unwind(AssertUnwindSafe(|| {
-        match operation(&mut document.inner) {
-            Some(edit) => {
-                unsafe {
-                    *edit_out = TcAppliedEdit {
-                        start: edit.start_utf16,
-                        end: edit.end_utf16,
-                        text: owned_c_string(edit.text),
-                    };
-                }
-                true
-            }
-            None => false,
+        let edits = operation(&mut document.inner);
+        if edits.is_empty() {
+            return false;
         }
+        let boxed: Box<[TcAppliedEdit]> = edits
+            .into_iter()
+            .map(|edit| TcAppliedEdit {
+                start: edit.start_utf16,
+                end: edit.end_utf16,
+                text: owned_c_string(edit.text),
+            })
+            .collect();
+        unsafe {
+            *count_out = boxed.len();
+            *edits_out = Box::into_raw(boxed) as *mut TcAppliedEdit;
+        }
+        true
     }))
     .unwrap_or(false)
 }
@@ -831,17 +930,15 @@ mod tests {
             assert!(error.is_null());
             assert!(!tc_document_is_dirty(doc));
 
-            let mut edit = TcAppliedEdit {
-                start: 0,
-                end: 0,
-                text: std::ptr::null_mut(),
-            };
-            assert!(tc_document_undo(doc, &mut edit));
-            assert_eq!((edit.start, edit.end), (0, 2));
-            tc_string_free(edit.text);
+            let mut edits: *mut TcAppliedEdit = std::ptr::null_mut();
+            let mut count: usize = 0;
+            assert!(tc_document_undo(doc, &mut edits, &mut count));
+            assert_eq!(count, 1);
+            assert_eq!(((*edits).start, (*edits).end), (0, 2));
+            tc_applied_edits_free(edits, count);
             assert_eq!(tc_document_len_bytes(doc), 0);
-            assert!(tc_document_redo(doc, &mut edit));
-            tc_string_free(edit.text);
+            assert!(tc_document_redo(doc, &mut edits, &mut count));
+            tc_applied_edits_free(edits, count);
             tc_document_free(doc);
 
             let mut error: *mut c_char = std::ptr::null_mut();

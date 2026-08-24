@@ -75,11 +75,26 @@ fn random_edits_undo_redo_stay_consistent() {
         let mut mirror = String::new();
         let initial = mirror.clone();
 
-        // Forward phase: random edits, mirrored and verified.
+        // Forward phase: random edits — some inside explicit groups —
+        // mirrored and verified.
         let edits = 200 + rng.below(300);
         for _ in 0..edits {
-            match rng.below(10) {
+            match rng.below(12) {
                 0 => doc.break_undo_group(),
+                1 => {
+                    // A compound operation: several edits as one undo step.
+                    doc.begin_edit_group();
+                    for _ in 0..1 + rng.below(3) {
+                        let (start, end) = random_range(&mut rng, &mirror);
+                        let snippet = random_snippet(&mut rng);
+                        doc.replace_utf16(start, end, &snippet).unwrap_or_else(|e| {
+                            panic!("round {round}: rejected grouped edit: {e}")
+                        });
+                        mirror = apply_to_mirror(&mirror, start, end, &snippet);
+                    }
+                    doc.end_edit_group();
+                    assert_eq!(doc.text(), mirror, "round {round}: diverged in group");
+                }
                 _ => {
                     let (start, end) = random_range(&mut rng, &mirror);
                     let snippet = random_snippet(&mut rng);
@@ -95,22 +110,34 @@ fn random_edits_undo_redo_stay_consistent() {
         // Interleaved phase: random undo/redo walk, replaying the reported
         // edits onto the mirror exactly like a shell view would.
         for _ in 0..100 {
-            let edit = if rng.below(2) == 0 { doc.undo() } else { doc.redo() };
-            if let Some(edit) = edit {
+            let edits = if rng.below(2) == 0 { doc.undo() } else { doc.redo() };
+            for edit in edits {
                 mirror = apply_to_mirror(&mirror, edit.start_utf16, edit.end_utf16, &edit.text);
-                assert_eq!(doc.text(), mirror, "round {round}: replayed edit diverged");
             }
+            assert_eq!(doc.text(), mirror, "round {round}: replayed step diverged");
         }
 
         // Full unwind must reach the initial text; full replay the final.
-        while let Some(edit) = doc.undo() {
-            mirror = apply_to_mirror(&mirror, edit.start_utf16, edit.end_utf16, &edit.text);
+        loop {
+            let edits = doc.undo();
+            if edits.is_empty() {
+                break;
+            }
+            for edit in edits {
+                mirror = apply_to_mirror(&mirror, edit.start_utf16, edit.end_utf16, &edit.text);
+            }
         }
         assert_eq!(doc.text(), initial, "round {round}: full undo missed initial state");
         assert_eq!(mirror, initial, "round {round}: mirror missed initial state");
 
-        while let Some(edit) = doc.redo() {
-            mirror = apply_to_mirror(&mirror, edit.start_utf16, edit.end_utf16, &edit.text);
+        loop {
+            let edits = doc.redo();
+            if edits.is_empty() {
+                break;
+            }
+            for edit in edits {
+                mirror = apply_to_mirror(&mirror, edit.start_utf16, edit.end_utf16, &edit.text);
+            }
         }
         assert_eq!(doc.text(), final_text, "round {round}: full redo missed final state");
         assert_eq!(mirror, final_text, "round {round}: mirror missed final state");

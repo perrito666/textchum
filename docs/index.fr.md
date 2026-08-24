@@ -45,7 +45,9 @@ Textchum est jeune. Ce qui existe et fonctionne aujourd'hui :
 - Un canal d'événements asynchrone des fils d'exécution du noyau vers
   l'interface, avec un contrat strict de livraison sur un seul fil.
 - Un éditeur macOS à fenêtres multiples (avec onglets natifs), panneaux
-  d'ouverture/enregistrement et invites d'enregistrement à la fermeture ;
+  d'ouverture/enregistrement, invites d'enregistrement à la fermeture,
+  recherche et remplacement avec expressions régulières, et surveillance en
+  direct des fichiers ouverts face aux modifications d'autres programmes ;
   chaque vue de texte est maintenue au pas avec son document du noyau par un
   protocole de synchronisation qui interdit toute divergence.
 - Un test de fumée sans interface qui exerce l'aller-retour complet

@@ -24,6 +24,33 @@ Records coalesce so undo moves in human-sized steps:
 - **Moving the caret** (click, arrow keys) ends the current run; the next
   keystroke starts a fresh step.
 
+Compound operations record as explicit groups: Replace All rewrites every
+match but undoes as a single step, and a reload from disk (below) is one
+step too.
+
+## Find and replace
+
+**⌘F** opens the native find bar (**⌥⌘F** with the replace field, **⌘G** /
+**⇧⌘G** next and previous match, **⌘E** searches the selection). The bar's
+options menu offers substring, whole-word, and **regular expression**
+matching. Replacements are ordinary edits: they flow through the core,
+land in the undo history — Replace All as one step — and mark the document
+dirty like typing would.
+
+## External changes
+
+Textchum watches each open document's file. If another program changes it:
+
+- a **clean** document follows the disk silently — the window simply shows
+  the new content;
+- a **dirty** document asks: keep your unsaved changes, or reload from
+  disk. Reloading discards the buffer in favor of the file, but the reload
+  is itself one undo step, so ⌘Z brings your version back (and marks the
+  document dirty again, as it then differs from disk).
+
+A file that disappears from disk is left alone: the buffer stays, and
+saving recreates the file.
+
 ## Dirty state
 
 A document knows the exact point in its history where it was last saved, so
@@ -64,7 +91,6 @@ old content or the new — never a mixture.
 
 ## Not there yet
 
-- Detecting external changes to open files (edit the file elsewhere and
-  Textchum will not notice yet).
 - Encodings beyond UTF-8 and Latin-1.
 - Reopening windows and documents from the previous session.
+- Project-wide search across files.

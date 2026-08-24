@@ -57,13 +57,30 @@ func runSmokeTest() -> Int32 {
             print("FAIL: edits not reflected in dirty/undo state")
             return 1
         }
-        guard let undone = document.undo(), undone.replacement.isEmpty else {
+        let undone = document.undo()
+        guard undone.count == 1, undone[0].replacement.isEmpty else {
             print("FAIL: undo returned no edit")
             return 1
         }
-        guard document.text == "hello", document.redo() != nil, document.text == "hello world"
+        guard document.text == "hello", !document.redo().isEmpty,
+            document.text == "hello world"
         else {
             print("FAIL: undo/redo walk: got \(document.text.debugDescription)")
+            return 1
+        }
+
+        // Grouped edits (the shape of a replace-all) undo as one step.
+        document.beginEditGroup()
+        try document.replace(utf16Range: NSRange(location: 6, length: 5), with: "W")
+        try document.replace(utf16Range: NSRange(location: 0, length: 5), with: "H")
+        document.endEditGroup()
+        guard document.text == "H W" else {
+            print("FAIL: grouped edits: got \(document.text.debugDescription)")
+            return 1
+        }
+        let groupUndo = document.undo()
+        guard groupUndo.count == 2, document.text == "hello world" else {
+            print("FAIL: group undo: \(groupUndo.count) edits, \(document.text.debugDescription)")
             return 1
         }
         try document.save(to: filePath)
@@ -77,7 +94,24 @@ func runSmokeTest() -> Int32 {
             print("FAIL: reopened document mismatch: \(reopened.text.debugDescription)")
             return 1
         }
-        print("document lifecycle ok (edit/undo/save/reopen)")
+
+        // External change → reload picks it up as one clean, undoable step.
+        try "changed elsewhere".write(toFile: filePath, atomically: true, encoding: .utf8)
+        guard let reloadEdit = try reopened.reload(), reloadEdit.replacement == "changed elsewhere",
+            reopened.text == "changed elsewhere", !reopened.isDirty
+        else {
+            print("FAIL: reload after external change")
+            return 1
+        }
+        guard try reopened.reload() == nil else {
+            print("FAIL: reload of unchanged file should be a no-op")
+            return 1
+        }
+        guard reopened.undo().count == 1, reopened.text == "hello world" else {
+            print("FAIL: reload not undoable")
+            return 1
+        }
+        print("document lifecycle ok (edit/undo/group/save/reopen/reload)")
         try? FileManager.default.removeItem(at: smokeDir)
     } catch {
         print("FAIL: document lifecycle: \(error)")

@@ -197,26 +197,88 @@ impl Document {
         self.history.break_group();
     }
 
-    /// Undoes the newest edit. Returns the edit the caller must replay on
-    /// its display cache, or `None` if there was nothing to undo.
-    pub fn undo(&mut self) -> Option<AppliedEdit> {
-        // The record says `old` was replaced by `new` at start_byte; invert
-        // by putting `old` back in place of `new`.
-        let (start_byte, remove_len, insert): (usize, usize, String) = {
-            let record = self.history.pop_undo()?;
-            (record.start_byte, record.new.len(), record.old.clone())
-        };
-        Some(self.apply_recorded(start_byte, remove_len, insert))
+    /// Starts an explicit edit group: every edit until
+    /// [`Self::end_edit_group`] undoes as one step. Used for compound
+    /// operations like replace-all.
+    pub fn begin_edit_group(&mut self) {
+        self.history.begin_group();
     }
 
-    /// Redoes the most recently undone edit. Returns the edit to replay, or
-    /// `None` if there was nothing to redo.
-    pub fn redo(&mut self) -> Option<AppliedEdit> {
-        let (start_byte, remove_len, insert): (usize, usize, String) = {
-            let record = self.history.pop_redo()?;
-            (record.start_byte, record.old.len(), record.new.clone())
+    /// Commits the open edit group.
+    pub fn end_edit_group(&mut self) {
+        self.history.end_group();
+    }
+
+    /// Undoes the newest step. Returns the edits the caller must replay on
+    /// its display cache **in the given order**; empty if there was nothing
+    /// to undo.
+    pub fn undo(&mut self) -> Vec<AppliedEdit> {
+        // A step's records were applied first-to-last; inverting them
+        // last-to-first walks back through the exact intermediate states,
+        // so each record's byte range is valid when its turn comes.
+        let inverses: Vec<(usize, usize, String)> = match self.history.pop_undo() {
+            Some(group) => group
+                .iter()
+                .rev()
+                .map(|r| (r.start_byte, r.new.len(), r.old.clone()))
+                .collect(),
+            None => return Vec::new(),
         };
-        Some(self.apply_recorded(start_byte, remove_len, insert))
+        inverses
+            .into_iter()
+            .map(|(start, remove_len, insert)| self.apply_recorded(start, remove_len, insert))
+            .collect()
+    }
+
+    /// Redoes the most recently undone step; same contract as
+    /// [`Self::undo`].
+    pub fn redo(&mut self) -> Vec<AppliedEdit> {
+        let replays: Vec<(usize, usize, String)> = match self.history.pop_redo() {
+            Some(group) => group
+                .iter()
+                .map(|r| (r.start_byte, r.old.len(), r.new.clone()))
+                .collect(),
+            None => return Vec::new(),
+        };
+        replays
+            .into_iter()
+            .map(|(start, remove_len, insert)| self.apply_recorded(start, remove_len, insert))
+            .collect()
+    }
+
+    /// Re-reads the document from its file, replacing the buffer contents.
+    ///
+    /// The replacement is recorded as a single undoable step (so an
+    /// unwanted reload is one ⌘Z away), after which the document counts as
+    /// clean — it matches the disk again. Returns the edit for the shell to
+    /// replay; a no-op edit (empty range, empty text) means file and buffer
+    /// already agreed.
+    pub fn reload(&mut self) -> Result<AppliedEdit, DocumentError> {
+        let path = self.path.clone().ok_or(DocumentError::NoPath)?;
+        let bytes = std::fs::read(&path).map_err(|source| DocumentError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        let (text, encoding) = decode(&bytes);
+        self.encoding = encoding;
+
+        if text == self.buffer.text() {
+            self.history.mark_saved();
+            return Ok(AppliedEdit {
+                start_utf16: 0,
+                end_utf16: 0,
+                text: String::new(),
+            });
+        }
+
+        let end_utf16 = self.buffer.len_utf16();
+        self.replace_utf16(0, end_utf16, &text)?;
+        self.history.mark_saved();
+        Ok(AppliedEdit {
+            start_utf16: 0,
+            end_utf16,
+            text,
+        })
     }
 
     /// Replaces `remove_len` bytes at `start_byte` with `insert`, reporting
@@ -325,19 +387,20 @@ mod tests {
         doc.replace_utf16(5, 5, " world").unwrap();
         assert_eq!(doc.text(), "hello world");
 
-        let edit = doc.undo().unwrap();
+        let edits = doc.undo();
         assert_eq!(doc.text(), "hello");
-        assert_eq!(edit.start_utf16, 5);
-        assert_eq!(edit.text, "");
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].start_utf16, 5);
+        assert_eq!(edits[0].text, "");
 
-        let edit = doc.redo().unwrap();
+        let edits = doc.redo();
         assert_eq!(doc.text(), "hello world");
-        assert_eq!(edit.text, " world");
+        assert_eq!(edits[0].text, " world");
 
-        doc.undo().unwrap();
-        doc.undo().unwrap();
+        assert!(!doc.undo().is_empty());
+        assert!(!doc.undo().is_empty());
         assert_eq!(doc.text(), "");
-        assert!(doc.undo().is_none());
+        assert!(doc.undo().is_empty());
     }
 
     #[test]
@@ -346,7 +409,7 @@ mod tests {
         for (i, ch) in ["a", "b", "c"].iter().enumerate() {
             doc.replace_utf16(i, i, ch).unwrap();
         }
-        doc.undo().unwrap();
+        doc.undo();
         assert_eq!(doc.text(), "");
     }
 
@@ -356,9 +419,62 @@ mod tests {
         doc.replace_utf16(0, 0, "a🎉").unwrap(); // 3 UTF-16 units total
         doc.break_undo_group();
         doc.replace_utf16(3, 3, "b").unwrap();
-        let edit = doc.undo().unwrap();
-        assert_eq!((edit.start_utf16, edit.end_utf16), (3, 4));
+        let edits = doc.undo();
+        assert_eq!((edits[0].start_utf16, edits[0].end_utf16), (3, 4));
         assert_eq!(doc.text(), "a🎉");
+    }
+
+    #[test]
+    fn grouped_edits_undo_and_redo_as_one_step() {
+        // A replace-all shaped operation: two disjoint replacements applied
+        // back-to-front, exactly as the shell does it.
+        let mut doc = Document::new();
+        doc.replace_utf16(0, 0, "one two one").unwrap();
+        doc.break_undo_group();
+
+        doc.begin_edit_group();
+        doc.replace_utf16(8, 11, "1").unwrap();
+        doc.replace_utf16(0, 3, "1").unwrap();
+        doc.end_edit_group();
+        assert_eq!(doc.text(), "1 two 1");
+
+        let edits = doc.undo();
+        assert_eq!(doc.text(), "one two one");
+        assert_eq!(edits.len(), 2, "one step, both records replayed");
+
+        let edits = doc.redo();
+        assert_eq!(doc.text(), "1 two 1");
+        assert_eq!(edits.len(), 2);
+    }
+
+    #[test]
+    fn reload_picks_up_disk_changes_and_is_one_undo_step() {
+        let path = temp_dir().join("reload.txt");
+        std::fs::write(&path, "from disk v1").unwrap();
+        let mut doc = Document::open(&path).unwrap();
+
+        std::fs::write(&path, "from disk v2").unwrap();
+        let edit = doc.reload().unwrap();
+        assert_eq!(doc.text(), "from disk v2");
+        assert_eq!(edit.text, "from disk v2");
+        assert!(!doc.is_dirty(), "a reloaded document matches the disk");
+
+        // The reload is one ⌘Z away; undoing it diverges from disk again.
+        let edits = doc.undo();
+        assert_eq!(edits.len(), 1);
+        assert_eq!(doc.text(), "from disk v1");
+        assert!(doc.is_dirty());
+    }
+
+    #[test]
+    fn reload_with_unchanged_file_is_a_noop() {
+        let path = temp_dir().join("reload-same.txt");
+        std::fs::write(&path, "same").unwrap();
+        let mut doc = Document::open(&path).unwrap();
+        let edit = doc.reload().unwrap();
+        assert_eq!((edit.start_utf16, edit.end_utf16), (0, 0));
+        assert!(edit.text.is_empty());
+        assert!(doc.undo().is_empty(), "no-op reload records nothing");
     }
 
     #[test]
@@ -384,7 +500,7 @@ mod tests {
         std::fs::write(&path, "base").unwrap();
         let mut doc = Document::open(&path).unwrap();
         doc.replace_utf16(4, 4, "!").unwrap();
-        doc.undo().unwrap();
+        doc.undo();
         assert!(!doc.is_dirty());
     }
 

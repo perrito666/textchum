@@ -291,25 +291,76 @@ bool tc_document_can_redo(const struct TcDocument *document);
 void tc_document_break_undo_group(struct TcDocument *document);
 
 /**
- * Undoes the newest edit. On success returns true and fills `edit_out` with
- * the change the shell must replay on its display cache (release its `text`
- * with [`tc_string_free`]). Returns false when there is nothing to undo.
+ * Starts an explicit edit group: every edit until
+ * [`tc_document_end_edit_group`] undoes as a single step (e.g. a
+ * replace-all).
  *
  * # Safety
- * `document` must be a live document pointer; `edit_out` must point to a
- * writable [`TcAppliedEdit`].
+ * `document` must be a live document pointer.
  */
-bool tc_document_undo(struct TcDocument *document, struct TcAppliedEdit *edit_out);
+void tc_document_begin_edit_group(struct TcDocument *document);
 
 /**
- * Redoes the most recently undone edit; same contract as
+ * Commits the open edit group.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+void tc_document_end_edit_group(struct TcDocument *document);
+
+/**
+ * Undoes the newest step. On success returns true and stores an array of
+ * edits — to be replayed on the display cache **in array order** — in
+ * `edits_out`/`count_out`; release the array with
+ * [`tc_applied_edits_free`]. Returns false (leaving the outputs zeroed)
+ * when there is nothing to undo.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `edits_out` and `count_out`
+ * must point to writable slots.
+ */
+bool tc_document_undo(struct TcDocument *document,
+                      struct TcAppliedEdit **edits_out,
+                      uintptr_t *count_out);
+
+/**
+ * Redoes the most recently undone step; same contract as
  * [`tc_document_undo`].
  *
  * # Safety
- * `document` must be a live document pointer; `edit_out` must point to a
- * writable [`TcAppliedEdit`].
+ * `document` must be a live document pointer; `edits_out` and `count_out`
+ * must point to writable slots.
  */
-bool tc_document_redo(struct TcDocument *document, struct TcAppliedEdit *edit_out);
+bool tc_document_redo(struct TcDocument *document,
+                      struct TcAppliedEdit **edits_out,
+                      uintptr_t *count_out);
+
+/**
+ * Releases an edit array returned by [`tc_document_undo`] or
+ * [`tc_document_redo`], including the strings it owns.
+ *
+ * # Safety
+ * `edits` and `count` must be exactly the pair produced by one undo/redo
+ * call, not previously freed.
+ */
+void tc_applied_edits_free(struct TcAppliedEdit *edits, uintptr_t count);
+
+/**
+ * Re-reads the document from its file. On success fills `edit_out` with
+ * the single replacement to replay on the display cache (an empty range
+ * and empty text means the buffer already matched the disk; release its
+ * `text` with [`tc_string_free`]). The reload is one undo step, and the
+ * document counts as clean afterwards. Returns false on failure and fills
+ * the optional `error_out`.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `edit_out` must point to a
+ * writable [`TcAppliedEdit`]; `error_out`, if non-null, must point to a
+ * writable pointer slot.
+ */
+bool tc_document_reload(struct TcDocument *document,
+                        struct TcAppliedEdit *edit_out,
+                        char **error_out);
 
 /**
  * Saves to the document's current path. Returns false on failure and, if

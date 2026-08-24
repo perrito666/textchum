@@ -212,6 +212,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(NSText.selectAll(_:)),
             keyEquivalent: "a"
         )
+        editMenu.addItem(.separator())
+
+        // Find submenu, driving the text view's native find bar.
+        func finderItem(
+            _ title: String,
+            _ action: NSTextFinder.Action,
+            _ key: String,
+            _ modifiers: NSEvent.ModifierFlags = [.command]
+        ) -> NSMenuItem {
+            let item = NSMenuItem(
+                title: title,
+                action: #selector(NSResponder.performTextFinderAction(_:)),
+                keyEquivalent: key
+            )
+            item.tag = action.rawValue
+            item.keyEquivalentModifierMask = modifiers
+            return item
+        }
+        let findMenu = NSMenu(title: "Find")
+        findMenu.addItem(finderItem("Find…", .showFindInterface, "f"))
+        findMenu.addItem(
+            finderItem("Find and Replace…", .showReplaceInterface, "f", [.command, .option]))
+        findMenu.addItem(finderItem("Find Next", .nextMatch, "g"))
+        findMenu.addItem(finderItem("Find Previous", .previousMatch, "g", [.command, .shift]))
+        findMenu.addItem(finderItem("Use Selection for Find", .setSearchString, "e"))
+        let findMenuItem = NSMenuItem(title: "Find", action: nil, keyEquivalent: "")
+        findMenuItem.submenu = findMenu
+        editMenu.addItem(findMenuItem)
+
         let editMenuItem = NSMenuItem()
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)

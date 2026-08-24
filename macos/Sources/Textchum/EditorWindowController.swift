@@ -24,6 +24,13 @@ final class EditorWindowController: NSWindowController {
     /// True while the next selection change is caused by an edit we already
     /// know about, so it should not break undo coalescing.
     private var selectionChangeIsFromEditing = false
+    /// Watches the document's file for changes made by other programs.
+    private var fileWatcher: DispatchSourceFileSystemObject?
+    /// Our own atomic saves rename over the watched file; events until this
+    /// instant are ours, not an external change.
+    private var watcherSuppressedUntil = Date.distantPast
+    /// Prevents stacking reload prompts when events arrive in bursts.
+    private var isPresentingReloadPrompt = false
 
     init(document: CoreDocument, settings: EditorSettings? = nil) {
         self.coreDocument = document
@@ -49,6 +56,11 @@ final class EditorWindowController: NSWindowController {
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
+        // Native find bar: find/replace UI, regex option, ⌘G navigation.
+        // Replacements route through the standard delegate path, so they
+        // synchronize with the core like any other edit.
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         textView.delegate = self
         self.textView = textView
 
@@ -58,6 +70,93 @@ final class EditorWindowController: NSWindowController {
             apply(settings: settings)
         }
         updateChrome()
+        startWatchingFile()
+    }
+
+    deinit {
+        fileWatcher?.cancel()
+    }
+
+    // MARK: External changes
+
+    /// (Re)arms the file watcher on the document's current path. Called at
+    /// init, after saves (each atomic save is a new inode), and from the
+    /// event handler itself after rename/delete events leave the old
+    /// source watching a dead inode.
+    private func startWatchingFile() {
+        fileWatcher?.cancel()
+        fileWatcher = nil
+        guard let path = coreDocument.path else { return }
+        let descriptor = open(path, O_EVTONLY)
+        guard descriptor >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: descriptor,
+            eventMask: [.write, .extend, .rename, .delete],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            self?.fileDidChangeOnDisk()
+        }
+        source.setCancelHandler {
+            _ = Darwin.close(descriptor)
+        }
+        source.resume()
+        fileWatcher = source
+    }
+
+    private func fileDidChangeOnDisk() {
+        startWatchingFile()
+        guard Date() >= watcherSuppressedUntil else { return }
+        guard let path = coreDocument.path, FileManager.default.fileExists(atPath: path) else {
+            // Deleted or moved away: keep the buffer; a save will recreate
+            // the file.
+            updateChrome()
+            return
+        }
+        if coreDocument.isDirty {
+            guard !isPresentingReloadPrompt else { return }
+            isPresentingReloadPrompt = true
+            defer { isPresentingReloadPrompt = false }
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "“\(window?.title ?? "Document")” changed on disk."
+            alert.informativeText =
+                "The file was modified by another program, and you have unsaved changes. "
+                + "Reloading will discard your changes (one Undo brings them back)."
+            alert.addButton(withTitle: "Keep My Changes")
+            alert.addButton(withTitle: "Reload From Disk")
+            if alert.runModal() == .alertSecondButtonReturn {
+                reloadFromDisk()
+            }
+        } else {
+            // Clean documents follow the disk silently.
+            reloadFromDisk()
+        }
+    }
+
+    private func reloadFromDisk() {
+        let selection = textView?.selectedRange()
+        do {
+            guard let edit = try coreDocument.reload() else { return }
+            replay([edit])
+            // A whole-document replace should not fling the caret to the
+            // end; keep the previous position, clamped.
+            if let selection, let textView {
+                let length = (textView.string as NSString).length
+                let caret = NSRange(location: min(selection.location, length), length: 0)
+                textView.setSelectedRange(caret)
+                textView.scrollRangeToVisible(caret)
+            }
+        } catch {
+            presentError("Could not reload the document.", details: "\(error)")
+        }
+        updateChrome()
+    }
+
+    /// Marks a window of time in which file events are our own save.
+    private func noteOwnSave() {
+        watcherSuppressedUntil = Date().addingTimeInterval(1.0)
+        startWatchingFile()
     }
 
     /// Applies configuration-derived settings to the view: the font, and
@@ -118,36 +217,37 @@ final class EditorWindowController: NSWindowController {
     // MARK: Undo / redo
 
     @objc func performUndo(_ sender: Any?) {
-        if let edit = coreDocument.undo() {
-            replay(edit)
-        }
+        replay(coreDocument.undo())
     }
 
     @objc func performRedo(_ sender: Any?) {
-        if let edit = coreDocument.redo() {
-            replay(edit)
-        }
+        replay(coreDocument.redo())
     }
 
-    /// Applies a core-reported edit to the display cache. Storage mutations
-    /// do not go through the text view delegate, so this cannot echo back
-    /// into the core.
-    private func replay(_ edit: CoreDocument.AppliedEdit) {
-        guard let textView, let storage = textView.textStorage else { return }
+    /// Applies core-reported edits to the display cache, in order. Storage
+    /// mutations do not go through the text view delegate, so this cannot
+    /// echo back into the core.
+    private func replay(_ edits: [CoreDocument.AppliedEdit]) {
+        guard !edits.isEmpty, let textView, let storage = textView.textStorage else { return }
+        var caret = 0
         storage.beginEditing()
-        storage.replaceCharacters(in: edit.range, with: edit.replacement)
-        let insertedLength = (edit.replacement as NSString).length
-        if insertedLength > 0 {
-            storage.setAttributes(
-                textView.typingAttributes,
-                range: NSRange(location: edit.range.location, length: insertedLength)
-            )
+        for edit in edits {
+            storage.replaceCharacters(in: edit.range, with: edit.replacement)
+            let insertedLength = (edit.replacement as NSString).length
+            if insertedLength > 0 {
+                storage.setAttributes(
+                    textView.typingAttributes,
+                    range: NSRange(location: edit.range.location, length: insertedLength)
+                )
+            }
+            caret = edit.range.location + insertedLength
         }
         storage.endEditing()
 
-        // Put the caret at the end of the replayed change and reveal it.
+        // Put the caret at the end of the last replayed change, clamped in
+        // case the document shrank, and reveal it.
         selectionChangeIsFromEditing = true
-        let caret = edit.range.location + insertedLength
+        caret = min(caret, (textView.string as NSString).length)
         textView.setSelectedRange(NSRange(location: caret, length: 0))
         textView.scrollRangeToVisible(NSRange(location: caret, length: 0))
 
@@ -164,6 +264,7 @@ final class EditorWindowController: NSWindowController {
         guard coreDocument.path != nil else { return saveAsInteractively() }
         do {
             try coreDocument.save()
+            noteOwnSave()
             updateChrome()
             return true
         } catch {
@@ -181,6 +282,7 @@ final class EditorWindowController: NSWindowController {
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         do {
             try coreDocument.save(to: url.path)
+            noteOwnSave()
             updateChrome()
             return true
         } catch {
@@ -249,6 +351,45 @@ extension EditorWindowController: NSTextViewDelegate {
             // moves. Rejections here indicate a sync bug worth surfacing.
             NSSound.beep()
             NSLog("edit rejected by core: \(error)")
+            return false
+        }
+    }
+
+    /// Multi-range variant, used by the find bar's Replace All (and any
+    /// future multi-selection editing). All ranges arrive in the
+    /// coordinates of the current text; the view applies them at once
+    /// after we return true, while the core applies sequentially — so the
+    /// core takes them back-to-front to keep earlier offsets valid, and
+    /// records them as one undo step.
+    func textView(
+        _ textView: NSTextView,
+        shouldChangeTextInRanges affectedRanges: [NSValue],
+        replacementStrings: [String]?
+    ) -> Bool {
+        guard let replacementStrings else { return true }
+        guard affectedRanges.count == replacementStrings.count else { return false }
+        // Pre-validate so the group below cannot fail halfway through.
+        let length = coreDocument.lengthInUTF16
+        let pairs = zip(affectedRanges.map(\.rangeValue), replacementStrings)
+        guard affectedRanges.allSatisfy({ NSMaxRange($0.rangeValue) <= length }) else {
+            NSSound.beep()
+            return false
+        }
+        coreDocument.beginEditGroup()
+        do {
+            for (range, replacement) in pairs.sorted(by: { $0.0.location > $1.0.location }) {
+                try coreDocument.replace(utf16Range: range, with: replacement)
+            }
+            coreDocument.endEditGroup()
+            selectionChangeIsFromEditing = true
+            return true
+        } catch {
+            // Should be unreachable after pre-validation; restore the core
+            // (the view never changed) and refuse the edit.
+            coreDocument.endEditGroup()
+            _ = coreDocument.undo()
+            NSSound.beep()
+            NSLog("multi-range edit rejected by core: \(error)")
             return false
         }
     }

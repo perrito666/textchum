@@ -39,9 +39,10 @@ Textchum is young. What exists and works today:
 - An asynchronous event channel from core worker threads to the UI, with a
   strict single-thread delivery contract.
 - A macOS editor with multiple windows (and native window tabs), open/save
-  panels, and save prompts on close; every text view is kept in lockstep
-  with its core document through a synchronization protocol that refuses to
-  let the two sides diverge.
+  panels, save prompts on close, find and replace with regular expressions,
+  and live watching of open files for changes made by other programs; every
+  text view is kept in lockstep with its core document through a
+  synchronization protocol that refuses to let the two sides diverge.
 - A headless smoke test that exercises the whole Swift ↔ core round trip —
   editing, undo, saving, reopening, events — used both by CI and by humans
   in a hurry.

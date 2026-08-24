@@ -43,9 +43,11 @@ Textchum es joven. Lo que existe y funciona hoy:
 - Un canal de eventos asíncrono desde los hilos de trabajo del núcleo hacia
   la interfaz, con un contrato estricto de entrega en un solo hilo.
 - Un editor macOS con varias ventanas (y pestañas nativas), paneles de
-  abrir/guardar y avisos de guardado al cerrar; cada vista de texto se
-  mantiene sincronizada con su documento del núcleo mediante un protocolo
-  que impide que ambos lados diverjan.
+  abrir/guardar, avisos de guardado al cerrar, buscar y reemplazar con
+  expresiones regulares y vigilancia en vivo de los archivos abiertos ante
+  cambios de otros programas; cada vista de texto se mantiene sincronizada
+  con su documento del núcleo mediante un protocolo que impide que ambos
+  lados diverjan.
 - Una prueba de humo sin interfaz que ejercita el ciclo completo
   Swift ↔ núcleo — edición, deshacer, guardado, reapertura, eventos —,
   usada por la integración continua y por humanos con prisa.
