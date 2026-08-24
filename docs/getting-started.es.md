@@ -98,7 +98,11 @@ como crate de Rust en lugar de a través de la cabecera C (allí ambos
 lados son Rust). Es joven — una ventana por archivo, edición y deshacer
 propiedad del núcleo, un menú en la barra de cabecera que lista todo lo
 disponible, coloreado tree-sitter desde la tabla de temas
-compartida, abrir/guardar — pero es la arquitectura real, no una
+compartida, abrir/guardar, búsqueda en el archivo (Ctrl+F), apertura
+difusa en el proyecto (Ctrl+P) y el pool de servidores de lenguaje
+conectado: diagnósticos como subrayados ondulados con recuento de
+problemas en el título, salto a la definición (F12) y problemas de
+servidor como avisos — pero es la arquitectura real, no una
 adaptación: el protocolo de sincronización y sus aserciones de
 depuración son los de macOS traducidos.
 

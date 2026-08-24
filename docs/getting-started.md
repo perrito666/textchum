@@ -90,7 +90,11 @@ It works through the `textchum://` URL scheme, so the app bundle
 The same core drives a native GTK4/libadwaita shell, linked as a Rust
 crate rather than through the C header (both sides are Rust there). It
 is young — one window per file, core-owned editing and undo, a header-bar menu listing everything available, tree-sitter
-highlighting from the shared theme table, open/save — but it is the real
+highlighting from the shared theme table, open/save, in-file search
+(Ctrl+F), project-wide fuzzy open (Ctrl+P), and the language-server
+pool wired in: diagnostics as squiggles with a problem count in the
+title, jump to definition (F12), and server trouble surfaced as toasts
+— but it is the real
 architecture, not a port: the sync protocol and its debug assertions are
 the macOS ones translated.
 

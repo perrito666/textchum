@@ -98,7 +98,11 @@ Le même noyau anime une coque native GTK4/libadwaita, liée comme crate
 Rust plutôt qu'à travers l'en-tête C (là, les deux côtés sont Rust).
 C'est jeune — une fenêtre par fichier, édition et annulation propriété
 du noyau, un menu de barre d'en-tête listant tout ce qui existe, coloration tree-sitter depuis la table de thèmes partagée,
-ouvrir/enregistrer — mais c'est la vraie architecture, pas un portage :
+ouvrir/enregistrer, recherche dans le fichier (Ctrl+F), ouverture
+floue dans le projet (Ctrl+P) et le pool de serveurs de langage
+branché : diagnostics en soulignés ondulés avec compte de problèmes
+dans le titre, saut à la définition (F12) et ennuis de serveur en
+avis — mais c'est la vraie architecture, pas un portage :
 le protocole de synchronisation et ses assertions de débogage sont ceux
 de macOS traduits.
 

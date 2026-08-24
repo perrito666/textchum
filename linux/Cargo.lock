@@ -967,7 +967,17 @@ version = "0.1.0"
 dependencies = [
  "gtk4",
  "libadwaita",
+ "serde_json",
  "sourceview5",
+ "textchum-core",
+ "textchum-lsp",
+]
+
+[[package]]
+name = "textchum-lsp"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
  "textchum-core",
 ]
 

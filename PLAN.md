@@ -371,8 +371,12 @@ Prove the architecture end to end before writing real features.
   **Started** (`linux/`): the GTK4/libadwaita shell builds and passes a headless smoke
   test in CI — core-owned editing and undo through the `insert-text`/`delete-range`
   choke point, tree-sitter highlighting as text tags from the shared theme table,
-  GtkSourceView line numbers, open/save. Next: tabs (AdwTabView), the drawer, search
-  panels, LSP wiring.
+  GtkSourceView line numbers, open/save, a primary menu, in-file search, fuzzy
+  quick-open over the core matcher, and the language-server pool wired through a
+  main-loop event pump: diagnostics as squiggles + problem counts, jump to
+  definition, server status as toasts. The smoke test exercises the whole server
+  path against the scripted server. Next: tabs (AdwTabView), the drawer, grep
+  panel, completion and hover.
 
 **Linux shell design (decided ahead of need):** GTK4 + libadwaita, editor view via
 GtkSourceView, preview via WebKitGTK, written in Rust with gtk4-rs — the same shape
