@@ -63,13 +63,31 @@ impl Instance {
         root: &Path,
         events: EventSender,
     ) -> std::io::Result<Self> {
-        let child = ProcessCommand::new(&config.command)
+        let mut child = ProcessCommand::new(&config.command)
             .args(&config.args)
             .current_dir(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()?;
+        // The server's own complaints are the best diagnostics there
+        // are for "exited during initialize" — capture stderr into the
+        // debug log, capped, but always drained so a chatty server
+        // never blocks on a full pipe.
+        if let Some(stderr) = child.stderr.take() {
+            let server_id = config.id.clone();
+            let _ = std::thread::Builder::new()
+                .name(format!("lsp-{server_id}-stderr"))
+                .spawn(move || {
+                    use std::io::BufRead;
+                    for (count, line) in BufReader::new(stderr).lines().enumerate() {
+                        let Ok(line) = line else { break };
+                        if count < 50 {
+                            crate::log::log(&format!("stderr {server_id}: {line}"));
+                        }
+                    }
+                });
+        }
         let child = Arc::new(Mutex::new(child));
 
         let (commands_tx, commands_rx) = mpsc::channel::<Command>();

@@ -105,8 +105,14 @@ Dos redes de seguridad cubren el caso sin servidor:
   ~/Library/Logs/Textchum/lsp.log
   ```
 
-  Cuando un proyecto se queda misteriosamente sin soporte de lenguaje,
-  este archivo nombra la pieza que falta.
+  La salida de error propia de cada servidor (stderr) también se
+  captura ahí, de modo que un servidor que sale durante el arranque
+  deja su queja registrada — un comando sin su indicador de transporte
+  (el `--stdio` de pyright, por ejemplo) se diagnostica de un vistazo,
+  y el registro avisa directamente cuando un comando personalizado
+  omite argumentos que el registro incorporado sabe necesarios. Cuando
+  un proyecto se queda misteriosamente sin soporte de lenguaje, este
+  archivo nombra la pieza que falta.
 
 Una causa clásica merece nota aparte: las aplicaciones lanzadas desde el
 Finder heredaban el `PATH` mínimo de macOS, que no contiene ninguno de

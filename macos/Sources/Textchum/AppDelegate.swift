@@ -295,6 +295,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 alert.informativeText = message
                 alert.runModal()
             }
+            // A server that starts but dies before (or during) the
+            // handshake deserves one loud notice too — with a pointer to
+            // the log that holds its stderr.
+            let diedEarly =
+                status == "failed" || (status == "exited" && message == "during initialize")
+            if diedEarly, !reportedMissingServers.contains(server) {
+                reportedMissingServers.insert(server)
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "Language server failed to start"
+                alert.informativeText =
+                    "\(server) exited during startup"
+                    + (message.isEmpty || message == "during initialize"
+                        ? "" : " (\(message))")
+                    + ". Its own error output is in ~/Library/Logs/Textchum/lsp.log."
+                alert.runModal()
+            }
         }
     }
 

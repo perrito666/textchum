@@ -165,10 +165,33 @@ impl Pool {
         if let Some(command_line) = self.configured_command(root, language) {
             let mut parts = command_line.split_whitespace().map(str::to_owned);
             let command = parts.next()?;
+            let args: Vec<String> = parts.collect();
+            // A custom command that is the registry's server minus its
+            // required arguments is the classic "exited during
+            // initialize" — say so where the user will look.
+            if let Some(spec) = server_for_language(language) {
+                let same_binary = Path::new(&command)
+                    .file_name()
+                    .map(|name| name == std::ffi::OsStr::new(spec.command))
+                    .unwrap_or(false);
+                let missing: Vec<_> = spec
+                    .args
+                    .iter()
+                    .filter(|required| !args.iter().any(|arg| arg == *required))
+                    .collect();
+                if same_binary && !missing.is_empty() {
+                    crate::log::log(&format!(
+                        "note: the built-in registry runs {} with {:?}; the \
+                         configured command omits {:?} — most servers exit \
+                         immediately without them",
+                        spec.command, spec.args, missing
+                    ));
+                }
+            }
             return Some(ServerConfig {
                 id: format!("custom:{command}"),
                 command,
-                args: parts.collect(),
+                args,
                 languages: vec![language.to_owned()],
                 install_hint: format!("configured in Settings for {language}"),
             });

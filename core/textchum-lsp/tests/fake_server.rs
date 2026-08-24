@@ -294,3 +294,49 @@ fn missing_server_reports_once_with_hint() {
         "no repeat report"
     );
 }
+
+#[test]
+fn dying_server_stderr_and_missing_args_hint_reach_the_log() {
+    let log_file = std::env::temp_dir()
+        .join(format!("textchum-lsp-{}", std::process::id()))
+        .join("lsp-test.log");
+    textchum_lsp::log::set_path(&log_file);
+
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    // A server that complains on stderr and dies before the handshake —
+    // the "exited during initialize" shape.
+    pool.add_override(ServerConfig {
+        id: "dying".into(),
+        command: "sh".into(),
+        args: vec!["-c".into(), "echo transport flag missing >&2; exit 1".into()],
+        languages: vec!["rust".into()],
+        install_hint: "n/a".into(),
+    });
+    let (_root, file) = project("proj-dying");
+    pool.did_open(&file, "rust", "");
+    let mut seen = Vec::new();
+    collect_until(&events, "early-exit status", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::ServerStatus { status, message, .. }
+            if status == "failed" || (status == "exited" && message == "during initialize")))
+    });
+
+    // A custom command that is the registry's binary minus its required
+    // arguments earns a hint at resolution time.
+    pool.configure(r#"{"defaults": {"python": "/opt/somewhere/pyright-langserver"}}"#);
+    pool.did_open(&file.with_extension("py"), "python", "");
+
+    // The stderr reader runs on its own thread; give it a moment.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let log = std::fs::read_to_string(&log_file).unwrap_or_default();
+        if log.contains("stderr dying: transport flag missing") && log.contains("omits") {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "log lacks stderr capture or args hint:\n{log}"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}

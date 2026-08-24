@@ -107,8 +107,14 @@ Deux filets de sécurité couvrent le cas sans serveur :
   ~/Library/Logs/Textchum/lsp.log
   ```
 
-  Quand un projet se retrouve mystérieusement sans support de langage,
-  ce fichier nomme la pièce manquante.
+  La sortie d'erreur propre à chaque serveur (stderr) y est capturée
+  aussi : un serveur qui sort pendant le démarrage laisse sa plainte au
+  dossier — une commande privée de son option de transport (le
+  `--stdio` de pyright, par exemple) se diagnostique d'un coup d'œil,
+  et le journal signale explicitement quand une commande personnalisée
+  omet des arguments que le registre intégré sait requis. Quand un
+  projet se retrouve mystérieusement sans support de langage, ce
+  fichier nomme la pièce manquante.
 
 Une cause classique mérite sa note : les applications lancées depuis le
 Finder héritaient du `PATH` minimal de macOS, qui ne contient aucun des

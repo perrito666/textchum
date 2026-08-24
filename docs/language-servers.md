@@ -96,6 +96,11 @@ Two safety nets cover the no-server case:
   ~/Library/Logs/Textchum/lsp.log
   ```
 
+  Each server's own error output (stderr) is captured there too, so a
+  server that exits during startup leaves its complaint on record — a
+  command missing its transport flag (pyright's `--stdio`, say) is
+  diagnosed in one glance, and the log notes outright when a custom
+  command omits arguments the built-in registry knows are required.
   When a project mysteriously has no language support, this file names
   the missing piece.
 
