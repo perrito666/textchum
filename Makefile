@@ -11,7 +11,9 @@ SWIFT_PKG     := --package-path macos
 # Outside docs/ so MkDocs does not scan it as content.
 DOCS_VENV     := .docs-venv
 
-.PHONY: all build core run test smoke header-check check app docs docs-serve clean install-cli
+# `linux` MUST stay in this list: a directory of that name exists, and
+# without .PHONY make declares it up to date and builds nothing.
+.PHONY: all build core run test smoke header-check check app docs docs-serve clean install-cli linux
 
 all: build
 
