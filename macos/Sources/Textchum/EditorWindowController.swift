@@ -44,8 +44,18 @@ struct SidebarConfiguration {
     let openFile: (String) -> Void
     /// Moves the given documents' windows into a window of their own…
     var splitGroup: ([ObjectIdentifier]) -> Void = { _ in }
-    /// …or into the named host controller's window as tabs.
+    /// …or into the chosen target window (second argument) as tabs.
     var mergeGroup: ([ObjectIdentifier], ObjectIdentifier) -> Void = { _, _ in }
+    /// Destinations for "Gather Into": one entry per tab group, the
+    /// asking window's own group listed first as "This Window".
+    var windowTargets: (ObjectIdentifier) -> [WindowTarget] = { _ in [] }
+}
+
+/// One "Gather Into" destination: a window standing for its tab group.
+struct WindowTarget: Identifiable {
+    /// The representative editor controller's identity.
+    let id: ObjectIdentifier
+    let title: String
 }
 
 /// Per-window observable state feeding the sidebar's folder tree.
@@ -214,9 +224,12 @@ final class EditorWindowController: NSWindowController {
                 onSplitGroup: { group in
                     sidebar.splitGroup(group.documents.map(\.id))
                 },
-                onMergeGroup: { [weak self] group in
-                    guard let self else { return }
-                    sidebar.mergeGroup(group.documents.map(\.id), ObjectIdentifier(self))
+                onMergeGroup: { group, target in
+                    sidebar.mergeGroup(group.documents.map(\.id), target)
+                },
+                windowTargets: { [weak self] in
+                    guard let self else { return [] }
+                    return sidebar.windowTargets(ObjectIdentifier(self))
                 }
             )
             let sidebarHost = NSHostingController(rootView: sidebarView)

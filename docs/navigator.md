@@ -35,8 +35,9 @@ launches — it is a quick look, not a mode.
 
 Right-clicking a **project's header** offers window arrangement for the
 whole group: **Split into New Window** pulls the project's documents out
-into a window of their own (as tabs of it), and **Gather Here as Tabs**
-adopts them into the current window's tab group. The divider between
+into a window of their own (as tabs of it), and **Gather Into** is a
+submenu of destinations — This Window, or any other open window (its
+tab group, really) — that adopts the project's documents there as tabs. The divider between
 the buffer list and the folder tree is one shared position — dragging
 it in any tab moves it in all of them, and it is remembered with the
 session.

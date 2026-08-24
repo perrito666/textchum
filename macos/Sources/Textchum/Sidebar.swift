@@ -201,8 +201,11 @@ struct SidebarView: View {
     let onOpenFile: (String) -> Void
     /// Moves a project group's windows out into their own window…
     var onSplitGroup: (SidebarProjectGroup) -> Void = { _ in }
-    /// …or gathers them into this window as tabs.
-    var onMergeGroup: (SidebarProjectGroup) -> Void = { _ in }
+    /// …or gathers them into the chosen target window as tabs.
+    var onMergeGroup: (SidebarProjectGroup, ObjectIdentifier) -> Void = { _, _ in }
+    /// The destinations offered by the Gather Into submenu, computed
+    /// when the menu opens.
+    var windowTargets: () -> [WindowTarget] = { [] }
 
     private var projectRoot: String? { context.projectRoot }
 
@@ -282,8 +285,12 @@ struct SidebarView: View {
                             Button("Split into New Window") {
                                 onSplitGroup(group)
                             }
-                            Button("Gather Here as Tabs") {
-                                onMergeGroup(group)
+                            Menu("Gather Into") {
+                                ForEach(windowTargets()) { target in
+                                    Button(target.title) {
+                                        onMergeGroup(group, target.id)
+                                    }
+                                }
                             }
                         }
                     ForEach(group.documents) { document in

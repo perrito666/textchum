@@ -43,8 +43,9 @@ mémorisé d'un lancement à l'autre — c'est un coup d'œil, pas un mode.
 Un clic droit sur l'**en-tête d'un projet** propose l'agencement des
 fenêtres du groupe entier : **Split into New Window** sort les
 documents du projet dans une fenêtre à eux (comme ses onglets) et
-**Gather Here as Tabs** les adopte dans le groupe d'onglets de la
-fenêtre courante. Le séparateur entre la liste des tampons et l'arbre
+**Gather Into** est un sous-menu de destinations — This Window, ou
+toute autre fenêtre ouverte (son groupe d'onglets, en réalité) — qui y
+adopte les documents du projet comme onglets. Le séparateur entre la liste des tampons et l'arbre
 des dossiers est une position unique partagée — le glisser dans un
 onglet le déplace dans tous, et il est retenu avec la session.
 

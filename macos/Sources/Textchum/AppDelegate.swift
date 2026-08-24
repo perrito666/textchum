@@ -153,6 +153,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self?.togglePathDisplay(nil)
                         return
                     }
+                    if allArguments[flagIndex + 1] == "gather" {
+                        // Merge every document into the first window's
+                        // group — exercises the standalone-window path.
+                        if let self, let first = self.editors.first {
+                            self.mergeAsTabs(
+                                documentIDs: self.editors.map(ObjectIdentifier.init),
+                                into: ObjectIdentifier(first))
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "outline" {
                         // Give the language server time to hand-shake.
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -736,22 +746,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: nil)
     }
 
-    /// "Gather Here as Tabs": adopts the group's windows into the host
-    /// window's tab group.
-    private func mergeAsTabs(documentIDs: [ObjectIdentifier], into host: ObjectIdentifier) {
+    /// "Gather Into …": adopts the group's windows into the target
+    /// window's tab group. A window already tabbed with the target is
+    /// left alone — but two standalone windows both have a nil tab
+    /// group, so membership is checked, never group identity.
+    private func mergeAsTabs(documentIDs: [ObjectIdentifier], into target: ObjectIdentifier) {
         guard
-            let hostWindow = editors.first(where: { ObjectIdentifier($0) == host })?.window
+            let targetWindow = editors.first(where: { ObjectIdentifier($0) == target })?
+                .window
         else { return }
         let members = editors.filter { documentIDs.contains(ObjectIdentifier($0)) }
         for member in members {
-            guard let window = member.window, window != hostWindow,
-                window.tabGroup !== hostWindow.tabGroup
-            else { continue }
+            guard let window = member.window, window != targetWindow else { continue }
+            if let group = targetWindow.tabGroup, group.windows.contains(window) {
+                continue
+            }
             window.tabGroup?.removeWindow(window)
-            hostWindow.addTabbedWindow(window, ordered: .above)
+            targetWindow.addTabbedWindow(window, ordered: .above)
         }
-        hostWindow.makeKeyAndOrderFront(nil)
+        targetWindow.makeKeyAndOrderFront(nil)
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: nil)
+    }
+
+    /// One "Gather Into" destination per tab group, the asker's own
+    /// group first as "This Window".
+    private func windowTargets(asking host: ObjectIdentifier) -> [WindowTarget] {
+        let hostGroupKey = editors.first { ObjectIdentifier($0) == host }
+            .flatMap { editor -> ObjectIdentifier? in
+                guard let window = editor.window else { return nil }
+                return window.tabGroup.map(ObjectIdentifier.init) ?? ObjectIdentifier(window)
+            }
+        var seen = Set<ObjectIdentifier>()
+        var targets: [WindowTarget] = []
+        for editor in editors {
+            guard let window = editor.window else { continue }
+            let groupKey =
+                window.tabGroup.map(ObjectIdentifier.init) ?? ObjectIdentifier(window)
+            guard !seen.contains(groupKey) else { continue }
+            seen.insert(groupKey)
+            let tabCount = window.tabGroup?.windows.count ?? 1
+            let extra = tabCount > 1 ? " (+\(tabCount - 1))" : ""
+            let title: String
+            if groupKey == hostGroupKey {
+                title = "This Window"
+            } else {
+                title = (window.tabGroup?.selectedWindow ?? window).title + extra
+            }
+            let target = WindowTarget(id: ObjectIdentifier(editor), title: title)
+            if groupKey == hostGroupKey {
+                targets.insert(target, at: 0)
+            } else {
+                targets.append(target)
+            }
+        }
+        return targets
     }
 
     /// The pool configuration: server entries plus workspace behavior.
@@ -785,8 +833,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             splitGroup: { [weak self] ids in
                 self?.splitIntoNewWindow(documentIDs: ids)
             },
-            mergeGroup: { [weak self] ids, host in
-                self?.mergeAsTabs(documentIDs: ids, into: host)
+            mergeGroup: { [weak self] ids, target in
+                self?.mergeAsTabs(documentIDs: ids, into: target)
+            },
+            windowTargets: { [weak self] host in
+                self?.windowTargets(asking: host) ?? []
             }
         )
     }

@@ -44,8 +44,9 @@ no un modo.
 Un clic derecho sobre la **cabecera de un proyecto** ofrece la
 disposición de ventanas del grupo entero: **Split into New Window** saca
 los documentos del proyecto a una ventana propia (como pestañas suyas) y
-**Gather Here as Tabs** los adopta en el grupo de pestañas de la ventana
-actual. El divisor entre la lista de búferes y el árbol de carpetas es
+**Gather Into** es un submenú de destinos — This Window o cualquier
+otra ventana abierta (su grupo de pestañas, en realidad) — que adopta
+allí los documentos del proyecto como pestañas. El divisor entre la lista de búferes y el árbol de carpetas es
 una única posición compartida — arrastrarlo en cualquier pestaña lo
 mueve en todas, y se recuerda con la sesión.
 
