@@ -140,8 +140,12 @@ struct FileTreeRow: View {
 
     private var label: some View {
         HStack(spacing: 4) {
-            Image(systemName: node.isDirectory ? "folder" : "doc.text")
-                .foregroundStyle(.secondary)
+            if node.isDirectory {
+                Image(systemName: "folder")
+                    .foregroundStyle(.secondary)
+            } else {
+                LanguageBadge(filename: node.name)
+            }
             Text(node.name)
             Spacer(minLength: 0)
         }
@@ -295,13 +299,16 @@ struct SidebarView: View {
                         }
                     ForEach(group.documents) { document in
                         HStack(spacing: 4) {
-                            Image(
-                                systemName: document.isDirty
-                                    ? "circle.fill" : "doc.text"
-                            )
-                            .font(.system(size: document.isDirty ? 7 : 12))
-                            .foregroundStyle(
-                                document.isDirty ? .primary : .secondary)
+                            if document.isDirty {
+                                // The dirty dot outranks the badge: unsaved
+                                // is the one thing worth noticing here.
+                                Image(systemName: "circle.fill")
+                                    .font(.system(size: 7))
+                                    .foregroundStyle(.primary)
+                                    .frame(width: 17)
+                            } else {
+                                LanguageBadge(filename: document.title)
+                            }
                             Text(document.display)
                                 .fontWeight(
                                     document.id == currentDocumentID

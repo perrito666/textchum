@@ -152,3 +152,35 @@ fn language_detected_from_extension_on_open() {
     assert_eq!(doc.language_name(), Some("rust"));
     assert!(!doc.highlights(0, doc.len_utf16()).unwrap().is_empty());
 }
+
+#[test]
+fn filename_only_languages_detect_and_color() {
+    use textchum_core::syntax::languages;
+    // Identity by name, not extension.
+    assert_eq!(
+        languages::by_path(std::path::Path::new("/x/Makefile")).map(|l| l.spec.name),
+        Some("make")
+    );
+    assert_eq!(
+        languages::by_path(std::path::Path::new("/repo/.git/COMMIT_EDITMSG"))
+            .map(|l| l.spec.name),
+        Some("gitcommit")
+    );
+    // Extensions still work for make fragments.
+    assert_eq!(
+        languages::by_path(std::path::Path::new("rules.mk")).map(|l| l.spec.name),
+        Some("make")
+    );
+
+    // Both grammars compile their queries and produce styled spans.
+    let make = doc_with("make", "all: build\n\techo done\n\n# comment\n");
+    let spans = make.highlights(0, make.len_utf16()).unwrap();
+    assert!(!spans.is_empty(), "make produced no spans");
+
+    let commit = doc_with(
+        "gitcommit",
+        "Fix the frobnicator\n\nLonger body.\n# Please enter the commit message\n",
+    );
+    let spans = commit.highlights(0, commit.len_utf16()).unwrap();
+    assert!(!spans.is_empty(), "gitcommit produced no spans");
+}

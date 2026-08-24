@@ -7,11 +7,16 @@ from regular expressions.
 
 ## Languages
 
-Detection is by file extension, on open and on the first save of an
-untitled document. Currently recognized: Rust, Python, Go, C, JavaScript,
-JSON, Bash, HTML, CSS, TOML, YAML, Swift, Zig, and Markdown. The window
-subtitle shows the active language; unrecognized files simply stay plain
-text.
+Detection is by file extension — or by exact file name, for the files
+whose identity *is* their name: `Makefile` (and `*.mk`), and git's
+message files (`COMMIT_EDITMSG`, `MERGE_MSG`, `TAG_EDITMSG`), so commit
+messages written through `chum --wait` arrive colored. It runs on open
+and on the first save of an untitled document. Currently recognized:
+Rust, Python, Go, C, JavaScript, JSON, Bash, Make, git commit messages,
+HTML, CSS, TOML, YAML, Swift, Zig, and Markdown. The window subtitle
+shows the active language; unrecognized files simply stay plain text.
+The navigator's file rows carry a small badge in each known language's
+conventional color, so a tree scans by shape.
 
 Grammars are compiled into the application, so highlighting works offline
 and identically everywhere.

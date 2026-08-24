@@ -8,11 +8,17 @@ ese árbol — no con expresiones regulares.
 
 ## Lenguajes
 
-La detección es por extensión de archivo, al abrir y en el primer guardado
-de un documento sin título. Actualmente se reconocen: Rust, Python, Go, C,
-JavaScript, JSON, Bash, HTML, CSS, TOML, YAML, Swift, Zig y Markdown. El
-subtítulo de la ventana muestra el lenguaje activo; los archivos no
-reconocidos se quedan simplemente en texto plano.
+La detección es por extensión de archivo — o por nombre exacto, para
+los archivos cuya identidad *es* su nombre: `Makefile` (y `*.mk`) y los
+mensajes de git (`COMMIT_EDITMSG`, `MERGE_MSG`, `TAG_EDITMSG`), así que
+los mensajes de commit escritos con `chum --wait` llegan coloreados.
+Se ejecuta al abrir y en el primer guardado de un documento sin título.
+Actualmente se reconocen: Rust, Python, Go, C, JavaScript, JSON, Bash,
+Make, mensajes de commit de git, HTML, CSS, TOML, YAML, Swift, Zig y
+Markdown. El subtítulo de la ventana muestra el lenguaje activo; los
+archivos no reconocidos se quedan simplemente en texto plano. Las filas
+del navegador llevan una pequeña insignia con el color convencional de
+cada lenguaje conocido, para recorrer el árbol de un vistazo.
 
 Las gramáticas van compiladas dentro de la aplicación, así que el
 coloreado funciona sin conexión y de forma idéntica en todas partes.

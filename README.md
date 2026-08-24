@@ -14,7 +14,8 @@ the platform.
 - **Documents the core owns**: rope-backed buffers, undo/redo with
   coalescing, atomic saves, external-change detection, and session
   restore down to caret positions (`--fresh` to skip it).
-- **Syntax highlighting** via tree-sitter across 15 languages, with
+- **Syntax highlighting** via tree-sitter across 16 languages —
+  Makefiles and git commit messages included — with
   injections (Markdown fences, HTML script/style), incremental re-parse
   on every edit, and auto-indent on return.
 - **Themes**: seven built in — including Molokai, Solarized, Dracula,

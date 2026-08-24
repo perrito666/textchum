@@ -22,6 +22,10 @@ pub struct LanguageSpec {
     pub aliases: &'static [&'static str],
     /// File extensions (lowercase, no dot) that select this language.
     pub extensions: &'static [&'static str],
+    /// Exact file names that select this language — for the files whose
+    /// identity is their name, not an extension (Makefile, git's
+    /// COMMIT_EDITMSG).
+    pub filenames: &'static [&'static str],
     language: fn() -> Language,
     highlights: &'static str,
     injections: Option<&'static str>,
@@ -72,10 +76,14 @@ impl RegisteredLanguage {
 
 macro_rules! lang {
     ($name:literal, $aliases:expr, $exts:expr, $lang:expr, $hl:expr, $inj:expr) => {
+        lang!($name, $aliases, $exts, &[], $lang, $hl, $inj)
+    };
+    ($name:literal, $aliases:expr, $exts:expr, $files:expr, $lang:expr, $hl:expr, $inj:expr) => {
         LanguageSpec {
             name: $name,
             aliases: $aliases,
             extensions: $exts,
+            filenames: $files,
             language: || $lang.into(),
             highlights: $hl,
             injections: $inj,
@@ -130,6 +138,24 @@ static SPECS: &[LanguageSpec] = &[
         &["json", "jsonc"],
         tree_sitter_json::LANGUAGE,
         tree_sitter_json::HIGHLIGHTS_QUERY,
+        None
+    ),
+    lang!(
+        "make",
+        &["makefile", "gnumakefile"],
+        &["mk", "mak"],
+        &["Makefile", "makefile", "GNUmakefile"],
+        tree_sitter_make::LANGUAGE,
+        tree_sitter_make::HIGHLIGHTS_QUERY,
+        None
+    ),
+    lang!(
+        "gitcommit",
+        &["git-commit"],
+        &[],
+        &["COMMIT_EDITMSG", "MERGE_MSG", "TAG_EDITMSG"],
+        tree_sitter_gitcommit::LANGUAGE,
+        tree_sitter_gitcommit::HIGHLIGHTS_QUERY,
         None
     ),
     lang!(
@@ -230,8 +256,17 @@ pub fn by_name(name: &str) -> Option<&'static RegisteredLanguage> {
     })
 }
 
-/// Finds a language by a file path's extension.
+/// Finds a language by a file path: an exact file-name match first
+/// (Makefile, COMMIT_EDITMSG), then the extension.
 pub fn by_path(path: &std::path::Path) -> Option<&'static RegisteredLanguage> {
+    if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
+        if let Some(entry) = registry()
+            .iter()
+            .find(|entry| entry.spec.filenames.iter().any(|file| *file == name))
+        {
+            return Some(entry);
+        }
+    }
     let extension = path.extension()?.to_str()?.to_ascii_lowercase();
     registry()
         .iter()
