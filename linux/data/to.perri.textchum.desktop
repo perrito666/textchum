@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Textchum
+GenericName=Text Editor
+Comment=A fast, native text editor with language servers and tree-sitter highlighting
+Exec=textchum-gtk %F
+Icon=to.perri.textchum
+Terminal=false
+Type=Application
+Categories=Utility;TextEditor;Development;
+MimeType=text/plain;text/markdown;text/x-python;text/x-rust;text/x-go;text/x-csrc;application/json;application/x-yaml;application/x-shellscript;
+StartupNotify=true

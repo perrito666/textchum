@@ -108,8 +108,36 @@ impl Workbench {
 
         let file_section = gtk::gio::Menu::new();
         file_section.append(Some("New Tab"), Some("win.new-tab"));
+        // One entry per selectable language: a new tab that speaks it
+        // before its first save.
+        let formats_menu = gtk::gio::Menu::new();
+        for name in textchum_core::syntax::languages::selectable_names() {
+            formats_menu.append(
+                Some(name),
+                Some(&format!("win.new-with-format('{name}')")),
+            );
+        }
+        file_section.append_submenu(Some("New with Format"), &formats_menu);
         file_section.append(Some("New Window"), Some("win.new"));
         file_section.append(Some("Open…"), Some("win.open"));
+        // The desktop's shared recent-files list, newest first.
+        let recent_menu = gtk::gio::Menu::new();
+        let mut recent: Vec<gtk::RecentInfo> = gtk::RecentManager::default().items();
+        recent.sort_by_key(|info| std::cmp::Reverse(info.modified()));
+        for info in recent.iter().take(10) {
+            let uri = info.uri();
+            if let Some(path) = uri.strip_prefix("file://") {
+                let path = percent_decode(path);
+                if std::path::Path::new(&path).is_file() {
+                    let name = info.display_name();
+                    recent_menu.append(
+                        Some(&name),
+                        Some(&format!("win.open-recent('{}')", path.replace('\'', "\\'"))),
+                    );
+                }
+            }
+        }
+        file_section.append_submenu(Some("Open Recent"), &recent_menu);
         file_section.append(Some("Open Quickly…"), Some("win.quick-open"));
         file_section.append(Some("Save"), Some("win.save"));
         file_section.append(Some("Save As…"), Some("win.save-as"));
@@ -130,6 +158,9 @@ impl Workbench {
         go_section.append(Some("Format Document"), Some("win.format"));
         go_section.append(Some("Document Outline…"), Some("win.outline"));
         go_section.append(Some("Show Documentation for Symbol"), Some("win.hover"));
+        go_section.append(Some("Go to Block Start"), Some("win.block-start"));
+        go_section.append(Some("Go to Block End"), Some("win.block-end"));
+        go_section.append(Some("Command Palette…"), Some("win.palette"));
         go_section.append(Some("Toggle File Tree"), Some("win.sidebar"));
         go_section.append(Some("Toggle Markdown Preview"), Some("win.preview"));
         let app_section = gtk::gio::Menu::new();
@@ -486,6 +517,11 @@ impl Workbench {
         }
         self.refresh_chrome();
         self.refresh_sidebar();
+        // The desktop's shared recent-files list learns about it too.
+        if let Some(path) = self.selected().and_then(|page| page.path.borrow().clone()) {
+            let uri = gtk::gio::File::for_path(&path).uri();
+            let _ = gtk::RecentManager::default().add_item(&uri);
+        }
         crate::session::save();
     }
 
@@ -1014,6 +1050,45 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
     });
+    add("block-start", workbench, |workbench, _| move_to_block_edge(workbench, true));
+    add("block-end", workbench, |workbench, _| move_to_block_edge(workbench, false));
+    add("palette", workbench, |workbench, _| show_palette(workbench));
+    // Parameterized actions: the language for a fresh tab, and a
+    // recent file's path.
+    {
+        let action = gtk::gio::SimpleAction::new(
+            "new-with-format",
+            Some(glib::VariantTy::STRING),
+        );
+        let weak = Rc::downgrade(workbench);
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some(name) = parameter.and_then(|p| p.str().map(str::to_owned)) else {
+                return;
+            };
+            workbench.open(None, None);
+            if let Some(page) = workbench.selected() {
+                page.state.borrow_mut().document.set_language(Some(&name));
+                page::refresh_style_tags(&page.buffer);
+                page::recolor(&page.buffer);
+                page::apply_highlights(&page.buffer, &page.state.borrow().document);
+                workbench.refresh_chrome();
+            }
+        });
+        workbench.window.add_action(&action);
+    }
+    {
+        let action =
+            gtk::gio::SimpleAction::new("open-recent", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(workbench);
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            if let Some(path) = parameter.and_then(|p| p.str().map(str::to_owned)) {
+                workbench.open(Some(PathBuf::from(path)), None);
+            }
+        });
+        workbench.window.add_action(&action);
+    }
     add("redraw", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         page::recolor(&page.buffer);
@@ -1284,6 +1359,181 @@ fn open_definition(workbench: &Rc<Workbench>, json: &str) {
     let line = range["start"]["line"].as_i64().unwrap_or(0) as i32;
     let character = range["start"]["character"].as_u64().unwrap_or(0) as usize;
     workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+}
+
+/// Moves the caret to the innermost multi-line block's start or end,
+/// courtesy of the same tree that powers highlighting.
+fn move_to_block_edge(workbench: &Rc<Workbench>, to_start: bool) {
+    let Some(page) = workbench.selected() else { return };
+    let buffer = &page.buffer;
+    let insert = buffer.iter_at_mark(&buffer.get_insert());
+    let position = page::utf16_offset(buffer, insert.offset());
+    let Some((start, end)) = page.state.borrow().document.block_bounds(position) else {
+        workbench.toast("No enclosing block here.");
+        return;
+    };
+    let target_utf16 = if to_start { start } else { end };
+    let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+    let target = buffer.iter_at_offset(page::char_offset(&text, target_utf16));
+    buffer.place_cursor(&target);
+    page.view
+        .scroll_to_iter(&mut target.clone(), 0.1, false, 0.0, 0.0);
+}
+
+/// Every palette entry: what the menus can do, searchable by name.
+const PALETTE: &[(&str, &str)] = &[
+    ("New Tab", "win.new-tab"),
+    ("New Window", "win.new"),
+    ("Open…", "win.open"),
+    ("Open Quickly…", "win.quick-open"),
+    ("Save", "win.save"),
+    ("Save As…", "win.save-as"),
+    ("Revert to Saved", "win.revert"),
+    ("Undo", "win.undo"),
+    ("Redo", "win.redo"),
+    ("Find…", "win.find"),
+    ("Find in Project…", "win.find-in-project"),
+    ("Run Save Preprocessors", "win.preprocess"),
+    ("Redraw", "win.redraw"),
+    ("Jump to Definition", "win.definition"),
+    ("Go Back", "win.back"),
+    ("Go Forward", "win.forward"),
+    ("Find References", "win.references"),
+    ("Rename Symbol…", "win.rename"),
+    ("Format Document", "win.format"),
+    ("Document Outline…", "win.outline"),
+    ("Show Documentation for Symbol", "win.hover"),
+    ("Go to Block Start", "win.block-start"),
+    ("Go to Block End", "win.block-end"),
+    ("Toggle File Tree", "win.sidebar"),
+    ("Toggle Markdown Preview", "win.preview"),
+    ("Preferences…", "win.preferences"),
+    ("Close Tab", "win.close-tab"),
+];
+
+/// A fuzzy-filterable list over every menu action; ⏎ runs the
+/// selection. The shortcut for when the shortcut escapes memory.
+fn show_palette(workbench: &Rc<Workbench>) {
+    let entry = gtk::SearchEntry::new();
+    entry.set_placeholder_text(Some("Type a command…"));
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::Browse);
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&list)
+        .min_content_height(300)
+        .build();
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    content.set_margin_top(10);
+    content.set_margin_bottom(10);
+    content.set_margin_start(10);
+    content.set_margin_end(10);
+    content.append(&entry);
+    content.append(&scrolled);
+    let dialog = adw::Window::builder()
+        .transient_for(&workbench.window)
+        .modal(true)
+        .title("Command Palette")
+        .default_width(440)
+        .default_height(380)
+        .build();
+    dialog.set_content(Some(&content));
+
+    // Rows carry their action index; filtering rebuilds the list.
+    let visible: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
+    let rebuild = {
+        let list = list.clone();
+        let visible = Rc::clone(&visible);
+        move |query: &str| {
+            while let Some(row) = list.row_at_index(0) {
+                list.remove(&row);
+            }
+            let query = query.to_lowercase();
+            let mut shown = Vec::new();
+            for (index, (label, _)) in PALETTE.iter().enumerate() {
+                // Subsequence match: every query character in order.
+                let mut characters = query.chars().peekable();
+                for candidate in label.to_lowercase().chars() {
+                    if characters.peek() == Some(&candidate) {
+                        characters.next();
+                    }
+                }
+                if characters.peek().is_none() {
+                    let row_label = gtk::Label::new(Some(label));
+                    row_label.set_xalign(0.0);
+                    row_label.set_margin_start(10);
+                    row_label.set_margin_end(10);
+                    row_label.set_margin_top(4);
+                    row_label.set_margin_bottom(4);
+                    list.append(&row_label);
+                    shown.push(index);
+                }
+            }
+            *visible.borrow_mut() = shown;
+            if let Some(first) = list.row_at_index(0) {
+                list.select_row(Some(&first));
+            }
+        }
+    };
+    rebuild("");
+    {
+        let rebuild = rebuild.clone();
+        entry.connect_search_changed(move |entry| rebuild(&entry.text()));
+    }
+    let run = {
+        let workbench = Rc::downgrade(workbench);
+        let visible = Rc::clone(&visible);
+        let dialog = dialog.clone();
+        Rc::new(move |row_index: i32| {
+            let Some(workbench) = workbench.upgrade() else { return };
+            let Some(&index) = visible.borrow().get(row_index.max(0) as usize) else {
+                return;
+            };
+            dialog.close();
+            let _ = gtk::prelude::WidgetExt::activate_action(
+                &workbench.window,
+                PALETTE[index].1,
+                None,
+            );
+        })
+    };
+    {
+        let list = list.clone();
+        let run = Rc::clone(&run);
+        entry.connect_activate(move |_| {
+            if let Some(row) = list.selected_row() {
+                run(row.index());
+            }
+        });
+    }
+    {
+        let run = Rc::clone(&run);
+        list.connect_row_activated(move |_, row| run(row.index()));
+    }
+    // ↑/↓ move the selection from the entry; Escape closes.
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    {
+        let dialog = dialog.clone();
+        let list = list.clone();
+        keys.connect_key_pressed(move |_, key, _, _| match key {
+            gtk::gdk::Key::Escape => {
+                dialog.close();
+                glib::Propagation::Stop
+            }
+            gtk::gdk::Key::Down | gtk::gdk::Key::Up => {
+                let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
+                let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
+                if let Some(row) = list.row_at_index(next.max(0)) {
+                    list.select_row(Some(&row));
+                }
+                glib::Propagation::Stop
+            }
+            _ => glib::Propagation::Proceed,
+        });
+    }
+    dialog.add_controller(keys);
+    dialog.present();
+    entry.grab_focus();
 }
 
 /// The configured preprocessor chain for a page, if any.

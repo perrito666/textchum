@@ -13,7 +13,7 @@ DOCS_VENV     := .docs-venv
 
 # `linux` MUST stay in this list: a directory of that name exists, and
 # without .PHONY make declares it up to date and builds nothing.
-.PHONY: all build core run test smoke header-check check app docs docs-serve clean install-cli linux
+.PHONY: all build core run test smoke header-check check app docs docs-serve clean install-cli linux install-linux
 
 all: build
 
@@ -73,6 +73,15 @@ app: core
 ## packages — see docs/getting-started.md).
 linux:
 	cargo build --release --manifest-path linux/Cargo.toml
+
+## Installs the Linux build for the current user: binary, desktop
+## entry, and icon into the XDG home directories.
+install-linux: linux
+	install -Dm755 linux/target/release/textchum-gtk $(HOME)/.local/bin/textchum-gtk
+	install -Dm644 linux/data/to.perri.textchum.desktop $(HOME)/.local/share/applications/to.perri.textchum.desktop
+	install -Dm644 macos/AppIcon/icon-1024.png $(HOME)/.local/share/icons/hicolor/1024x1024/apps/to.perri.textchum.png
+	-update-desktop-database $(HOME)/.local/share/applications 2>/dev/null
+	@echo Installed textchum-gtk for $(USER) — ensure ~/.local/bin is on PATH
 
 PREFIX ?= /usr/local
 

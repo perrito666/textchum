@@ -53,8 +53,8 @@ Ordered roughly by how much daily pain each gap causes.
    Documentation for Symbol (Ctrl+Alt+H).
 6. ~~Replace in file.~~ Done: the search bar grew a replace row
    (Replace / All) and match-case, regex, and whole-word toggles.
-7. **Command palette.** Menu actions exist and are named; the
-   fuzzy-searchable panel over them does not.
+7. ~~Command palette.~~ Done: Ctrl+Shift+P, subsequence-filterable
+   over every menu action, ↑/↓/⏎ from the entry.
 8. **The `chum` story.** `GApplication` already gives single-instance
    file opening over D-Bus (`textchum-gtk file.txt` from anywhere), but
    there is no `+line` handling, no `--wait` for `GIT_EDITOR`, and no
@@ -63,16 +63,17 @@ Ordered roughly by how much daily pain each gap causes.
    toggle, no copy name/relative/absolute/forge-URL menus, no project
    split/gather between windows, and tree rows use generic icons — no
    language badges or system type icons.
-10. **New-file ergonomics.** No New with Format, no Save As directory
-    seeding from the frontmost file.
-11. **Editing niceties.** Auto-indent on return is in (GtkSourceView's
-    own), and Redraw (Ctrl+Alt+L) too; block start/end navigation is
-    still missing.
+10. **New-file ergonomics.** New with Format is in (one submenu entry
+    per language); Save As directory seeding is still missing.
+11. ~~Editing niceties.~~ Done: auto-indent on return (GtkSourceView's
+    own), Redraw (Ctrl+Alt+L), and Go to Block Start/End
+    (Ctrl+Alt+Up/Down) over the core's syntax tree.
 12. ~~Theme files.~~ Done: JSON files in `~/.config/textchum/themes/`
     join the built-ins in Preferences, named by file stem.
 13. **Ctags fallback.** Not implemented; depends on nothing
     macOS-specific.
-14. **Recent files.** No recent-documents menu.
+14. ~~Recent files.~~ Done: opens register with the desktop's shared
+    recent list, and File ▸ Open Recent shows the newest ten.
 15. ~~Window subtitle detail.~~ Done: encoding · size · language ·
     problems, same as the Mac.
 16. **Save preprocessors.** Done in behavior: the shared config
@@ -84,8 +85,9 @@ Ordered roughly by how much daily pain each gap causes.
 17. **Prose spell check.** macOS scopes the system checker to comments
     and prose documents (`editor.spell`). GTK land would use
     libspelling/enchant over the same comment-span logic.
-18. **Packaging.** No `.desktop` file, no icon, no Flatpak, no release
-    artifact — the only install is `make linux` from a checkout.
+18. **Packaging.** `make install-linux` now installs the binary,
+    a `.desktop` entry, and the icon into the XDG home directories
+    (release tarballs already existed). Flatpak remains unplanned.
 
 ## Behavioral differences that are choices, not gaps
 
