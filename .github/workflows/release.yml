@@ -105,10 +105,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [ "$HAVE_SIGNING" = "true" ]; then
+            MAC_NOTE="macOS: signed and notarized — download, unzip, and double-click; requires macOS 14+ on Apple Silicon."
+          else
+            MAC_NOTE="macOS: the app is not code-signed — on first launch, right-click Textchum.app and choose Open (or clear quarantine with \`xattr -d com.apple.quarantine Textchum.app\`); requires macOS 14+ on Apple Silicon."
+          fi
           gh release create "$GITHUB_REF_NAME" \
             --title "Textchum $GITHUB_REF_NAME" \
             --generate-notes \
-            --notes "macOS: the app is not code-signed — on first launch, right-click Textchum.app and choose Open (or clear quarantine with \`xattr -d com.apple.quarantine Textchum.app\`); requires macOS 14+ on Apple Silicon. Linux: the textchum-gtk tarballs need GTK 4.14+, libadwaita 1.5+, GtkSourceView 5, and WebKitGTK 6 at runtime (Ubuntu 24.04+, Fedora 40+)." \
+            --notes "$MAC_NOTE Linux: the textchum-gtk tarballs need GTK 4.14+, libadwaita 1.5+, GtkSourceView 5, and WebKitGTK 6 at runtime (Ubuntu 24.04+, Fedora 40+); optional extras: hunspell + a dictionary for prose spell check, universal-ctags for the no-server fallback." \
             "Textchum-${GITHUB_REF_NAME}.zip" \
             "Textchum-${GITHUB_REF_NAME}.zip.sha256"
 
