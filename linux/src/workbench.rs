@@ -547,6 +547,24 @@ impl Workbench {
 
     // MARK: Chrome
 
+    /// The page's display name, with enough parent path to tell it
+    /// apart when another open file shares its bare name.
+    pub fn disambiguated_name(&self, page: &Rc<Page>) -> String {
+        let name = page.display_name();
+        let collides = self.pages.borrow().iter().any(|other| {
+            !Rc::ptr_eq(other, page) && other.display_name() == name
+        });
+        if !collides {
+            return name;
+        }
+        let Some(path) = page.path.borrow().clone() else { return name };
+        Path::new(&path)
+            .parent()
+            .and_then(Path::file_name)
+            .map(|parent| format!("{}/{name}", parent.to_string_lossy()))
+            .unwrap_or(name)
+    }
+
     pub fn refresh_chrome(&self) {
         let Some(page) = self.selected() else {
             self.title.set_title("Textchum");
@@ -555,10 +573,12 @@ impl Workbench {
         };
         let state = page.state.borrow();
         let dirty = if state.document.is_dirty() { "● " } else { "" };
-        self.title
-            .set_title(&format!("{dirty}{}", page.display_name()));
+        drop(state);
+        let shown = self.disambiguated_name(&page);
+        let state = page.state.borrow();
+        self.title.set_title(&format!("{dirty}{shown}"));
         if let Some(tab_page) = self.tab_view.selected_page() {
-            tab_page.set_title(&format!("{dirty}{}", page.display_name()));
+            tab_page.set_title(&format!("{dirty}{shown}"));
         }
         let detail = format!(
             "{} · {} bytes",
@@ -596,7 +616,7 @@ impl Workbench {
             .iter()
             .map(|page| {
                 (
-                    page.display_name(),
+                    self.disambiguated_name(page),
                     page.state.borrow().document.is_dirty(),
                     selected.as_ref().is_some_and(|s| Rc::ptr_eq(s, page)),
                 )
@@ -663,7 +683,7 @@ impl Workbench {
                 let label = gtk::Label::new(Some(&format!(
                     "{}{}",
                     if dirty { "● " } else { "" },
-                    page.display_name()
+                    self.disambiguated_name(&page)
                 )));
                 label.set_xalign(0.0);
                 label.set_margin_start(14);
@@ -699,6 +719,44 @@ impl Workbench {
                     workbench.tab_view.set_selected_page(&tab_page);
                 }
             });
+        }
+        // Right-click: the copy-path menu for that row's document.
+        {
+            let workbench = Rc::downgrade(&WORKBENCHES.with(|all| {
+                all.borrow()
+                    .iter()
+                    .find(|w| w.window == self.window)
+                    .cloned()
+                    .expect("workbench registered")
+            }));
+            let gesture = gtk::GestureClick::new();
+            gesture.set_button(3);
+            let list_in_handler = list.clone();
+            let list = list.clone();
+            gesture.connect_pressed(move |gesture, _, x, y| {
+                let list = &list_in_handler;
+                let Some(workbench) = workbench.upgrade() else { return };
+                let Some(row) = list.row_at_y(y as i32) else { return };
+                let page = workbench
+                    .buffer_rows
+                    .borrow()
+                    .get(row.index() as usize)
+                    .cloned()
+                    .flatten();
+                let Some(path) = page.and_then(|page| page.path.borrow().clone()) else {
+                    return;
+                };
+                let menu = copy_menu(&path);
+                let popover = gtk::PopoverMenu::from_model(Some(&menu));
+                popover.set_parent(list);
+                popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(
+                    x as i32, y as i32, 1, 1,
+                )));
+                popover.set_has_arrow(false);
+                popover.popup();
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+            });
+            list.add_controller(gesture);
         }
         self.buffers_box.append(&list);
     }
@@ -954,6 +1012,23 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("save-as", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let dialog = gtk::FileDialog::new();
+        // Seed the folder from the document itself or, for untitled
+        // ones, from any open file — the user is probably adding a
+        // file to that project.
+        let seed = page
+            .path
+            .borrow()
+            .clone()
+            .or_else(|| {
+                workbench
+                    .all_pages()
+                    .iter()
+                    .find_map(|other| other.path.borrow().clone())
+            })
+            .and_then(|path| Path::new(&path).parent().map(Path::to_owned));
+        if let Some(folder) = seed {
+            dialog.set_initial_folder(Some(&gtk::gio::File::for_path(&folder)));
+        }
         let workbench = Rc::clone(workbench);
         dialog.save(
             Some(&workbench.window.clone()),
@@ -1076,6 +1151,39 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             }
         });
         workbench.window.add_action(&action);
+    }
+    // The copy-path family: each takes the document path as its
+    // parameter and puts one shape of it on the clipboard.
+    {
+        let copies: [(&str, fn(&str) -> Option<String>); 4] = [
+            ("copy-name", |path| {
+                Path::new(path)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+            }),
+            ("copy-relative", |path| {
+                let root = workspace::project_root_for(Path::new(path))
+                    .map(|root| root.to_string_lossy().into_owned());
+                Some(crate::path_actions::relative_path(path, root.as_deref()))
+            }),
+            ("copy-absolute", |path| Some(path.to_owned())),
+            ("copy-forge", |path| crate::path_actions::forge_url(path)),
+        ];
+        for (name, shape) in copies {
+            let action = gtk::gio::SimpleAction::new(name, Some(glib::VariantTy::STRING));
+            let weak = Rc::downgrade(workbench);
+            action.connect_activate(move |_, parameter| {
+                let Some(workbench) = weak.upgrade() else { return };
+                let Some(path) = parameter.and_then(|p| p.str().map(str::to_owned)) else {
+                    return;
+                };
+                match shape(&path) {
+                    Some(text) => workbench.window.clipboard().set_text(&text),
+                    None => workbench.toast("Not in a git repository with a remote."),
+                }
+            });
+            workbench.window.add_action(&action);
+        }
     }
     {
         let action =
@@ -1359,6 +1467,28 @@ fn open_definition(workbench: &Rc<Workbench>, json: &str) {
     let line = range["start"]["line"].as_i64().unwrap_or(0) as i32;
     let character = range["start"]["character"].as_u64().unwrap_or(0) as usize;
     workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+}
+
+/// The copy-path context menu for one document.
+fn copy_menu(path: &str) -> gtk::gio::Menu {
+    let escaped = path.replace('\\', "\\\\").replace('\'', "\\'");
+    let menu = gtk::gio::Menu::new();
+    menu.append(Some("Copy Name"), Some(&format!("win.copy-name('{escaped}')")));
+    menu.append(
+        Some("Copy Relative Path"),
+        Some(&format!("win.copy-relative('{escaped}')")),
+    );
+    menu.append(
+        Some("Copy Absolute Path"),
+        Some(&format!("win.copy-absolute('{escaped}')")),
+    );
+    if crate::path_actions::forge_url(path).is_some() {
+        menu.append(
+            Some("Copy Forge URL"),
+            Some(&format!("win.copy-forge('{escaped}')")),
+        );
+    }
+    menu
 }
 
 /// Moves the caret to the innermost multi-line block's start or end,

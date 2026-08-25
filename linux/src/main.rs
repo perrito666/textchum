@@ -6,6 +6,7 @@
 
 mod lsp_edits;
 mod page;
+mod path_actions;
 mod preprocessors;
 mod session;
 mod shell;
@@ -20,12 +21,22 @@ const APP_ID: &str = "to.perri.textchum";
 fn main() -> gtk::glib::ExitCode {
     let smoke_test = std::env::args().any(|argument| argument == "--smoke-test");
     let fresh = std::env::args().any(|argument| argument == "--fresh");
+    // --wait (the GIT_EDITOR contract): a private instance that stays
+    // in the foreground until its windows close, instead of handing
+    // the file to the running one and returning immediately. Waiting
+    // implies not restoring the whole session into git's editor.
+    let wait = std::env::args().any(|argument| argument == "--wait");
+    let fresh = fresh || wait;
 
+    let mut flags = gio::ApplicationFlags::HANDLES_OPEN;
+    if wait {
+        flags |= gio::ApplicationFlags::NON_UNIQUE;
+    }
     let app = adw::Application::builder()
         .application_id(APP_ID)
         // GApplication gives single-instance + open-files over D-Bus for
         // free — this is what the textchum:// scheme hand-rolls on macOS.
-        .flags(gio::ApplicationFlags::HANDLES_OPEN)
+        .flags(flags)
         .build();
 
     app.connect_activate(move |app| {
@@ -45,10 +56,26 @@ fn main() -> gtk::glib::ExitCode {
     app.connect_shutdown(|_| session::save());
     app.connect_open(|app, files, _hint| {
         let workbench = Workbench::active().unwrap_or_else(|| Workbench::new(app));
+        // `+12` before a file jumps to that line, the editor-CLI
+        // convention (chum +12 notes.md). Such an argument arrives as
+        // a GFile whose basename is the +number.
+        let mut pending_line: Option<i32> = None;
         for file in files {
-            if let Some(path) = file.path() {
-                workbench.open(Some(path), None);
+            let Some(path) = file.path() else { continue };
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if let Some(digits) = name.strip_prefix('+') {
+                if let Ok(line) = digits.parse::<i32>() {
+                    if !path.is_file() {
+                        pending_line = Some((line - 1).max(0));
+                        continue;
+                    }
+                }
             }
+            let at = pending_line.take().map(|line| (line, 0));
+            workbench.open(Some(path), at);
         }
         workbench.window.present();
     });
@@ -89,7 +116,9 @@ fn main() -> gtk::glib::ExitCode {
     // GApplication consumes argv; strip our own flags so it does not
     // try to open files named after them.
     let arguments: Vec<String> = std::env::args()
-        .filter(|argument| argument != "--smoke-test" && argument != "--fresh")
+        .filter(|argument| {
+            argument != "--smoke-test" && argument != "--fresh" && argument != "--wait"
+        })
         .collect();
     app.run_with_args(&arguments)
 }

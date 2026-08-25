@@ -55,16 +55,18 @@ Ordered roughly by how much daily pain each gap causes.
    (Replace / All) and match-case, regex, and whole-word toggles.
 7. ~~Command palette.~~ Done: Ctrl+Shift+P, subsequence-filterable
    over every menu action, ↑/↓/⏎ from the entry.
-8. **The `chum` story.** `GApplication` already gives single-instance
-   file opening over D-Bus (`textchum-gtk file.txt` from anywhere), but
-   there is no `+line` handling, no `--wait` for `GIT_EDITOR`, and no
-   installable wrapper script.
-9. **Navigator polish.** No filename disambiguation, no path-display
-   toggle, no copy name/relative/absolute/forge-URL menus, no project
-   split/gather between windows, and tree rows use generic icons — no
-   language badges or system type icons.
-10. **New-file ergonomics.** New with Format is in (one submenu entry
-    per language); Save As directory seeding is still missing.
+8. ~~The `chum` story.~~ Done in the binary itself: `+12 file` jumps
+   to the line, and `--wait` runs a private foreground instance that
+   blocks until its windows close — `GIT_EDITOR="textchum-gtk --wait"`
+   just works. No separate wrapper script needed.
+9. **Navigator polish.** Filename disambiguation (colliding names
+   grow their parent directory) and right-click copy
+   name/relative/absolute/forge-URL menus on buffer rows are in; Save
+   As seeds its folder from the open files. Still missing: a
+   path-display toggle, project split/gather between windows, and
+   language icons on tree rows.
+10. ~~New-file ergonomics.~~ Done: New with Format (one submenu entry
+    per language) and Save As folder seeding from the frontmost file.
 11. ~~Editing niceties.~~ Done: auto-indent on return (GtkSourceView's
     own), Redraw (Ctrl+Alt+L), and Go to Block Start/End
     (Ctrl+Alt+Up/Down) over the core's syntax tree.
