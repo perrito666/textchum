@@ -78,4 +78,4 @@ fields near Lisse, the Netherlands (52°19'54.1"N 4°37'25.9"E) on
 
 ## License
 
-MIT
+[MIT](LICENSE)
