@@ -113,8 +113,30 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.block-start", &["<Ctrl><Alt>Up"]);
     app.set_accels_for_action("win.block-end", &["<Ctrl><Alt>Down"]);
     // Key overrides read the configuration, which touches GTK-backed
-    // state — so they wait for startup, after GTK initializes.
-    app.connect_startup(|app| apply_key_overrides(app));
+    // state — so they wait for startup, after GTK initializes. The
+    // config watcher starts here too: external edits to config.json
+    // apply while running, through the same pipeline a Preferences
+    // change uses.
+    app.connect_startup(|app| {
+        apply_key_overrides(app);
+        let app = app.clone();
+        shell::Shell::instance().watch_config(move || {
+            apply_key_overrides(&app);
+            let shell = shell::Shell::instance();
+            let config = shell.config.borrow();
+            let font_size = config.font_size();
+            let tab_width = config.tab_width();
+            let line_numbers = config.line_numbers();
+            drop(config);
+            workbench::apply_editor_look(font_size, tab_width, line_numbers);
+            workbench::Workbench::for_each(|workbench| {
+                for page in workbench.all_pages() {
+                    spell::run(&page);
+                }
+                workbench.refresh_chrome();
+            });
+        });
+    });
 
     // GApplication consumes argv; strip our own flags so it does not
     // try to open files named after them.

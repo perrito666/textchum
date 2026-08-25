@@ -164,6 +164,7 @@ impl Workbench {
         go_section.append(Some("Go to Block Start"), Some("win.block-start"));
         go_section.append(Some("Go to Block End"), Some("win.block-end"));
         go_section.append(Some("Command Palette…"), Some("win.palette"));
+        go_section.append(Some("Language Server Status"), Some("win.server-status"));
         go_section.append(Some("Toggle Path Display"), Some("win.paths"));
         go_section.append(Some("Toggle File Tree"), Some("win.sidebar"));
         go_section.append(Some("Toggle Markdown Preview"), Some("win.preview"));
@@ -1157,6 +1158,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("block-start", workbench, |workbench, _| move_to_block_edge(workbench, true));
     add("block-end", workbench, |workbench, _| move_to_block_edge(workbench, false));
     add("palette", workbench, |workbench, _| show_palette(workbench));
+    add("server-status", workbench, |workbench, _| show_server_status(workbench));
     add("paths", workbench, |workbench, _| {
         workbench
             .show_full_paths
@@ -1730,6 +1732,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Show Documentation for Symbol", "win.hover"),
     ("Go to Block Start", "win.block-start"),
     ("Go to Block End", "win.block-end"),
+    ("Language Server Status", "win.server-status"),
     ("Toggle File Tree", "win.sidebar"),
     ("Toggle Markdown Preview", "win.preview"),
     ("Preferences…", "win.preferences"),
@@ -1859,6 +1862,81 @@ fn show_palette(workbench: &Rc<Workbench>) {
     dialog.add_controller(keys);
     dialog.present();
     entry.grab_focus();
+}
+
+/// A live view of the pool: what runs where, and the recent status
+/// transitions — the at-a-glance answer to "is my server alive?".
+fn show_server_status(workbench: &Rc<Workbench>) {
+    let label = gtk::Label::new(None);
+    label.set_xalign(0.0);
+    label.set_yalign(0.0);
+    label.set_selectable(true);
+    label.add_css_class("monospace");
+    label.set_margin_top(10);
+    label.set_margin_bottom(10);
+    label.set_margin_start(12);
+    label.set_margin_end(12);
+    let scrolled = gtk::ScrolledWindow::builder().child(&label).vexpand(true).build();
+    let header = adw::HeaderBar::new();
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    content.append(&header);
+    content.append(&scrolled);
+    let dialog = adw::Window::builder()
+        .transient_for(&workbench.window)
+        .title("Language Server Status")
+        .default_width(560)
+        .default_height(380)
+        .content(&content)
+        .build();
+
+    let render = {
+        let label = label.clone();
+        move || {
+            let shell = Shell::instance();
+            let mut lines: Vec<String> = Vec::new();
+            let running = shell.pool.borrow().running();
+            lines.push(format!("Running instances ({}):", running.len()));
+            if running.is_empty() {
+                lines.push("  none — servers start when a matching document opens".into());
+            }
+            for (server, root) in &running {
+                lines.push(format!("  {server}  {root}"));
+            }
+            lines.push(String::new());
+            lines.push("Recent transitions:".into());
+            let log = shell.status_log.borrow();
+            if log.is_empty() {
+                lines.push("  none this session".into());
+            }
+            for (at, server, root, line) in log.iter().rev().take(30) {
+                let clock = gtk::glib::DateTime::from_unix_local(
+                    at.duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0),
+                )
+                .map(|t| t.format("%H:%M:%S").map(|s| s.to_string()).unwrap_or_default())
+                .unwrap_or_default();
+                lines.push(format!("  {clock}  {server} [{root}]: {line}"));
+            }
+            lines.push(String::new());
+            lines.push("Full trail: ~/.local/state/textchum/lsp.log".into());
+            label.set_text(&lines.join("\n"));
+        }
+    };
+    render();
+    // Refresh while open; the source dies with the dialog.
+    let source = glib::timeout_add_local(std::time::Duration::from_secs(2), {
+        let dialog = dialog.clone();
+        move || {
+            if !dialog.is_visible() {
+                return glib::ControlFlow::Break;
+            }
+            render();
+            glib::ControlFlow::Continue
+        }
+    });
+    let _ = source;
+    dialog.present();
 }
 
 /// The configured preprocessor chain for a page, if any.
@@ -2942,6 +3020,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     for (key, title) in [
         ("manifest_projects", "Manifest projects"),
         ("recursive_config", "Recursive config"),
+        ("ctags_fallback", "Ctags fallback"),
     ] {
         let row = adw::SwitchRow::new();
         row.set_title(title);
@@ -2973,6 +3052,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             for (key, title) in [
                 ("manifest_projects", "Manifest projects"),
                 ("recursive_config", "Recursive config"),
+                ("ctags_fallback", "Ctags fallback"),
             ] {
                 let row = adw::SwitchRow::new();
                 row.set_title(title);
@@ -2987,6 +3067,69 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
                     );
                     shell.save_config();
                     shell.reconfigure_pool();
+                });
+                expander.add_row(&row);
+            }
+            // Editor overrides for windows inside this root; empty
+            // fields inherit the General page's values. New windows
+            // pick them up (existing views keep their look until
+            // reopened).
+            let overrides: serde_json::Value = serde_json::from_str(
+                &shell.config.borrow().editor_overrides_json(root),
+            )
+            .unwrap_or_default();
+            for (key, title, current) in [
+                (
+                    "font_family",
+                    "Editor font family (empty = inherit)",
+                    overrides["font_family"].as_str().unwrap_or("").to_owned(),
+                ),
+                (
+                    "font_size",
+                    "Editor font size (empty = inherit)",
+                    overrides["font_size"]
+                        .as_f64()
+                        .map(|size| {
+                            if size == size.trunc() {
+                                format!("{}", size as i64)
+                            } else {
+                                format!("{size}")
+                            }
+                        })
+                        .unwrap_or_default(),
+                ),
+                (
+                    "tab_width",
+                    "Editor tab width (empty = inherit)",
+                    overrides["tab_width"]
+                        .as_u64()
+                        .map(|width| width.to_string())
+                        .unwrap_or_default(),
+                ),
+            ] {
+                let row = adw::EntryRow::new();
+                row.set_title(title);
+                row.set_text(&current);
+                row.set_show_apply_button(true);
+                let shell = Rc::clone(&shell);
+                let root = root.clone();
+                row.connect_apply(move |row| {
+                    let text = row.text();
+                    let trimmed = text.trim();
+                    let value = if trimmed.is_empty() {
+                        None
+                    } else if key == "font_family" {
+                        Some(format!("\"{}\"", trimmed.replace('"', "")))
+                    } else if key == "tab_width" {
+                        trimmed.parse::<u32>().ok().map(|v| v.to_string())
+                    } else {
+                        trimmed.parse::<f64>().ok().map(|v| v.to_string())
+                    };
+                    shell
+                        .config
+                        .borrow_mut()
+                        .set_editor_override(&root, key, value.as_deref());
+                    shell.save_config();
                 });
                 expander.add_row(&row);
             }
@@ -3021,6 +3164,16 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     window.add(&projects_page);
 
     window.present();
+}
+
+/// Re-applies the global editor look after a configuration reload:
+/// the font-size CSS, and every view's tab width and gutter.
+pub fn apply_editor_look(font_size: f64, tab_width: u32, line_numbers: bool) {
+    apply_font_size(font_size);
+    for_all_views(|view| {
+        view.set_tab_width(tab_width);
+        view.set_show_line_numbers(line_numbers);
+    });
 }
 
 /// One app-wide CSS provider carrying the editor font size.

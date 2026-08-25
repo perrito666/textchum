@@ -212,6 +212,8 @@ impl Page {
         install_completion_keys(&page);
         install_hover(&page);
         install_file_monitor(&page);
+        install_control_click(&page);
+        apply_project_editor_overrides(&page);
 
         // --- After every change: recolor, announce, verify -------------
         {
@@ -662,39 +664,92 @@ pub fn parse_completion_items(json: &str) -> Vec<(String, String)> {
                 .or_else(|| item["textEdit"]["newText"].as_str())
                 .unwrap_or(&label)
                 .to_string();
-            // Flatten snippet placeholders: ${1:x} → x, $0 → "".
-            let mut flat = String::new();
-            let mut chars = insert.chars().peekable();
-            while let Some(c) = chars.next() {
-                if c != '$' {
-                    flat.push(c);
-                    continue;
-                }
-                match chars.peek() {
-                    Some('{') => {
-                        chars.next();
-                        let mut body = String::new();
-                        for inner in chars.by_ref() {
-                            if inner == '}' {
-                                break;
-                            }
-                            body.push(inner);
-                        }
-                        if let Some((_, placeholder)) = body.split_once(':') {
-                            flat.push_str(placeholder);
-                        }
-                    }
-                    Some(d) if d.is_ascii_digit() => {
-                        while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
-                            chars.next();
-                        }
-                    }
-                    _ => flat.push(c),
-                }
-            }
-            Some((label, flat))
+            Some((label, insert))
         })
         .collect()
+}
+
+/// Expands LSP snippet syntax to plain text and remembers where the
+/// caret should land, in characters of the result: `${1:placeholder}`
+/// keeps its placeholder (the lowest-numbered tabstop comes back
+/// selected so typing replaces it), bare `$1`/`$0` vanish (`$0`
+/// marking the exit point), and `\$` stays a dollar sign. Later
+/// tabstops are plain text — one honest stop, not a tabstop mode.
+pub fn expand_snippet(text: &str) -> (String, Option<(i32, i32)>) {
+    let mut out = String::new();
+    // (tabstop number, char offset, char length) in `out`.
+    let mut stops: Vec<(u32, i32, i32)> = Vec::new();
+    let mut chars = text.chars().peekable();
+    let mut out_chars = 0i32;
+    let push = |out: &mut String, out_chars: &mut i32, c: char| {
+        out.push(c);
+        *out_chars += 1;
+    };
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(next) = chars.next() {
+                push(&mut out, &mut out_chars, next);
+            } else {
+                push(&mut out, &mut out_chars, c);
+            }
+            continue;
+        }
+        if c != '$' {
+            push(&mut out, &mut out_chars, c);
+            continue;
+        }
+        match chars.peek() {
+            Some('{') => {
+                chars.next();
+                let mut body = String::new();
+                for inner in chars.by_ref() {
+                    if inner == '}' {
+                        break;
+                    }
+                    body.push(inner);
+                }
+                let (number, placeholder) = match body.split_once(':') {
+                    Some((number, placeholder)) => (number, placeholder),
+                    None => (body.as_str(), ""),
+                };
+                let number: u32 = number.parse().unwrap_or(0);
+                let length = placeholder.chars().count() as i32;
+                stops.push((number, out_chars, length));
+                for inner in placeholder.chars() {
+                    push(&mut out, &mut out_chars, inner);
+                }
+            }
+            Some(d) if d.is_ascii_digit() => {
+                let mut digits = String::new();
+                while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
+                    digits.push(chars.next().unwrap());
+                }
+                stops.push((digits.parse().unwrap_or(0), out_chars, 0));
+            }
+            _ => push(&mut out, &mut out_chars, c),
+        }
+    }
+    let first = stops
+        .iter()
+        .filter(|(number, _, _)| *number > 0)
+        .min_by_key(|(number, _, _)| *number)
+        .or_else(|| stops.iter().find(|(number, _, _)| *number == 0));
+    (out, first.map(|(_, offset, length)| (*offset, *length)))
+}
+
+#[cfg(test)]
+mod snippet_tests {
+    use super::expand_snippet;
+
+    #[test]
+    fn placeholder_selection_and_exit() {
+        assert_eq!(
+            expand_snippet("frob(${1:x}, ${2:y})$0"),
+            ("frob(x, y)".into(), Some((5, 1)))
+        );
+        assert_eq!(expand_snippet("done()$0 end"), ("done() end".into(), Some((6, 0))));
+        assert_eq!(expand_snippet("cost \\$5"), ("cost $5".into(), None));
+    }
 }
 
 fn is_word_char(c: char) -> bool {
@@ -792,13 +847,22 @@ fn accept_completion(page: &Rc<Page>) {
         .map(|(_, insert)| insert.clone());
     page.completion.popover.popdown();
     let Some(insert) = insert else { return };
+    let (expanded, selection) = expand_snippet(&insert);
     let buffer = &page.buffer;
     let mut start = buffer.iter_at_offset(page.completion.word_start.get());
     let mut caret = buffer.iter_at_mark(&buffer.get_insert());
     // Through the normal buffer path, so the core sees it as typing.
     buffer.delete(&mut start, &mut caret);
+    let insert_at = buffer.iter_at_mark(&buffer.get_insert()).offset();
     let mut at = buffer.iter_at_mark(&buffer.get_insert());
-    buffer.insert(&mut at, &insert);
+    buffer.insert(&mut at, &expanded);
+    // A snippet's first placeholder comes back selected, so typing
+    // replaces it; a bare tabstop just parks the caret there.
+    if let Some((offset, length)) = selection {
+        let from = buffer.iter_at_offset(insert_at + offset);
+        let to = buffer.iter_at_offset(insert_at + offset + length);
+        buffer.select_range(&to, &from);
+    }
 }
 
 /// Keyboard routing while the popup is visible: arrows navigate it,
@@ -896,6 +960,79 @@ fn install_file_monitor(page: &Rc<Page>) {
         }
     });
     *page.monitor.borrow_mut() = Some(monitor);
+}
+
+/// Ctrl+click jumps to the definition under the pointer — the caret
+/// moves to the click first, so the jump stack records where the
+/// mouse actually was.
+fn install_control_click(page: &Rc<Page>) {
+    let gesture = gtk::GestureClick::new();
+    gesture.set_button(1);
+    let weak = Rc::downgrade(page);
+    gesture.connect_pressed(move |gesture, _, x, y| {
+        let state = gesture.current_event_state();
+        if !state.contains(gtk::gdk::ModifierType::CONTROL_MASK) {
+            return;
+        }
+        let Some(page) = weak.upgrade() else { return };
+        let (bx, by) = page.view.window_to_buffer_coords(
+            gtk::TextWindowType::Widget,
+            x as i32,
+            y as i32,
+        );
+        let Some(iter) = page.view.iter_at_location(bx, by) else { return };
+        page.buffer.place_cursor(&iter);
+        if let Some(workbench) = crate::workbench::Workbench::active() {
+            let _ = gtk::prelude::WidgetExt::activate_action(
+                &workbench.window,
+                "win.definition",
+                None,
+            );
+        }
+        gesture.set_state(gtk::EventSequenceState::Claimed);
+    });
+    page.view.add_controller(gesture);
+}
+
+/// Applies the project root's `editor` overrides (font family, size,
+/// tab width) to this view — the Mac's per-project settings, GTK
+/// edition. Font settings ride a per-view CSS provider; the global
+/// size provider stays the fallback. (The per-widget style context is
+/// deprecated upstream but remains the one per-view hook.)
+#[allow(deprecated)]
+fn apply_project_editor_overrides(page: &Rc<Page>) {
+    let Some(path) = page.path.borrow().clone() else { return };
+    let Some(root) = textchum_core::workspace::project_root_for(Path::new(&path)) else {
+        return;
+    };
+    let overrides = Shell::instance()
+        .config
+        .borrow()
+        .editor_overrides_json(&root.to_string_lossy());
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&overrides) else {
+        return;
+    };
+    if let Some(width) = parsed["tab_width"].as_u64() {
+        page.view.set_tab_width((width as u32).clamp(1, 16));
+    }
+    let family = parsed["font_family"].as_str().unwrap_or("");
+    let size = parsed["font_size"].as_f64();
+    if family.is_empty() && size.is_none() {
+        return;
+    }
+    let mut rules = String::from("textview {");
+    if !family.is_empty() {
+        rules.push_str(&format!(" font-family: \"{family}\";"));
+    }
+    if let Some(size) = size {
+        rules.push_str(&format!(" font-size: {size}pt;"));
+    }
+    rules.push_str(" }");
+    let provider = gtk::CssProvider::new();
+    provider.load_from_string(&rules);
+    page.view
+        .style_context()
+        .add_provider(&provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
 }
 
 fn install_hover(page: &Rc<Page>) {

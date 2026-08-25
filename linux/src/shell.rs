@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
+use adw::prelude::*;
 use gtk::glib;
 use textchum_core::{theme, Config, Event};
 use textchum_lsp::Pool;
@@ -40,6 +41,13 @@ pub struct Shell {
     /// Paths this process just wrote, so the file monitor can tell the
     /// app's own saves from external changes.
     own_saves: RefCell<HashMap<String, std::time::Instant>>,
+    /// When this process last wrote config.json, for the same reason.
+    own_config_save: std::cell::Cell<Option<std::time::Instant>>,
+    /// The last hundred server status transitions, oldest first:
+    /// (when, server, root, "status — message").
+    pub status_log: RefCell<Vec<(std::time::SystemTime, String, String, String)>>,
+    /// Keeps the config-file monitor alive.
+    config_monitor: RefCell<Option<gtk::gio::FileMonitor>>,
 }
 
 thread_local! {
@@ -115,6 +123,9 @@ impl Shell {
                 pages: RefCell::new(HashMap::new()),
                 callbacks: RefCell::new(HashMap::new()),
                 own_saves: RefCell::new(HashMap::new()),
+                own_config_save: std::cell::Cell::new(None),
+                status_log: RefCell::new(Vec::new()),
+                config_monitor: RefCell::new(None),
             });
             shell.apply_appearance();
             shell.apply_theme();
@@ -190,9 +201,48 @@ impl Shell {
     }
 
     pub fn save_config(&self) {
+        self.own_config_save.set(Some(std::time::Instant::now()));
         if let Err(error) = self.config.borrow_mut().save() {
             eprintln!("textchum: could not save configuration: {error}");
         }
+    }
+
+    /// Follows external edits to config.json while running: the file is
+    /// reloaded wholesale and `reapply` runs the same pipeline a
+    /// Preferences change does. The app's own saves are ignored.
+    pub fn watch_config(self: &Rc<Self>, reapply: impl Fn() + 'static) {
+        let file = gtk::gio::File::for_path(config_path());
+        let Ok(monitor) = file.monitor_file(
+            gtk::gio::FileMonitorFlags::NONE,
+            gtk::gio::Cancellable::NONE,
+        ) else {
+            return;
+        };
+        let shell = Rc::clone(self);
+        monitor.connect_changed(move |_, _, _, event| {
+            use gtk::gio::FileMonitorEvent;
+            if !matches!(
+                event,
+                FileMonitorEvent::ChangesDoneHint | FileMonitorEvent::Created
+            ) {
+                return;
+            }
+            if shell
+                .own_config_save
+                .get()
+                .is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(2))
+            {
+                return;
+            }
+            if let Some(warning) = shell.config.borrow_mut().reload() {
+                eprintln!("textchum: config reload: {warning}");
+            }
+            shell.apply_appearance();
+            shell.apply_theme();
+            shell.reconfigure_pool();
+            reapply();
+        });
+        *self.config_monitor.borrow_mut() = Some(monitor);
     }
 
     /// Registers a request's continuation; the pump calls it when the
@@ -228,7 +278,25 @@ impl Shell {
                         callback(&json);
                     }
                 }
-                Event::ServerStatus { status, message, server, .. } => {
+                Event::ServerStatus { status, message, server, root } => {
+                    let line = if message.is_empty() {
+                        status.clone()
+                    } else {
+                        format!("{status} — {message}")
+                    };
+                    {
+                        let mut log = self.status_log.borrow_mut();
+                        log.push((
+                            std::time::SystemTime::now(),
+                            server.clone(),
+                            root.clone(),
+                            line,
+                        ));
+                        let overflow = log.len().saturating_sub(100);
+                        if overflow > 0 {
+                            log.drain(..overflow);
+                        }
+                    }
                     if status == "not-found" || status == "failed" {
                         let text = if message.is_empty() {
                             format!("{server}: {status}")
