@@ -115,9 +115,11 @@ Ordered roughly by how much daily pain each gap causes.
 - The shell links the core as a crate: no FFI ceremony, no header to
   drift.
 
-## Suggested order
+## Where this stands
 
-File watching (1) and session restore (2) make it trustworthy; keys
-(3), jump stack (4), and LSP breadth (5) make it comfortable; the rest
-is polish in whatever order irritation dictates. Packaging (18) last —
-ship it to more people only once it deserves them.
+Every numbered item above is closed. What separates the shells now is
+temperament, not features: the behavioral differences listed as
+choices, a Preferences layout that follows GNOME rather than the Mac's
+tabs, and Flatpak packaging nobody has asked for. New features land on
+both sides from the start — this file goes back to being a place to
+record any gap the moment one opens.
