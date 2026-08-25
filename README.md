@@ -60,7 +60,7 @@ make check    # what CI runs: tests, smoke test, header drift check
 make docs     # build the documentation site (en/es/fr) into site/
 ```
 
-On Linux (experimental — core-owned editing, highlighting, open/save):
+On Linux (GTK4/libadwaita, at feature parity with the macOS shell):
 
 ```sh
 sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev \
