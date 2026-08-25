@@ -83,6 +83,11 @@ install-linux: linux
 	install -Dm755 linux/target/release/textchum-gtk $(HOME)/.local/bin/textchum-gtk
 	install -Dm644 linux/data/to.perri.textchum.desktop $(HOME)/.local/share/applications/to.perri.textchum.desktop
 	install -Dm644 macos/AppIcon/icon-1024.png $(HOME)/.local/share/icons/hicolor/1024x1024/apps/to.perri.textchum.png
+	install -Dm644 linux/data/to.perri.textchum-512.png $(HOME)/.local/share/icons/hicolor/512x512/apps/to.perri.textchum.png
+	test -f $(HOME)/.local/share/icons/hicolor/index.theme || \
+		test ! -f /usr/share/icons/hicolor/index.theme || \
+		install -Dm644 /usr/share/icons/hicolor/index.theme $(HOME)/.local/share/icons/hicolor/index.theme
+	-gtk-update-icon-cache $(HOME)/.local/share/icons/hicolor 2>/dev/null
 	-update-desktop-database $(HOME)/.local/share/applications 2>/dev/null
 	@echo Installed textchum-gtk for $(USER) — ensure ~/.local/bin is on PATH
 

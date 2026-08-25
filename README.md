@@ -65,8 +65,16 @@ On Linux (GTK4/libadwaita, at feature parity with the macOS shell):
 ```sh
 sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev \
   libwebkitgtk-6.0-dev libsoup-3.0-dev
-cargo build --release --manifest-path linux/Cargo.toml
+make linux
 ```
+
+To install it for the current user:
+
+```sh
+make install-linux
+```
+
+This installs the binary, desktop entry, and icon into `~/.local`. If it does not appear in your app launcher immediately, log out and back in.
 
 Full documentation lives in [`docs/`](docs/index.md), built with MkDocs —
 see [Getting started](docs/getting-started.md).
