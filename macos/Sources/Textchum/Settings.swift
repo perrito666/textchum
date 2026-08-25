@@ -452,8 +452,11 @@ struct SettingsView: View {
             LanguageServersTab(model: model)
                 .tabItem { Label("Language Servers", systemImage: "network") }
                 .tag("servers")
+            PreprocessorsTab(model: model)
+                .tabItem { Label("Preprocessors", systemImage: "wand.and.rays") }
+                .tag("preprocessors")
         }
-        .frame(width: 640, height: 460)
+        .frame(width: 640, height: 480)
         .padding(20)
     }
 }
@@ -736,9 +739,6 @@ private struct LanguageServersTab: View {
     @State private var newScope = ""
     @State private var newLanguage = ""
     @State private var newCommand = ""
-    @State private var newPreprocessorScope = ""
-    @State private var newPreprocessorLanguage = ""
-    @State private var newPreprocessorCommands = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -819,14 +819,29 @@ private struct LanguageServersTab: View {
                     model.onRestartServers?()
                 }
             }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+    }
+}
 
-            Divider()
+/// Save preprocessors get their own tab: chains grow multi-line, and
+/// sharing a 480-point tab with the server table pushed the tab bar
+/// clean out of the window.
+private struct PreprocessorsTab: View {
+    @ObservedObject var model: SettingsModel
+    @State private var newScope = ""
+    @State private var newLanguage = ""
+    @State private var newCommands = ""
 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
             Text(
                 "Save preprocessors run before every save (and on Run Save Preprocessors), "
                     + "one command per line in order — each reads the document on standard "
                     + "input and writes it back on standard output, like `ruff check --fix -` "
-                    + "then `black -`. A project entry replaces the default chain."
+                    + "then `black -`. {path} and {filename} expand to the document's. "
+                    + "A project entry replaces the default chain."
             )
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -861,31 +876,31 @@ private struct LanguageServersTab: View {
                     }
                 }
             }
-            .frame(minHeight: 110)
+            .frame(minHeight: 160)
 
             GroupBox("Add preprocessor chain") {
                 VStack(spacing: 8) {
                     PathPicker(
-                        text: $newPreprocessorScope,
+                        text: $newScope,
                         placeholder: "Project root (empty = default for all projects)")
                     HStack(alignment: .top, spacing: 8) {
-                        TextField("Language (e.g. python)", text: $newPreprocessorLanguage)
+                        TextField("Language (e.g. python)", text: $newLanguage)
                             .frame(width: 180)
                         TextField(
                             "Commands, one per line (e.g. black -)",
-                            text: $newPreprocessorCommands, axis: .vertical)
+                            text: $newCommands, axis: .vertical)
                             .lineLimit(1...4)
                             .font(.system(.caption, design: .monospaced))
                         Button("Add") {
                             model.addPreprocessorEntry(
-                                scope: newPreprocessorScope,
-                                language: newPreprocessorLanguage,
-                                commands: newPreprocessorCommands)
-                            newPreprocessorScope = ""
-                            newPreprocessorLanguage = ""
-                            newPreprocessorCommands = ""
+                                scope: newScope,
+                                language: newLanguage,
+                                commands: newCommands)
+                            newScope = ""
+                            newLanguage = ""
+                            newCommands = ""
                         }
-                        .disabled(newPreprocessorLanguage.isEmpty || newPreprocessorCommands.isEmpty)
+                        .disabled(newLanguage.isEmpty || newCommands.isEmpty)
                     }
                 }
                 .textFieldStyle(.roundedBorder)
