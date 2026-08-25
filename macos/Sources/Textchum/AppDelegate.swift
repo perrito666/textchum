@@ -36,6 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let settingsModel = SettingsModel(config: config)
         settingsModel.onChange = { [weak self] in
             guard let self, let model = self.settingsModel else { return }
+            // The change was ours; the config watcher must not treat the
+            // save's echo as an external edit.
+            self.lastOwnConfigSave = Date()
             self.applyAppearanceChoice()
             self.applyThemeChoice()
             self.coreApp?.lspConfigure(json: self.combinedLSPConfiguration)
@@ -43,12 +46,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 editor.refreshProjectRoot()
             }
             for editor in self.editors {
-                editor.apply(settings: model.currentSettings)
+                editor.apply(settings: model.currentSettings(forRoot: editor.projectRoot))
             }
         }
         self.settingsModel = settingsModel
         applyAppearanceChoice()
         applyThemeChoice()
+        startWatchingConfig()
+        installCommandClickMonitor()
 
         NotificationCenter.default.addObserver(
             forName: .textchumDocumentsChanged, object: nil, queue: .main
@@ -153,6 +158,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                             MainActor.assumeIsolated {
                                 self?.editors.first?.debugShowHover()
+                            }
+                        }
+                        return
+                    }
+                    if allArguments[flagIndex + 1] == "status" {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                self?.showServerStatus(nil)
                             }
                         }
                         return
@@ -396,6 +409,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             break  // routed to its completion handler inside CoreApp
         case let .serverStatus(server, root, status, message):
             NSLog("lsp \(server) [\(root)]: \(status) \(message)")
+            noteServerStatus(server: server, root: root, status: status, message: message)
             if status == "not-found", !reportedMissingServers.contains(server) {
                 reportedMissingServers.insert(server)
                 let alert = NSAlert()
@@ -508,6 +522,191 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Configurable key shortcuts
 
+    // MARK: Server status
+
+    /// The last hundred server status transitions, oldest first.
+    private var serverStatusLog: [(at: Date, server: String, root: String, line: String)] = []
+    private var statusPanel: NSPanel?
+    private var statusRefreshTimer: Timer?
+
+    private func noteServerStatus(server: String, root: String, status: String, message: String)
+    {
+        let line = message.isEmpty ? status : "\(status) — \(message)"
+        serverStatusLog.append((Date(), server, root, line))
+        if serverStatusLog.count > 100 {
+            serverStatusLog.removeFirst(serverStatusLog.count - 100)
+        }
+        if statusPanel?.isVisible == true {
+            refreshStatusPanel()
+        }
+    }
+
+    /// View → Language Server Status: what runs where, and the recent
+    /// transitions — the at-a-glance answer to "is my server alive?".
+    @objc func showServerStatus(_ sender: Any?) {
+        if statusPanel == nil {
+            let panel = NSPanel(
+                contentRect: NSRect(x: 0, y: 0, width: 560, height: 360),
+                styleMask: [.titled, .closable, .resizable, .utilityWindow],
+                backing: .buffered,
+                defer: false
+            )
+            panel.title = "Language Server Status"
+            panel.isReleasedWhenClosed = false
+            let scroll = NSTextView.scrollableTextView()
+            let text = scroll.documentView as! NSTextView
+            text.isEditable = false
+            text.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
+            text.textContainerInset = NSSize(width: 8, height: 8)
+            panel.contentView = scroll
+            panel.center()
+            statusPanel = panel
+        }
+        refreshStatusPanel()
+        statusPanel?.makeKeyAndOrderFront(nil)
+        statusRefreshTimer?.invalidate()
+        statusRefreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if self.statusPanel?.isVisible == true {
+                        self.refreshStatusPanel()
+                    } else {
+                        self.statusRefreshTimer?.invalidate()
+                        self.statusRefreshTimer = nil
+                    }
+                }
+            }
+        }
+    }
+
+    private func refreshStatusPanel() {
+        guard let scroll = statusPanel?.contentView as? NSScrollView,
+            let text = scroll.documentView as? NSTextView
+        else { return }
+        var lines: [String] = []
+        let running = coreApp?.lspRunning() ?? []
+        lines.append("Running instances (\(running.count)):")
+        if running.isEmpty {
+            lines.append("  none — servers start when a matching document opens")
+        }
+        for instance in running.sorted(by: { $0.root < $1.root }) {
+            lines.append("  \(instance.server)  \(abbreviate(instance.root))")
+        }
+        lines.append("")
+        lines.append("Recent transitions:")
+        if serverStatusLog.isEmpty {
+            lines.append("  none this session")
+        }
+        let clock = DateFormatter()
+        clock.dateFormat = "HH:mm:ss"
+        for entry in serverStatusLog.suffix(30).reversed() {
+            lines.append(
+                "  \(clock.string(from: entry.at))  \(entry.server) [\(abbreviate(entry.root))]: \(entry.line)"
+            )
+        }
+        lines.append("")
+        lines.append("Full trail: ~/Library/Logs/Textchum/lsp.log")
+        text.string = lines.joined(separator: "\n")
+    }
+
+    private func abbreviate(_ path: String) -> String {
+        (path as NSString).abbreviatingWithTildeInPath
+    }
+
+    // MARK: Configuration file watching
+
+    /// When the app itself last wrote config.json; the watcher ignores
+    /// the echo of our own saves.
+    private var lastOwnConfigSave = Date.distantPast
+    private var configWatcher: DispatchSourceFileSystemObject?
+
+    /// Follows external edits to config.json while running: the file is
+    /// reloaded wholesale (hand edits and unknown keys intact) and the
+    /// same pipeline a Settings change runs re-applies everything.
+    private func startWatchingConfig() {
+        configWatcher?.cancel()
+        configWatcher = nil
+        let descriptor = Darwin.open(Self.configPath, O_EVTONLY)
+        guard descriptor >= 0 else {
+            // Not created yet; try again once something exists.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+                MainActor.assumeIsolated { self?.startWatchingConfig() }
+            }
+            return
+        }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: descriptor,
+            eventMask: [.write, .extend, .rename, .delete],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            self?.configDidChangeOnDisk()
+        }
+        source.setCancelHandler {
+            _ = Darwin.close(descriptor)
+        }
+        source.resume()
+        configWatcher = source
+    }
+
+    private func configDidChangeOnDisk() {
+        // Atomic saves replace the file; rewatch the path first.
+        startWatchingConfig()
+        guard Date().timeIntervalSince(lastOwnConfigSave) > 2 else { return }
+        guard let config else { return }
+        if let warning = config.reload() {
+            NSLog("config reload: \(warning)")
+        }
+        // Same pipeline as a Settings change — plus re-publishing the
+        // Settings window's own fields.
+        settingsModel?.reloadFromConfig()
+        applyKeyOverrides()
+        applyAppearanceChoice()
+        applyThemeChoice()
+        coreApp?.lspConfigure(json: combinedLSPConfiguration)
+        for editor in editors {
+            editor.refreshProjectRoot()
+        }
+        if let model = settingsModel {
+            for editor in editors {
+                editor.apply(settings: model.currentSettings(forRoot: editor.projectRoot))
+            }
+        }
+    }
+
+    // MARK: Command-click navigation
+
+    /// ⌘-click jumps to the definition under the pointer — the caret
+    /// moves to the click first, so the jump stack records where the
+    /// mouse actually was.
+    private var commandClickMonitor: Any?
+
+    private func installCommandClickMonitor() {
+        commandClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) {
+            [weak self] event in
+            guard event.modifierFlags.contains(.command),
+                !event.modifierFlags.contains(.shift),
+                let self,
+                let editor = self.editors.first(where: { $0.window == event.window }),
+                let textView = editor.editorTextView,
+                let contentView = event.window?.contentView,
+                textView.isDescendant(of: contentView)
+            else { return event }
+            let point = textView.convert(event.locationInWindow, from: nil)
+            guard textView.bounds.contains(point) else { return event }
+            let index = textView.characterIndexForInsertion(at: point)
+            guard index >= 0, index <= (textView.string as NSString).length else {
+                return event
+            }
+            textView.setSelectedRange(NSRange(location: index, length: 0))
+            self.recordJumpOrigin()
+            editor.jumpToDefinition(nil)
+            return nil
+        }
+    }
+
     /// Menu items by their stable action name, for `keys` overrides.
     private var menuActions: [String: NSMenuItem] = [:]
 
@@ -543,6 +742,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.redrawDocument(_:)): "redraw",
             #selector(EditorWindowController.showDocumentOutline(_:)): "documentOutline",
             #selector(showCommandPalette(_:)): "commandPalette",
+            #selector(showServerStatus(_:)): "serverStatus",
             #selector(showSettings(_:)): "settings",
         ]
         let finderNames: [Int: String] = [
@@ -1136,6 +1336,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             )
             show(editor: editor, placeAsConfigured: true, target: target)
+            // The window was built with the global settings; its project
+            // root is known now, so any per-root overrides apply.
+            if let model = settingsModel, editor.projectRoot != nil {
+                editor.apply(settings: model.currentSettings(forRoot: editor.projectRoot))
+            }
             if let revealLine {
                 editor.reveal(line: revealLine - 1, character: 0)
             }
@@ -1484,6 +1689,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         showHoverItem.keyEquivalentModifierMask = [.command, .control]
         viewMenu.addItem(showHoverItem)
+        let serverStatusItem = NSMenuItem(
+            title: "Language Server Status",
+            action: #selector(showServerStatus(_:)),
+            keyEquivalent: ""
+        )
+        viewMenu.addItem(serverStatusItem)
         let outlineItem = NSMenuItem(
             title: "Document Outline…",
             action: #selector(EditorWindowController.showDocumentOutline(_:)),

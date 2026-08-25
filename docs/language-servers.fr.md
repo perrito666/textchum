@@ -38,9 +38,9 @@ quelqu'un d'autre.
   Documentation au survol (ou dans les Réglages), et **Afficher la
   documentation du symbole** (⌃⌘H) la demande pour le symbole sous le
   curseur — même souris désactivée.
-- **Aller à la définition** (⌃⌘J) rejoint le symbole sous le curseur —
-  d'un fichier à l'autre, en ouvrant ou en ramenant la cible au premier
-  plan au besoin.
+- **Aller à la définition** (⌃⌘J, ou ⌘-clic) rejoint le symbole sous
+  le curseur — d'un fichier à l'autre, en ouvrant ou en ramenant la
+  cible au premier plan au besoin.
 - **Chercher les références** (⇧⌘R) liste chaque usage du symbole sous
   le curseur dans un panneau flottant — ↑/↓ pour se déplacer, ⏎ pour
   sauter.
@@ -162,7 +162,12 @@ minutes** est arrêtée — l'ouverture suivante en lance une fraîche.
 
 ## Pas encore là
 
-- Les marqueurs de fragments (snippets) dans la complétion sont aplanis
-  en texte brut.
-- ⌘-clic comme déclencheur alternatif d'Aller à la définition.
-- Un panneau d'état des serveurs.
+- Les snippets de la complétion arrivent en texte brut avec le
+  premier marqueur sélectionné, donc taper le remplace — un arrêt
+  honnête plutôt qu'un mode de tabulations.
+- **Présentation ▸ État des serveurs** liste les instances en cours et
+  les transitions récentes de la session, rafraîchi en direct, avec un
+  pointeur vers le journal complet.
+- Le cycle complet des marqueurs de snippet (le premier est
+  sélectionné ; les suivants restent du texte brut) n'est pas encore
+  là.

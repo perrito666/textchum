@@ -232,6 +232,24 @@ func runSmokeTest() -> Int32 {
             return 1
         }
         print("configuration ok (round trip, breakage recovery, backup)")
+
+        // Live reload: an external rewrite lands after reload(), and
+        // per-project editor overrides resolve into the settings.
+        let live = CoreConfig(path: configPath)
+        try #"{"editor": {"tab_width": 6}, "workspace": {"projects": {"/proj": {"editor": {"tab_width": 2, "font_size": 15}}}}}"#
+            .write(toFile: configPath, atomically: true, encoding: .utf8)
+        live.reload()
+        guard live.tabWidth == 6 else {
+            print("FAIL: config reload did not follow the disk")
+            return 1
+        }
+        guard EditorSettings(config: live, projectRoot: "/proj").tabWidth == 2,
+            EditorSettings(config: live, projectRoot: "/elsewhere").tabWidth == 6
+        else {
+            print("FAIL: per-project editor overrides did not resolve")
+            return 1
+        }
+        print("config reload + project overrides ok")
         try? FileManager.default.removeItem(at: configDir)
     } catch {
         print("FAIL: configuration: \(error)")
@@ -334,6 +352,29 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     print("jump stack ok (back, forward, truncation on new jump)")
+
+    // Snippet expansion: the first tabstop's placeholder comes back
+    // selected; $0 parks the caret; escapes survive.
+    let snippet = CompletionPopup.expandSnippet("frob(${1:x}, ${2:y})$0")
+    guard snippet.text == "frob(x, y)",
+        snippet.selection == NSRange(location: 5, length: 1)
+    else {
+        print("FAIL: snippet expansion: \(snippet)")
+        return 1
+    }
+    let exitOnly = CompletionPopup.expandSnippet("done()$0 end")
+    guard exitOnly.text == "done() end",
+        exitOnly.selection == NSRange(location: 6, length: 0)
+    else {
+        print("FAIL: snippet exit point: \(exitOnly)")
+        return 1
+    }
+    let escaped = CompletionPopup.expandSnippet(#"cost \$5"#)
+    guard escaped.text == "cost $5", escaped.selection == nil else {
+        print("FAIL: snippet escape: \(escaped)")
+        return 1
+    }
+    print("snippet expansion ok (placeholder selection, exit point, escapes)")
 
     // Async event round trip: core dispatch thread → main queue.
     var receivedSequence: UInt64?

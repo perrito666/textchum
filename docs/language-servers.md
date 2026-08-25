@@ -32,8 +32,8 @@ never join someone else's workspace either.
   switched off in View ▸ Hover Documentation (or Settings), and
   **Show Documentation for Symbol** (⌃⌘H) asks for the symbol under
   the caret on demand — even with mouse hover off.
-- **Jump to Definition** (⌃⌘J) goes to the symbol under the caret —
-  across files, opening or fronting the target as needed.
+- **Jump to Definition** (⌃⌘J, or ⌘-click) goes to the symbol under
+  the caret — across files, opening or fronting the target as needed.
 - **Find References** (⇧⌘R) lists every use of the symbol under the
   caret in a floating panel — ↑/↓ to move, ⏎ to jump.
 - **Rename Symbol…** (⌃⌘R) renames across the whole workspace: open
@@ -141,8 +141,14 @@ seconds; four failures in a row and it stays down until a restart or a
 configuration change), and an instance **no open document has needed
 for five minutes** is shut down — the next open starts a fresh one.
 
+- Snippet completions land as plain text with the first
+  placeholder selected, so typing replaces it — one honest stop
+  rather than a tabstop mode.
+- **View ▸ Language Server Status** lists the running instances and
+  the session's recent status transitions, refreshed live, with a
+  pointer to the full log.
+
 ## Not there yet
 
-- Snippet placeholders in completions are flattened to plain text.
-- ⌘-click as an alternative trigger for Jump to Definition.
-- A server-status panel.
+- Full snippet tabstop cycling (the first placeholder is selected;
+  later ones are plain text).

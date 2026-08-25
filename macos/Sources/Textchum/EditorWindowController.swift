@@ -1312,6 +1312,9 @@ final class EditorWindowController: NSWindowController {
         startWatchingFile()
     }
 
+    /// The text view, for app-level interactions (⌘-click navigation).
+    var editorTextView: NSTextView? { textView }
+
     /// The configured tab width, remembered for formatting requests.
     private var appliedTabWidth = 4
 
@@ -1550,6 +1553,16 @@ final class EditorWindowController: NSWindowController {
             currentWordPrefix()?.range
             ?? NSRange(location: textView.selectedRange().location, length: 0)
         textView.insertText(item.insertText, replacementRange: replacementRange)
+        // A snippet's first placeholder comes back selected, so typing
+        // replaces it; a bare tabstop just parks the caret there.
+        if let selection = item.selection {
+            let target = NSRange(
+                location: replacementRange.location + selection.location,
+                length: selection.length)
+            if NSMaxRange(target) <= (textView.string as NSString).length {
+                textView.setSelectedRange(target)
+            }
+        }
     }
 
     /// Auto-trigger after identifier characters and member access.

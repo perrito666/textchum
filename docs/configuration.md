@@ -245,7 +245,7 @@ Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
 `toggleLineNumbers`, `toggleHover`, `showHover`, `togglePathDisplay`,
-`redraw`, `commandPalette`,
+`redraw`, `commandPalette`, `serverStatus`,
 `settings` — an unknown name is
 logged with the full list. And when a shortcut escapes memory entirely,
 the **Command Palette** (⇧⌘P) fuzzy-searches every menu action by name
@@ -253,10 +253,32 @@ and runs the selection. Go to Block Start/End (⌃⌥↑/⌃⌥↓ by default) j
 innermost multi-line syntax block around the caret, courtesy of the
 same tree that powers highlighting.
 
+## Live reload
+
+The file is watched while Textchum runs: edit `config.json` in another
+editor and the change applies the moment it lands — appearance, theme,
+fonts, key bindings, server table, everything, including the open
+Settings window. The app's own saves are recognized and ignored, and a
+file that momentarily fails to parse falls back to defaults without
+being overwritten, exactly like at launch.
+
+## Per-project editor settings
+
+A project root can override the editor's font family, font size, and
+tab width for every window inside it — the Projects tab's rows carry
+the three fields (empty means "inherit the general value"), and the
+file spells it as an `editor` object on the workspace entry:
+
+```json
+{
+  "workspace": {
+    "projects": {
+      "/work/legacy": { "editor": { "tab_width": 8, "font_size": 12 } }
+    }
+  }
+}
+```
+
 ## Not there yet
 
-- Textchum does not yet watch the file while running; changes made in
-  another editor apply on the next launch.
-- Per-project overrides of the editor settings (font, tab width) —
-  projects already carry their own detection and language-server
-  settings, but not these.
+- Nothing at the moment — file an itch when one appears.

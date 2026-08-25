@@ -189,6 +189,19 @@ public final class CoreApp {
         }
     }
 
+    /// The pool's live instances as (server id, project root) pairs.
+    public func lspRunning() -> [(server: String, root: String)] {
+        guard let cString = tc_lsp_running(handle) else { return [] }
+        defer { tc_string_free(cString) }
+        return String(cString: cString)
+            .split(separator: "\n")
+            .compactMap { line in
+                let halves = line.split(separator: "\u{1f}", maxSplits: 1)
+                guard halves.count == 2 else { return nil }
+                return (String(halves[0]), String(halves[1]))
+            }
+    }
+
     /// Shuts down every running server instance; re-announce open
     /// documents afterwards to respawn under the current configuration.
     public func lspRestartServers() {

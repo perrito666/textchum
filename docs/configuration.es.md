@@ -256,7 +256,7 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`toggleHover`, `showHover`,
+`toggleHover`, `showHover`, `serverStatus`,
 `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nombre desconocido se registra junto a la lista completa. Ir al
 inicio/fin de bloque (⌃⌥↑/⌃⌥↓ por defecto) salta sobre el bloque
@@ -265,10 +265,33 @@ mismo árbol que alimenta el coloreado. Y cuando un atajo se escapa de
 la memoria por completo, la **paleta de comandos** (⇧⌘P) busca de forma
 difusa cualquier acción de menú por su nombre y ejecuta la selección.
 
+## Recarga en vivo
+
+El archivo se vigila mientras Textchum corre: edita `config.json` en
+otro editor y el cambio se aplica en cuanto aterriza — apariencia,
+tema, tipografías, atajos, tabla de servidores, todo, incluida la
+ventana de Ajustes si está abierta. Los guardados de la propia app se
+reconocen y se ignoran, y un archivo que momentáneamente no parsea cae
+a los valores por defecto sin ser sobrescrito, igual que al arrancar.
+
+## Ajustes del editor por proyecto
+
+Una raíz de proyecto puede sobrescribir la tipografía, su tamaño y el
+ancho de tabulación para todas las ventanas dentro de ella — las filas
+de la pestaña Proyectos llevan los tres campos (vacío significa
+«heredar el valor general»), y el archivo lo escribe como un objeto
+`editor` en la entrada del workspace:
+
+```json
+{
+  "workspace": {
+    "projects": {
+      "/work/legacy": { "editor": { "tab_width": 8, "font_size": 12 } }
+    }
+  }
+}
+```
+
 ## Aún no está
 
-- Textchum todavía no vigila el archivo mientras se ejecuta; los cambios
-  hechos en otro editor se aplican en el siguiente arranque.
-- Ajustes del editor por proyecto (tipografía, ancho de tabulación) —
-  los proyectos ya tienen sus propios ajustes de detección y de
-  servidores de lenguaje, pero no estos.
+- Nada por el momento — apunta la próxima molestia cuando aparezca.

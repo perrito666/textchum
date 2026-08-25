@@ -771,6 +771,46 @@ bool tc_config_hover_docs(const struct TcConfig *config);
 void tc_config_set_hover_docs(struct TcConfig *config, bool enabled);
 
 /**
+ * Re-reads the configuration file, replacing in-memory state — for
+ * following external edits while running. Returns a human-readable
+ * warning (release with [`tc_string_free`]) or null when the file was
+ * usable.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_reload(struct TcConfig *config);
+
+/**
+ * Per-project editor overrides for a root, serialized (`{}` when
+ * none): any of `font_family`, `font_size`, `tab_width`. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; the pointer/length
+ * pair must describe readable bytes.
+ */
+char *tc_config_editor_overrides(const struct TcConfig *config,
+                                 const char *root,
+                                 uintptr_t root_len);
+
+/**
+ * Sets (or removes, with `value_len == 0`) one per-project editor
+ * override. `value` is a JSON value — `13.5`, `"Menlo"`.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_editor_override(struct TcConfig *config,
+                                   const char *root,
+                                   uintptr_t root_len,
+                                   const char *key,
+                                   uintptr_t key_len,
+                                   const char *value,
+                                   uintptr_t value_len);
+
+/**
  * Whether hover documentation pops on mouse rest (default true).
  *
  * # Safety
@@ -1172,6 +1212,15 @@ void tc_lsp_retire(struct TcApp *app,
                    uintptr_t server_len,
                    const char *root,
                    uintptr_t root_len);
+
+/**
+ * The pool's live instances, one per line as `server\x1froot` —
+ * empty when nothing runs. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`].
+ */
+char *tc_lsp_running(const struct TcApp *app);
 
 /**
  * Shuts down every running server instance. The shell re-announces its

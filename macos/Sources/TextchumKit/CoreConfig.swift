@@ -321,6 +321,64 @@ public final class CoreConfig {
         }
     }
 
+    /// Re-reads the file, replacing in-memory state — for following
+    /// external edits while running. Returns a warning to show once when
+    /// the file existed but was unusable.
+    @discardableResult
+    public func reload() -> String? {
+        guard let cString = tc_config_reload(handle) else { return nil }
+        defer { tc_string_free(cString) }
+        return String(cString: cString)
+    }
+
+    /// Per-project editor overrides for a root, as a JSON object with
+    /// any of `font_family`, `font_size`, `tab_width` (`{}` when none).
+    public func editorOverridesJSON(root: String) -> String {
+        var root = root
+        return root.withUTF8 { bytes in
+            guard
+                let cString = tc_config_editor_overrides(
+                    handle,
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count)
+                )
+            else { return "{}" }
+            defer { tc_string_free(cString) }
+            return String(cString: cString)
+        }
+    }
+
+    /// Sets (nil removes) one per-project editor override; `valueJSON`
+    /// is a JSON value — `13.5`, `"Menlo"`.
+    public func setEditorOverride(root: String, key: String, valueJSON: String?) {
+        var root = root
+        var key = key
+        var value = valueJSON ?? ""
+        root.withUTF8 { rootBytes in
+            key.withUTF8 { keyBytes in
+                value.withUTF8 { valueBytes in
+                    tc_config_set_editor_override(
+                        handle,
+                        rootBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(rootBytes.count),
+                        keyBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(keyBytes.count),
+                        valueBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(valueBytes.count)
+                    )
+                }
+            }
+        }
+    }
+
     /// Writes the configuration back to its file (atomic, pretty-printed,
     /// unknown keys preserved).
     public func save() throws {

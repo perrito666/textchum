@@ -14,6 +14,10 @@ final class CompletionPopup: NSObject {
         let label: String
         let detail: String
         let insertText: String
+        /// Where the caret belongs after insertion — the first snippet
+        /// tabstop's placeholder (selected so typing replaces it), or
+        /// the `$0` exit point. Relative to `insertText`, UTF-16 units.
+        let selection: NSRange?
         let sortText: String
         let filterText: String
     }
@@ -47,10 +51,12 @@ final class CompletionPopup: NSObject {
                 (raw["textEdit"] as? [String: Any])?["newText"] as? String
                 ?? raw["insertText"] as? String
                 ?? label
+            let (expanded, selection) = Self.expandSnippet(insert)
             return Item(
                 label: label,
                 detail: raw["detail"] as? String ?? "",
-                insertText: Self.flattenSnippet(insert),
+                insertText: expanded,
+                selection: selection,
                 sortText: raw["sortText"] as? String ?? label,
                 filterText: (raw["filterText"] as? String ?? label).lowercased()
             )
@@ -58,18 +64,70 @@ final class CompletionPopup: NSObject {
         .sorted { $0.sortText < $1.sortText }
     }
 
-    /// `${1:placeholder}` → `placeholder`, `$1`/`$0` → nothing.
-    static func flattenSnippet(_ text: String) -> String {
-        var out = text
-        while let range = out.range(of: #"\$\{\d+:([^}]*)\}"#, options: .regularExpression) {
-            let inner = out[range].dropFirst(2).dropLast()
-            let content = inner.drop(while: { $0 != ":" }).dropFirst()
-            out.replaceSubrange(range, with: content)
+    /// Expands LSP snippet syntax to plain text and remembers where the
+    /// caret should land: `${1:placeholder}` keeps its placeholder (the
+    /// lowest-numbered one comes back selected, so typing replaces it),
+    /// bare `$1`/`$0` vanish (`$0` marking the exit point), and `\$`
+    /// stays a dollar sign. Later tabstops are plain text — one honest
+    /// stop, not a tabstop mode.
+    static func expandSnippet(_ text: String) -> (text: String, selection: NSRange?) {
+        var out = ""
+        out.reserveCapacity(text.count)
+        // (tabstop number, location, length) in UTF-16 units of `out`.
+        var stops: [(number: Int, location: Int, length: Int)] = []
+        var scanner = Substring(text)
+        func utf16Length(_ string: String) -> Int { string.utf16.count }
+        while let dollar = scanner.firstIndex(of: "$") {
+            let before = scanner[..<dollar]
+            // A backslash right before the dollar escapes it.
+            if before.last == "\\" {
+                out += before.dropLast()
+                out += "$"
+                scanner = scanner[scanner.index(after: dollar)...]
+                continue
+            }
+            out += before
+            var rest = scanner[scanner.index(after: dollar)...]
+            if rest.first == "{" {
+                // ${n} or ${n:placeholder} (no nesting).
+                guard let close = rest.firstIndex(of: "}") else {
+                    out += "$"
+                    scanner = rest
+                    continue
+                }
+                let body = rest[rest.index(after: rest.startIndex)..<close]
+                let halves = body.split(separator: ":", maxSplits: 1)
+                let number = Int(halves.first ?? "") ?? 0
+                let placeholder = halves.count > 1 ? String(halves[1]) : ""
+                stops.append(
+                    (number, utf16Length(out), utf16Length(placeholder)))
+                out += placeholder
+                scanner = rest[rest.index(after: close)...]
+            } else {
+                var digits = ""
+                while let first = rest.first, first.isNumber {
+                    digits.append(first)
+                    rest = rest.dropFirst()
+                }
+                if digits.isEmpty {
+                    out += "$"
+                } else {
+                    stops.append((Int(digits) ?? 0, utf16Length(out), 0))
+                }
+                scanner = rest
+            }
         }
-        while let range = out.range(of: #"\$\d+"#, options: .regularExpression) {
-            out.replaceSubrange(range, with: "")
-        }
-        return out
+        out += scanner
+        // The first real tabstop wins; $0 (the exit point) is the
+        // fallback caret position.
+        let first = stops
+            .filter { $0.number > 0 }
+            .min { $0.number < $1.number }
+            ?? stops.first { $0.number == 0 }
+        return (
+            out,
+            first.map { NSRange(location: $0.location, length: $0.length) }
+        )
     }
 
     // MARK: Presentation

@@ -146,6 +146,77 @@ impl Config {
         }
     }
 
+    /// Re-reads the file, replacing in-memory state — for following
+    /// external edits while running. Same warning contract as
+    /// [`Config::load`]; unknown keys and hand edits arrive intact
+    /// because the whole document is replaced.
+    pub fn reload(&mut self) -> Option<String> {
+        let (fresh, warning) = Self::load(&self.path);
+        self.root = fresh.root;
+        self.broken_on_disk = fresh.broken_on_disk;
+        warning
+    }
+
+    /// Per-project editor overrides (`workspace.projects.<root>.editor`):
+    /// an object with any of `font_family`, `font_size`, `tab_width`.
+    /// `{}` when the root has none.
+    pub fn editor_overrides_json(&self, root: &str) -> String {
+        self.root
+            .get("workspace")
+            .and_then(|w| w.get("projects"))
+            .and_then(|p| p.get(root))
+            .and_then(|entry| entry.get("editor"))
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "{}".into())
+    }
+
+    /// Sets (or, with `None`/invalid JSON, removes) one per-project
+    /// editor override. `value_json` is a JSON value — `13.5`,
+    /// `"Menlo"`. Empty objects prune away.
+    pub fn set_editor_override(&mut self, root: &str, key: &str, value_json: Option<&str>) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let entry = ensure_object(
+            ensure_object(ensure_object(top, "workspace"), "projects"),
+            root,
+        );
+        let editor = ensure_object(entry, "editor");
+        match value_json.and_then(|json| serde_json::from_str::<Value>(json).ok()) {
+            Some(value) => {
+                editor.insert(key.into(), value);
+            }
+            None => {
+                editor.remove(key);
+            }
+        }
+        // Prune the editor object, then any now-empty ancestors.
+        if editor.is_empty() {
+            entry.remove("editor");
+        }
+        let projects = top
+            .get_mut("workspace")
+            .and_then(Value::as_object_mut)
+            .and_then(|w| w.get_mut("projects"))
+            .and_then(Value::as_object_mut);
+        if let Some(projects) = projects {
+            if projects.get(root).and_then(Value::as_object).is_some_and(|o| o.is_empty()) {
+                projects.remove(root);
+            }
+        }
+        if let Some(workspace) = top.get_mut("workspace").and_then(Value::as_object_mut) {
+            if workspace
+                .get("projects")
+                .and_then(Value::as_object)
+                .is_some_and(|p| p.is_empty())
+            {
+                workspace.remove("projects");
+            }
+        }
+        prune_empty(top, "workspace");
+    }
+
     /// Editor font family, if one is configured. `None` means "use the
     /// platform's monospaced font".
     pub fn font_family(&self) -> Option<&str> {
@@ -705,6 +776,40 @@ mod tests {
         config.set_preprocessor_entry(None, "python", None);
         config.set_preprocessor_entry(Some("/work/projA"), "python", Some("  "));
         assert_eq!(config.preprocessors_json(), "{}");
+    }
+
+    #[test]
+    fn reload_follows_external_edits() {
+        let path = temp_path("reload.json");
+        let (mut config, _) = Config::load(&path);
+        config.set_tab_width(8);
+        config.save().unwrap();
+        std::fs::write(&path, r#"{"editor": {"tab_width": 3}, "kept": true}"#).unwrap();
+        assert!(config.reload().is_none());
+        assert_eq!(config.tab_width(), 3);
+        // The replacement carried the hand-added key along.
+        config.save().unwrap();
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(written.contains("kept"));
+    }
+
+    #[test]
+    fn editor_overrides_round_trip_and_prune() {
+        let path = temp_path("editor-overrides.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.editor_overrides_json("/work/projA"), "{}");
+        config.set_editor_override("/work/projA", "tab_width", Some("2"));
+        config.set_editor_override("/work/projA", "font_family", Some("\"Menlo\""));
+        config.save().unwrap();
+        let (mut reloaded, _) = Config::load(&path);
+        let overrides: Value =
+            serde_json::from_str(&reloaded.editor_overrides_json("/work/projA")).unwrap();
+        assert_eq!(overrides["tab_width"], 2);
+        assert_eq!(overrides["font_family"], "Menlo");
+        // Removing both prunes the whole trail away.
+        reloaded.set_editor_override("/work/projA", "tab_width", None);
+        reloaded.set_editor_override("/work/projA", "font_family", None);
+        assert_eq!(reloaded.editor_overrides_json("/work/projA"), "{}");
     }
 
     #[test]

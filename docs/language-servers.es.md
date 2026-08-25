@@ -39,8 +39,9 @@ nadie.
   Documentación al pasar (o en Ajustes), y **Mostrar documentación del
   símbolo** (⌃⌘H) la pide para el símbolo bajo el cursor a demanda —
   incluso con el hover del ratón apagado.
-- **Saltar a la definición** (⌃⌘J) va al símbolo bajo el cursor — entre
-  archivos, abriendo o trayendo al frente el destino según haga falta.
+- **Saltar a la definición** (⌃⌘J, o ⌘-clic) va al símbolo bajo el
+  cursor — entre archivos, abriendo o trayendo al frente el destino
+  según haga falta.
 - **Buscar referencias** (⇧⌘R) lista cada uso del símbolo bajo el
   cursor en un panel flotante — ↑/↓ para moverse, ⏎ para saltar.
 - **Renombrar símbolo…** (⌃⌘R) renombra en todo el espacio de trabajo:
@@ -158,9 +159,14 @@ un cambio de configuración), y una instancia que **ningún documento
 abierto ha necesitado en cinco minutos** se apaga — la siguiente
 apertura arranca una fresca.
 
+- Los snippets del autocompletado llegan como texto plano con el
+  primer marcador seleccionado, así que escribir lo reemplaza — una
+  parada honesta en vez de un modo de tabulaciones.
+- **Vista ▸ Estado de servidores** lista las instancias en ejecución y
+  las transiciones recientes de la sesión, refrescado en vivo, con un
+  puntero al registro completo.
+
 ## Aún no está
 
-- Los marcadores de fragmento (snippets) en el autocompletado se
-  aplanan a texto plano.
-- ⌘-clic como disparador alternativo de Saltar a la definición.
-- Un panel de estado de servidores.
+- El ciclo completo de marcadores de snippet (el primero queda
+  seleccionado; los siguientes son texto plano).

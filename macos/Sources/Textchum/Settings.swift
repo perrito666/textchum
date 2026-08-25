@@ -13,15 +13,28 @@ struct EditorSettings {
 
     /// Resolves configuration values into a usable font: the configured
     /// family if it exists on this system, the platform monospaced font
-    /// otherwise.
-    init(config: CoreConfig) {
-        let size = config.fontSize
-        if let family = config.fontFamily, let font = NSFont(name: family, size: size) {
+    /// otherwise. A project root's `editor` overrides (font family,
+    /// size, tab width) win over the globals for windows inside it.
+    init(config: CoreConfig, projectRoot: String? = nil) {
+        var family = config.fontFamily
+        var size = config.fontSize
+        var tabWidth = config.tabWidth
+        if let projectRoot,
+            let data = config.editorOverridesJSON(root: projectRoot).data(using: .utf8),
+            let overrides = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        {
+            if let value = overrides["font_family"] as? String, !value.isEmpty {
+                family = value
+            }
+            if let value = overrides["font_size"] as? Double { size = value }
+            if let value = overrides["tab_width"] as? Int { tabWidth = value }
+        }
+        if let family, let font = NSFont(name: family, size: size) {
             self.font = font
         } else {
             self.font = .monospacedSystemFont(ofSize: size, weight: .regular)
         }
-        self.tabWidth = config.tabWidth
+        self.tabWidth = tabWidth
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
         self.spellLanguage = config.spellLanguage
@@ -87,12 +100,16 @@ final class SettingsModel: ObservableObject {
     }
     @Published private(set) var lspEntries: [LSPEntry] = []
 
-    /// One workspace-behavior row (a project root and its flags).
+    /// One workspace-behavior row (a project root, its flags, and any
+    /// editor overrides — empty strings mean "inherit the global").
     struct WorkspaceEntry: Identifiable, Equatable {
         let scope: String
         var manifestProjects: Bool
         var recursiveConfig: Bool
         var ctagsFallback: Bool
+        var fontFamily: String = ""
+        var fontSize: String = ""
+        var tabWidth: String = ""
         var id: String { scope }
         var scopeLabel: String { (scope as NSString).lastPathComponent }
     }
@@ -133,6 +150,25 @@ final class SettingsModel: ObservableObject {
         return names
     }
 
+    /// Re-publishes every value from the (just-reloaded) configuration —
+    /// the settings window follows external edits like everything else.
+    func reloadFromConfig() {
+        isLoading = true
+        appearance = config.appearance
+        theme = config.theme
+        openTarget = config.openTarget
+        fontFamily = config.fontFamily ?? ""
+        fontSize = config.fontSize
+        tabWidth = config.tabWidth
+        lineNumbers = config.lineNumbers
+        hoverDocs = config.hoverDocs
+        spellLanguage = config.spellLanguage ?? ""
+        isLoading = false
+        reloadLSPEntries()
+        reloadWorkspaceEntries()
+        reloadPreprocessorEntries()
+    }
+
     init(config: CoreConfig) {
         self.config = config
         self.appearance = config.appearance
@@ -163,6 +199,7 @@ final class SettingsModel: ObservableObject {
             recursiveConfigDefault = parsed["recursive_config"] as? Bool ?? false
             ctagsFallbackDefault = parsed["ctags_fallback"] as? Bool ?? false
             for (root, raw) in parsed["projects"] as? [String: [String: Any]] ?? [:] {
+                let editor = raw["editor"] as? [String: Any] ?? [:]
                 entries.append(
                     WorkspaceEntry(
                         scope: root,
@@ -171,7 +208,12 @@ final class SettingsModel: ObservableObject {
                         recursiveConfig: raw["recursive_config"] as? Bool
                             ?? recursiveConfigDefault,
                         ctagsFallback: raw["ctags_fallback"] as? Bool
-                            ?? ctagsFallbackDefault
+                            ?? ctagsFallbackDefault,
+                        fontFamily: editor["font_family"] as? String ?? "",
+                        fontSize: (editor["font_size"] as? Double).map { size in
+                            size == size.rounded() ? String(Int(size)) : String(size)
+                        } ?? "",
+                        tabWidth: (editor["tab_width"] as? Int).map(String.init) ?? ""
                     ))
             }
         }
@@ -216,6 +258,19 @@ final class SettingsModel: ObservableObject {
 
     var currentSettings: EditorSettings {
         EditorSettings(config: config)
+    }
+
+    /// The effective settings for a window whose document lives under
+    /// `root` — per-project overrides applied over the globals.
+    func currentSettings(forRoot root: String?) -> EditorSettings {
+        EditorSettings(config: config, projectRoot: root)
+    }
+
+    /// One per-project editor override changed (a JSON value, nil
+    /// removes); persists and reapplies everywhere.
+    func setEditorOverride(scope: String, key: String, valueJSON: String?) {
+        config.setEditorOverride(root: scope, key: key, valueJSON: valueJSON)
+        persistWorkspaceChange()
     }
 
     // MARK: Language servers
@@ -466,6 +521,47 @@ private struct GeneralSettingsTab: View {
     }
 }
 
+/// A small inherit-when-empty field for per-project editor overrides:
+/// commits on ⏎ or focus loss, and an emptied field removes the
+/// override (that is its meaning, unlike the command fields).
+private struct OverrideField: View {
+    let placeholder: String
+    let width: CGFloat
+    let initial: String
+    let commit: (String) -> Void
+    @State private var text: String
+    @FocusState private var focused: Bool
+
+    init(
+        placeholder: String, width: CGFloat, initial: String,
+        commit: @escaping (String) -> Void
+    ) {
+        self.placeholder = placeholder
+        self.width = width
+        self.initial = initial
+        self.commit = commit
+        _text = State(initialValue: initial)
+    }
+
+    var body: some View {
+        TextField(placeholder, text: $text)
+            .textFieldStyle(.roundedBorder)
+            .font(.caption)
+            .frame(width: width)
+            .focused($focused)
+            .onSubmit(commitIfChanged)
+            .onChange(of: focused) { _, isFocused in
+                if !isFocused { commitIfChanged() }
+            }
+    }
+
+    private func commitIfChanged() {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard trimmed != initial else { return }
+        commit(trimmed)
+    }
+}
+
 private struct ProjectsTab: View {
     @ObservedObject var model: SettingsModel
     @State private var newScope = ""
@@ -500,47 +596,80 @@ private struct ProjectsTab: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.workspaceEntries) { entry in
-                    HStack(spacing: 12) {
-                        Text(entry.scopeLabel)
-                            .fontWeight(.semibold)
-                            .help(entry.scope)
-                        Spacer()
-                        Toggle(
-                            "Manifest projects",
-                            isOn: Binding(
-                                get: { entry.manifestProjects },
-                                set: {
-                                    model.setWorkspaceFlag(
-                                        scope: entry.scope, key: "manifest_projects",
-                                        value: $0)
-                                }
-                            ))
-                        Toggle(
-                            "Recursive config",
-                            isOn: Binding(
-                                get: { entry.recursiveConfig },
-                                set: {
-                                    model.setWorkspaceFlag(
-                                        scope: entry.scope, key: "recursive_config",
-                                        value: $0)
-                                }
-                            ))
-                        Toggle(
-                            "Ctags fallback",
-                            isOn: Binding(
-                                get: { entry.ctagsFallback },
-                                set: {
-                                    model.setWorkspaceFlag(
-                                        scope: entry.scope, key: "ctags_fallback",
-                                        value: $0)
-                                }
-                            ))
-                        Button {
-                            model.removeWorkspaceEntry(entry)
-                        } label: {
-                            Image(systemName: "minus.circle")
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 12) {
+                            Text(entry.scopeLabel)
+                                .fontWeight(.semibold)
+                                .help(entry.scope)
+                            Spacer()
+                            Toggle(
+                                "Manifest projects",
+                                isOn: Binding(
+                                    get: { entry.manifestProjects },
+                                    set: {
+                                        model.setWorkspaceFlag(
+                                            scope: entry.scope, key: "manifest_projects",
+                                            value: $0)
+                                    }
+                                ))
+                            Toggle(
+                                "Recursive config",
+                                isOn: Binding(
+                                    get: { entry.recursiveConfig },
+                                    set: {
+                                        model.setWorkspaceFlag(
+                                            scope: entry.scope, key: "recursive_config",
+                                            value: $0)
+                                    }
+                                ))
+                            Toggle(
+                                "Ctags fallback",
+                                isOn: Binding(
+                                    get: { entry.ctagsFallback },
+                                    set: {
+                                        model.setWorkspaceFlag(
+                                            scope: entry.scope, key: "ctags_fallback",
+                                            value: $0)
+                                    }
+                                ))
+                            Button {
+                                model.removeWorkspaceEntry(entry)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
                         }
-                        .buttonStyle(.borderless)
+                        // Editor overrides for windows inside this root;
+                        // empty fields inherit the General tab's values.
+                        HStack(spacing: 8) {
+                            Text("Editor:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            OverrideField(
+                                placeholder: "font family", width: 140,
+                                initial: entry.fontFamily
+                            ) { text in
+                                model.setEditorOverride(
+                                    scope: entry.scope, key: "font_family",
+                                    valueJSON: text.isEmpty
+                                        ? nil
+                                        : "\"\(text.replacingOccurrences(of: "\"", with: ""))\"")
+                            }
+                            OverrideField(
+                                placeholder: "size", width: 52, initial: entry.fontSize
+                            ) { text in
+                                model.setEditorOverride(
+                                    scope: entry.scope, key: "font_size",
+                                    valueJSON: Double(text).map { String($0) })
+                            }
+                            OverrideField(
+                                placeholder: "tab width", width: 72, initial: entry.tabWidth
+                            ) { text in
+                                model.setEditorOverride(
+                                    scope: entry.scope, key: "tab_width",
+                                    valueJSON: Int(text).map(String.init))
+                            }
+                        }
                     }
                 }
             }

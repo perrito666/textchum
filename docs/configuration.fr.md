@@ -260,7 +260,7 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`toggleHover`, `showHover`,
+`toggleHover`, `showHover`, `serverStatus`,
 `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à
 la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique
@@ -269,11 +269,35 @@ alimente déjà la coloration. Et quand un raccourci échappe tout à fait
 à la mémoire, la **palette de commandes** (⇧⌘P) cherche floue n'importe
 quelle action de menu par son nom et exécute la sélection.
 
+## Rechargement à chaud
+
+Le fichier est surveillé pendant que Textchum tourne : éditez
+`config.json` ailleurs et le changement s'applique dès qu'il atterrit —
+apparence, thème, polices, raccourcis, table des serveurs, tout, y
+compris la fenêtre Réglages si elle est ouverte. Les sauvegardes de
+l'app elle-même sont reconnues et ignorées, et un fichier qui échoue
+momentanément à parser retombe sur les défauts sans être écrasé,
+exactement comme au lancement.
+
+## Réglages d'éditeur par projet
+
+Une racine de projet peut remplacer la police, sa taille et la largeur
+de tabulation pour toutes les fenêtres qu'elle contient — les lignes de
+l'onglet Projets portent les trois champs (vide signifie « hériter de
+la valeur générale »), et le fichier l'écrit comme un objet `editor`
+sur l'entrée workspace :
+
+```json
+{
+  "workspace": {
+    "projects": {
+      "/work/legacy": { "editor": { "tab_width": 8, "font_size": 12 } }
+    }
+  }
+}
+```
+
 ## Pas encore là
 
-- Textchum ne surveille pas encore le fichier en cours d'exécution ; les
-  changements faits dans un autre éditeur s'appliquent au prochain
-  lancement.
-- Les réglages d'éditeur par projet (police, largeur de tabulation) —
-  les projets portent déjà leurs propres réglages de détection et de
-  serveurs de langage, mais pas ceux-ci.
+- Rien pour le moment — notez la prochaine gêne quand elle se
+  présentera.

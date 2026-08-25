@@ -1193,6 +1193,80 @@ pub unsafe extern "C" fn tc_config_set_hover_docs(config: *mut TcConfig, enabled
     let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_hover_docs(enabled)));
 }
 
+/// Re-reads the configuration file, replacing in-memory state — for
+/// following external edits while running. Returns a human-readable
+/// warning (release with [`tc_string_free`]) or null when the file was
+/// usable.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_reload(config: *mut TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return std::ptr::null_mut();
+    };
+    match catch_unwind(AssertUnwindSafe(|| config.inner.reload())) {
+        Ok(Some(warning)) => owned_c_string(warning),
+        _ => std::ptr::null_mut(),
+    }
+}
+
+/// Per-project editor overrides for a root, serialized (`{}` when
+/// none): any of `font_family`, `font_size`, `tab_width`. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer; the pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_editor_overrides(
+    config: *const TcConfig,
+    root: *const c_char,
+    root_len: usize,
+) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(root) = (unsafe { str_from_raw(root, root_len) }) else {
+        return std::ptr::null_mut();
+    };
+    owned_c_string(config.inner.editor_overrides_json(root))
+}
+
+/// Sets (or removes, with `value_len == 0`) one per-project editor
+/// override. `value` is a JSON value — `13.5`, `"Menlo"`.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_editor_override(
+    config: *mut TcConfig,
+    root: *const c_char,
+    root_len: usize,
+    key: *const c_char,
+    key_len: usize,
+    value: *const c_char,
+    value_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let (root, key, value) = unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(key, key_len),
+            str_from_raw(value, value_len),
+        )
+    };
+    let (Some(root), Some(key), Some(value)) = (root, key, value) else {
+        return;
+    };
+    config
+        .inner
+        .set_editor_override(root, key, (!value.is_empty()).then_some(value));
+}
+
 /// Whether hover documentation pops on mouse rest (default true).
 ///
 /// # Safety
@@ -2073,6 +2147,28 @@ pub unsafe extern "C" fn tc_lsp_retire(
         return;
     };
     let _ = catch_unwind(AssertUnwindSafe(|| app.pool.retire(server, root)));
+}
+
+/// The pool's live instances, one per line as `server\x1froot` —
+/// empty when nothing runs. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_running(app: *const TcApp) -> *mut c_char {
+    let Some(app) = (unsafe { app.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    let joined = catch_unwind(AssertUnwindSafe(|| {
+        app.pool
+            .running()
+            .into_iter()
+            .map(|(server, root)| format!("{server}\x1f{root}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }))
+    .unwrap_or_default();
+    owned_c_string(joined)
 }
 
 /// Shuts down every running server instance. The shell re-announces its
