@@ -1074,6 +1074,70 @@ void tc_config_set_lsp_entry(struct TcConfig *config,
                              uintptr_t command_len);
 
 /**
+ * The configuration's `preprocessors` section, serialized (`{}` when
+ * unset): `{"defaults": {lang: [cmd, ...]}, "projects": {root: {...}}}`.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_preprocessors_json(const struct TcConfig *config);
+
+/**
+ * Sets (or removes, with `commands_len == 0`) the save-preprocessor
+ * chain for a language — newline-separated command lines — scoped to a
+ * project root when `root_len > 0`, the defaults otherwise.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_preprocessor_entry(struct TcConfig *config,
+                                      const char *root,
+                                      uintptr_t root_len,
+                                      const char *language,
+                                      uintptr_t language_len,
+                                      const char *commands,
+                                      uintptr_t commands_len);
+
+/**
+ * The resolved preprocessor chain for a language under a project root
+ * (the defaults when `root_len == 0` or the root has no entry), as
+ * newline-separated command lines — empty when none configured.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+char *tc_config_preprocessor_commands(const struct TcConfig *config,
+                                      const char *root,
+                                      uintptr_t root_len,
+                                      const char *language,
+                                      uintptr_t language_len);
+
+/**
+ * The prose spell-check language (`editor.spell`): a spelling
+ * identifier, `"auto"`, or empty when spell checking is off.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_spell_language(const struct TcConfig *config);
+
+/**
+ * Sets (or removes, with `language_len == 0`) the spell-check language.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; the pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_spell_language(struct TcConfig *config,
+                                  const char *language,
+                                  uintptr_t language_len);
+
+/**
  * Applies a server configuration (the JSON from [`tc_config_lsp_json`])
  * to the pool. Takes effect for instances spawned afterwards and clears
  * the missing-server memory.

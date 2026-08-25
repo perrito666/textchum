@@ -166,6 +166,60 @@ En el archivo, esto vive en una sección `workspace`:
 }
 ```
 
+## Preprocesadores de guardado
+
+Los formateadores y correctores pueden ejecutarse automáticamente antes
+de cada guardado, por lenguaje — para todos los proyectos o para una
+raíz concreta, exactamente como los servidores de lenguaje. Cada
+entrada es una cadena: un comando por línea, en orden, donde cada
+comando lee el documento por la entrada estándar y escribe el documento
+completo por la salida estándar (la convención `-` que siguen casi
+todos los formateadores). Si un eslabón falla — salida distinta de
+cero, salida vacía, o más de diez segundos colgado — no se aplica nada,
+se muestra el error (con el stderr de la herramienta) y el guardado
+pregunta si continuar sin procesar.
+
+```json
+{
+  "preprocessors": {
+    "defaults": {
+      "python": ["ruff check --fix -", "black -"],
+      "go": ["gofmt"]
+    },
+    "projects": {
+      "/work/site": { "javascript": ["prettier --stdin-filepath x.js"] }
+    }
+  }
+}
+```
+
+Una entrada de proyecto reemplaza la cadena por defecto para ese
+lenguaje, nunca se añade a ella. La ventana de Ajustes edita esta misma
+sección bajo Servidores de lenguaje, y **Edición ▸ Ejecutar
+preprocesadores** (⌃⌥⌘F, nombre de acción `runPreprocessors`) ejecuta
+la cadena a demanda sin guardar — formatear con tus herramientas en
+vez del formateador del servidor. El resultado llega como una sola
+edición, así que ⌘Z lo deshace.
+
+## Corrección ortográfica
+
+La prosa usa el corrector del sistema — los mismos diccionarios que
+comparte toda app del Mac — acotado a donde la prosa vive de verdad:
+los comentarios en el código, y el documento entero en Markdown,
+mensajes de commit de git y texto plano. Los identificadores y las
+cadenas literales nunca se marcan. Las faltas llevan un tinte púrpura,
+distinto del rojo/naranja/azul de los diagnósticos.
+
+Elige el idioma en Ajustes ▸ General ▸ «Spell check prose» — Apagado
+(el valor por defecto), automático por contenido, o un diccionario
+concreto — o pon `editor.spell` a mano: `"auto"` o un identificador
+como `"es"` o `"en_US"`. Los diccionarios disponibles son los
+habilitados en Ajustes del Sistema ▸ Teclado ▸ Entrada de texto.
+
+```json
+{ "editor": { "spell": "auto" } }
+```
+
 ## Atajos de teclado
 
 Los atajos de los menús se reasignan mediante una sección `keys` editada
@@ -188,6 +242,7 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
 `jumpToDefinition`, `findReferences`, `renameSymbol`, `formatDocument`,
+`runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,

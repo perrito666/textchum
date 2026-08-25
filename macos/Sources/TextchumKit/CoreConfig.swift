@@ -232,6 +232,95 @@ public final class CoreConfig {
         }
     }
 
+    /// The save-preprocessor section, serialized:
+    /// `{"defaults": {lang: [cmd, ...]}, "projects": {root: {lang: [...]}}}`.
+    public var preprocessorsJSON: String {
+        guard let cString = tc_config_preprocessors_json(handle) else { return "{}" }
+        defer { tc_string_free(cString) }
+        return String(cString: cString)
+    }
+
+    /// Sets (nil or blank removes) the save-preprocessor chain for a
+    /// language — newline-separated command lines — scoped to a project
+    /// root, or the defaults when `root` is nil.
+    public func setPreprocessorEntry(root: String?, language: String, commands: String?) {
+        var root = root ?? ""
+        var language = language
+        var commands = commands ?? ""
+        root.withUTF8 { rootBytes in
+            language.withUTF8 { languageBytes in
+                commands.withUTF8 { commandBytes in
+                    tc_config_set_preprocessor_entry(
+                        handle,
+                        rootBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(rootBytes.count),
+                        languageBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(languageBytes.count),
+                        commandBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(commandBytes.count)
+                    )
+                }
+            }
+        }
+    }
+
+    /// The resolved preprocessor chain for a language under a project
+    /// root: the root's entry when it has one, the defaults otherwise.
+    public func preprocessorCommands(root: String?, language: String) -> [String] {
+        var root = root ?? ""
+        var language = language
+        let joined: String? = root.withUTF8 { rootBytes in
+            language.withUTF8 { languageBytes in
+                guard
+                    let cString = tc_config_preprocessor_commands(
+                        handle,
+                        rootBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(rootBytes.count),
+                        languageBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(languageBytes.count)
+                    )
+                else { return nil }
+                defer { tc_string_free(cString) }
+                return String(cString: cString)
+            }
+        }
+        guard let joined, !joined.isEmpty else { return [] }
+        return joined.split(separator: "\n").map(String.init)
+    }
+
+    /// The prose spell-check language: a spelling identifier like
+    /// "en_US", "auto" for automatic detection, or nil when off.
+    public var spellLanguage: String? {
+        get {
+            guard let cString = tc_config_spell_language(handle) else { return nil }
+            defer { tc_string_free(cString) }
+            let value = String(cString: cString)
+            return value.isEmpty ? nil : value
+        }
+        set {
+            var language = newValue ?? ""
+            language.withUTF8 { bytes in
+                tc_config_set_spell_language(
+                    handle,
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count)
+                )
+            }
+        }
+    }
+
     /// Writes the configuration back to its file (atomic, pretty-printed,
     /// unknown keys preserved).
     public func save() throws {

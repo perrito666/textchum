@@ -232,6 +232,101 @@ impl Config {
         prune_empty(top, "lsp");
     }
 
+    /// The save-preprocessor section (`preprocessors`), serialized:
+    /// `{"defaults": {lang: [cmd, ...]}, "projects": {root: {lang: [...]}}}`.
+    /// Empty object when unset.
+    pub fn preprocessors_json(&self) -> String {
+        self.root
+            .get("preprocessors")
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "{}".into())
+    }
+
+    /// Sets (or, with `None`/blank, removes) the save-preprocessor
+    /// command list for a language — one command per line, stored as an
+    /// array — under `preprocessors.projects.<root>` when `root` is
+    /// given, under `preprocessors.defaults` otherwise.
+    pub fn set_preprocessor_entry(
+        &mut self,
+        root: Option<&str>,
+        language: &str,
+        commands: Option<&str>,
+    ) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let section = ensure_object(top, "preprocessors");
+        let section = match root {
+            Some(root) => ensure_object(ensure_object(section, "projects"), root),
+            None => ensure_object(section, "defaults"),
+        };
+        let lines: Vec<Value> = commands
+            .unwrap_or_default()
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(|line| Value::String(line.into()))
+            .collect();
+        if lines.is_empty() {
+            section.remove(language);
+        } else {
+            section.insert(language.into(), Value::Array(lines));
+        }
+        prune_empty(top, "preprocessors");
+    }
+
+    /// The preprocessor command chain for a language: the project
+    /// entry when the root has one, the defaults entry otherwise.
+    /// A string entry counts as a one-command chain, so hand-written
+    /// configs need no array brackets for the common case.
+    pub fn preprocessor_commands(&self, root: Option<&str>, language: &str) -> Vec<String> {
+        let section = self.root.get("preprocessors");
+        let commands_in = |table: Option<&Value>| -> Option<Vec<String>> {
+            let entry = table?.get(language)?;
+            match entry {
+                Value::String(command) => Some(vec![command.clone()]),
+                Value::Array(items) => Some(
+                    items
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect(),
+                ),
+                _ => None,
+            }
+        };
+        root.and_then(|root| {
+            commands_in(section.and_then(|s| s.get("projects")).and_then(|p| p.get(root)))
+        })
+        .or_else(|| commands_in(section.and_then(|s| s.get("defaults"))))
+        .unwrap_or_default()
+    }
+
+    /// The prose spell-check language (`editor.spell`): a spelling
+    /// identifier like "en_US", `"auto"` for automatic detection, or
+    /// `None` when spell checking is off (the default).
+    pub fn spell_language(&self) -> Option<String> {
+        self.editor()
+            .get("spell")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+    }
+
+    pub fn set_spell_language(&mut self, language: Option<&str>) {
+        match language.map(str::trim).filter(|s| !s.is_empty()) {
+            Some(language) => {
+                self.editor_mut()
+                    .insert("spell".into(), Value::String(language.into()));
+            }
+            None => {
+                self.editor_mut().remove("spell");
+            }
+        }
+    }
+
     /// Whether the editor shows a line-number gutter
     /// (`editor.line_numbers`, default true).
     /// The chosen theme name (a built-in or a user theme file's name);
@@ -564,6 +659,65 @@ mod tests {
         let (weird, warning) = Config::load(&path);
         assert!(warning.is_none());
         assert_eq!(weird.appearance(), Appearance::System);
+    }
+
+    #[test]
+    fn preprocessors_round_trip_and_resolution() {
+        let path = temp_path("preprocessors.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.preprocessors_json(), "{}");
+        assert!(config.preprocessor_commands(None, "python").is_empty());
+
+        config.set_preprocessor_entry(None, "python", Some("ruff check --fix -\nblack -"));
+        config.set_preprocessor_entry(Some("/work/projA"), "python", Some("black -"));
+        config.save().unwrap();
+
+        let (reloaded, _) = Config::load(&path);
+        assert_eq!(
+            reloaded.preprocessor_commands(None, "python"),
+            vec!["ruff check --fix -", "black -"]
+        );
+        // The project entry replaces the defaults, not appends to them.
+        assert_eq!(
+            reloaded.preprocessor_commands(Some("/work/projA"), "python"),
+            vec!["black -"]
+        );
+        // A root without its own entry falls back to the defaults.
+        assert_eq!(
+            reloaded.preprocessor_commands(Some("/elsewhere"), "python"),
+            vec!["ruff check --fix -", "black -"]
+        );
+
+        // A hand-written plain string counts as a one-command chain.
+        let mut by_hand = reloaded;
+        by_hand
+            .root
+            .as_object_mut()
+            .unwrap()
+            .insert(
+                "preprocessors".into(),
+                serde_json::json!({"defaults": {"go": "gofmt"}}),
+            );
+        assert_eq!(by_hand.preprocessor_commands(None, "go"), vec!["gofmt"]);
+
+        // Blank removes; empty sections prune away.
+        let (mut config, _) = Config::load(&path);
+        config.set_preprocessor_entry(None, "python", None);
+        config.set_preprocessor_entry(Some("/work/projA"), "python", Some("  "));
+        assert_eq!(config.preprocessors_json(), "{}");
+    }
+
+    #[test]
+    fn spell_language_round_trip() {
+        let path = temp_path("spell.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.spell_language(), None);
+        config.set_spell_language(Some("es_ES"));
+        config.save().unwrap();
+        let (mut reloaded, _) = Config::load(&path);
+        assert_eq!(reloaded.spell_language().as_deref(), Some("es_ES"));
+        reloaded.set_spell_language(None);
+        assert_eq!(reloaded.spell_language(), None);
     }
 
     #[test]

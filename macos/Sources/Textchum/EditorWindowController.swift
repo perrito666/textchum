@@ -40,6 +40,8 @@ struct SidebarConfiguration {
     /// The configuration's current `workspace` section, for flags the
     /// editor resolves itself (the ctags fallback).
     var workspaceSettingsJSON: () -> String = { "{}" }
+    /// The resolved save-preprocessor chain for (project root, language).
+    var preprocessorCommands: (String?, String) -> [String] = { _, _ in [] }
     let selectDocument: (ObjectIdentifier) -> Void
     let openFile: (String) -> Void
     /// Moves the given documents' windows into a window of their own…
@@ -125,6 +127,8 @@ final class EditorWindowController: NSWindowController {
     private let resolveProjectRoot: (String) -> String?
     /// The configuration's live `workspace` section, for flag lookups.
     private let workspaceSettingsJSON: () -> String
+    /// The resolved save-preprocessor chain from the app's configuration.
+    private let preprocessorCommands: (String?, String) -> [String]
     /// Where Save As should start for this (untitled) document: the
     /// folder of the file that was frontmost when it was created — the
     /// user was probably adding a file to that project.
@@ -143,6 +147,7 @@ final class EditorWindowController: NSWindowController {
         self.resolveProjectRoot =
             sidebar?.resolveProjectRoot ?? { CoreWorkspace.projectRoot(forPath: $0) }
         self.workspaceSettingsJSON = sidebar?.workspaceSettingsJSON ?? { "{}" }
+        self.preprocessorCommands = sidebar?.preprocessorCommands ?? { _, _ in [] }
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 480),
@@ -984,10 +989,98 @@ final class EditorWindowController: NSWindowController {
     func refreshDecorations() {
         applyHighlights()
         renderDiagnostics()
+        scheduleSpellCheck()
+    }
+
+    // MARK: Spell check (prose only)
+
+    /// Ranges the last spell pass flagged, painted with the overlays.
+    private var spellingRanges: [NSRange] = []
+    private var spellTimer: Timer?
+
+    /// The configured spelling language ("auto", "en_US", …; nil = off),
+    /// set from `apply(settings:)`.
+    private var appliedSpellLanguage: String?
+
+    /// Applies the settings' choice and re-checks (or clears the marks).
+    func applySpellLanguage(_ language: String?) {
+        guard language != appliedSpellLanguage else { return }
+        appliedSpellLanguage = language
+        if language == nil {
+            spellTimer?.invalidate()
+            if !spellingRanges.isEmpty {
+                spellingRanges = []
+                renderDiagnostics()
+            }
+        } else {
+            scheduleSpellCheck()
+        }
+    }
+
+    /// Debounced pass so typing does not spell-check every keystroke.
+    private func scheduleSpellCheck() {
+        guard appliedSpellLanguage != nil else { return }
+        spellTimer?.invalidate()
+        spellTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.runSpellPass() }
+            }
+        }
+    }
+
+    /// Where prose lives in this document: everywhere for languages
+    /// that are prose (markdown, git commits, plain text), only inside
+    /// comments for code — spell checking identifiers helps no one.
+    private func proseRanges(in text: NSString) -> [NSRange] {
+        let language = coreDocument.languageName
+        if language == nil || language == "markdown" || language == "gitcommit" {
+            return [NSRange(location: 0, length: text.length)]
+        }
+        guard text.length <= Self.highlightSizeCap else { return [] }
+        // Style index 1 is the canonical comment capture (theme contract).
+        return coreDocument.highlights(in: NSRange(location: 0, length: text.length))
+            .filter { $0.styleIndex == 1 }
+            .map(\.range)
+    }
+
+    private func runSpellPass() {
+        guard let textView, let language = appliedSpellLanguage else { return }
+        let checker = NSSpellChecker.shared
+        if language == "auto" {
+            checker.automaticallyIdentifiesLanguages = true
+        } else {
+            checker.automaticallyIdentifiesLanguages = false
+            checker.setLanguage(language)
+        }
+        let text = textView.string as NSString
+        var found: [NSRange] = []
+        for range in proseRanges(in: text) where range.length > 0 {
+            let segment = text.substring(with: range)
+            var offset = 0
+            while offset < range.length {
+                let miss = checker.checkSpelling(
+                    of: segment,
+                    startingAt: offset,
+                    language: language == "auto" ? nil : language,
+                    wrap: false,
+                    inSpellDocumentWithTag: 0,
+                    wordCount: nil
+                )
+                guard miss.location != NSNotFound, miss.length > 0 else { break }
+                found.append(NSRange(location: range.location + miss.location, length: miss.length))
+                offset = NSMaxRange(miss)
+            }
+        }
+        if found != spellingRanges {
+            spellingRanges = found
+            renderDiagnostics()
+        }
     }
 
     /// Marks each finding with a tinted background: red for errors,
-    /// orange for warnings, blue otherwise.
+    /// orange for warnings, blue otherwise — and each misspelling from
+    /// the prose spell pass in purple, so the two never read as one.
     private func renderDiagnostics() {
         guard let textView, let layoutManager = textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager
@@ -996,9 +1089,21 @@ final class EditorWindowController: NSWindowController {
         layoutManager.removeRenderingAttribute(.underlineStyle, for: documentRange)
         layoutManager.removeRenderingAttribute(.underlineColor, for: documentRange)
         layoutManager.removeRenderingAttribute(.backgroundColor, for: documentRange)
-        guard !diagnostics.isEmpty else { return }
 
         let text = textView.string as NSString
+        for spelling in spellingRanges {
+            guard NSMaxRange(spelling) <= text.length,
+                let start = contentManager.location(
+                    documentRange.location, offsetBy: spelling.location),
+                let end = contentManager.location(start, offsetBy: spelling.length),
+                let textRange = NSTextRange(location: start, end: end)
+            else { continue }
+            layoutManager.addRenderingAttribute(
+                .backgroundColor,
+                value: NSColor.systemPurple.withAlphaComponent(0.18), for: textRange)
+        }
+        guard !diagnostics.isEmpty else { return }
+
         for diagnostic in diagnostics {
             guard let range = nsRange(of: diagnostic, in: text) else { continue }
             guard
@@ -1219,6 +1324,7 @@ final class EditorWindowController: NSWindowController {
     func apply(settings: EditorSettings) {
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
+        applySpellLanguage(settings.spellLanguage)
         if !settings.hoverDocs {
             hoverTimer?.invalidate()
             hoverPopover?.close()
@@ -1495,6 +1601,100 @@ final class EditorWindowController: NSWindowController {
         moveCaret(to: NSMaxRange(block))
     }
 
+    // MARK: Save preprocessors
+
+    /// What running the configured chain over the buffer produced.
+    private enum PreprocessOutcome {
+        case clean
+        case failed(Preprocessors.Failure)
+    }
+
+    /// Runs the configured save-preprocessor chain (ruff, black, gofmt,
+    /// prettier…) over the buffer and applies the result through the
+    /// normal text-view path — the core stays synchronized and undo
+    /// works. No chain configured counts as clean.
+    private func preprocessBuffer() -> PreprocessOutcome {
+        guard let textView, let language = coreDocument.languageName else { return .clean }
+        let commands = preprocessorCommands(projectRoot, language)
+        guard !commands.isEmpty else { return .clean }
+        switch Preprocessors.run(commands: commands, on: textView.string, in: projectRoot) {
+        case .success(let output):
+            applyWholeDocument(output)
+            return .clean
+        case .failure(let failure):
+            return .failed(failure)
+        }
+    }
+
+    /// Replaces the buffer with `new` as one minimal edit: the common
+    /// prefix and suffix stay untouched, so the caret and scroll
+    /// position survive a formatter that only changed a few lines.
+    private func applyWholeDocument(_ new: String) {
+        guard let textView else { return }
+        let old = textView.string
+        guard new != old else { return }
+        let oldChars = Array(old.utf16)
+        let newChars = Array(new.utf16)
+        var prefix = 0
+        while prefix < min(oldChars.count, newChars.count),
+            oldChars[prefix] == newChars[prefix]
+        {
+            prefix += 1
+        }
+        var suffix = 0
+        while suffix < min(oldChars.count, newChars.count) - prefix,
+            oldChars[oldChars.count - 1 - suffix] == newChars[newChars.count - 1 - suffix]
+        {
+            suffix += 1
+        }
+        // Never split a surrogate pair at either boundary.
+        if prefix > 0, prefix < oldChars.count, UTF16.isTrailSurrogate(oldChars[prefix]) {
+            prefix -= 1
+        }
+        if suffix > 0, suffix < newChars.count,
+            UTF16.isLeadSurrogate(newChars[newChars.count - suffix])
+        {
+            suffix -= 1
+        }
+        let range = NSRange(location: prefix, length: oldChars.count - prefix - suffix)
+        let replacement = String(
+            decoding: newChars[prefix..<(newChars.count - suffix)], as: UTF16.self)
+        textView.insertText(replacement, replacementRange: range)
+    }
+
+    /// Edit → Run Save Preprocessors: format the buffer through the
+    /// configured chain without saving.
+    @objc func runPreprocessors(_ sender: Any?) {
+        guard let language = coreDocument.languageName,
+            !preprocessorCommands(projectRoot, language).isEmpty
+        else {
+            NSSound.beep()
+            return
+        }
+        if case .failed(let failure) = preprocessBuffer() {
+            presentError(
+                "Preprocessor failed: \(failure.command)", details: failure.details)
+        }
+    }
+
+    /// The pre-save half of the flow: runs the chain, and on failure
+    /// lets the user choose between saving the unprocessed buffer and
+    /// not saving at all. Returns whether the save should proceed.
+    private func preprocessBeforeSave() -> Bool {
+        switch preprocessBuffer() {
+        case .clean:
+            return true
+        case .failed(let failure):
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Save preprocessor failed: \(failure.command)"
+            alert.informativeText = failure.details
+            alert.addButton(withTitle: "Save Without Preprocessing")
+            alert.addButton(withTitle: "Cancel")
+            return alert.runModal() == .alertFirstButtonReturn
+        }
+    }
+
     // MARK: Saving
 
     /// Saves, asking for a location if the document has none. Returns
@@ -1502,6 +1702,7 @@ final class EditorWindowController: NSWindowController {
     @discardableResult
     func saveInteractively() -> Bool {
         guard coreDocument.path != nil else { return saveAsInteractively() }
+        guard preprocessBeforeSave() else { return false }
         do {
             try coreDocument.save()
             noteOwnSave()
@@ -1532,6 +1733,7 @@ final class EditorWindowController: NSWindowController {
         panel.nameFieldStringValue =
             coreDocument.path.map { ($0 as NSString).lastPathComponent } ?? untitledName
         guard panel.runModal() == .OK, let url = panel.url else { return false }
+        guard preprocessBeforeSave() else { return false }
         do {
             try coreDocument.save(to: url.path)
             noteOwnSave()

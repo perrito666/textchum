@@ -169,6 +169,61 @@ Dans le fichier, tout cela vit dans une section `workspace` :
 }
 ```
 
+## Préprocesseurs de sauvegarde
+
+Les formateurs et correcteurs peuvent s'exécuter automatiquement avant
+chaque sauvegarde, par langage — pour tous les projets ou pour une
+racine précise, exactement comme les serveurs de langage. Chaque entrée
+est une chaîne : une commande par ligne, dans l'ordre, où chaque
+commande lit le document sur l'entrée standard et réécrit le document
+entier sur la sortie standard (la convention `-` que suivent presque
+tous les formateurs). Si un maillon échoue — code de sortie non nul,
+sortie vide, ou plus de dix secondes sans répondre — rien n'est
+appliqué, l'erreur (avec le stderr de l'outil) s'affiche, et la
+sauvegarde demande s'il faut continuer sans traitement.
+
+```json
+{
+  "preprocessors": {
+    "defaults": {
+      "python": ["ruff check --fix -", "black -"],
+      "go": ["gofmt"]
+    },
+    "projects": {
+      "/work/site": { "javascript": ["prettier --stdin-filepath x.js"] }
+    }
+  }
+}
+```
+
+Une entrée de projet remplace la chaîne par défaut pour ce langage,
+elle ne s'y ajoute jamais. La fenêtre Réglages édite cette même section
+sous Serveurs de langage, et **Édition ▸ Lancer les préprocesseurs**
+(⌃⌥⌘F, nom d'action `runPreprocessors`) lance la chaîne à la demande
+sans sauvegarder — formater avec vos outils plutôt qu'avec le
+formateur du serveur. Le résultat arrive en une seule édition, donc ⌘Z
+l'annule.
+
+## Correction orthographique
+
+La prose passe par le correcteur du système — les dictionnaires que
+partagent toutes les apps du Mac — restreint à là où la prose vit
+vraiment : les commentaires dans le code, et le document entier en
+Markdown, dans les messages de commit git et le texte brut. Les
+identifiants et les littéraux de chaîne ne sont jamais signalés. Les
+fautes portent une teinte violette, distincte du rouge/orange/bleu des
+diagnostics.
+
+Choisissez la langue dans Réglages ▸ Général ▸ « Spell check prose » —
+Désactivé (le défaut), automatique selon le contenu, ou un dictionnaire
+précis — ou réglez `editor.spell` à la main : `"auto"` ou un
+identifiant comme `"fr"` ou `"en_US"`. Les dictionnaires disponibles
+sont ceux activés dans Réglages Système ▸ Clavier ▸ Saisie de texte.
+
+```json
+{ "editor": { "spell": "auto" } }
+```
+
 ## Raccourcis clavier
 
 Les raccourcis des menus se réassignent via une section `keys` éditée à
@@ -191,6 +246,7 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
 `jumpToDefinition`, `findReferences`, `renameSymbol`, `formatDocument`,
+`runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,

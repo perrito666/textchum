@@ -76,7 +76,14 @@ Ordered roughly by how much daily pain each gap causes.
 14. **Recent files.** No recent-documents menu.
 15. **Window subtitle detail.** macOS shows encoding · size · language
     · problems; Linux shows language · problems.
-16. **Packaging.** No `.desktop` file, no icon, no Flatpak, no release
+16. **Save preprocessors.** The `preprocessors` config section (chains
+    of stdin→stdout formatters, defaults + per-root) is macOS-only:
+    the resolution lives in the shared core, so Linux needs only the
+    process-spawning half and a Run Save Preprocessors action.
+17. **Prose spell check.** macOS scopes the system checker to comments
+    and prose documents (`editor.spell`). GTK land would use
+    libspelling/enchant over the same comment-span logic.
+18. **Packaging.** No `.desktop` file, no icon, no Flatpak, no release
     artifact — the only install is `make linux` from a checkout.
 
 ## Behavioral differences that are choices, not gaps
@@ -105,5 +112,5 @@ Ordered roughly by how much daily pain each gap causes.
 
 File watching (1) and session restore (2) make it trustworthy; keys
 (3), jump stack (4), and LSP breadth (5) make it comfortable; the rest
-is polish in whatever order irritation dictates. Packaging (16) last —
+is polish in whatever order irritation dictates. Packaging (18) last —
 ship it to more people only once it deserves them.

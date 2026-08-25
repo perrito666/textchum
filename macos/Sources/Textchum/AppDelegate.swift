@@ -157,6 +157,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         }
                         return
                     }
+                    if allArguments[flagIndex + 1] == "preprocess" {
+                        // Exercise the save-preprocessor chain end to
+                        // end on the named document: save through the
+                        // same path a user's ⌘S takes. The path-suffix
+                        // argument picks the window, so an untitled or
+                        // restored one can never soak up the save.
+                        let suffix = scope
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                let target = self?.editors.first {
+                                    $0.coreDocument.path?.hasSuffix(suffix) == true
+                                }
+                                _ = target?.saveInteractively()
+                            }
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "paths" {
                         self?.togglePathDisplay(nil)
                         return
@@ -512,6 +529,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.findReferences(_:)): "findReferences",
             #selector(EditorWindowController.renameSymbol(_:)): "renameSymbol",
             #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
+            #selector(EditorWindowController.runPreprocessors(_:)): "runPreprocessors",
             #selector(EditorWindowController.goToBlockStart(_:)): "goToBlockStart",
             #selector(EditorWindowController.goToBlockEnd(_:)): "goToBlockEnd",
             #selector(EditorWindowController.triggerCompletion(_:)): "complete",
@@ -864,6 +882,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     forPath: path, settingsJSON: self?.config?.workspaceJSON ?? "{}")
             },
             workspaceSettingsJSON: { [weak self] in self?.config?.workspaceJSON ?? "{}" },
+            preprocessorCommands: { [weak self] root, language in
+                self?.config?.preprocessorCommands(root: root, language: language) ?? []
+            },
             selectDocument: { [weak self] id in
                 guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
                 else { return }
@@ -1353,6 +1374,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         format.keyEquivalentModifierMask = [.command, .option, .shift]
         editMenu.addItem(format)
+        let preprocess = NSMenuItem(
+            title: "Run Save Preprocessors",
+            action: #selector(EditorWindowController.runPreprocessors(_:)),
+            keyEquivalent: "f"
+        )
+        preprocess.keyEquivalentModifierMask = [.command, .option, .control]
+        editMenu.addItem(preprocess)
         let blockStart = NSMenuItem(
             title: "Go to Block Start",
             action: #selector(EditorWindowController.goToBlockStart(_:)),

@@ -158,6 +158,58 @@ In the file, these live in a `workspace` section:
 }
 ```
 
+## Save preprocessors
+
+Formatters and fixers can run automatically before every save, per
+language — for every project or for one root, exactly like language
+servers. Each entry is a chain: one command per line, run in order,
+where every command reads the document on standard input and writes
+the whole document back on standard output (the `-` convention most
+formatters follow). If a link in the chain fails — non-zero exit,
+empty output, or a hang past ten seconds — nothing is applied, the
+error (with the tool's stderr) is shown, and the save asks whether to
+proceed unprocessed.
+
+```json
+{
+  "preprocessors": {
+    "defaults": {
+      "python": ["ruff check --fix -", "black -"],
+      "go": ["gofmt"]
+    },
+    "projects": {
+      "/work/site": { "javascript": ["prettier --stdin-filepath x.js"] }
+    }
+  }
+}
+```
+
+A project entry replaces the default chain for that language, never
+appends to it. The Settings window edits the same section under
+Language Servers, and **Edit ▸ Run Save Preprocessors** (⌃⌥⌘F, action
+name `runPreprocessors`) runs the chain on demand without saving —
+formatting through your tools instead of the language server's
+formatter. The result lands as one edit, so ⌘Z undoes it.
+
+## Spell checking
+
+Prose gets the system spell checker — the same dictionaries every Mac
+app shares — scoped to where prose actually lives: comments in code,
+and the whole document in Markdown, git commit messages, and plain
+text. Identifiers and string literals are never flagged. Misspellings
+carry a purple tint, distinct from the red/orange/blue of diagnostics.
+
+Pick the language in Settings ▸ General ▸ "Spell check prose" — Off
+(the default), Automatic by content, or a specific dictionary — or set
+`editor.spell` by hand: `"auto"` or a spelling identifier like
+`"en_US"` or `"es"`. The dictionaries available are the ones enabled
+in System Settings ▸ Keyboard ▸ Text Input (macOS ships dozens; add
+more there and they appear in the picker).
+
+```json
+{ "editor": { "spell": "auto" } }
+```
+
 ## Key shortcuts
 
 Menu shortcuts are rebindable through a hand-edited `keys` section (no
@@ -179,7 +231,8 @@ Modifiers: `cmd`, `shift`, `alt`, `ctrl`. Keys: a character, or
 Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `undo`, `redo`, `find`, `findAndReplace`, `findNext`, `findPrevious`,
 `useSelectionForFind`, `findInProject`, `jumpToDefinition`,
-`findReferences`, `renameSymbol`, `formatDocument`, `documentOutline`,
+`findReferences`, `renameSymbol`, `formatDocument`, `runPreprocessors`,
+`documentOutline`,
 `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
 `toggleLineNumbers`, `toggleHover`, `showHover`, `togglePathDisplay`,

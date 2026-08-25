@@ -9,6 +9,7 @@ struct EditorSettings {
     let tabWidth: Int
     let lineNumbers: Bool
     let hoverDocs: Bool
+    let spellLanguage: String?
 
     /// Resolves configuration values into a usable font: the configured
     /// family if it exists on this system, the platform monospaced font
@@ -23,6 +24,7 @@ struct EditorSettings {
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
+        self.spellLanguage = config.spellLanguage
     }
 }
 
@@ -78,6 +80,10 @@ final class SettingsModel: ObservableObject {
     }
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
+    }
+    /// Prose spell-check choice: "" = off, "auto", or a language code.
+    @Published var spellLanguage: String {
+        didSet { persist { $0.spellLanguage = spellLanguage.isEmpty ? nil : spellLanguage } }
     }
     @Published private(set) var lspEntries: [LSPEntry] = []
 
@@ -137,9 +143,11 @@ final class SettingsModel: ObservableObject {
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
+        self.spellLanguage = config.spellLanguage ?? ""
         self.isLoading = false
         reloadLSPEntries()
         reloadWorkspaceEntries()
+        reloadPreprocessorEntries()
     }
 
     // MARK: Workspace behavior
@@ -274,6 +282,92 @@ final class SettingsModel: ObservableObject {
         onChange?()
     }
 
+    // MARK: Save preprocessors
+
+    /// One preprocessor row: a language's command chain, one command
+    /// per line, for every project (empty scope) or one root.
+    struct PreprocessorEntry: Identifiable, Equatable {
+        let scope: String
+        let language: String
+        /// Newline-joined for the multi-line editor.
+        let commands: String
+
+        var id: String { "\(scope)|\(language)" }
+        var scopeLabel: String {
+            scope.isEmpty ? "Default" : (scope as NSString).lastPathComponent
+        }
+    }
+
+    @Published private(set) var preprocessorEntries: [PreprocessorEntry] = []
+
+    private func reloadPreprocessorEntries() {
+        var entries: [PreprocessorEntry] = []
+        func commandLines(_ raw: Any?) -> String? {
+            if let one = raw as? String { return one }
+            if let many = raw as? [String] { return many.joined(separator: "\n") }
+            return nil
+        }
+        if let data = config.preprocessorsJSON.data(using: .utf8),
+            let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        {
+            for (language, raw) in parsed["defaults"] as? [String: Any] ?? [:] {
+                guard let commands = commandLines(raw) else { continue }
+                entries.append(
+                    PreprocessorEntry(scope: "", language: language, commands: commands))
+            }
+            for (root, languages) in parsed["projects"] as? [String: [String: Any]] ?? [:] {
+                for (language, raw) in languages {
+                    guard let commands = commandLines(raw) else { continue }
+                    entries.append(
+                        PreprocessorEntry(scope: root, language: language, commands: commands))
+                }
+            }
+        }
+        preprocessorEntries = entries.sorted { ($0.scope, $0.language) < ($1.scope, $1.language) }
+    }
+
+    func addPreprocessorEntry(scope: String, language: String, commands: String) {
+        let language = language.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !language.isEmpty,
+            !commands.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        config.setPreprocessorEntry(
+            root: scope.isEmpty ? nil : (scope as NSString).expandingTildeInPath,
+            language: language,
+            commands: commands
+        )
+        persistPreprocessorChange()
+    }
+
+    func updatePreprocessorEntry(_ entry: PreprocessorEntry, commands: String) {
+        guard !commands.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        config.setPreprocessorEntry(
+            root: entry.scope.isEmpty ? nil : entry.scope,
+            language: entry.language,
+            commands: commands
+        )
+        persistPreprocessorChange()
+    }
+
+    func removePreprocessorEntry(_ entry: PreprocessorEntry) {
+        config.setPreprocessorEntry(
+            root: entry.scope.isEmpty ? nil : entry.scope,
+            language: entry.language,
+            commands: nil
+        )
+        persistPreprocessorChange()
+    }
+
+    private func persistPreprocessorChange() {
+        do {
+            try config.save()
+        } catch {
+            NSLog("could not save configuration: \(error)")
+        }
+        reloadPreprocessorEntries()
+        onChange?()
+    }
+
     var lspJSON: String { config.lspJSON }
 
     private func persist(_ apply: (CoreConfig) -> Void) {
@@ -353,6 +447,18 @@ private struct GeneralSettingsTab: View {
             }
             Toggle("Show line numbers", isOn: $model.lineNumbers)
             Toggle("Hover documentation", isOn: $model.hoverDocs)
+            Picker("Spell check prose", selection: $model.spellLanguage) {
+                Text("Off").tag("")
+                Text("Automatic by content").tag("auto")
+                Divider()
+                ForEach(NSSpellChecker.shared.availableLanguages, id: \.self) { language in
+                    Text(Locale.current.localizedString(forIdentifier: language) ?? language)
+                        .tag(language)
+                }
+            }
+            Text("Checks comments in code, and everything in Markdown, git commit messages, and plain text.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 20)
@@ -501,6 +607,9 @@ private struct LanguageServersTab: View {
     @State private var newScope = ""
     @State private var newLanguage = ""
     @State private var newCommand = ""
+    @State private var newPreprocessorScope = ""
+    @State private var newPreprocessorLanguage = ""
+    @State private var newPreprocessorCommands = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -581,9 +690,119 @@ private struct LanguageServersTab: View {
                     model.onRestartServers?()
                 }
             }
+
+            Divider()
+
+            Text(
+                "Save preprocessors run before every save (and on Run Save Preprocessors), "
+                    + "one command per line in order — each reads the document on standard "
+                    + "input and writes it back on standard output, like `ruff check --fix -` "
+                    + "then `black -`. A project entry replaces the default chain."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            List {
+                if model.preprocessorEntries.isEmpty {
+                    Text("No preprocessors — documents save exactly as typed.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.preprocessorEntries) { entry in
+                    HStack(alignment: .top, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(entry.scopeLabel)
+                                    .fontWeight(.semibold)
+                                Text(entry.language)
+                                    .foregroundStyle(.secondary)
+                            }
+                            CommandsField(entry: entry) { commands in
+                                model.updatePreprocessorEntry(entry, commands: commands)
+                            }
+                        }
+                        .help(entry.scope.isEmpty ? "All projects" : entry.scope)
+                        Spacer()
+                        Button {
+                            model.removePreprocessorEntry(entry)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+            .frame(minHeight: 110)
+
+            GroupBox("Add preprocessor chain") {
+                VStack(spacing: 8) {
+                    PathPicker(
+                        text: $newPreprocessorScope,
+                        placeholder: "Project root (empty = default for all projects)")
+                    HStack(alignment: .top, spacing: 8) {
+                        TextField("Language (e.g. python)", text: $newPreprocessorLanguage)
+                            .frame(width: 180)
+                        TextField(
+                            "Commands, one per line (e.g. black -)",
+                            text: $newPreprocessorCommands, axis: .vertical)
+                            .lineLimit(1...4)
+                            .font(.system(.caption, design: .monospaced))
+                        Button("Add") {
+                            model.addPreprocessorEntry(
+                                scope: newPreprocessorScope,
+                                language: newPreprocessorLanguage,
+                                commands: newPreprocessorCommands)
+                            newPreprocessorScope = ""
+                            newPreprocessorLanguage = ""
+                            newPreprocessorCommands = ""
+                        }
+                        .disabled(newPreprocessorLanguage.isEmpty || newPreprocessorCommands.isEmpty)
+                    }
+                }
+                .textFieldStyle(.roundedBorder)
+                .padding(6)
+            }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
+    }
+}
+
+/// A preprocessor chain, editable in place — one command per line.
+/// Commits when focus leaves; an emptied field reverts (removal has
+/// its own button).
+private struct CommandsField: View {
+    let entry: SettingsModel.PreprocessorEntry
+    let commit: (String) -> Void
+    @State private var text: String
+    @FocusState private var focused: Bool
+
+    init(entry: SettingsModel.PreprocessorEntry, commit: @escaping (String) -> Void) {
+        self.entry = entry
+        self.commit = commit
+        _text = State(initialValue: entry.commands)
+    }
+
+    var body: some View {
+        TextField("commands, one per line", text: $text, axis: .vertical)
+            .lineLimit(1...6)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(.caption, design: .monospaced))
+            .focused($focused)
+            .onChange(of: focused) { _, isFocused in
+                if !isFocused { commitIfChanged() }
+            }
+            .onDisappear(perform: commitIfChanged)
+    }
+
+    private func commitIfChanged() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            text = entry.commands
+            return
+        }
+        guard trimmed != entry.commands else { return }
+        commit(trimmed)
     }
 }
 

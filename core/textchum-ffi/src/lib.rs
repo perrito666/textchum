@@ -1897,6 +1897,124 @@ pub unsafe extern "C" fn tc_config_set_lsp_entry(
     );
 }
 
+/// The configuration's `preprocessors` section, serialized (`{}` when
+/// unset): `{"defaults": {lang: [cmd, ...]}, "projects": {root: {...}}}`.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_preprocessors_json(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    owned_c_string(config.inner.preprocessors_json())
+}
+
+/// Sets (or removes, with `commands_len == 0`) the save-preprocessor
+/// chain for a language — newline-separated command lines — scoped to a
+/// project root when `root_len > 0`, the defaults otherwise.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_preprocessor_entry(
+    config: *mut TcConfig,
+    root: *const c_char,
+    root_len: usize,
+    language: *const c_char,
+    language_len: usize,
+    commands: *const c_char,
+    commands_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let (root, language, commands) = unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(language, language_len),
+            str_from_raw(commands, commands_len),
+        )
+    };
+    let (Some(root), Some(language), Some(commands)) = (root, language, commands) else {
+        return;
+    };
+    config.inner.set_preprocessor_entry(
+        (!root.is_empty()).then_some(root),
+        language,
+        (!commands.is_empty()).then_some(commands),
+    );
+}
+
+/// The resolved preprocessor chain for a language under a project root
+/// (the defaults when `root_len == 0` or the root has no entry), as
+/// newline-separated command lines — empty when none configured.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_preprocessor_commands(
+    config: *const TcConfig,
+    root: *const c_char,
+    root_len: usize,
+    language: *const c_char,
+    language_len: usize,
+) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    let (root, language) = unsafe {
+        (str_from_raw(root, root_len), str_from_raw(language, language_len))
+    };
+    let (Some(root), Some(language)) = (root, language) else {
+        return std::ptr::null_mut();
+    };
+    let commands = config
+        .inner
+        .preprocessor_commands((!root.is_empty()).then_some(root), language);
+    owned_c_string(commands.join("\n"))
+}
+
+/// The prose spell-check language (`editor.spell`): a spelling
+/// identifier, `"auto"`, or empty when spell checking is off.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_spell_language(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    owned_c_string(config.inner.spell_language().unwrap_or_default())
+}
+
+/// Sets (or removes, with `language_len == 0`) the spell-check language.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; the pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_spell_language(
+    config: *mut TcConfig,
+    language: *const c_char,
+    language_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(language) = (unsafe { str_from_raw(language, language_len) }) else {
+        return;
+    };
+    config
+        .inner
+        .set_spell_language((!language.is_empty()).then_some(language));
+}
+
 /// Applies a server configuration (the JSON from [`tc_config_lsp_json`])
 /// to the pool. Takes effect for instances spawned afterwards and clears
 /// the missing-server memory.

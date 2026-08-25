@@ -1,4 +1,5 @@
 site_name: Textchum
+site_url: https://perrito666.github.io/textchum/
 site_description: A fast, native text editor for macOS with a portable compiled core.
 repo_url: https://github.com/perrito666/textchum
 repo_name: perrito666/textchum
@@ -49,6 +50,7 @@ plugins:
             Highlighting: Coloreado
             Markdown: Markdown
             Language servers: Servidores de lenguaje
+            Language setups: Recetas por lenguaje
             The navigator: El navegador
             Configuration: Configuración
             The C boundary: La frontera C
@@ -64,6 +66,7 @@ plugins:
             Highlighting: Coloration
             Markdown: Markdown
             Language servers: Serveurs de langage
+            Language setups: Recettes par langage
             The navigator: Le navigateur
             Configuration: Configuration
             The C boundary: La frontière C
@@ -77,6 +80,7 @@ nav:
   - Highlighting: highlighting.md
   - Markdown: markdown.md
   - Language servers: language-servers.md
+  - Language setups: language-setups.md
   - The navigator: navigator.md
   - Configuration: configuration.md
   - The C boundary: ffi.md
