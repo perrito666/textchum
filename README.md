@@ -1,5 +1,9 @@
 # Textchum
 
+[![Documentation](https://img.shields.io/badge/docs-perrito666.github.io%2Ftextchum-14b8a6)](https://perrito666.github.io/textchum/)
+[![Latest release](https://img.shields.io/github/v/release/perrito666/textchum)](https://github.com/perrito666/textchum/releases/latest)
+[![CI](https://github.com/perrito666/textchum/actions/workflows/ci.yml/badge.svg)](https://github.com/perrito666/textchum/actions/workflows/ci.yml)
+
 A text editor in the spirit of TextMate: native, fast, and focused on
 **editing and validating a vast range of file types** — not on being an
 IDE.
