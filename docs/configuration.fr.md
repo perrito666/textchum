@@ -190,11 +190,17 @@ sauvegarde demande s'il faut continuer sans traitement.
       "go": ["gofmt"]
     },
     "projects": {
-      "/work/site": { "javascript": ["prettier --stdin-filepath x.js"] }
+      "/work/site": { "javascript": ["prettier --stdin-filepath {filename}"] }
     }
   }
 }
 ```
+
+`{path}` et `{filename}` n'importe où dans une commande se développent
+en le chemin absolu du document et son nom — pour les outils qui lisent
+stdin mais déduisent leur comportement du nom, comme le
+`--stdin-filepath` de Prettier. Un document sans titre offre `Untitled`
+plus l'extension de son langage.
 
 Une entrée de projet remplace la chaîne par défaut pour ce langage,
 elle ne s'y ajoute jamais. La fenêtre Réglages édite cette même section

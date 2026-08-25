@@ -178,11 +178,16 @@ proceed unprocessed.
       "go": ["gofmt"]
     },
     "projects": {
-      "/work/site": { "javascript": ["prettier --stdin-filepath x.js"] }
+      "/work/site": { "javascript": ["prettier --stdin-filepath {filename}"] }
     }
   }
 }
 ```
+
+`{path}` and `{filename}` anywhere in a command expand to the
+document's absolute path and bare name — for tools that read stdin but
+infer their behavior from the name, like Prettier's `--stdin-filepath`.
+An untitled document offers `Untitled` plus its language's extension.
 
 A project entry replaces the default chain for that language, never
 appends to it. The Settings window edits the same section under

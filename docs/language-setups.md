@@ -73,14 +73,14 @@ called plainly:
 npm install -g typescript typescript-language-server prettier
 ```
 
-`typescript-language-server` is the default server. Prettier needs a
-filename hint to pick its parser — any name with the right extension
-works:
+`typescript-language-server` is the default server. Prettier picks
+its parser from the file name, so hand it the document's real one —
+`{filename}` expands to it:
 
 ```json
 {
   "preprocessors": {
-    "defaults": { "javascript": ["prettier --stdin-filepath file.js"] }
+    "defaults": { "javascript": ["prettier --stdin-filepath {filename}"] }
   }
 }
 ```
@@ -127,9 +127,9 @@ and prose spell checking without any setup:
 {
   "preprocessors": {
     "defaults": {
-      "json": ["prettier --stdin-filepath file.json"],
-      "yaml": ["prettier --stdin-filepath file.yaml"],
-      "markdown": ["prettier --stdin-filepath file.md"]
+      "json": ["prettier --stdin-filepath {filename}"],
+      "yaml": ["prettier --stdin-filepath {filename}"],
+      "markdown": ["prettier --stdin-filepath {filename}"]
     }
   }
 }

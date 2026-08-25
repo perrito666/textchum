@@ -19,13 +19,24 @@ enum Preprocessors {
 
     /// Runs `commands` over `text` in order, in `directory` (the
     /// project root, so tools pick up their own config files).
+    /// `{path}` and `{filename}` in a command expand to the document's
+    /// absolute path and bare name — for tools like
+    /// `prettier --stdin-filepath {filename}` that infer behavior from
+    /// the name while still reading stdin.
     /// Blocking — call it off the main thread or accept the stall.
     static func run(
-        commands: [String], on text: String, in directory: String?
+        commands: [String], on text: String, in directory: String?,
+        documentPath: String? = nil
     ) -> Result<String, Failure> {
+        let path = documentPath ?? ""
+        let filename = (path as NSString).lastPathComponent
         var current = text
         for command in commands {
-            let words = split(commandLine: command)
+            let words = split(commandLine: command).map { word in
+                word
+                    .replacingOccurrences(of: "{path}", with: path)
+                    .replacingOccurrences(of: "{filename}", with: filename)
+            }
             guard !words.isEmpty else { continue }
             switch pipe(current, through: words, in: directory) {
             case .success(let output):

@@ -76,13 +76,13 @@ npm install -g typescript typescript-language-server prettier
 ```
 
 `typescript-language-server` es el servidor predeterminado. Prettier
-necesita una pista de nombre de archivo para elegir su parser —
-cualquier nombre con la extensión correcta sirve:
+elige su parser por el nombre del archivo, así que pásale el real —
+`{filename}` se expande a él:
 
 ```json
 {
   "preprocessors": {
-    "defaults": { "javascript": ["prettier --stdin-filepath file.js"] }
+    "defaults": { "javascript": ["prettier --stdin-filepath {filename}"] }
   }
 }
 ```
@@ -129,9 +129,9 @@ integrada y la corrección ortográfica de prosa sin configurar nada:
 {
   "preprocessors": {
     "defaults": {
-      "json": ["prettier --stdin-filepath file.json"],
-      "yaml": ["prettier --stdin-filepath file.yaml"],
-      "markdown": ["prettier --stdin-filepath file.md"]
+      "json": ["prettier --stdin-filepath {filename}"],
+      "yaml": ["prettier --stdin-filepath {filename}"],
+      "markdown": ["prettier --stdin-filepath {filename}"]
     }
   }
 }

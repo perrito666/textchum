@@ -1617,7 +1617,17 @@ final class EditorWindowController: NSWindowController {
         guard let textView, let language = coreDocument.languageName else { return .clean }
         let commands = preprocessorCommands(projectRoot, language)
         guard !commands.isEmpty else { return .clean }
-        switch Preprocessors.run(commands: commands, on: textView.string, in: projectRoot) {
+        // Untitled documents still offer a name for {filename}: the
+        // language's extension is what stdin-filepath tools care about.
+        let documentPath =
+            coreDocument.path
+            ?? CoreLanguages.all
+            .first { $0.name == language && !$0.fileExtension.isEmpty }
+            .map { "Untitled.\($0.fileExtension)" }
+        switch Preprocessors.run(
+            commands: commands, on: textView.string, in: projectRoot,
+            documentPath: documentPath)
+        {
         case .success(let output):
             applyWholeDocument(output)
             return .clean

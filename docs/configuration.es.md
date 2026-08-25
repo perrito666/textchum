@@ -187,11 +187,17 @@ pregunta si continuar sin procesar.
       "go": ["gofmt"]
     },
     "projects": {
-      "/work/site": { "javascript": ["prettier --stdin-filepath x.js"] }
+      "/work/site": { "javascript": ["prettier --stdin-filepath {filename}"] }
     }
   }
 }
 ```
+
+`{path}` y `{filename}` en cualquier parte de un comando se expanden
+a la ruta absoluta del documento y a su nombre — para herramientas que
+leen stdin pero deducen su comportamiento del nombre, como el
+`--stdin-filepath` de Prettier. Un documento sin título ofrece
+`Untitled` más la extensión de su lenguaje.
 
 Una entrada de proyecto reemplaza la cadena por defecto para ese
 lenguaje, nunca se añade a ella. La ventana de Ajustes edita esta misma

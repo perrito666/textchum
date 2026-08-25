@@ -75,14 +75,14 @@ on l'appelle sans arguments :
 npm install -g typescript typescript-language-server prettier
 ```
 
-`typescript-language-server` est le serveur par défaut. Prettier a
-besoin d'un indice de nom de fichier pour choisir son parseur —
-n'importe quel nom avec la bonne extension convient :
+`typescript-language-server` est le serveur par défaut. Prettier
+choisit son parseur d'après le nom du fichier, donnez-lui donc le vrai —
+`{filename}` se développe en lui :
 
 ```json
 {
   "preprocessors": {
-    "defaults": { "javascript": ["prettier --stdin-filepath file.js"] }
+    "defaults": { "javascript": ["prettier --stdin-filepath {filename}"] }
   }
 }
 ```
@@ -130,9 +130,9 @@ correction orthographique de la prose sans rien configurer :
 {
   "preprocessors": {
     "defaults": {
-      "json": ["prettier --stdin-filepath file.json"],
-      "yaml": ["prettier --stdin-filepath file.yaml"],
-      "markdown": ["prettier --stdin-filepath file.md"]
+      "json": ["prettier --stdin-filepath {filename}"],
+      "yaml": ["prettier --stdin-filepath {filename}"],
+      "markdown": ["prettier --stdin-filepath {filename}"]
     }
   }
 }
