@@ -9,7 +9,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{theme, workspace, Appearance};
+use textchum_core::{workspace, Appearance};
 
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
@@ -28,6 +28,10 @@ pub struct Workbench {
     buffer_signature: RefCell<Vec<(String, bool, bool)>>,
     search_bar: gtk::SearchBar,
     search_entry: gtk::SearchEntry,
+    replace_entry: gtk::Entry,
+    search_case: gtk::ToggleButton,
+    search_regex: gtk::ToggleButton,
+    search_word: gtk::ToggleButton,
     pages: RefCell<Vec<Rc<Page>>>,
     /// The root the sidebar currently shows.
     sidebar_root: RefCell<Option<PathBuf>>,
@@ -115,6 +119,8 @@ impl Workbench {
         edit_section.append(Some("Redo"), Some("win.redo"));
         edit_section.append(Some("Find…"), Some("win.find"));
         edit_section.append(Some("Find in Project…"), Some("win.find-in-project"));
+        edit_section.append(Some("Run Save Preprocessors"), Some("win.preprocess"));
+        edit_section.append(Some("Redraw"), Some("win.redraw"));
         let go_section = gtk::gio::Menu::new();
         go_section.append(Some("Jump to Definition"), Some("win.definition"));
         go_section.append(Some("Go Back"), Some("win.back"));
@@ -123,6 +129,7 @@ impl Workbench {
         go_section.append(Some("Rename Symbol…"), Some("win.rename"));
         go_section.append(Some("Format Document"), Some("win.format"));
         go_section.append(Some("Document Outline…"), Some("win.outline"));
+        go_section.append(Some("Show Documentation for Symbol"), Some("win.hover"));
         go_section.append(Some("Toggle File Tree"), Some("win.sidebar"));
         go_section.append(Some("Toggle Markdown Preview"), Some("win.preview"));
         let app_section = gtk::gio::Menu::new();
@@ -149,8 +156,32 @@ impl Workbench {
 
         let search_entry = gtk::SearchEntry::new();
         search_entry.set_placeholder_text(Some("Find in file…"));
+        search_entry.set_hexpand(true);
+        let search_case = gtk::ToggleButton::with_label("Aa");
+        search_case.set_tooltip_text(Some("Match case"));
+        let search_regex = gtk::ToggleButton::with_label(".*");
+        search_regex.set_tooltip_text(Some("Regular expression"));
+        let search_word = gtk::ToggleButton::with_label("⌊w⌋");
+        search_word.set_tooltip_text(Some("Whole words"));
+        let find_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        find_row.append(&search_entry);
+        find_row.append(&search_case);
+        find_row.append(&search_regex);
+        find_row.append(&search_word);
+        let replace_entry = gtk::Entry::new();
+        replace_entry.set_placeholder_text(Some("Replace with…"));
+        replace_entry.set_hexpand(true);
+        let replace_button = gtk::Button::with_label("Replace");
+        let replace_all_button = gtk::Button::with_label("All");
+        let replace_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        replace_row.append(&replace_entry);
+        replace_row.append(&replace_button);
+        replace_row.append(&replace_all_button);
+        let search_rows = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        search_rows.append(&find_row);
+        search_rows.append(&replace_row);
         let search_bar = gtk::SearchBar::new();
-        search_bar.set_child(Some(&search_entry));
+        search_bar.set_child(Some(&search_rows));
         search_bar.connect_entry(&search_entry);
 
         let content_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -218,6 +249,10 @@ impl Workbench {
             buffer_signature: RefCell::new(Vec::new()),
             search_bar,
             search_entry: search_entry.clone(),
+            replace_entry: replace_entry.clone(),
+            search_case: search_case.clone(),
+            search_regex: search_regex.clone(),
+            search_word: search_word.clone(),
             pages: RefCell::new(Vec::new()),
             sidebar_root: RefCell::new(None),
             jumps: RefCell::new(JumpStack::default()),
@@ -232,6 +267,7 @@ impl Workbench {
                 if let Some(workbench) = workbench.upgrade() {
                     workbench.refresh_chrome();
                     workbench.refresh_sidebar();
+                    workbench.apply_search_options();
                 }
             });
         }
@@ -272,6 +308,46 @@ impl Workbench {
                 }
             });
         }
+        // The find toggles push into the selected page's settings the
+        // moment they change (and page switches re-apply them).
+        for toggle in [&search_case, &search_regex, &search_word] {
+            let workbench = Rc::downgrade(&workbench);
+            toggle.connect_toggled(move |_| {
+                if let Some(workbench) = workbench.upgrade() {
+                    workbench.apply_search_options();
+                }
+            });
+        }
+        {
+            let workbench = Rc::downgrade(&workbench);
+            replace_button.connect_clicked(move |_| {
+                let Some(workbench) = workbench.upgrade() else { return };
+                let Some(page) = workbench.selected() else { return };
+                let replacement = workbench.replace_entry.text();
+                let buffer = &page.buffer;
+                let insert = buffer.iter_at_mark(&buffer.get_insert());
+                if let Some((mut start, mut end, _)) = page.search_context.forward(&insert) {
+                    let _ = page
+                        .search_context
+                        .replace(&mut start, &mut end, &replacement);
+                    buffer.place_cursor(&end);
+                    page.view
+                        .scroll_to_iter(&mut end.clone(), 0.1, false, 0.0, 0.0);
+                }
+            });
+        }
+        {
+            let workbench = Rc::downgrade(&workbench);
+            replace_all_button.connect_clicked(move |_| {
+                let Some(workbench) = workbench.upgrade() else { return };
+                let Some(page) = workbench.selected() else { return };
+                let replacement = workbench.replace_entry.text();
+                match page.search_context.replace_all(&replacement) {
+                    Ok(()) => workbench.toast("Replaced every occurrence."),
+                    Err(error) => workbench.toast(&format!("Replace failed: {error}")),
+                }
+            });
+        }
         install_actions(app, &workbench);
         workbench
     }
@@ -297,6 +373,17 @@ impl Workbench {
             .iter()
             .find(|page| page.path.borrow().as_deref() == Some(path))
             .cloned()
+    }
+
+    /// Pushes the find toggles into the selected page's settings.
+    fn apply_search_options(&self) {
+        let Some(page) = self.selected() else { return };
+        page.search_settings
+            .set_case_sensitive(self.search_case.is_active());
+        page.search_settings
+            .set_regex_enabled(self.search_regex.is_active());
+        page.search_settings
+            .set_at_word_boundaries(self.search_word.is_active());
     }
 
     /// The selected page's position, for the jump stack.
@@ -385,6 +472,7 @@ impl Workbench {
                         .to_string(),
                 ),
                 problems: RefCell::new(String::new()),
+                detail: RefCell::new(String::new()),
             });
             Shell::instance().pages.borrow_mut().insert(path, handles);
         }
@@ -436,9 +524,15 @@ impl Workbench {
         if let Some(tab_page) = self.tab_view.selected_page() {
             tab_page.set_title(&format!("{dirty}{}", page.display_name()));
         }
+        let detail = format!(
+            "{} · {} bytes",
+            state.document.encoding().name(),
+            state.document.len_bytes()
+        );
         drop(state);
         if let Some(path) = page.path.borrow().clone() {
             if let Some(handles) = Shell::instance().pages.borrow().get(&path) {
+                *handles.detail.borrow_mut() = detail;
                 refresh_subtitle(handles);
                 self.rebuild_buffer_list();
                 return;
@@ -633,14 +727,15 @@ pub fn refresh_subtitle(handles: &PageHandles) {
         .selected_page()
         .is_some_and(|selected| selected.as_ptr() == handles.tab_page.as_ptr())
     {
+        let detail = handles.detail.borrow();
         let language = handles.language.borrow();
         let problems = handles.problems.borrow();
-        let subtitle = match (language.is_empty(), problems.is_empty()) {
-            (false, false) => format!("{language} · {problems}"),
-            (false, true) => language.clone(),
-            (true, false) => problems.clone(),
-            (true, true) => String::new(),
-        };
+        let subtitle = [detail.as_str(), language.as_str(), problems.as_str()]
+            .iter()
+            .filter(|half| !half.is_empty())
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(" · ");
         handles.title.set_subtitle(&subtitle);
     }
 }
@@ -803,19 +898,22 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("save", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
-        let saved = page.state.borrow_mut().document.save().is_ok();
-        if saved {
-            if let Some(path) = page.path.borrow().as_deref() {
-                Shell::instance().note_own_save(path);
+        let workbench = Rc::clone(workbench);
+        preprocess_gate(&workbench.clone(), &page, move |workbench, page| {
+            let saved = page.state.borrow_mut().document.save().is_ok();
+            if saved {
+                if let Some(path) = page.path.borrow().as_deref() {
+                    Shell::instance().note_own_save(path);
+                }
+                workbench.refresh_chrome();
+            } else {
+                let _ = gtk::prelude::WidgetExt::activate_action(
+                    &workbench.window,
+                    "win.save-as",
+                    None,
+                );
             }
-            workbench.refresh_chrome();
-        } else {
-            let _ = gtk::prelude::WidgetExt::activate_action(
-                &workbench.window,
-                "win.save-as",
-                None,
-            );
-        }
+        });
     });
     add("save-as", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
@@ -915,6 +1013,28 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
+    });
+    add("redraw", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        page::recolor(&page.buffer);
+        page::apply_highlights(&page.buffer, &page.state.borrow().document);
+    });
+    add("hover", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        page::hover_at_caret(&page);
+    });
+    add("preprocess", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        if preprocessor_chain(&page).is_none() {
+            workbench.toast("No save preprocessors configured for this language.");
+            return;
+        }
+        if let Err(failure) = run_preprocessor_chain(&page) {
+            workbench.toast(&format!(
+                "Preprocessor failed: {} — {}",
+                failure.command, failure.details
+            ));
+        }
     });
     add("revert", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
@@ -1164,6 +1284,70 @@ fn open_definition(workbench: &Rc<Workbench>, json: &str) {
     let line = range["start"]["line"].as_i64().unwrap_or(0) as i32;
     let character = range["start"]["character"].as_u64().unwrap_or(0) as usize;
     workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+}
+
+/// The configured preprocessor chain for a page, if any.
+fn preprocessor_chain(page: &Rc<Page>) -> Option<(Vec<String>, Option<PathBuf>, String)> {
+    let path = page.path.borrow().clone()?;
+    let language = page.state.borrow().document.language_name()?;
+    let root = workspace::project_root_for(Path::new(&path));
+    let root_string = root.as_deref().map(|r| r.to_string_lossy().into_owned());
+    let commands = Shell::instance()
+        .config
+        .borrow()
+        .preprocessor_commands(root_string.as_deref(), language);
+    if commands.is_empty() {
+        return None;
+    }
+    Some((commands, root, path))
+}
+
+/// Runs the chain over the buffer and applies the result as one
+/// minimal edit through the choke point (so the core follows and undo
+/// works). `Ok(())` also covers "no chain configured".
+fn run_preprocessor_chain(page: &Rc<Page>) -> Result<(), crate::preprocessors::Failure> {
+    let Some((commands, root, path)) = preprocessor_chain(page) else {
+        return Ok(());
+    };
+    let text = page.state.borrow().document.text();
+    let output =
+        crate::preprocessors::run(&commands, &text, root.as_deref(), Some(&path))?;
+    page::apply_whole_document(page, &output);
+    Ok(())
+}
+
+/// Runs the chain, then `proceed` — immediately when clean, after the
+/// user chooses "Save Without Preprocessing" when a link failed.
+fn preprocess_gate(
+    workbench: &Rc<Workbench>,
+    page: &Rc<Page>,
+    proceed: impl FnOnce(&Rc<Workbench>, &Rc<Page>) + 'static,
+) {
+    match run_preprocessor_chain(page) {
+        Ok(()) => proceed(workbench, page),
+        Err(failure) => {
+            let dialog = adw::AlertDialog::new(
+                Some(&format!("Save preprocessor failed: {}", failure.command)),
+                Some(&failure.details),
+            );
+            dialog.add_response("cancel", "Cancel");
+            dialog.add_response("save", "Save Without Preprocessing");
+            let parent = workbench.window.clone();
+            let workbench = Rc::clone(workbench);
+            let page = Rc::clone(page);
+            // connect_response takes Fn; the once-only continuation
+            // rides in a RefCell.
+            let proceed = RefCell::new(Some(proceed));
+            dialog.connect_response(None, move |_, response| {
+                if response == "save" {
+                    if let Some(proceed) = proceed.borrow_mut().take() {
+                        proceed(&workbench, &page);
+                    }
+                }
+            });
+            dialog.present(Some(&parent));
+        }
+    }
 }
 
 /// Navigates for Go Back/Forward: same as a jump, minus the trail.
@@ -1780,8 +1964,9 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
 
     let theme_row = adw::ComboRow::new();
     theme_row.set_title("Theme");
-    let names: Vec<&str> = theme::builtin_names().collect();
-    let theme_model = gtk::StringList::new(&names);
+    let names: Vec<String> = crate::shell::theme_names();
+    let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
+    let theme_model = gtk::StringList::new(&name_refs);
     theme_row.set_model(Some(&theme_model));
     let current = shell.config.borrow().theme();
     if let Some(index) = names.iter().position(|name| *name == current) {
@@ -1789,7 +1974,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     {
         let shell = Rc::clone(&shell);
-        let names: Vec<String> = names.iter().map(|s| s.to_string()).collect();
+        let names: Vec<String> = names.clone();
         theme_row.connect_selected_notify(move |row| {
             if let Some(name) = names.get(row.selected() as usize) {
                 shell.config.borrow_mut().set_theme(name);
@@ -1839,6 +2024,18 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
     }
     editor_group.add(&lines_row);
+    let hover_row = adw::SwitchRow::new();
+    hover_row.set_title("Hover documentation");
+    hover_row.set_subtitle("Show server documentation when the mouse rests on a symbol");
+    hover_row.set_active(shell.config.borrow().hover_docs());
+    {
+        let shell = Rc::clone(&shell);
+        hover_row.connect_active_notify(move |row| {
+            shell.config.borrow_mut().set_hover_docs(row.is_active());
+            shell.save_config();
+        });
+    }
+    editor_group.add(&hover_row);
     general.add(&editor_group);
     window.add(&general);
 

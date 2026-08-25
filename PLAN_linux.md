@@ -44,14 +44,15 @@ Ordered roughly by how much daily pain each gap causes.
 4. ~~The jump stack.~~ Done: Go Back (Alt+Left) / Go Forward
    (Alt+Right) with the same clear-forward-on-new-jump contract;
    definitions, search results, and outline picks leave the trail.
-5. **LSP breadth.** References (Shift+F12), Rename (F2), Format
-   (Ctrl+Shift+I), and Document Outline (Ctrl+Shift+O) are in — rename
-   edits open pages in place and rewrites unopened files on disk; the
-   debug log now lands in `~/.local/state/textchum/lsp.log`. Still
-   behind the Mac's hover: no Markdown rendering, no symbol gating, no
-   on/off toggle, no show-at-caret command.
-6. **Replace in file.** The search bar finds; it does not replace, and
-   has no regex/whole-word toggles (macOS uses the native find bar).
+5. ~~LSP breadth.~~ Done: References (Shift+F12), Rename (F2, open
+   pages edit in place, unopened files rewritten on disk), Format
+   (Ctrl+Shift+I), Document Outline (Ctrl+Shift+O), and the debug log
+   in `~/.local/state/textchum/lsp.log`. Hover has parity too: Pango
+   Markdown rendering, symbol gating (identifiers outside comments
+   only), the `editor.hover` toggle in Preferences, and Show
+   Documentation for Symbol (Ctrl+Alt+H).
+6. ~~Replace in file.~~ Done: the search bar grew a replace row
+   (Replace / All) and match-case, regex, and whole-word toggles.
 7. **Command palette.** Menu actions exist and are named; the
    fuzzy-searchable panel over them does not.
 8. **The `chum` story.** `GApplication` already gives single-instance
@@ -64,20 +65,22 @@ Ordered roughly by how much daily pain each gap causes.
    language badges or system type icons.
 10. **New-file ergonomics.** No New with Format, no Save As directory
     seeding from the frontmost file.
-11. **Editing niceties.** No auto-indent on return (shell-side on
-    macOS), no block start/end navigation, no Redraw command.
-12. **Theme files.** Only the built-in themes are selectable; the user
-    theme JSON files and `--emit-theme` output are not read (the parser
-    is in the core — wiring only).
+11. **Editing niceties.** Auto-indent on return is in (GtkSourceView's
+    own), and Redraw (Ctrl+Alt+L) too; block start/end navigation is
+    still missing.
+12. ~~Theme files.~~ Done: JSON files in `~/.config/textchum/themes/`
+    join the built-ins in Preferences, named by file stem.
 13. **Ctags fallback.** Not implemented; depends on nothing
     macOS-specific.
 14. **Recent files.** No recent-documents menu.
-15. **Window subtitle detail.** macOS shows encoding · size · language
-    · problems; Linux shows language · problems.
-16. **Save preprocessors.** The `preprocessors` config section (chains
-    of stdin→stdout formatters, defaults + per-root) is macOS-only:
-    the resolution lives in the shared core, so Linux needs only the
-    process-spawning half and a Run Save Preprocessors action.
+15. ~~Window subtitle detail.~~ Done: encoding · size · language ·
+    problems, same as the Mac.
+16. **Save preprocessors.** Done in behavior: the shared config
+    section drives the same stdin→stdout chains ({path}/{filename}
+    placeholders included) before every save, with a
+    save-without-preprocessing escape dialog and Run Save
+    Preprocessors (Ctrl+Alt+F). Still config-file-only — Preferences
+    has no editing UI for the chains yet.
 17. **Prose spell check.** macOS scopes the system checker to comments
     and prose documents (`editor.spell`). GTK land would use
     libspelling/enchant over the same comment-span logic.

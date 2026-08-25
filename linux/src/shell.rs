@@ -27,6 +27,8 @@ pub struct PageHandles {
     /// "language" and "N errors" halves of the subtitle.
     pub language: RefCell<String>,
     pub problems: RefCell<String>,
+    /// "encoding · size" half, refreshed with the chrome.
+    pub detail: RefCell<String>,
 }
 
 pub struct Shell {
@@ -47,6 +49,31 @@ thread_local! {
 /// `~/.config/textchum/config.json` — the Linux home of the same file.
 pub fn config_path() -> PathBuf {
     glib::user_config_dir().join("textchum/config.json")
+}
+
+/// `~/.config/textchum/themes/` — user theme JSON files, one per
+/// theme, named by their file stem.
+pub fn themes_dir() -> PathBuf {
+    glib::user_config_dir().join("textchum/themes")
+}
+
+/// Every selectable theme name: the built-ins, then user files that do
+/// not shadow one.
+pub fn theme_names() -> Vec<String> {
+    let mut names: Vec<String> = theme::builtin_names().map(str::to_owned).collect();
+    if let Ok(entries) = std::fs::read_dir(themes_dir()) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "json") {
+                if let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().into_owned()) {
+                    if !names.contains(&stem) {
+                        names.push(stem);
+                    }
+                }
+            }
+        }
+    }
+    names
 }
 
 impl Shell {
@@ -126,11 +153,18 @@ impl Shell {
         adw::StyleManager::default().set_color_scheme(scheme);
     }
 
-    /// Activates the configured theme (built-ins; theme files join
-    /// later) and recolors every open buffer's tags.
+    /// Activates the configured theme — a built-in, or a user JSON
+    /// file from `~/.config/textchum/themes/` — and recolors every
+    /// open buffer's tags.
     pub fn apply_theme(&self) {
         let name = self.config.borrow().theme();
-        if let Some(chosen) = theme::Theme::builtin(&name) {
+        let chosen = theme::Theme::builtin(&name).or_else(|| {
+            let file = themes_dir().join(format!("{name}.json"));
+            std::fs::read_to_string(file)
+                .ok()
+                .and_then(|json| theme::Theme::from_json(&json).ok())
+        });
+        if let Some(chosen) = chosen {
             theme::set_active(chosen);
         }
         for handles in self.pages.borrow().values() {

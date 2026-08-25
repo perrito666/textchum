@@ -6,6 +6,7 @@
 
 mod lsp_edits;
 mod page;
+mod preprocessors;
 mod session;
 mod shell;
 mod workbench;
@@ -75,6 +76,9 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.format", &["<Ctrl><Shift>i"]);
     app.set_accels_for_action("win.outline", &["<Ctrl><Shift>o"]);
     app.set_accels_for_action("win.revert", &["<Ctrl><Alt>r"]);
+    app.set_accels_for_action("win.redraw", &["<Ctrl><Alt>l"]);
+    app.set_accels_for_action("win.hover", &["<Ctrl><Alt>h"]);
+    app.set_accels_for_action("win.preprocess", &["<Ctrl><Alt>f"]);
     // Key overrides read the configuration, which touches GTK-backed
     // state — so they wait for startup, after GTK initializes.
     app.connect_startup(|app| apply_key_overrides(app));
@@ -116,6 +120,9 @@ fn apply_key_overrides(app: &adw::Application) {
             "renameSymbol" => "win.rename",
             "formatDocument" => "win.format",
             "documentOutline" => "win.outline",
+            "redraw" => "win.redraw",
+            "showHover" => "win.hover",
+            "runPreprocessors" => "win.preprocess",
             "toggleNavigator" => "win.sidebar",
             "togglePreview" => "win.preview",
             "settings" => "win.preferences",

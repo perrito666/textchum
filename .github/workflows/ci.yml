@@ -54,6 +54,8 @@ jobs:
           sudo apt-get install -yq libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libwebkitgtk-6.0-dev xvfb
       - name: Build
         run: cargo build --manifest-path linux/Cargo.toml
+      - name: Shell unit tests
+        run: cargo test --manifest-path linux/Cargo.toml
       - name: Smoke test (headless)
         env:
           # WebKit's bubblewrap sandbox needs unprivileged user

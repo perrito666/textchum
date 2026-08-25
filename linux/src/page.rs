@@ -45,6 +45,9 @@ pub struct Page {
     pub preview: Option<webkit6::WebView>,
     /// Watches the file on disk; kept alive for the page's lifetime.
     pub monitor: RefCell<Option<gtk::gio::FileMonitor>>,
+    /// The hover balloon and its content label.
+    hover_popover: gtk::Popover,
+    hover_label: gtk::Label,
     /// The completion popup and its current candidates.
     completion: CompletionState,
 }
@@ -84,6 +87,9 @@ impl Page {
 
         let view = sourceview5::View::with_buffer(&buffer);
         view.set_monospace(true);
+        // Return inherits (and deepens) indentation — GtkSourceView has
+        // this built in; macOS hand-rolls the same behavior.
+        view.set_auto_indent(true);
         view.set_show_line_numbers(Shell::instance().config.borrow().line_numbers());
         view.set_tab_width(Shell::instance().config.borrow().tab_width());
         view.set_left_margin(6);
@@ -170,6 +176,19 @@ impl Page {
         completion_popover.set_position(gtk::PositionType::Bottom);
         completion_popover.set_child(Some(&completion_scroll));
 
+        let hover_popover = gtk::Popover::new();
+        hover_popover.set_parent(&view);
+        hover_popover.set_autohide(false);
+        hover_popover.set_position(gtk::PositionType::Top);
+        let hover_label = gtk::Label::new(None);
+        hover_label.set_wrap(true);
+        hover_label.set_max_width_chars(70);
+        hover_label.set_margin_top(6);
+        hover_label.set_margin_bottom(6);
+        hover_label.set_margin_start(8);
+        hover_label.set_margin_end(8);
+        hover_popover.set_child(Some(&hover_label));
+
         let page = Rc::new(Page {
             state,
             buffer: buffer.clone(),
@@ -180,6 +199,8 @@ impl Page {
             root,
             preview,
             monitor: RefCell::new(None),
+            hover_popover,
+            hover_label,
             completion: CompletionState {
                 popover: completion_popover,
                 list: completion_list,
@@ -332,6 +353,37 @@ impl Page {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Untitled".into())
     }
+}
+
+/// Replaces the buffer with `new` as one minimal edit through the
+/// choke point: the common prefix and suffix stay untouched, so the
+/// caret and scroll survive a formatter that only changed a few lines.
+pub fn apply_whole_document(page: &Rc<Page>, new: &str) {
+    let buffer = &page.buffer;
+    let old = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+    if old == new {
+        return;
+    }
+    let old_chars: Vec<char> = old.chars().collect();
+    let new_chars: Vec<char> = new.chars().collect();
+    let mut prefix = 0;
+    while prefix < old_chars.len().min(new_chars.len())
+        && old_chars[prefix] == new_chars[prefix]
+    {
+        prefix += 1;
+    }
+    let mut suffix = 0;
+    while suffix < old_chars.len().min(new_chars.len()) - prefix
+        && old_chars[old_chars.len() - 1 - suffix] == new_chars[new_chars.len() - 1 - suffix]
+    {
+        suffix += 1;
+    }
+    let replacement: String = new_chars[prefix..new_chars.len() - suffix].iter().collect();
+    let mut start = buffer.iter_at_offset(prefix as i32);
+    let mut end = buffer.iter_at_offset((old_chars.len() - suffix) as i32);
+    buffer.delete(&mut start, &mut end);
+    let mut at = start;
+    buffer.insert(&mut at, &replacement);
 }
 
 // MARK: Offsets
@@ -843,40 +895,29 @@ fn install_file_monitor(page: &Rc<Page>) {
 }
 
 fn install_hover(page: &Rc<Page>) {
-    let popover = gtk::Popover::new();
-    popover.set_parent(&page.view);
-    popover.set_autohide(false);
-    popover.set_position(gtk::PositionType::Top);
-    let label = gtk::Label::new(None);
-    label.set_wrap(true);
-    label.set_max_width_chars(70);
-    label.set_margin_top(6);
-    label.set_margin_bottom(6);
-    label.set_margin_start(8);
-    label.set_margin_end(8);
-    popover.set_child(Some(&label));
-
     let motion = gtk::EventControllerMotion::new();
     let timer: Rc<Cell<Option<glib::SourceId>>> = Rc::new(Cell::new(None));
     let weak = Rc::downgrade(page);
     {
-        let popover = popover.clone();
-        let label = label.clone();
         let timer = Rc::clone(&timer);
         motion.connect_motion(move |_, x, y| {
-            popover.popdown();
+            let Some(page) = weak.upgrade() else { return };
+            page.hover_popover.popdown();
             if let Some(previous) = timer.take() {
                 previous.remove();
             }
-            let Some(page) = weak.upgrade() else { return };
-            let popover = popover.clone();
-            let label = label.clone();
+            // Off unless the configuration says otherwise; the
+            // deliberate at-caret command ignores the toggle.
+            if !Shell::instance().config.borrow().hover_docs() {
+                return;
+            }
             let timer_inner = Rc::clone(&timer);
+            let weak = Rc::downgrade(&page);
             let source = glib::timeout_add_local_once(
                 std::time::Duration::from_millis(500),
                 move || {
                     timer_inner.set(None);
-                    let Some(path) = page.path.borrow().clone() else { return };
+                    let Some(page) = weak.upgrade() else { return };
                     let (bx, by) = page.view.window_to_buffer_coords(
                         gtk::TextWindowType::Widget,
                         x as i32,
@@ -885,40 +926,7 @@ fn install_hover(page: &Rc<Page>) {
                     let Some(iter) = page.view.iter_at_location(bx, by) else {
                         return;
                     };
-                    let line = iter.line();
-                    let line_start = page
-                        .buffer
-                        .iter_at_line(line)
-                        .unwrap_or_else(|| page.buffer.start_iter());
-                    let character = page
-                        .buffer
-                        .text(&line_start, &iter, true)
-                        .encode_utf16()
-                        .count();
-                    let shell = Shell::instance();
-                    let id = shell.pool.borrow_mut().hover(
-                        Path::new(&path),
-                        line.max(0) as u32,
-                        character as u32,
-                    );
-                    let page = Rc::clone(&page);
-                    shell.expect_response(id, move |json| {
-                        let Some(text) = hover_text(json) else { return };
-                        label.set_text(&text);
-                        let rect = page.view.iter_location(&iter);
-                        let (wx, wy) = page.view.buffer_to_window_coords(
-                            gtk::TextWindowType::Widget,
-                            rect.x(),
-                            rect.y(),
-                        );
-                        popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(
-                            wx,
-                            wy,
-                            1,
-                            rect.height(),
-                        )));
-                        popover.popup();
-                    });
+                    request_hover(&page, iter, false);
                 },
             );
             timer.set(Some(source));
@@ -933,6 +941,137 @@ fn install_hover(page: &Rc<Page>) {
         });
     }
     page.view.add_controller(motion);
+}
+
+/// Shows hover documentation for the symbol under the caret — works
+/// even with mouse hover switched off; this is the deliberate ask.
+pub fn hover_at_caret(page: &Rc<Page>) {
+    let caret = page.buffer.iter_at_mark(&page.buffer.get_insert());
+    request_hover(page, caret, true);
+}
+
+/// Asks the server what is at `iter` and shows the balloon there. A
+/// passive mouse rest (`deliberate == false`) only asks over
+/// identifier characters outside comments — whitespace, punctuation,
+/// and comments have no documentation, and an empty answer still
+/// costs a round trip and a popover flicker.
+fn request_hover(page: &Rc<Page>, iter: gtk::TextIter, deliberate: bool) {
+    let Some(path) = page.path.borrow().clone() else { return };
+    let line = iter.line();
+    let line_start = page
+        .buffer
+        .iter_at_line(line)
+        .unwrap_or_else(|| page.buffer.start_iter());
+    let character = page
+        .buffer
+        .text(&line_start, &iter, true)
+        .encode_utf16()
+        .count();
+    if !deliberate {
+        let under = iter.char();
+        if !(under.is_alphanumeric() || under == '_') {
+            return;
+        }
+        let offset = utf16_offset(&page.buffer, iter.offset());
+        // Style index 1 is the canonical comment capture.
+        let in_comment = page
+            .state
+            .borrow()
+            .document
+            .highlights(offset, offset + 1)
+            .ok()
+            .into_iter()
+            .flatten()
+            .any(|span| span.style == 1 && span.start_utf16 <= offset && offset < span.end_utf16);
+        if in_comment {
+            return;
+        }
+    }
+    let shell = Shell::instance();
+    let id = shell.pool.borrow_mut().hover(
+        Path::new(&path),
+        line.max(0) as u32,
+        character as u32,
+    );
+    let weak = Rc::downgrade(page);
+    shell.expect_response(id, move |json| {
+        let Some(page) = weak.upgrade() else { return };
+        let Some(text) = hover_text(json) else { return };
+        page.hover_label.set_markup(&hover_markup(&text));
+        let rect = page.view.iter_location(&iter);
+        let (wx, wy) = page.view.buffer_to_window_coords(
+            gtk::TextWindowType::Widget,
+            rect.x(),
+            rect.y(),
+        );
+        page.hover_popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(
+            wx,
+            wy,
+            1,
+            rect.height(),
+        )));
+        page.hover_popover.popup();
+    });
+}
+
+/// LSP hover Markdown as Pango markup: fenced code blocks and `code`
+/// spans in monospace, **bold** and *italic* styled, everything else
+/// escaped and left as its literal text.
+pub fn hover_markup(text: &str) -> String {
+    let mut out = String::new();
+    let mut in_fence = false;
+    let mut first = true;
+    for line in text.lines() {
+        if line.trim_start().starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if !first {
+            out.push('\n');
+        }
+        first = false;
+        let escaped = glib::markup_escape_text(line);
+        if in_fence {
+            out.push_str(&format!("<tt>{escaped}</tt>"));
+        } else {
+            out.push_str(&inline_markup(&escaped));
+        }
+    }
+    out
+}
+
+/// Inline Markdown over already-escaped text: **bold**, *italic*, and
+/// `code`, non-greedy and unnested — hover text, not a renderer.
+fn inline_markup(escaped: &str) -> String {
+    fn wrap(text: &str, delimiter: &str, open: &str, close: &str) -> String {
+        let mut out = String::new();
+        let mut rest = text;
+        loop {
+            let Some(start) = rest.find(delimiter) else {
+                out.push_str(rest);
+                return out;
+            };
+            let after = &rest[start + delimiter.len()..];
+            let Some(length) = after.find(delimiter) else {
+                out.push_str(rest);
+                return out;
+            };
+            if length == 0 {
+                // "**" with nothing inside: literal.
+                out.push_str(&rest[..start + delimiter.len() * 2]);
+                rest = &after[delimiter.len()..];
+                continue;
+            }
+            out.push_str(&rest[..start]);
+            out.push_str(open);
+            out.push_str(&after[..length]);
+            out.push_str(close);
+            rest = &after[length + delimiter.len()..];
+        }
+    }
+    let bolded = wrap(escaped, "**", "<b>", "</b>");
+    let coded = wrap(&bolded, "`", "<tt>", "</tt>");
+    wrap(&coded, "*", "<i>", "</i>")
 }
 
 /// Human text from a hover result: MarkupContent, a bare string, or an
