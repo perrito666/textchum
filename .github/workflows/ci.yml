@@ -55,6 +55,12 @@ jobs:
       - name: Build
         run: cargo build --manifest-path linux/Cargo.toml
       - name: Smoke test (headless)
+        env:
+          # WebKit's bubblewrap sandbox needs unprivileged user
+          # namespaces, which some runner images deny; without this the
+          # web process dies and GLib aborts the smoke test. Headless
+          # CI only — never set for users.
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
         run: xvfb-run -a linux/target/debug/textchum-gtk --smoke-test
 
   macos-app:

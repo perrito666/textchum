@@ -56,6 +56,8 @@ jobs:
     name: Linux binary (${{ matrix.arch }})
     needs: release
     strategy:
+      # One arch failing should not cancel the other's upload.
+      fail-fast: false
       matrix:
         include:
           - runner: ubuntu-24.04
@@ -74,6 +76,12 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -yq libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libwebkitgtk-6.0-dev xvfb
       - name: Build and smoke test
+        env:
+          # WebKit's bubblewrap sandbox needs unprivileged user
+          # namespaces, which some runner images deny (the arm pool
+          # does); without this the web process dies and GLib aborts
+          # the smoke test. Headless CI only — never set for users.
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
         run: |
           cargo build --release --manifest-path linux/Cargo.toml
           xvfb-run -a linux/target/release/textchum-gtk --smoke-test
