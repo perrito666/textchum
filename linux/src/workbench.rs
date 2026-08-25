@@ -41,6 +41,9 @@ pub struct Workbench {
     /// True while Go Back/Forward navigates, so retracing a jump does
     /// not record itself as a new one.
     retracing: std::cell::Cell<bool>,
+    /// Momentary path display: buffer rows show project-relative paths
+    /// instead of bare names while this is on.
+    show_full_paths: std::cell::Cell<bool>,
 }
 
 /// (path, line, UTF-16 column) positions with a cursor into them.
@@ -161,6 +164,7 @@ impl Workbench {
         go_section.append(Some("Go to Block Start"), Some("win.block-start"));
         go_section.append(Some("Go to Block End"), Some("win.block-end"));
         go_section.append(Some("Command Palette…"), Some("win.palette"));
+        go_section.append(Some("Toggle Path Display"), Some("win.paths"));
         go_section.append(Some("Toggle File Tree"), Some("win.sidebar"));
         go_section.append(Some("Toggle Markdown Preview"), Some("win.preview"));
         let app_section = gtk::gio::Menu::new();
@@ -288,6 +292,7 @@ impl Workbench {
             sidebar_root: RefCell::new(None),
             jumps: RefCell::new(JumpStack::default()),
             retracing: std::cell::Cell::new(false),
+            show_full_paths: std::cell::Cell::new(false),
         });
         WORKBENCHES.with(|list| list.borrow_mut().push(Rc::clone(&workbench)));
 
@@ -550,6 +555,13 @@ impl Workbench {
     /// The page's display name, with enough parent path to tell it
     /// apart when another open file shares its bare name.
     pub fn disambiguated_name(&self, page: &Rc<Page>) -> String {
+        if self.show_full_paths.get() {
+            if let Some(path) = page.path.borrow().clone() {
+                let root = workspace::project_root_for(Path::new(&path))
+                    .map(|root| root.to_string_lossy().into_owned());
+                return crate::path_actions::relative_path(&path, root.as_deref());
+            }
+        }
         let name = page.display_name();
         let collides = self.pages.borrow().iter().any(|other| {
             !Rc::ptr_eq(other, page) && other.display_name() == name
@@ -746,7 +758,7 @@ impl Workbench {
                 let Some(path) = page.and_then(|page| page.path.borrow().clone()) else {
                     return;
                 };
-                let menu = copy_menu(&path);
+                let menu = copy_menu(&workbench, &path);
                 let popover = gtk::PopoverMenu::from_model(Some(&menu));
                 popover.set_parent(list);
                 popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(
@@ -914,11 +926,19 @@ fn build_file_tree(root: &Path) -> gtk::ListView {
         let icon = row.first_child().and_downcast::<gtk::Image>();
         let label = row.last_child().and_downcast::<gtk::Label>();
         if let Some(icon) = icon {
-            icon.set_icon_name(Some(if path.is_dir() {
-                "folder-symbolic"
+            if path.is_dir() {
+                icon.set_icon_name(Some("folder-symbolic"));
             } else {
-                "text-x-generic-symbolic"
-            }));
+                // The desktop's own icon for the file's content type,
+                // guessed from the name — the system icons the Mac
+                // shell gets from NSWorkspace.
+                let (content_type, _) = gtk::gio::content_type_guess(
+                    Some(std::path::Path::new(&path)),
+                    &[],
+                );
+                let themed = gtk::gio::content_type_get_symbolic_icon(&content_type);
+                icon.set_from_gicon(&themed);
+            }
         }
         if let Some(label) = label {
             label.set_text(
@@ -1086,15 +1106,24 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .borrow_mut()
             .definition(Path::new(&path), line, character);
         if id == 0 {
-            // Silence was the old behavior; a jump that cannot happen
-            // should say why.
-            workbench.toast("No language server is running for this document.");
+            // No server: the ctags fallback gets its chance before the
+            // explanation does.
+            if !ctags_jump(workbench, &page, &path) {
+                workbench.toast("No language server is running for this document.");
+            }
             return;
         }
         let weak = Rc::downgrade(workbench);
+        let fallback_page = Rc::clone(&page);
         shell.expect_response(id, move |json| {
             if let Some(workbench) = weak.upgrade() {
-                open_definition(&workbench, json);
+                if !open_definition(&workbench, json) {
+                    // The server answered but had nothing; consult the
+                    // index for projects that opted in.
+                    if !ctags_jump(&workbench, &fallback_page, &path) {
+                        workbench.toast("No definition found.");
+                    }
+                }
             }
         });
     });
@@ -1128,6 +1157,13 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("block-start", workbench, |workbench, _| move_to_block_edge(workbench, true));
     add("block-end", workbench, |workbench, _| move_to_block_edge(workbench, false));
     add("palette", workbench, |workbench, _| show_palette(workbench));
+    add("paths", workbench, |workbench, _| {
+        workbench
+            .show_full_paths
+            .set(!workbench.show_full_paths.get());
+        workbench.refresh_chrome();
+        workbench.rebuild_buffer_list();
+    });
     // Parameterized actions: the language for a fresh tab, and a
     // recent file's path.
     {
@@ -1184,6 +1220,35 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             });
             workbench.window.add_action(&action);
         }
+    }
+    {
+        let action =
+            gtk::gio::SimpleAction::new("move-to-window", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(workbench);
+        let app = app.clone();
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some(spec) = parameter.and_then(|p| p.str().map(str::to_owned)) else {
+                return;
+            };
+            let Some((target, path)) = spec.split_once('|') else { return };
+            let target = if target == "new" {
+                None
+            } else {
+                let index: usize = match target.parse() {
+                    Ok(index) => index,
+                    Err(_) => return,
+                };
+                let found =
+                    WORKBENCHES.with(|all| all.borrow().get(index).cloned());
+                match found {
+                    Some(found) => Some(found),
+                    None => return,
+                }
+            };
+            move_page_to(&workbench, &app, path, target);
+        });
+        workbench.window.add_action(&action);
     }
     {
         let action =
@@ -1433,21 +1498,18 @@ fn replay(workbench: &Rc<Workbench>, is_undo: bool) {
 }
 
 /// Parses a definition result (Location, Location[], or LocationLink[])
-/// and navigates there — or says why it cannot.
-fn open_definition(workbench: &Rc<Workbench>, json: &str) {
+/// and navigates there. Returns whether there was anywhere to go — the
+/// caller decides between the ctags fallback and an explanation.
+fn open_definition(workbench: &Rc<Workbench>, json: &str) -> bool {
     let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
-        workbench.toast("No definition found.");
-        return;
+        return false;
     };
     let candidate = match &parsed {
         serde_json::Value::Array(items) => items.first().cloned(),
         serde_json::Value::Object(_) => Some(parsed.clone()),
         _ => None,
     };
-    let Some(candidate) = candidate else {
-        workbench.toast("No definition found.");
-        return;
-    };
+    let Some(candidate) = candidate else { return false };
     let uri = candidate["uri"]
         .as_str()
         .or_else(|| candidate["targetUri"].as_str());
@@ -1459,36 +1521,169 @@ fn open_definition(workbench: &Rc<Workbench>, json: &str) {
         &candidate["targetRange"]
     };
     let Some(path) = uri.and_then(|uri| uri.strip_prefix("file://")) else {
-        workbench.toast("No definition found.");
-        return;
+        return false;
     };
     // Servers percent-encode paths (a space is %20); decode before use.
     let path = percent_decode(path);
     let line = range["start"]["line"].as_i64().unwrap_or(0) as i32;
     let character = range["start"]["character"].as_u64().unwrap_or(0) as usize;
     workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+    true
 }
 
-/// The copy-path context menu for one document.
-fn copy_menu(path: &str) -> gtk::gio::Menu {
+/// Jumps via the Universal Ctags index, for projects that opted into
+/// the fallback. Returns whether a jump happened.
+fn ctags_jump(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &str) -> bool {
+    let settings = workspace::WorkspaceSettings::from_json(
+        &Shell::instance().config.borrow().workspace_json(),
+    );
+    let Some(root) = workspace::project_root_for(Path::new(path)) else { return false };
+    if !settings.flag(&root, "ctags_fallback") {
+        return false;
+    }
+    let Some(symbol) = symbol_under_caret(page) else { return false };
+    let Some((target, line)) = crate::ctags::definition(&symbol, &root) else {
+        if !crate::ctags::available() {
+            workbench.toast(
+                "The ctags fallback needs Universal Ctags — install the                  universal-ctags package.",
+            );
+            return true;
+        }
+        return false;
+    };
+    workbench.open(Some(target), Some((line, 0)));
+    true
+}
+
+/// The identifier around the caret (letters, digits, underscore).
+fn symbol_under_caret(page: &Rc<Page>) -> Option<String> {
+    let buffer = &page.buffer;
+    let text = buffer
+        .text(&buffer.start_iter(), &buffer.end_iter(), true)
+        .to_string();
+    let characters: Vec<char> = text.chars().collect();
+    let is_word = |index: usize| {
+        characters
+            .get(index)
+            .is_some_and(|c| c.is_alphanumeric() || *c == '_')
+    };
+    let caret = buffer.iter_at_mark(&buffer.get_insert()).offset().max(0) as usize;
+    let mut start = caret.min(characters.len());
+    // A caret just past the last character of a word still means it.
+    if !is_word(start) && start > 0 && is_word(start - 1) {
+        start -= 1;
+    }
+    if !is_word(start) {
+        return None;
+    }
+    let mut end = start + 1;
+    while start > 0 && is_word(start - 1) {
+        start -= 1;
+    }
+    while is_word(end) {
+        end += 1;
+    }
+    Some(characters[start..end].iter().collect())
+}
+
+/// The context menu for one document row: the copy-path family, and
+/// where the tab could move — a fresh window, or any of the others.
+fn copy_menu(current: &Workbench, path: &str) -> gtk::gio::Menu {
     let escaped = path.replace('\\', "\\\\").replace('\'', "\\'");
     let menu = gtk::gio::Menu::new();
-    menu.append(Some("Copy Name"), Some(&format!("win.copy-name('{escaped}')")));
-    menu.append(
+    let copies = gtk::gio::Menu::new();
+    copies.append(Some("Copy Name"), Some(&format!("win.copy-name('{escaped}')")));
+    copies.append(
         Some("Copy Relative Path"),
         Some(&format!("win.copy-relative('{escaped}')")),
     );
-    menu.append(
+    copies.append(
         Some("Copy Absolute Path"),
         Some(&format!("win.copy-absolute('{escaped}')")),
     );
     if crate::path_actions::forge_url(path).is_some() {
-        menu.append(
+        copies.append(
             Some("Copy Forge URL"),
             Some(&format!("win.copy-forge('{escaped}')")),
         );
     }
+    menu.append_section(None, &copies);
+    let moves = gtk::gio::Menu::new();
+    moves.append(
+        Some("Move to New Window"),
+        Some(&format!("win.move-to-window('new|{escaped}')")),
+    );
+    WORKBENCHES.with(|all| {
+        for (index, other) in all.borrow().iter().enumerate() {
+            if std::ptr::eq(other.as_ref() as *const Workbench, current as *const Workbench)
+            {
+                continue;
+            }
+            let title = other
+                .selected()
+                .map(|page| other.disambiguated_name(&page))
+                .unwrap_or_else(|| "Empty window".into());
+            moves.append(
+                Some(&format!("Move to “{title}”")),
+                Some(&format!("win.move-to-window('{index}|{escaped}')")),
+            );
+        }
+    });
+    menu.append_section(Some("Move Tab"), &moves);
     menu
+}
+
+/// Moves the tab showing `path` into `target` (or a new window),
+/// re-homing its shell handles so the pump keeps finding it.
+fn move_page_to(
+    source: &Rc<Workbench>,
+    app: &adw::Application,
+    path: &str,
+    target: Option<Rc<Workbench>>,
+) {
+    let Some(page) = source.page_for(path) else { return };
+    let target = target.unwrap_or_else(|| {
+        let fresh = Workbench::new(app);
+        fresh.window.present();
+        fresh
+    });
+    if std::ptr::eq(source.as_ref() as *const Workbench, target.as_ref() as *const Workbench)
+    {
+        return;
+    }
+    let tab_page = source.tab_view.page(&page.root);
+    let position = target.tab_view.n_pages();
+    source
+        .tab_view
+        .transfer_page(&tab_page, &target.tab_view, position);
+    source.pages.borrow_mut().retain(|other| !Rc::ptr_eq(other, &page));
+    target.pages.borrow_mut().push(Rc::clone(&page));
+    // The shell's handles carried the old window's chrome; rebuild
+    // them around the new one, keeping the subtitle halves.
+    let shell = Shell::instance();
+    let old = shell.pages.borrow().get(path).cloned();
+    if let Some(old) = old {
+        let handles = Rc::new(crate::shell::PageHandles {
+            window: target.window.clone(),
+            tab_view: target.tab_view.clone(),
+            tab_page: tab_page.clone(),
+            buffer: page.buffer.clone(),
+            view: page.view.clone(),
+            toasts: target.toasts.clone(),
+            title: target.title.clone(),
+            language: RefCell::new(old.language.borrow().clone()),
+            problems: RefCell::new(old.problems.borrow().clone()),
+            detail: RefCell::new(old.detail.borrow().clone()),
+        });
+        shell.pages.borrow_mut().insert(path.to_owned(), handles);
+    }
+    target.tab_view.set_selected_page(&tab_page);
+    target.window.present();
+    source.refresh_chrome();
+    source.refresh_sidebar();
+    target.refresh_chrome();
+    target.refresh_sidebar();
+    crate::session::save();
 }
 
 /// Moves the caret to the innermost multi-line block's start or end,
@@ -2416,6 +2611,43 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
     }
     editor_group.add(&hover_row);
+    let spell_row = adw::EntryRow::new();
+    spell_row.set_title("Spell check prose (off, auto, or a dictionary like es_ES)");
+    spell_row.set_text(
+        shell
+            .config
+            .borrow()
+            .spell_language()
+            .as_deref()
+            .unwrap_or(""),
+    );
+    spell_row.set_show_apply_button(true);
+    spell_row.set_tooltip_text(Some(
+        "Checks comments in code, and everything in Markdown, git commit          messages, and plain text. Needs hunspell and its dictionaries.",
+    ));
+    {
+        let shell = Rc::clone(&shell);
+        spell_row.connect_apply(move |row| {
+            let text = row.text();
+            let trimmed = text.trim();
+            let value = match trimmed {
+                "" | "off" => None,
+                other => Some(other),
+            };
+            shell.config.borrow_mut().set_spell_language(value);
+            shell.save_config();
+            for handles in Shell::instance().pages.borrow().values() {
+                let _ = handles;
+            }
+            // Re-check every open page under the new choice.
+            Workbench::for_each(|workbench| {
+                for page in workbench.all_pages() {
+                    crate::spell::run(&page);
+                }
+            });
+        });
+    }
+    editor_group.add(&spell_row);
     general.add(&editor_group);
     window.add(&general);
 
@@ -2588,6 +2820,109 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     servers_group.add(&add_command);
     servers.add(&servers_group);
     servers.add(&projects_group);
+
+    // Save preprocessors: the same chains the macOS Settings edit —
+    // one command per link, ` ;; ` separating links in these rows
+    // (the file stores them as an array, one per line).
+    let preprocessors_group = adw::PreferencesGroup::new();
+    preprocessors_group.set_title("Save preprocessors");
+    preprocessors_group.set_description(Some(
+        "Commands run before every save, in order, separated by ' ;; ' — \
+         each reads the document on stdin and writes it back on stdout \
+         (ruff check --fix - ;; black -). {path} and {filename} expand \
+         to the document's. A project entry replaces the defaults.",
+    ));
+    let preprocessor_entries: Vec<(Option<String>, String, String)> = {
+        let json = shell.config.borrow().preprocessors_json();
+        let parsed = serde_json::from_str::<serde_json::Value>(&json).unwrap_or_default();
+        let chain_of = |value: &serde_json::Value| -> Option<String> {
+            if let Some(one) = value.as_str() {
+                return Some(one.to_owned());
+            }
+            value.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ;; ")
+            })
+        };
+        let mut entries = Vec::new();
+        for (language, value) in parsed["defaults"].as_object().into_iter().flatten() {
+            if let Some(chain) = chain_of(value) {
+                entries.push((None, language.clone(), chain));
+            }
+        }
+        for (root, languages) in parsed["projects"].as_object().into_iter().flatten() {
+            for (language, value) in languages.as_object().into_iter().flatten() {
+                if let Some(chain) = chain_of(value) {
+                    entries.push((Some(root.clone()), language.clone(), chain));
+                }
+            }
+        }
+        entries
+    };
+    for (root, language, chain) in preprocessor_entries {
+        let row = adw::EntryRow::new();
+        match &root {
+            None => row.set_title(&language),
+            Some(root) => {
+                let basename = std::path::Path::new(root)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| root.clone());
+                row.set_title(&format!("{language} — {basename}"));
+                row.set_tooltip_text(Some(root));
+            }
+        }
+        row.set_text(&chain);
+        row.set_show_apply_button(true);
+        let shell = Rc::clone(&shell);
+        row.connect_apply(move |row| {
+            let text = row.text();
+            let commands = text.trim().replace(" ;; ", "\n");
+            shell.config.borrow_mut().set_preprocessor_entry(
+                root.as_deref(),
+                &language,
+                if commands.is_empty() { None } else { Some(&commands) },
+            );
+            shell.save_config();
+        });
+        preprocessors_group.add(&row);
+    }
+    let add_preprocessor_root = adw::EntryRow::new();
+    add_preprocessor_root.set_title("project root (empty = default for all projects)");
+    let add_preprocessor_language = adw::EntryRow::new();
+    add_preprocessor_language.set_title("language (e.g. python)");
+    let add_preprocessor_chain = adw::EntryRow::new();
+    add_preprocessor_chain.set_title("commands (e.g. ruff check --fix - ;; black -)");
+    add_preprocessor_chain.set_show_apply_button(true);
+    {
+        let shell = Rc::clone(&shell);
+        let root_row = add_preprocessor_root.clone();
+        let language_row = add_preprocessor_language.clone();
+        add_preprocessor_chain.connect_apply(move |row| {
+            let root = root_row.text().trim().to_string();
+            let language = language_row.text().trim().to_lowercase();
+            let commands = row.text().trim().replace(" ;; ", "\n");
+            if language.is_empty() || commands.is_empty() {
+                return;
+            }
+            shell.config.borrow_mut().set_preprocessor_entry(
+                (!root.is_empty()).then_some(root.as_str()),
+                &language,
+                Some(&commands),
+            );
+            shell.save_config();
+            root_row.set_text("");
+            language_row.set_text("");
+            row.set_text("");
+        });
+    }
+    preprocessors_group.add(&add_preprocessor_root);
+    preprocessors_group.add(&add_preprocessor_language);
+    preprocessors_group.add(&add_preprocessor_chain);
+    servers.add(&preprocessors_group);
     window.add(&servers);
 
     // Projects: how roots are detected, defaults plus per-root

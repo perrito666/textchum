@@ -226,6 +226,10 @@ habilitados en Ajustes del Sistema ▸ Teclado ▸ Entrada de texto.
 { "editor": { "spell": "auto" } }
 ```
 
+En Linux el mismo ajuste usa hunspell: instala `hunspell` más un
+paquete de diccionario (`hunspell-es`, `hunspell-en-us`, …) y las
+marcas aparecen; `"auto"` sigue a `$LANG`.
+
 ## Atajos de teclado
 
 Los atajos de los menús se reasignan mediante una sección `keys` editada

@@ -84,6 +84,7 @@ impl Page {
         buffer.set_enable_undo(false);
         install_style_tags(&buffer);
         install_diagnostic_tags(&buffer);
+        crate::spell::install_tag(&buffer);
 
         let view = sourceview5::View::with_buffer(&buffer);
         view.set_monospace(true);
@@ -258,6 +259,7 @@ impl Page {
                                     .did_change(Path::new(&path), &text);
                             }
                             update_preview(&page);
+                            crate::spell::run(&page);
                         },
                     );
                     lsp_timer.set(Some(source));
@@ -280,6 +282,7 @@ impl Page {
         }
         apply_highlights(&buffer, &page.state.borrow().document);
         update_preview(&page);
+        crate::spell::run(&page);
 
         // The pool learns about the document.
         if let (Some(path), Some(language)) = (
@@ -339,6 +342,7 @@ impl Page {
                 .did_change(Path::new(&path), &text);
         }
         update_preview(self);
+        crate::spell::run(self);
         if let Some(workbench) = crate::workbench::Workbench::active() {
             workbench.refresh_chrome();
         }

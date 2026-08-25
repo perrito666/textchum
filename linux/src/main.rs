@@ -4,10 +4,12 @@
 //! owns every document, the shell owns presentation, and every edit
 //! funnels through one choke point.
 
+mod ctags;
 mod lsp_edits;
 mod page;
 mod path_actions;
 mod preprocessors;
+mod spell;
 mod session;
 mod shell;
 mod workbench;
@@ -107,6 +109,7 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.hover", &["<Ctrl><Alt>h"]);
     app.set_accels_for_action("win.preprocess", &["<Ctrl><Alt>f"]);
     app.set_accels_for_action("win.palette", &["<Ctrl><Shift>p"]);
+    app.set_accels_for_action("win.paths", &["<Ctrl><Alt>t"]);
     app.set_accels_for_action("win.block-start", &["<Ctrl><Alt>Up"]);
     app.set_accels_for_action("win.block-end", &["<Ctrl><Alt>Down"]);
     // Key overrides read the configuration, which touches GTK-backed
@@ -156,6 +159,7 @@ fn apply_key_overrides(app: &adw::Application) {
             "showHover" => "win.hover",
             "runPreprocessors" => "win.preprocess",
             "commandPalette" => "win.palette",
+            "togglePathDisplay" => "win.paths",
             "goToBlockStart" => "win.block-start",
             "goToBlockEnd" => "win.block-end",
             "toggleNavigator" => "win.sidebar",
@@ -436,6 +440,73 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 return 1;
             }
         }
+    }
+
+    // Spell check: with a dictionary on hand, a typo in the markdown
+    // document gets the misspell tag — and only prose does.
+    let have_hunspell = std::process::Command::new("hunspell")
+        .arg("-v")
+        .output()
+        .is_ok();
+    if have_hunspell {
+        let second_key = second.to_string_lossy().into_owned();
+        let md_page = workbench
+            .all_pages()
+            .into_iter()
+            .find(|candidate| candidate.path.borrow().as_deref() == Some(second_key.as_str()));
+        if let Some(md_page) = md_page {
+            shell::Shell::instance()
+                .config
+                .borrow_mut()
+                .set_spell_language(Some("en_US"));
+            {
+                let buffer = &md_page.buffer;
+                let mut end = buffer.end_iter();
+                buffer.insert(&mut end, "\nthis sentense is wrogn\n");
+            }
+            spell::run(&md_page);
+            let buffer = &md_page.buffer;
+            let text = buffer
+                .text(&buffer.start_iter(), &buffer.end_iter(), true)
+                .to_string();
+            let target = text.find("sentense").map(|byte| {
+                text[..byte].chars().count() as i32
+            });
+            let tagged = target.is_some_and(|offset| {
+                buffer
+                    .iter_at_offset(offset)
+                    .tags()
+                    .iter()
+                    .any(|tag| tag.name().as_deref() == Some(spell::TAG))
+            });
+            if !tagged {
+                eprintln!("FAIL: misspelling was not tagged");
+                return 1;
+            }
+            shell::Shell::instance().config.borrow_mut().set_spell_language(None);
+        }
+    } else {
+        eprintln!("note: hunspell not installed; spell smoke skipped");
+    }
+
+    // Ctags: with Universal Ctags on hand, the index finds a definition
+    // in a plain directory.
+    if ctags::available() {
+        let project = directory.join("ctagsproj");
+        let _ = std::fs::create_dir_all(&project);
+        let _ = std::fs::write(
+            project.join("lib.py"),
+            "def frobnicate():\n    return 1\n",
+        );
+        match ctags::definition("frobnicate", &project) {
+            Some((path, line)) if path.ends_with("lib.py") && line == 0 => {}
+            other => {
+                eprintln!("FAIL: ctags definition wrong: {other:?}");
+                return 1;
+            }
+        }
+    } else {
+        eprintln!("note: Universal Ctags not installed; ctags smoke skipped");
     }
 
     // The session file records the open documents.

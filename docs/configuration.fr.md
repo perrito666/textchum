@@ -230,6 +230,10 @@ sont ceux activés dans Réglages Système ▸ Clavier ▸ Saisie de texte.
 { "editor": { "spell": "auto" } }
 ```
 
+Sous Linux le même réglage passe par hunspell : installez `hunspell`
+plus un paquet de dictionnaire (`hunspell-fr`, `hunspell-en-us`, …) et
+les marques apparaissent ; `"auto"` suit `$LANG`.
+
 ## Raccourcis clavier
 
 Les raccourcis des menus se réassignent via une section `keys` éditée à

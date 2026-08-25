@@ -215,6 +215,10 @@ more there and they appear in the picker).
 { "editor": { "spell": "auto" } }
 ```
 
+On Linux the same setting rides hunspell: install `hunspell` plus a
+dictionary package (`hunspell-es`, `hunspell-en-us`, …) and the marks
+appear; `"auto"` follows `$LANG`.
+
 ## Key shortcuts
 
 Menu shortcuts are rebindable through a hand-edited `keys` section (no

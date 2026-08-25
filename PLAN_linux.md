@@ -59,12 +59,11 @@ Ordered roughly by how much daily pain each gap causes.
    to the line, and `--wait` runs a private foreground instance that
    blocks until its windows close — `GIT_EDITOR="textchum-gtk --wait"`
    just works. No separate wrapper script needed.
-9. **Navigator polish.** Filename disambiguation (colliding names
-   grow their parent directory) and right-click copy
-   name/relative/absolute/forge-URL menus on buffer rows are in; Save
-   As seeds its folder from the open files. Still missing: a
-   path-display toggle, project split/gather between windows, and
-   language icons on tree rows.
+9. ~~Navigator polish.~~ Done: filename disambiguation, right-click
+   copy name/relative/absolute/forge-URL menus, Save As folder
+   seeding, the path-display toggle (Ctrl+Alt+T), Move Tab to New
+   Window / to any other window from the row menu, and tree rows
+   showing the desktop's content-type icons.
 10. ~~New-file ergonomics.~~ Done: New with Format (one submenu entry
     per language) and Save As folder seeding from the frontmost file.
 11. ~~Editing niceties.~~ Done: auto-indent on return (GtkSourceView's
@@ -72,21 +71,24 @@ Ordered roughly by how much daily pain each gap causes.
     (Ctrl+Alt+Up/Down) over the core's syntax tree.
 12. ~~Theme files.~~ Done: JSON files in `~/.config/textchum/themes/`
     join the built-ins in Preferences, named by file stem.
-13. **Ctags fallback.** Not implemented; depends on nothing
-    macOS-specific.
+13. ~~Ctags fallback.~~ Done: the same Universal Ctags index as the
+    Mac's (30-second cache per root, `ctags_fallback` workspace flag),
+    consulted when no server runs and when the server has no answer.
 14. ~~Recent files.~~ Done: opens register with the desktop's shared
     recent list, and File ▸ Open Recent shows the newest ten.
 15. ~~Window subtitle detail.~~ Done: encoding · size · language ·
     problems, same as the Mac.
-16. **Save preprocessors.** Done in behavior: the shared config
-    section drives the same stdin→stdout chains ({path}/{filename}
-    placeholders included) before every save, with a
-    save-without-preprocessing escape dialog and Run Save
-    Preprocessors (Ctrl+Alt+F). Still config-file-only — Preferences
-    has no editing UI for the chains yet.
-17. **Prose spell check.** macOS scopes the system checker to comments
-    and prose documents (`editor.spell`). GTK land would use
-    libspelling/enchant over the same comment-span logic.
+16. ~~Save preprocessors.~~ Done: the shared config section drives
+    the same stdin→stdout chains ({path}/{filename} placeholders
+    included) before every save, with a save-without-preprocessing
+    escape dialog, Run Save Preprocessors (Ctrl+Alt+F), and a
+    Preferences group editing defaults and per-project chains
+    (` ;; ` separates links in the rows; the file stores an array).
+17. ~~Prose spell check.~~ Done: `hunspell -l` over the same
+    comment-span scoping (`editor.spell` — "auto" follows $LANG, a
+    code names a dictionary), misspellings tinted purple, and a
+    Preferences row. Needs hunspell plus a dictionary installed; a
+    one-time toast says so when it is missing.
 18. **Packaging.** `make install-linux` now installs the binary,
     a `.desktop` entry, and the icon into the XDG home directories
     (release tarballs already existed). Flatpak remains unplanned.
