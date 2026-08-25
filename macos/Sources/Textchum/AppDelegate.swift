@@ -162,6 +162,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         }
                         return
                     }
+                    if allArguments[flagIndex + 1] == "about" {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                self?.showAbout(nil)
+                            }
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "status" {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                             MainActor.assumeIsolated {
@@ -521,6 +529,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: Configurable key shortcuts
+
+    // MARK: About
+
+    /// The standard About panel, with content worth reading: the real
+    /// build version (git-described for local builds, the tag for
+    /// releases), the author with their site, the repository, and the
+    /// license — all clickable.
+    @objc func showAbout(_ sender: Any?) {
+        let version =
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? "development build"
+        let credits = NSMutableAttributedString()
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.paragraphSpacing = 4
+        let base: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 11),
+            .paragraphStyle: paragraph,
+            .foregroundColor: NSColor.labelColor,
+        ]
+        func line(_ text: String, link: String? = nil, prefix: String = "", suffix: String = "\n")
+        {
+            if !prefix.isEmpty {
+                credits.append(NSAttributedString(string: prefix, attributes: base))
+            }
+            var attributes = base
+            if let link { attributes[.link] = link }
+            credits.append(NSAttributedString(string: text, attributes: attributes))
+            credits.append(NSAttributedString(string: suffix, attributes: base))
+        }
+        line("A text editor in the spirit of TextMate:")
+        line("native, fast, and focused on editing.")
+        line("")
+        line("Horacio Duran", link: "https://perri.to", prefix: "By ", suffix: " · ")
+        line("perri.to", link: "https://perri.to")
+        line(
+            "github.com/perrito666/textchum",
+            link: "https://github.com/perrito666/textchum", prefix: "Source: ")
+        line(
+            "MIT license",
+            link: "https://github.com/perrito666/textchum/blob/main/LICENSE")
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "Textchum",
+            .applicationVersion: version,
+            .version: "core " + Core.version,
+            .credits: credits,
+        ])
+    }
 
     // MARK: Server status
 
@@ -1411,7 +1467,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(
             withTitle: "About Textchum",
-            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            action: #selector(showAbout(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(.separator())

@@ -170,6 +170,7 @@ impl Workbench {
         go_section.append(Some("Toggle Markdown Preview"), Some("win.preview"));
         let app_section = gtk::gio::Menu::new();
         app_section.append(Some("Preferences…"), Some("win.preferences"));
+        app_section.append(Some("About Textchum"), Some("win.about"));
         app_section.append(Some("Close Tab"), Some("win.close-tab"));
         app_section.append(Some("Close Window"), Some("window.close"));
         let menu = gtk::gio::Menu::new();
@@ -1155,6 +1156,25 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
     });
+    add("about", workbench, |workbench, _| {
+        // The real build version comes from git at compile time (the
+        // tag in CI); the rest is the who/where/under-what.
+        let about = adw::AboutWindow::builder()
+            .transient_for(&workbench.window)
+            .application_name("Textchum")
+            .application_icon("to.perri.textchum")
+            .version(env!("TEXTCHUM_BUILD_VERSION"))
+            .comments(
+                "A text editor in the spirit of TextMate: native, fast, and                  focused on editing.",
+            )
+            .developer_name("Horacio Duran")
+            .website("https://perri.to")
+            .issue_url("https://github.com/perrito666/textchum/issues")
+            .license_type(gtk::License::MitX11)
+            .build();
+        about.add_link("Repository", "https://github.com/perrito666/textchum");
+        about.present();
+    });
     add("block-start", workbench, |workbench, _| move_to_block_edge(workbench, true));
     add("block-end", workbench, |workbench, _| move_to_block_edge(workbench, false));
     add("palette", workbench, |workbench, _| show_palette(workbench));
@@ -1736,6 +1756,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Toggle File Tree", "win.sidebar"),
     ("Toggle Markdown Preview", "win.preview"),
     ("Preferences…", "win.preferences"),
+    ("About Textchum", "win.about"),
     ("Close Tab", "win.close-tab"),
 ];
 

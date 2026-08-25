@@ -56,6 +56,9 @@ app: core
 	mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources
 	cp macos/.build/release/Textchum $(APP_BUNDLE)/Contents/MacOS/
 	cp macos/Info.plist $(APP_BUNDLE)/Contents/
+	plutil -replace CFBundleShortVersionString \
+	  -string "$$(git describe --tags --always --dirty 2>/dev/null || echo development)" \
+	  $(APP_BUNDLE)/Contents/Info.plist
 	cp scripts/chum $(APP_BUNDLE)/Contents/Resources/
 	rm -rf dist/Textchum.iconset
 	mkdir -p dist/Textchum.iconset
