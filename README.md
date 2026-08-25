@@ -63,7 +63,8 @@ make docs     # build the documentation site (en/es/fr) into site/
 On Linux (experimental — core-owned editing, highlighting, open/save):
 
 ```sh
-sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev \
+  libwebkitgtk-6.0-dev libsoup-3.0-dev
 cargo build --release --manifest-path linux/Cargo.toml
 ```
 

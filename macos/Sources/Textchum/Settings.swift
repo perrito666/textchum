@@ -886,11 +886,9 @@ private struct PreprocessorsTab: View {
                     HStack(alignment: .top, spacing: 8) {
                         TextField("Language (e.g. python)", text: $newLanguage)
                             .frame(width: 180)
-                        TextField(
-                            "Commands, one per line (e.g. black -)",
-                            text: $newCommands, axis: .vertical)
-                            .lineLimit(1...4)
-                            .font(.system(.caption, design: .monospaced))
+                        CommandsEditor(
+                            placeholder: "Commands, one per line — Return adds a line",
+                            text: $newCommands)
                         Button("Add") {
                             model.addPreprocessorEntry(
                                 scope: newScope,
@@ -912,14 +910,53 @@ private struct PreprocessorsTab: View {
     }
 }
 
-/// A preprocessor chain, editable in place — one command per line.
-/// Commits when focus leaves; an emptied field reverts (removal has
-/// its own button).
+/// A real multi-line editor for command chains: Return adds a line
+/// (a vertical TextField would submit instead), the height follows
+/// the content, and the caption explains the one-command-per-line
+/// contract. Commits when focus leaves.
+struct CommandsEditor: View {
+    let placeholder: String
+    @Binding var text: String
+    var onFocusLost: () -> Void = {}
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $text)
+                .font(.system(.caption, design: .monospaced))
+                .frame(minHeight: 38, maxHeight: 110)
+                .fixedSize(horizontal: false, vertical: true)
+                .scrollContentBackground(.hidden)
+                .padding(4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(nsColor: .textBackgroundColor)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color(nsColor: .separatorColor)))
+                .focused($focused)
+                .onChange(of: focused) { _, isFocused in
+                    if !isFocused { onFocusLost() }
+                }
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 8)
+                    .padding(.leading, 10)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+/// A preprocessor chain, editable in place — one command per line,
+/// Return adds one. Commits when focus leaves; an emptied editor
+/// reverts (removal has its own button).
 private struct CommandsField: View {
     let entry: SettingsModel.PreprocessorEntry
     let commit: (String) -> Void
     @State private var text: String
-    @FocusState private var focused: Bool
 
     init(entry: SettingsModel.PreprocessorEntry, commit: @escaping (String) -> Void) {
         self.entry = entry
@@ -928,15 +965,10 @@ private struct CommandsField: View {
     }
 
     var body: some View {
-        TextField("commands, one per line", text: $text, axis: .vertical)
-            .lineLimit(1...6)
-            .textFieldStyle(.roundedBorder)
-            .font(.system(.caption, design: .monospaced))
-            .focused($focused)
-            .onChange(of: focused) { _, isFocused in
-                if !isFocused { commitIfChanged() }
-            }
-            .onDisappear(perform: commitIfChanged)
+        CommandsEditor(placeholder: "commands, one per line", text: $text) {
+            commitIfChanged()
+        }
+        .onDisappear(perform: commitIfChanged)
     }
 
     private func commitIfChanged() {

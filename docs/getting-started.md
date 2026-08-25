@@ -107,7 +107,8 @@ per-project overrides, and the workspace toggles —
 stored at `~/.config/textchum/config.json`.
 
 ```sh
-sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libwebkitgtk-6.0-dev
+sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev \
+  libwebkitgtk-6.0-dev libsoup-3.0-dev
 cargo build --release --manifest-path linux/Cargo.toml
 linux/target/release/textchum-gtk notes.md
 ```
