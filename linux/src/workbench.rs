@@ -31,6 +31,52 @@ pub struct Workbench {
     pages: RefCell<Vec<Rc<Page>>>,
     /// The root the sidebar currently shows.
     sidebar_root: RefCell<Option<PathBuf>>,
+    /// Where jumps came from, vim-jumplist style: Go Back retraces,
+    /// Go Forward returns, and a new jump clears the forward trail.
+    jumps: RefCell<JumpStack>,
+    /// True while Go Back/Forward navigates, so retracing a jump does
+    /// not record itself as a new one.
+    retracing: std::cell::Cell<bool>,
+}
+
+/// (path, line, UTF-16 column) positions with a cursor into them.
+#[derive(Default)]
+pub struct JumpStack {
+    entries: Vec<(String, i32, usize)>,
+    cursor: usize,
+}
+
+impl JumpStack {
+    /// Records where a jump started; anything forward of the cursor is
+    /// no longer reachable (same contract as the macOS stack).
+    fn note(&mut self, origin: (String, i32, usize)) {
+        self.entries.truncate(self.cursor);
+        self.entries.push(origin);
+        self.cursor = self.entries.len();
+    }
+
+    fn back(&mut self, current: Option<(String, i32, usize)>) -> Option<(String, i32, usize)> {
+        if self.cursor == 0 {
+            return None;
+        }
+        // Standing past the end: remember where we are, so Forward can
+        // return here.
+        if self.cursor == self.entries.len() {
+            if let Some(current) = current {
+                self.entries.push(current);
+            }
+        }
+        self.cursor -= 1;
+        self.entries.get(self.cursor).cloned()
+    }
+
+    fn forward(&mut self) -> Option<(String, i32, usize)> {
+        if self.cursor + 1 >= self.entries.len() {
+            return None;
+        }
+        self.cursor += 1;
+        self.entries.get(self.cursor).cloned()
+    }
 }
 
 thread_local! {
@@ -63,6 +109,7 @@ impl Workbench {
         file_section.append(Some("Open Quickly…"), Some("win.quick-open"));
         file_section.append(Some("Save"), Some("win.save"));
         file_section.append(Some("Save As…"), Some("win.save-as"));
+        file_section.append(Some("Revert to Saved"), Some("win.revert"));
         let edit_section = gtk::gio::Menu::new();
         edit_section.append(Some("Undo"), Some("win.undo"));
         edit_section.append(Some("Redo"), Some("win.redo"));
@@ -70,6 +117,12 @@ impl Workbench {
         edit_section.append(Some("Find in Project…"), Some("win.find-in-project"));
         let go_section = gtk::gio::Menu::new();
         go_section.append(Some("Jump to Definition"), Some("win.definition"));
+        go_section.append(Some("Go Back"), Some("win.back"));
+        go_section.append(Some("Go Forward"), Some("win.forward"));
+        go_section.append(Some("Find References"), Some("win.references"));
+        go_section.append(Some("Rename Symbol…"), Some("win.rename"));
+        go_section.append(Some("Format Document"), Some("win.format"));
+        go_section.append(Some("Document Outline…"), Some("win.outline"));
         go_section.append(Some("Toggle File Tree"), Some("win.sidebar"));
         go_section.append(Some("Toggle Markdown Preview"), Some("win.preview"));
         let app_section = gtk::gio::Menu::new();
@@ -167,6 +220,8 @@ impl Workbench {
             search_entry: search_entry.clone(),
             pages: RefCell::new(Vec::new()),
             sidebar_root: RefCell::new(None),
+            jumps: RefCell::new(JumpStack::default()),
+            retracing: std::cell::Cell::new(false),
         });
         WORKBENCHES.with(|list| list.borrow_mut().push(Rc::clone(&workbench)));
 
@@ -221,6 +276,45 @@ impl Workbench {
         workbench
     }
 
+    /// Runs `f` over every live workbench.
+    pub fn for_each(mut f: impl FnMut(&Rc<Workbench>)) {
+        WORKBENCHES.with(|list| {
+            for workbench in list.borrow().iter() {
+                f(workbench);
+            }
+        });
+    }
+
+    /// Every page this workbench hosts, in tab order.
+    pub fn all_pages(&self) -> Vec<Rc<Page>> {
+        self.pages.borrow().clone()
+    }
+
+    /// The page showing `path`, if this workbench has it.
+    pub fn page_for(&self, path: &str) -> Option<Rc<Page>> {
+        self.pages
+            .borrow()
+            .iter()
+            .find(|page| page.path.borrow().as_deref() == Some(path))
+            .cloned()
+    }
+
+    /// The selected page's position, for the jump stack.
+    fn current_position(&self) -> Option<(String, i32, usize)> {
+        let page = self.selected()?;
+        let path = page.path.borrow().clone()?;
+        let (line, character) = page::lsp_caret(&page.buffer);
+        Some((path, line as i32, character as usize))
+    }
+
+    /// Records the current position as a jump origin (called before any
+    /// navigation that deserves a Go Back).
+    pub fn note_jump(&self) {
+        if let Some(position) = self.current_position() {
+            self.jumps.borrow_mut().note(position);
+        }
+    }
+
     /// The workbench of the currently focused window (or the last one).
     pub fn active() -> Option<Rc<Workbench>> {
         WORKBENCHES.with(|list| {
@@ -251,6 +345,12 @@ impl Workbench {
     /// Opens `path` as a tab (or focuses the tab already showing it,
     /// anywhere), then optionally reveals a position.
     pub fn open(self: &Rc<Self>, path: Option<PathBuf>, at: Option<(i32, usize)>) {
+        // Navigations to a position (definitions, search results,
+        // outline picks) leave a trail; plain opens do not, and
+        // neither does retracing the trail itself.
+        if at.is_some() && !self.retracing.get() {
+            self.note_jump();
+        }
         if let Some(path) = &path {
             let key = path.to_string_lossy().into_owned();
             let existing = Shell::instance().pages.borrow().get(&key).cloned();
@@ -298,6 +398,7 @@ impl Workbench {
         }
         self.refresh_chrome();
         self.refresh_sidebar();
+        crate::session::save();
     }
 
     fn forget(&self, tab_page: &adw::TabPage) {
@@ -315,6 +416,8 @@ impl Workbench {
                     .borrow_mut()
                     .did_close(Path::new(&path));
             }
+            drop(pages);
+            crate::session::save();
         }
     }
 
@@ -702,6 +805,9 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let Some(page) = workbench.selected() else { return };
         let saved = page.state.borrow_mut().document.save().is_ok();
         if saved {
+            if let Some(path) = page.path.borrow().as_deref() {
+                Shell::instance().note_own_save(path);
+            }
             workbench.refresh_chrome();
         } else {
             let _ = gtk::prelude::WidgetExt::activate_action(
@@ -722,6 +828,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 if let Ok(file) = result {
                     if let Some(path) = file.path() {
                         let _ = page.state.borrow_mut().document.save_as(&path);
+                        Shell::instance().note_own_save(&path.to_string_lossy());
                         *page.path.borrow_mut() =
                             Some(path.to_string_lossy().into_owned());
                         workbench.refresh_chrome();
@@ -809,6 +916,188 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
     });
+    add("revert", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        if page.path.borrow().is_none() {
+            workbench.toast("Untitled documents have no file to revert to.");
+            return;
+        }
+        if !page.state.borrow().document.is_dirty() {
+            page.reload_from_disk();
+            return;
+        }
+        let dialog = adw::AlertDialog::new(
+            Some("Revert to Saved?"),
+            Some("Local changes will be replaced with the file on disk."),
+        );
+        dialog.add_response("cancel", "Cancel");
+        dialog.add_response("revert", "Revert");
+        dialog.set_response_appearance("revert", adw::ResponseAppearance::Destructive);
+        let page = Rc::clone(&page);
+        dialog.connect_response(None, move |_, response| {
+            if response == "revert" {
+                page.reload_from_disk();
+            }
+        });
+        dialog.present(Some(&workbench.window));
+    });
+    add("back", workbench, |workbench, _| {
+        let target = {
+            let current = workbench.current_position();
+            workbench.jumps.borrow_mut().back(current)
+        };
+        match target {
+            Some((path, line, character)) => {
+                jump_without_trail(workbench, &path, line, character);
+            }
+            None => workbench.toast("Nowhere to go back to."),
+        }
+    });
+    add("forward", workbench, |workbench, _| {
+        let target = workbench.jumps.borrow_mut().forward();
+        match target {
+            Some((path, line, character)) => {
+                jump_without_trail(workbench, &path, line, character);
+            }
+            None => workbench.toast("Nowhere to go forward to."),
+        }
+    });
+    add("references", workbench, |workbench, _| {
+        let Some((page, path)) = workbench
+            .selected()
+            .and_then(|page| {
+                let path = page.path.borrow().clone();
+                path.map(|path| (page, path))
+            })
+        else {
+            workbench.toast("Save the file first — untitled documents have no server.");
+            return;
+        };
+        let (line, character) = page::lsp_caret(&page.buffer);
+        let shell = Shell::instance();
+        let id = shell
+            .pool
+            .borrow_mut()
+            .references(Path::new(&path), line, character);
+        if id == 0 {
+            workbench.toast("No language server is running for this document.");
+            return;
+        }
+        let weak = Rc::downgrade(workbench);
+        shell.expect_response(id, move |json| {
+            if let Some(workbench) = weak.upgrade() {
+                show_locations(&workbench, "References", json);
+            }
+        });
+    });
+    add("rename", workbench, |workbench, _| {
+        let Some((page, path)) = workbench
+            .selected()
+            .and_then(|page| {
+                let path = page.path.borrow().clone();
+                path.map(|path| (page, path))
+            })
+        else {
+            workbench.toast("Save the file first — untitled documents have no server.");
+            return;
+        };
+        let (line, character) = page::lsp_caret(&page.buffer);
+        let dialog = adw::AlertDialog::new(Some("Rename Symbol"), None);
+        let entry = gtk::Entry::new();
+        entry.set_placeholder_text(Some("New name"));
+        dialog.set_extra_child(Some(&entry));
+        dialog.add_response("cancel", "Cancel");
+        dialog.add_response("rename", "Rename");
+        dialog.set_response_appearance("rename", adw::ResponseAppearance::Suggested);
+        dialog.set_default_response(Some("rename"));
+        let weak = Rc::downgrade(workbench);
+        dialog.connect_response(None, move |_, response| {
+            if response != "rename" {
+                return;
+            }
+            let new_name = entry.text().to_string();
+            if new_name.trim().is_empty() {
+                return;
+            }
+            let shell = Shell::instance();
+            let id = shell
+                .pool
+                .borrow_mut()
+                .rename(Path::new(&path), line, character, new_name.trim());
+            let weak = weak.clone();
+            if id == 0 {
+                if let Some(workbench) = weak.upgrade() {
+                    workbench.toast("No language server is running for this document.");
+                }
+                return;
+            }
+            shell.expect_response(id, move |json| {
+                if let Some(workbench) = weak.upgrade() {
+                    apply_workspace_edit(&workbench, json);
+                }
+            });
+        });
+        dialog.present(Some(&workbench.window));
+        let _ = page;
+    });
+    add("format", workbench, |workbench, _| {
+        let Some((page, path)) = workbench
+            .selected()
+            .and_then(|page| {
+                let path = page.path.borrow().clone();
+                path.map(|path| (page, path))
+            })
+        else {
+            workbench.toast("Save the file first — untitled documents have no server.");
+            return;
+        };
+        // A tab-indented file keeps tabs; everything else gets spaces.
+        let text = page.state.borrow().document.text();
+        let uses_tabs = text.contains("\n\t") || text.starts_with('\t');
+        let tab_width = Shell::instance().config.borrow().tab_width();
+        let shell = Shell::instance();
+        let id = shell
+            .pool
+            .borrow_mut()
+            .formatting(Path::new(&path), tab_width, !uses_tabs);
+        if id == 0 {
+            workbench.toast("No language server is running for this document.");
+            return;
+        }
+        let weak = Rc::downgrade(workbench);
+        shell.expect_response(id, move |json| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let edits = crate::lsp_edits::text_edits(json);
+            if edits.is_empty() {
+                workbench.toast("The server had no formatting to offer.");
+                return;
+            }
+            let Some(page) = workbench.page_for(&path) else { return };
+            apply_edits_to_page(&page, edits);
+            workbench.refresh_chrome();
+        });
+    });
+    add("outline", workbench, |workbench, _| {
+        let Some(path) = workbench
+            .selected()
+            .and_then(|page| page.path.borrow().clone())
+        else {
+            workbench.toast("Save the file first — untitled documents have no server.");
+            return;
+        };
+        let shell = Shell::instance();
+        let id = shell.pool.borrow_mut().document_symbols(Path::new(&path));
+        if id == 0 {
+            workbench.toast("No language server is running for this document.");
+            return;
+        }
+        let weak = Rc::downgrade(workbench);
+        shell.expect_response(id, move |json| {
+            if let Some(workbench) = weak.upgrade() {
+                show_outline(&workbench, &path, json);
+            }
+        });
+    });
     let _ = window;
 }
 
@@ -877,7 +1166,205 @@ fn open_definition(workbench: &Rc<Workbench>, json: &str) {
     workbench.open(Some(PathBuf::from(path)), Some((line, character)));
 }
 
-fn percent_decode(text: &str) -> String {
+/// Navigates for Go Back/Forward: same as a jump, minus the trail.
+fn jump_without_trail(workbench: &Rc<Workbench>, path: &str, line: i32, character: usize) {
+    workbench.retracing.set(true);
+    workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+    workbench.retracing.set(false);
+}
+
+/// A floating list of locations (references); activating a row jumps.
+fn show_locations(workbench: &Rc<Workbench>, title: &str, json: &str) {
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
+        workbench.toast("No references found.");
+        return;
+    };
+    let mut rows: Vec<(String, i32, usize)> = Vec::new();
+    for item in parsed.as_array().into_iter().flatten() {
+        let Some(uri) = item["uri"].as_str() else { continue };
+        let Some(path) = uri.strip_prefix("file://") else { continue };
+        let line = item["range"]["start"]["line"].as_i64().unwrap_or(0) as i32;
+        let character = item["range"]["start"]["character"].as_u64().unwrap_or(0) as usize;
+        rows.push((percent_decode(path), line, character));
+    }
+    if rows.is_empty() {
+        workbench.toast("No references found.");
+        return;
+    }
+    present_picker(
+        workbench,
+        title,
+        rows.iter()
+            .map(|(path, line, _)| {
+                let name = Path::new(path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.clone());
+                format!("{name}:{}", line + 1)
+            })
+            .collect(),
+        move |workbench, index| {
+            let (path, line, character) = rows[index].clone();
+            workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+        },
+    );
+}
+
+/// The document's symbols, flattened; activating a row jumps.
+fn show_outline(workbench: &Rc<Workbench>, path: &str, json: &str) {
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
+        workbench.toast("The server offered no outline.");
+        return;
+    };
+    let mut rows: Vec<(String, i32, usize)> = Vec::new();
+    fn walk(rows: &mut Vec<(String, i32, usize)>, items: &serde_json::Value, depth: usize) {
+        for item in items.as_array().into_iter().flatten() {
+            let Some(name) = item["name"].as_str() else { continue };
+            // DocumentSymbol has selectionRange; SymbolInformation has
+            // location.range.
+            let range = if item["selectionRange"].is_object() {
+                &item["selectionRange"]
+            } else {
+                &item["location"]["range"]
+            };
+            let line = range["start"]["line"].as_i64().unwrap_or(0) as i32;
+            let character = range["start"]["character"].as_u64().unwrap_or(0) as usize;
+            rows.push((format!("{}{name}", "  ".repeat(depth)), line, character));
+            walk(rows, &item["children"], depth + 1);
+        }
+    }
+    walk(&mut rows, &parsed, 0);
+    if rows.is_empty() {
+        workbench.toast("The server offered no outline.");
+        return;
+    }
+    let path = path.to_owned();
+    let labels: Vec<String> = rows.iter().map(|(label, _, _)| label.clone()).collect();
+    present_picker(workbench, "Document Outline", labels, move |workbench, index| {
+        let (_, line, character) = rows[index];
+        workbench.open(Some(PathBuf::from(&path)), Some((line, character)));
+    });
+}
+
+/// A small modal list; activating a row runs `choose` and closes.
+fn present_picker(
+    workbench: &Rc<Workbench>,
+    title: &str,
+    labels: Vec<String>,
+    choose: impl Fn(&Rc<Workbench>, usize) + 'static,
+) {
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::Browse);
+    for label in &labels {
+        let row_label = gtk::Label::new(Some(label));
+        row_label.set_xalign(0.0);
+        row_label.set_margin_start(10);
+        row_label.set_margin_end(10);
+        row_label.set_margin_top(4);
+        row_label.set_margin_bottom(4);
+        list.append(&row_label);
+    }
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&list)
+        .min_content_height(280)
+        .min_content_width(420)
+        .build();
+    let dialog = adw::Window::builder()
+        .transient_for(&workbench.window)
+        .modal(true)
+        .title(title)
+        .default_width(460)
+        .default_height(340)
+        .build();
+    let header = adw::HeaderBar::new();
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    content.append(&header);
+    content.append(&scrolled);
+    dialog.set_content(Some(&content));
+    {
+        let workbench = Rc::clone(workbench);
+        let dialog = dialog.clone();
+        list.connect_row_activated(move |_, row| {
+            let index = row.index();
+            if index >= 0 {
+                choose(&workbench, index as usize);
+            }
+            dialog.close();
+        });
+    }
+    // Escape closes, like every dialog should.
+    let keys = gtk::EventControllerKey::new();
+    {
+        let dialog = dialog.clone();
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if key == gtk::gdk::Key::Escape {
+                dialog.close();
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+    }
+    dialog.add_controller(keys);
+    dialog.present();
+    if let Some(first) = list.row_at_index(0) {
+        list.select_row(Some(&first));
+    }
+}
+
+/// Applies LSP text edits to an open page through the buffer (the
+/// choke point carries them into the core, so undo works), bottom-up.
+fn apply_edits_to_page(page: &Rc<Page>, edits: Vec<crate::lsp_edits::TextEdit>) {
+    let buffer = &page.buffer;
+    for edit in crate::lsp_edits::bottom_up(edits) {
+        let Some(start) = page::iter_at_lsp(buffer, edit.start_line, edit.start_character)
+        else {
+            continue;
+        };
+        let Some(end) = page::iter_at_lsp(buffer, edit.end_line, edit.end_character) else {
+            continue;
+        };
+        let mut start = start;
+        let mut end = end;
+        buffer.delete(&mut start, &mut end);
+        let mut at = start;
+        buffer.insert(&mut at, &edit.new_text);
+    }
+}
+
+/// Applies a rename's WorkspaceEdit: open pages edit in place, files
+/// nobody has open are rewritten on disk.
+fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str) {
+    let by_file = crate::lsp_edits::workspace_edits(json);
+    if by_file.is_empty() {
+        workbench.toast("The server had no rename to offer.");
+        return;
+    }
+    let mut touched = 0usize;
+    for (path, edits) in by_file {
+        let mut open_page: Option<Rc<Page>> = None;
+        Workbench::for_each(|candidate| {
+            if open_page.is_none() {
+                open_page = candidate.page_for(&path);
+            }
+        });
+        if let Some(page) = open_page {
+            apply_edits_to_page(&page, edits);
+            touched += 1;
+        } else if let Ok(text) = std::fs::read_to_string(&path) {
+            let rewritten = crate::lsp_edits::apply_to_string(&text, edits);
+            if std::fs::write(&path, rewritten).is_ok() {
+                touched += 1;
+            }
+        }
+    }
+    workbench.toast(&format!(
+        "Renamed across {touched} file{}.",
+        if touched == 1 { "" } else { "s" }
+    ));
+    workbench.refresh_chrome();
+}
+
+pub fn percent_decode(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut index = 0;

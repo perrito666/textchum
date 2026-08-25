@@ -43,6 +43,8 @@ pub struct Page {
     pub root: gtk::Widget,
     /// Present for Markdown documents: the live preview.
     pub preview: Option<webkit6::WebView>,
+    /// Watches the file on disk; kept alive for the page's lifetime.
+    pub monitor: RefCell<Option<gtk::gio::FileMonitor>>,
     /// The completion popup and its current candidates.
     completion: CompletionState,
 }
@@ -177,6 +179,7 @@ impl Page {
             path: RefCell::new(document_path),
             root,
             preview,
+            monitor: RefCell::new(None),
             completion: CompletionState {
                 popover: completion_popover,
                 list: completion_list,
@@ -186,6 +189,7 @@ impl Page {
         });
         install_completion_keys(&page);
         install_hover(&page);
+        install_file_monitor(&page);
 
         // --- After every change: recolor, announce, verify -------------
         {
@@ -275,6 +279,50 @@ impl Page {
         update_preview(self);
     }
 
+    /// Replaces the buffer with the file's current on-disk content —
+    /// the core reload replayed into the view, caret preserved where
+    /// the text allows.
+    pub fn reload_from_disk(self: &Rc<Self>) {
+        let caret = {
+            let buffer = &self.buffer;
+            buffer.iter_at_mark(&buffer.get_insert()).offset()
+        };
+        let reloaded = {
+            let mut state = self.state.borrow_mut();
+            state.syncing = true;
+            let result = state.document.reload();
+            if result.is_err() {
+                state.syncing = false;
+            }
+            result
+        };
+        if reloaded.is_err() {
+            return;
+        }
+        let buffer = &self.buffer;
+        // Bind the text first: set_text re-enters the choke-point
+        // handlers, which take their own borrow of the state.
+        let text = self.state.borrow().document.text();
+        buffer.set_text(&text);
+        self.state.borrow_mut().syncing = false;
+        let target = buffer.iter_at_offset(caret.min(buffer.char_count()));
+        buffer.place_cursor(&target);
+        recolor(buffer);
+        apply_highlights(buffer, &self.state.borrow().document);
+        // The pool sees the fresh text like any other change.
+        if let Some(path) = self.path.borrow().clone() {
+            let text = self.state.borrow().document.text();
+            Shell::instance()
+                .pool
+                .borrow_mut()
+                .did_change(Path::new(&path), &text);
+        }
+        update_preview(self);
+        if let Some(workbench) = crate::workbench::Workbench::active() {
+            workbench.refresh_chrome();
+        }
+    }
+
     pub fn display_name(&self) -> String {
         self.state
             .borrow()
@@ -325,7 +373,7 @@ pub fn lsp_caret(buffer: &sourceview5::Buffer) -> (u32, u32) {
     (line.max(0) as u32, column as u32)
 }
 
-fn iter_at_lsp(
+pub fn iter_at_lsp(
     buffer: &sourceview5::Buffer,
     line: i32,
     character_utf16: usize,
@@ -747,6 +795,53 @@ fn install_completion_keys(page: &Rc<Page>) {
 
 /// Resting the pointer over a symbol asks its server; the answer shows
 /// in a popover at the spot. Moving on dismisses it.
+/// Watches the document's file: external changes follow the disk
+/// silently while the buffer is clean, and offer a toast (with a
+/// Reload button) when local edits would be lost. The app's own saves
+/// are recognized and ignored.
+fn install_file_monitor(page: &Rc<Page>) {
+    let Some(path) = page.path.borrow().clone() else { return };
+    let file = gtk::gio::File::for_path(&path);
+    let Ok(monitor) =
+        file.monitor_file(gtk::gio::FileMonitorFlags::NONE, gtk::gio::Cancellable::NONE)
+    else {
+        return;
+    };
+    let weak = Rc::downgrade(page);
+    monitor.connect_changed(move |_, _, _, event| {
+        use gtk::gio::FileMonitorEvent;
+        if !matches!(
+            event,
+            FileMonitorEvent::ChangesDoneHint | FileMonitorEvent::Created
+        ) {
+            return;
+        }
+        let Some(page) = weak.upgrade() else { return };
+        let Some(path) = page.path.borrow().clone() else { return };
+        if Shell::instance().is_own_save(&path) {
+            return;
+        }
+        if page.state.borrow().document.is_dirty() {
+            // Local edits at stake: never reload silently.
+            let toast = adw::Toast::new("The file changed on disk. Reload and lose local edits?");
+            toast.set_button_label(Some("Reload"));
+            toast.set_timeout(0);
+            let weak = Rc::downgrade(&page);
+            toast.connect_button_clicked(move |_| {
+                if let Some(page) = weak.upgrade() {
+                    page.reload_from_disk();
+                }
+            });
+            if let Some(handles) = Shell::instance().pages.borrow().get(&path) {
+                handles.toasts.add_toast(toast);
+            }
+        } else {
+            page.reload_from_disk();
+        }
+    });
+    *page.monitor.borrow_mut() = Some(monitor);
+}
+
 fn install_hover(page: &Rc<Page>) {
     let popover = gtk::Popover::new();
     popover.set_parent(&page.view);

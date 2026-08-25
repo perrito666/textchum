@@ -35,6 +35,9 @@ pub struct Shell {
     events: RefCell<Receiver<Event>>,
     pub pages: RefCell<HashMap<String, Rc<PageHandles>>>,
     callbacks: RefCell<HashMap<u64, Box<dyn FnOnce(&str)>>>,
+    /// Paths this process just wrote, so the file monitor can tell the
+    /// app's own saves from external changes.
+    own_saves: RefCell<HashMap<String, std::time::Instant>>,
 }
 
 thread_local! {
@@ -59,6 +62,13 @@ impl Shell {
             if let Some(warning) = warning {
                 eprintln!("textchum: {warning}");
             }
+            // The same debug log the macOS shell keeps, at the Linux
+            // conventional spot.
+            let log_path = crate::session::state_dir().join("textchum/lsp.log");
+            if let Some(parent) = log_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            textchum_lsp::log::set_path(&log_path);
             let (sender, receiver) = std::sync::mpsc::channel();
             let mut pool = Pool::new(sender);
             // Screenshot/demo hook: route rust at the scripted server.
@@ -77,6 +87,7 @@ impl Shell {
                 events: RefCell::new(receiver),
                 pages: RefCell::new(HashMap::new()),
                 callbacks: RefCell::new(HashMap::new()),
+                own_saves: RefCell::new(HashMap::new()),
             });
             shell.apply_appearance();
             shell.apply_theme();
@@ -126,6 +137,22 @@ impl Shell {
             crate::page::refresh_style_tags(&handles.buffer);
             crate::page::recolor(&handles.buffer);
         }
+    }
+
+    /// Remembers that this process wrote `path` just now, so the file
+    /// monitor does not offer to reload the app's own save.
+    pub fn note_own_save(&self, path: &str) {
+        self.own_saves
+            .borrow_mut()
+            .insert(path.to_owned(), std::time::Instant::now());
+    }
+
+    /// Whether a monitor event for `path` is the echo of our own save.
+    pub fn is_own_save(&self, path: &str) -> bool {
+        self.own_saves
+            .borrow()
+            .get(path)
+            .is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(2))
     }
 
     pub fn save_config(&self) {

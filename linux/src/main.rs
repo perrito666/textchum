@@ -4,7 +4,9 @@
 //! owns every document, the shell owns presentation, and every edit
 //! funnels through one choke point.
 
+mod lsp_edits;
 mod page;
+mod session;
 mod shell;
 mod workbench;
 
@@ -16,6 +18,7 @@ const APP_ID: &str = "to.perri.textchum";
 
 fn main() -> gtk::glib::ExitCode {
     let smoke_test = std::env::args().any(|argument| argument == "--smoke-test");
+    let fresh = std::env::args().any(|argument| argument == "--fresh");
 
     let app = adw::Application::builder()
         .application_id(APP_ID)
@@ -30,9 +33,15 @@ fn main() -> gtk::glib::ExitCode {
             std::process::exit(code);
         }
         let workbench = Workbench::new(app);
-        workbench.open(None, None);
+        // The saved session comes back unless --fresh says otherwise;
+        // an empty (or absent) session still deserves a tab.
+        let restored = if fresh { 0 } else { session::restore(&workbench) };
+        if restored == 0 {
+            workbench.open(None, None);
+        }
         workbench.window.present();
     });
+    app.connect_shutdown(|_| session::save());
     app.connect_open(|app, files, _hint| {
         let workbench = Workbench::active().unwrap_or_else(|| Workbench::new(app));
         for file in files {
@@ -59,13 +68,102 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.preferences", &["<Ctrl>comma"]);
     app.set_accels_for_action("win.close-tab", &["<Ctrl>w"]);
     app.set_accels_for_action("window.close", &["<Ctrl><Shift>w"]);
+    app.set_accels_for_action("win.back", &["<Alt>Left"]);
+    app.set_accels_for_action("win.forward", &["<Alt>Right"]);
+    app.set_accels_for_action("win.references", &["<Shift>F12"]);
+    app.set_accels_for_action("win.rename", &["F2"]);
+    app.set_accels_for_action("win.format", &["<Ctrl><Shift>i"]);
+    app.set_accels_for_action("win.outline", &["<Ctrl><Shift>o"]);
+    app.set_accels_for_action("win.revert", &["<Ctrl><Alt>r"]);
+    // Key overrides read the configuration, which touches GTK-backed
+    // state — so they wait for startup, after GTK initializes.
+    app.connect_startup(|app| apply_key_overrides(app));
 
-    // GApplication consumes argv; strip our own flag so it does not try
-    // to open a file called --smoke-test.
+    // GApplication consumes argv; strip our own flags so it does not
+    // try to open files named after them.
     let arguments: Vec<String> = std::env::args()
-        .filter(|argument| argument != "--smoke-test")
+        .filter(|argument| argument != "--smoke-test" && argument != "--fresh")
         .collect();
     app.run_with_args(&arguments)
+}
+
+/// Applies the configuration's `keys` section — the same action names
+/// and `modifiers+key` specs the macOS shell understands, mapped onto
+/// this shell's actions (`cmd` means the primary modifier, so it lands
+/// on Ctrl here).
+fn apply_key_overrides(app: &adw::Application) {
+    let keys_json = shell::Shell::instance().config.borrow().keys_json();
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&keys_json) else {
+        return;
+    };
+    let action_for = |name: &str| -> Option<&'static str> {
+        Some(match name {
+            "new" => "win.new-tab",
+            "open" => "win.open",
+            "openQuickly" => "win.quick-open",
+            "save" => "win.save",
+            "saveAs" => "win.save-as",
+            "revertToSaved" => "win.revert",
+            "close" => "win.close-tab",
+            "undo" => "win.undo",
+            "redo" => "win.redo",
+            "find" => "win.find",
+            "findInProject" => "win.find-in-project",
+            "jumpToDefinition" => "win.definition",
+            "goBack" => "win.back",
+            "goForward" => "win.forward",
+            "findReferences" => "win.references",
+            "renameSymbol" => "win.rename",
+            "formatDocument" => "win.format",
+            "documentOutline" => "win.outline",
+            "toggleNavigator" => "win.sidebar",
+            "togglePreview" => "win.preview",
+            "settings" => "win.preferences",
+            _ => return None,
+        })
+    };
+    for (name, spec) in parsed.as_object().into_iter().flatten() {
+        let Some(action) = action_for(name) else {
+            eprintln!("textchum: keys: no such action on this platform: {name}");
+            continue;
+        };
+        let Some(spec) = spec.as_str() else { continue };
+        let Some(accel) = accel_from_spec(spec) else {
+            eprintln!("textchum: keys: could not parse {spec:?} for {name}");
+            continue;
+        };
+        app.set_accels_for_action(action, &[&accel]);
+    }
+}
+
+/// "cmd+shift+g" → "<Ctrl><Shift>g". `cmd` and `ctrl` both mean Ctrl
+/// here; `alt` is Alt. Named keys use their GDK names.
+fn accel_from_spec(spec: &str) -> Option<String> {
+    let mut modifiers = String::new();
+    let mut key: Option<String> = None;
+    for part in spec.split('+') {
+        match part.trim().to_lowercase().as_str() {
+            "cmd" | "ctrl" | "control" => {
+                if !modifiers.contains("<Ctrl>") {
+                    modifiers.push_str("<Ctrl>");
+                }
+            }
+            "shift" => modifiers.push_str("<Shift>"),
+            "alt" | "option" => modifiers.push_str("<Alt>"),
+            "up" => key = Some("Up".into()),
+            "down" => key = Some("Down".into()),
+            "left" => key = Some("Left".into()),
+            "right" => key = Some("Right".into()),
+            "return" | "enter" => key = Some("Return".into()),
+            "escape" => key = Some("Escape".into()),
+            "space" => key = Some("space".into()),
+            "tab" => key = Some("Tab".into()),
+            "delete" => key = Some("Delete".into()),
+            other if other.chars().count() == 1 => key = Some(other.to_owned()),
+            _ => return None,
+        }
+    }
+    key.map(|key| format!("{modifiers}{key}"))
 }
 
 /// Headless end-to-end check (run under xvfb in CI): typing through the
@@ -166,6 +264,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         return 1;
     }
 
+
     // Diagnostics from the scripted server, delivered through the pump.
     if have_fake_server {
         let context = glib::MainContext::default();
@@ -240,9 +339,71 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             eprintln!("FAIL: hover text missing");
             return 1;
         }
+
+        // Formatting: the scripted server prepends "formatted: " as a
+        // TextEdit; the action must carry it through the buffer (and
+        // therefore the core) — proving the whole edits pipeline.
+        if !fire("win.format") {
+            eprintln!("FAIL: format action");
+            return 1;
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        loop {
+            context.iteration(true);
+            let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+            if text.starts_with("formatted: ") {
+                break;
+            }
+            if std::time::Instant::now() > deadline {
+                eprintln!("FAIL: formatting edit never landed");
+                return 1;
+            }
+        }
         println!("gtk smoke test passed (with language server)");
     } else {
         println!("gtk smoke test passed (no fake server available)");
+    }
+
+    // External changes follow the disk while the buffer is clean. Any
+    // formatting edit above left it dirty, so save first; the app's
+    // own save must be ignored, so wait out the suppression window.
+    {
+        if !fire("win.save") {
+            eprintln!("FAIL: save before watch test");
+            return 1;
+        }
+        let context = glib::MainContext::default();
+        let until = std::time::Instant::now() + std::time::Duration::from_millis(2200);
+        while std::time::Instant::now() < until {
+            context.iteration(false);
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let external = "fn main() {}\n// rewritten outside\n";
+        if std::fs::write(&path, external).is_err() {
+            eprintln!("FAIL: external rewrite");
+            return 1;
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            context.iteration(true);
+            if buffer.text(&buffer.start_iter(), &buffer.end_iter(), true) == external {
+                break;
+            }
+            if std::time::Instant::now() > deadline {
+                eprintln!("FAIL: external change never reached the buffer");
+                return 1;
+            }
+        }
+    }
+
+    // The session file records the open documents.
+    session::save();
+    match std::fs::read_to_string(session::session_path()) {
+        Ok(session_json) if session_json.contains("smoke.rs") => {}
+        _ => {
+            eprintln!("FAIL: session file missing the open document");
+            return 1;
+        }
     }
     let _ = std::fs::remove_dir_all(&directory);
     0

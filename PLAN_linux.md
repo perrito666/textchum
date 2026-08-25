@@ -31,27 +31,25 @@ feature ledger.
 
 Ordered roughly by how much daily pain each gap causes.
 
-1. **File watching + Revert to Saved.** The Linux shell does not watch
-   open files at all: external changes go unnoticed until a manual
-   reload that also does not exist yet. macOS follows the disk silently
-   when clean, prompts when dirty, and has ⌥⌘R. `GFileMonitor` is the
-   tool; the core's `reload()` does the rest.
-2. **Session restore.** No `session.json` on Linux: no reopened files,
-   no caret positions, no `--fresh`. The state format is shared and
-   hand-readable; only the save/restore plumbing is missing.
-3. **Rebindable keys.** The configuration's `keys` section is ignored;
-   accelerators are hardcoded. Map the existing action names onto
-   `set_accels_for_action` at startup.
-4. **The jump stack.** No Go Back/Go Forward; definition jumps and
-   search results leave no trail.
-5. **LSP breadth.** References, rename, formatting, and the document
-   outline are macOS-only; the pool methods exist in the linked crate,
-   so each is a panel/action away. Hover on Linux also lags the Mac's:
-   no Markdown rendering, no symbol gating (it fires over whitespace
-   and comments), no on/off toggle, and no show-at-caret command. The
-   LSP debug log is also unwired
-   (`textchum_lsp::log::set_path` is never called — point it at
-   `~/.local/state/textchum/lsp.log`).
+1. ~~File watching + Revert to Saved.~~ Done: `GFileMonitor` per
+   pathed page — clean buffers follow the disk silently, dirty ones
+   get a Reload toast, the app's own saves are recognized and ignored,
+   and Revert to Saved (Ctrl+Alt+R) confirms before discarding edits.
+2. ~~Session restore.~~ Done: `~/.local/state/textchum/session.json`
+   (same hand-readable shape as the Mac's), written eagerly on opens,
+   closes, and quit; `--fresh` skips it once.
+3. ~~Rebindable keys.~~ Done: the `keys` section's action names and
+   `modifiers+key` specs map onto the win.* actions at startup (`cmd`
+   lands on Ctrl).
+4. ~~The jump stack.~~ Done: Go Back (Alt+Left) / Go Forward
+   (Alt+Right) with the same clear-forward-on-new-jump contract;
+   definitions, search results, and outline picks leave the trail.
+5. **LSP breadth.** References (Shift+F12), Rename (F2), Format
+   (Ctrl+Shift+I), and Document Outline (Ctrl+Shift+O) are in — rename
+   edits open pages in place and rewrites unopened files on disk; the
+   debug log now lands in `~/.local/state/textchum/lsp.log`. Still
+   behind the Mac's hover: no Markdown rendering, no symbol gating, no
+   on/off toggle, no show-at-caret command.
 6. **Replace in file.** The search bar finds; it does not replace, and
    has no regex/whole-word toggles (macOS uses the native find bar).
 7. **Command palette.** Menu actions exist and are named; the
