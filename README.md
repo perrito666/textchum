@@ -85,6 +85,14 @@ The app icon is a tulip photographed by Horacio Duran in the flower
 fields near Lisse, the Netherlands (52°19'54.1"N 4°37'25.9"E) on
 21 April 2026 at 11:25.
 
+## Contributors
+
+Textchum is written by [Horacio Duran](https://perri.to), with
+contributions from:
+
+- [Juan Diaz](https://github.com/nueces) — Linux install instructions
+  and packaging polish, and the save-as highlighting report
+
 ## License
 
 [MIT](LICENSE)

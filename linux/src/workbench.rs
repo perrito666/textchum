@@ -1169,6 +1169,10 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .license_type(gtk::License::MitX11)
             .build();
         about.add_link("Repository", "https://github.com/perrito666/textchum");
+        about.add_credit_section(
+            Some("Contributors"),
+            &["Juan Diaz https://github.com/nueces"],
+        );
         about.present();
     });
     add("block-start", workbench, |workbench, _| move_to_block_edge(workbench, true));

@@ -593,6 +593,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         line(
             "MIT license",
             link: "https://github.com/perrito666/textchum/blob/main/LICENSE")
+        line(
+            "Juan Diaz", link: "https://github.com/nueces",
+            prefix: "With contributions from ")
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "Textchum",
             .applicationVersion: version,
