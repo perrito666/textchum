@@ -120,6 +120,7 @@ impl Workbench {
                 Some(&format!("win.new-with-format('{name}')")),
             );
         }
+        file_section.append(Some("New with Format…"), Some("win.new-format-picker"));
         file_section.append_submenu(Some("New with Format"), &formats_menu);
         file_section.append(Some("New Window"), Some("win.new"));
         file_section.append(Some("Open…"), Some("win.open"));
@@ -1173,6 +1174,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("block-start", workbench, |workbench, _| move_to_block_edge(workbench, true));
     add("block-end", workbench, |workbench, _| move_to_block_edge(workbench, false));
     add("palette", workbench, |workbench, _| show_palette(workbench));
+    add("new-format-picker", workbench, |workbench, _| show_format_picker(workbench));
     add("server-status", workbench, |workbench, _| show_server_status(workbench));
     add("paths", workbench, |workbench, _| {
         workbench
@@ -1725,6 +1727,7 @@ fn move_to_block_edge(workbench: &Rc<Workbench>, to_start: bool) {
 /// Every palette entry: what the menus can do, searchable by name.
 const PALETTE: &[(&str, &str)] = &[
     ("New Tab", "win.new-tab"),
+    ("New with Format…", "win.new-format-picker"),
     ("New Window", "win.new"),
     ("Open…", "win.open"),
     ("Open Quickly…", "win.quick-open"),
@@ -1754,6 +1757,148 @@ const PALETTE: &[(&str, &str)] = &[
     ("About Textchum", "win.about"),
     ("Close Tab", "win.close-tab"),
 ];
+
+/// New with Format for keyboards (Ctrl+Shift+N): the language list
+/// behind an editable filter; ⏎ opens an untitled tab already
+/// speaking the selection.
+fn show_format_picker(workbench: &Rc<Workbench>) {
+    let names: Vec<&'static str> =
+        textchum_core::syntax::languages::selectable_names().to_vec();
+    filterable_picker(workbench, "New with Format", names.clone(), move |workbench, index| {
+        let name = names[index];
+        let _ = gtk::prelude::WidgetExt::activate_action(
+            &workbench.window,
+            &format!("win.new-with-format('{name}')"),
+            None,
+        );
+    });
+}
+
+/// A modal list with an editable subsequence filter — the palette's
+/// skeleton, reusable for any pick-one-by-name flow. ↑/↓ move from the
+/// entry, ⏎ picks, ⎋ closes.
+fn filterable_picker(
+    workbench: &Rc<Workbench>,
+    title: &str,
+    labels: Vec<&'static str>,
+    choose: impl Fn(&Rc<Workbench>, usize) + 'static,
+) {
+    let entry = gtk::SearchEntry::new();
+    entry.set_placeholder_text(Some("Type to filter…"));
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::Browse);
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&list)
+        .min_content_height(300)
+        .build();
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    content.set_margin_top(10);
+    content.set_margin_bottom(10);
+    content.set_margin_start(10);
+    content.set_margin_end(10);
+    content.append(&entry);
+    content.append(&scrolled);
+    let dialog = adw::Window::builder()
+        .transient_for(&workbench.window)
+        .modal(true)
+        .title(title)
+        .default_width(380)
+        .default_height(360)
+        .build();
+    dialog.set_content(Some(&content));
+
+    let visible: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
+    let rebuild = {
+        let list = list.clone();
+        let visible = Rc::clone(&visible);
+        let labels = labels.clone();
+        move |query: &str| {
+            while let Some(row) = list.row_at_index(0) {
+                list.remove(&row);
+            }
+            let query = query.to_lowercase();
+            let mut shown = Vec::new();
+            for (index, label) in labels.iter().enumerate() {
+                let mut characters = query.chars().peekable();
+                for candidate in label.to_lowercase().chars() {
+                    if characters.peek() == Some(&candidate) {
+                        characters.next();
+                    }
+                }
+                if characters.peek().is_none() {
+                    let row_label = gtk::Label::new(Some(label));
+                    row_label.set_xalign(0.0);
+                    row_label.set_margin_start(10);
+                    row_label.set_margin_end(10);
+                    row_label.set_margin_top(4);
+                    row_label.set_margin_bottom(4);
+                    list.append(&row_label);
+                    shown.push(index);
+                }
+            }
+            *visible.borrow_mut() = shown;
+            if let Some(first) = list.row_at_index(0) {
+                list.select_row(Some(&first));
+            }
+        }
+    };
+    rebuild("");
+    {
+        let rebuild = rebuild.clone();
+        entry.connect_search_changed(move |entry| rebuild(&entry.text()));
+    }
+    let run = {
+        let workbench = Rc::downgrade(workbench);
+        let visible = Rc::clone(&visible);
+        let dialog = dialog.clone();
+        let choose = Rc::new(choose);
+        Rc::new(move |row_index: i32| {
+            let Some(workbench) = workbench.upgrade() else { return };
+            let Some(&index) = visible.borrow().get(row_index.max(0) as usize) else {
+                return;
+            };
+            dialog.close();
+            choose(&workbench, index);
+        })
+    };
+    {
+        let list = list.clone();
+        let run = Rc::clone(&run);
+        entry.connect_activate(move |_| {
+            if let Some(row) = list.selected_row() {
+                run(row.index());
+            }
+        });
+    }
+    {
+        let run = Rc::clone(&run);
+        list.connect_row_activated(move |_, row| run(row.index()));
+    }
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    {
+        let dialog = dialog.clone();
+        let list = list.clone();
+        keys.connect_key_pressed(move |_, key, _, _| match key {
+            gtk::gdk::Key::Escape => {
+                dialog.close();
+                glib::Propagation::Stop
+            }
+            gtk::gdk::Key::Down | gtk::gdk::Key::Up => {
+                let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
+                let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
+                if let Some(row) = list.row_at_index(next.max(0)) {
+                    list.select_row(Some(&row));
+                }
+                glib::Propagation::Stop
+            }
+            _ => glib::Propagation::Proceed,
+        });
+    }
+    dialog.add_controller(keys);
+    dialog.present();
+    entry.grab_focus();
+}
 
 /// A fuzzy-filterable list over every menu action; ⏎ runs the
 /// selection. The shortcut for when the shortcut escapes memory.

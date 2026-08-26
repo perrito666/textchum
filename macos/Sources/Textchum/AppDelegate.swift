@@ -162,6 +162,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         }
                         return
                     }
+                    if allArguments[flagIndex + 1] == "newformat" {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                self?.newDocumentWithFormatPicker(nil)
+                            }
+                        }
+                        return
+                    }
+                    if allArguments[flagIndex + 1] == "newplacement" {
+                        // Two fresh documents; with the tab default they
+                        // must share one tab group.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                guard let self else { return }
+                                self.newDocument(nil)
+                                self.newDocument(nil)
+                                let tabs =
+                                    self.editors.first?.window?.tabbedWindows?.count ?? 0
+                                NSLog("debug newplacement tabs=\(tabs)")
+                            }
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "about" {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                             MainActor.assumeIsolated {
@@ -770,6 +793,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func registerMenuActions(in menu: NSMenu) {
         let bySelector: [Selector: String] = [
             #selector(newDocument(_:)): "new",
+            #selector(newDocumentWithFormatPicker(_:)): "newWithFormat",
             #selector(openDocument(_:)): "open",
             #selector(openQuickly(_:)): "openQuickly",
             #selector(EditorWindowController.saveDocument(_:)): "save",
@@ -1338,7 +1362,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.openLocation(path: path, line: line, character: character)
             })
         editor.suggestedSaveDirectory = suggestedDirectory
-        show(editor: editor)
+        // Fresh documents follow their own placement setting: a tab of
+        // the frontmost group by default, a window when configured so.
+        show(editor: editor, placeAsConfigured: true, target: config?.newFileTarget)
+    }
+
+    /// File → New with Format… (⇧⌘N): the language list as a
+    /// fuzzy-filterable panel, for keyboards. ⏎ creates the untitled
+    /// document already speaking the selection.
+    @objc func newDocumentWithFormatPicker(_ sender: Any?) {
+        let languages = CoreLanguages.all.map { language in
+            OutlinePanel.Symbol(
+                name: language.name,
+                kind: language.fileExtension.isEmpty ? "" : ".\(language.fileExtension)",
+                line: 0,
+                character: 0,
+                depth: 0
+            )
+        }
+        OutlinePanel.shared.show(
+            symbols: languages, over: NSApp.keyWindow,
+            title: "New with Format", placeholder: "language…"
+        ) { [weak self] symbol in
+            self?.makeUntitled(language: symbol.name)
+        }
     }
 
     @objc func openDocument(_ sender: Any?) {
@@ -1499,6 +1546,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let fileMenu = NSMenu(title: "File")
         fileMenu.addItem(
             withTitle: "New", action: #selector(newDocument(_:)), keyEquivalent: "n")
+        let formatPickerItem = NSMenuItem(
+            title: "New with Format…",
+            action: #selector(newDocumentWithFormatPicker(_:)),
+            keyEquivalent: "n"
+        )
+        formatPickerItem.keyEquivalentModifierMask = [.command, .shift]
+        fileMenu.addItem(formatPickerItem)
         let formatItem = NSMenuItem(title: "New with Format", action: nil, keyEquivalent: "")
         let formatMenu = NSMenu(title: "New with Format")
         for language in CoreLanguages.all {

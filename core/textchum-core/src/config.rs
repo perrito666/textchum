@@ -508,6 +508,21 @@ impl Config {
             .insert("open_files_in".into(), Value::String(target.as_str().into()));
     }
 
+    /// Where File → New puts the fresh document (`editor.new_files_in`):
+    /// a tab of the frontmost window's group (the default), or a window
+    /// of its own.
+    pub fn new_file_target(&self) -> OpenTarget {
+        match self.editor().get("new_files_in").and_then(Value::as_str) {
+            Some("window") => OpenTarget::Window,
+            _ => OpenTarget::Tab,
+        }
+    }
+
+    pub fn set_new_file_target(&mut self, target: OpenTarget) {
+        self.editor_mut()
+            .insert("new_files_in".into(), Value::String(target.as_str().into()));
+    }
+
     /// Sets the font family; `None` (or empty) removes the key, returning
     /// to the platform default.
     pub fn set_font_family(&mut self, family: Option<&str>) {
@@ -810,6 +825,17 @@ mod tests {
         reloaded.set_editor_override("/work/projA", "tab_width", None);
         reloaded.set_editor_override("/work/projA", "font_family", None);
         assert_eq!(reloaded.editor_overrides_json("/work/projA"), "{}");
+    }
+
+    #[test]
+    fn new_file_target_round_trip_defaults_to_tab() {
+        let path = temp_path("new-target.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.new_file_target(), OpenTarget::Tab);
+        config.set_new_file_target(OpenTarget::Window);
+        config.save().unwrap();
+        let (reloaded, _) = Config::load(&path);
+        assert_eq!(reloaded.new_file_target(), OpenTarget::Window);
     }
 
     #[test]

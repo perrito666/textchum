@@ -906,6 +906,23 @@ uint32_t tc_config_open_target(const struct TcConfig *config);
 void tc_config_set_open_target(struct TcConfig *config, uint32_t target);
 
 /**
+ * Where File → New places the fresh document (`TC_OPEN_IN_*`; tab is
+ * the default).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+uint32_t tc_config_new_file_target(const struct TcConfig *config);
+
+/**
+ * Sets the new-file placement (`TC_OPEN_IN_*`; unknown values mean tab).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_new_file_target(struct TcConfig *config, uint32_t target);
+
+/**
  * Sets the editor font family; `len == 0` clears it back to the platform
  * default.
  *

@@ -109,6 +109,7 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.hover", &["<Ctrl><Alt>h"]);
     app.set_accels_for_action("win.preprocess", &["<Ctrl><Alt>f"]);
     app.set_accels_for_action("win.palette", &["<Ctrl><Shift>p"]);
+    app.set_accels_for_action("win.new-format-picker", &["<Ctrl><Shift>n"]);
     app.set_accels_for_action("win.paths", &["<Ctrl><Alt>t"]);
     app.set_accels_for_action("win.block-start", &["<Ctrl><Alt>Up"]);
     app.set_accels_for_action("win.block-end", &["<Ctrl><Alt>Down"]);
@@ -181,6 +182,7 @@ fn apply_key_overrides(app: &adw::Application) {
             "showHover" => "win.hover",
             "runPreprocessors" => "win.preprocess",
             "commandPalette" => "win.palette",
+            "newWithFormat" => "win.new-format-picker",
             "togglePathDisplay" => "win.paths",
             "goToBlockStart" => "win.block-start",
             "goToBlockEnd" => "win.block-end",

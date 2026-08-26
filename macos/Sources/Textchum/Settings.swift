@@ -79,6 +79,9 @@ final class SettingsModel: ObservableObject {
     @Published var openTarget: CoreOpenTarget {
         didSet { persist { $0.openTarget = openTarget } }
     }
+    @Published var newFileTarget: CoreOpenTarget {
+        didSet { persist { $0.newFileTarget = newFileTarget } }
+    }
     @Published var fontFamily: String {
         didSet { persist { $0.fontFamily = fontFamily.isEmpty ? nil : fontFamily } }
     }
@@ -157,6 +160,7 @@ final class SettingsModel: ObservableObject {
         appearance = config.appearance
         theme = config.theme
         openTarget = config.openTarget
+        newFileTarget = config.newFileTarget
         fontFamily = config.fontFamily ?? ""
         fontSize = config.fontSize
         tabWidth = config.tabWidth
@@ -174,6 +178,7 @@ final class SettingsModel: ObservableObject {
         self.appearance = config.appearance
         self.theme = config.theme
         self.openTarget = config.openTarget
+        self.newFileTarget = config.newFileTarget
         self.fontFamily = config.fontFamily ?? ""
         self.fontSize = config.fontSize
         self.tabWidth = config.tabWidth
@@ -486,6 +491,10 @@ private struct GeneralSettingsTab: View {
                 }
             }
             Picker("Open files in:", selection: $model.openTarget) {
+                Text("Tabs").tag(CoreOpenTarget.tab)
+                Text("Windows").tag(CoreOpenTarget.window)
+            }
+            Picker("New files in:", selection: $model.newFileTarget) {
                 Text("Tabs").tag(CoreOpenTarget.tab)
                 Text("Windows").tag(CoreOpenTarget.window)
             }

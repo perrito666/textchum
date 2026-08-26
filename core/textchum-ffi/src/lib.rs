@@ -1446,6 +1446,35 @@ pub unsafe extern "C" fn tc_config_set_open_target(config: *mut TcConfig, target
     }
 }
 
+/// Where File → New places the fresh document (`TC_OPEN_IN_*`; tab is
+/// the default).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_new_file_target(config: *const TcConfig) -> u32 {
+    use textchum_core::OpenTarget;
+    match unsafe { config.as_ref() }.map(|c| c.inner.new_file_target()) {
+        Some(OpenTarget::Window) => TC_OPEN_IN_WINDOW,
+        _ => TC_OPEN_IN_TAB,
+    }
+}
+
+/// Sets the new-file placement (`TC_OPEN_IN_*`; unknown values mean tab).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_new_file_target(config: *mut TcConfig, target: u32) {
+    use textchum_core::OpenTarget;
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_new_file_target(match target {
+            TC_OPEN_IN_WINDOW => OpenTarget::Window,
+            _ => OpenTarget::Tab,
+        });
+    }
+}
+
 /// Sets the editor font family; `len == 0` clears it back to the platform
 /// default.
 ///

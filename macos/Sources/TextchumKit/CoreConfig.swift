@@ -92,6 +92,18 @@ public final class CoreConfig {
         }
     }
 
+    /// Where File → New places the fresh document; tabs by default.
+    public var newFileTarget: CoreOpenTarget {
+        get {
+            tc_config_new_file_target(handle) == UInt32(TC_OPEN_IN_WINDOW) ? .window : .tab
+        }
+        set {
+            tc_config_set_new_file_target(
+                handle,
+                newValue == .window ? UInt32(TC_OPEN_IN_WINDOW) : UInt32(TC_OPEN_IN_TAB))
+        }
+    }
+
     /// Editor font family; nil means "use the platform monospaced font".
     public var fontFamily: String? {
         get {

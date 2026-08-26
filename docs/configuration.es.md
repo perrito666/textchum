@@ -52,7 +52,9 @@ Un archivo editado a mano podría verse así:
 `appearance` acepta `"system"`, `"light"` u `"dark"`; si se omite (el
 valor por defecto), se sigue al sistema. `editor.hover` apaga el globo
 de documentación al reposar el ratón (`true`, el valor por defecto, lo
-mantiene encendido).
+mantiene encendido). `editor.new_files_in` coloca los documentos
+nuevos en una `"tab"` del grupo de la ventana frontal (el valor por
+defecto) o en una `"window"` propia.
 
 Todo es opcional: un archivo, una sección o una clave ausentes significan
 simplemente el valor por defecto. Las escrituras son atómicas (archivo
@@ -256,7 +258,7 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`toggleHover`, `showHover`, `serverStatus`,
+`toggleHover`, `showHover`, `serverStatus`, `newWithFormat`,
 `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nombre desconocido se registra junto a la lista completa. Ir al
 inicio/fin de bloque (⌃⌥↑/⌃⌥↓ por defecto) salta sobre el bloque

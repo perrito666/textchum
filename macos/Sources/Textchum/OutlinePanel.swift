@@ -23,11 +23,17 @@ final class OutlinePanel: NSObject {
     private var rows: [Symbol] = []
     private var onSelect: ((Symbol) -> Void)?
 
-    func show(symbols: [Symbol], over window: NSWindow?, onSelect: @escaping (Symbol) -> Void) {
+    func show(
+        symbols: [Symbol], over window: NSWindow?,
+        title: String = "Document Outline", placeholder: String = "symbol…",
+        onSelect: @escaping (Symbol) -> Void
+    ) {
         self.all = symbols
         self.onSelect = onSelect
         let panel = self.panel ?? makePanel()
         self.panel = panel
+        panel.title = title
+        queryField.placeholderString = placeholder
         queryField.stringValue = ""
         applyFilter()
 

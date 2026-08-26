@@ -53,6 +53,9 @@ Un fichier édité à la main pourrait ressembler à :
 `appearance` accepte `"system"`, `"light"` ou `"dark"` ; en son absence
 (le défaut), le système est suivi. `editor.hover` désactive la bulle de
 documentation au survol (`true`, le défaut, la laisse active).
+`editor.new_files_in` place les documents neufs dans un `"tab"` du
+groupe de la fenêtre frontale (le défaut) ou dans une `"window"` à
+eux.
 
 Tout est optionnel — fichier, section ou clé manquants signifient
 simplement la valeur par défaut. Les écritures sont atomiques (fichier
@@ -260,7 +263,7 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`toggleHover`, `showHover`, `serverStatus`,
+`toggleHover`, `showHover`, `serverStatus`, `newWithFormat`,
 `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à
 la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique
