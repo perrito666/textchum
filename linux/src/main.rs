@@ -531,6 +531,40 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         eprintln!("note: Universal Ctags not installed; ctags smoke skipped");
     }
 
+    // Save As on an untitled document: the new extension brings its
+    // language, colors, and shell registration along (issue #2).
+    {
+        workbench.open(None, None);
+        let untitled = workbench.selected().expect("untitled page selected");
+        if untitled.path.borrow().is_some() {
+            eprintln!("FAIL: fresh tab unexpectedly has a path");
+            return 1;
+        }
+        {
+            let buffer = &untitled.buffer;
+            let mut end = buffer.end_iter();
+            buffer.insert(&mut end, "fn saved_as() {}\n");
+        }
+        let target = directory.join("gained.rs");
+        if !workbench::save_page_as(&workbench, &untitled, &target) {
+            eprintln!("FAIL: save_page_as failed");
+            return 1;
+        }
+        if untitled.state.borrow().document.language_name() != Some("rust") {
+            eprintln!("FAIL: save-as did not detect the language");
+            return 1;
+        }
+        if untitled.buffer.iter_at_offset(0).tags().is_empty() {
+            eprintln!("FAIL: save-as did not repaint highlighting");
+            return 1;
+        }
+        let key = target.to_string_lossy().into_owned();
+        if !shell::Shell::instance().pages.borrow().contains_key(&key) {
+            eprintln!("FAIL: save-as did not register shell handles");
+            return 1;
+        }
+    }
+
     // The session file records the open documents.
     session::save();
     match std::fs::read_to_string(session::session_path()) {

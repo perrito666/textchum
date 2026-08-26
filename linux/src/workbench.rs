@@ -1058,12 +1058,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             move |result| {
                 if let Ok(file) = result {
                     if let Some(path) = file.path() {
-                        let _ = page.state.borrow_mut().document.save_as(&path);
-                        Shell::instance().note_own_save(&path.to_string_lossy());
-                        *page.path.borrow_mut() =
-                            Some(path.to_string_lossy().into_owned());
-                        workbench.refresh_chrome();
-                        workbench.refresh_sidebar();
+                        save_page_as(&workbench, &page, &path);
                     }
                 }
             },
@@ -1958,6 +1953,65 @@ fn show_server_status(workbench: &Rc<Workbench>) {
     });
     let _ = source;
     dialog.present();
+}
+
+/// Saves a page under a new path and finishes what that implies: an
+/// untitled document that just gained an extension gets its language
+/// (the core detects it), fresh colors, shell handles so diagnostics
+/// and the subtitle work, a file monitor, its project's editor
+/// overrides, a pool announcement, and a spell pass — everything a
+/// pathed open would have had. Returns whether the save landed.
+pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> bool {
+    let previous = page.path.borrow().clone();
+    if page.state.borrow_mut().document.save_as(path).is_err() {
+        workbench.toast("Could not save the document.");
+        return false;
+    }
+    let key = path.to_string_lossy().into_owned();
+    let shell = Shell::instance();
+    shell.note_own_save(&key);
+    *page.path.borrow_mut() = Some(key.clone());
+    if let Some(previous) = previous.filter(|previous| *previous != key) {
+        shell.pages.borrow_mut().remove(&previous);
+        shell.pool.borrow_mut().did_close(Path::new(&previous));
+    }
+    page::refresh_style_tags(&page.buffer);
+    page::recolor(&page.buffer);
+    page::apply_highlights(&page.buffer, &page.state.borrow().document);
+    let tab_page = workbench.tab_view.page(&page.root);
+    let handles = Rc::new(crate::shell::PageHandles {
+        window: workbench.window.clone(),
+        tab_view: workbench.tab_view.clone(),
+        tab_page,
+        buffer: page.buffer.clone(),
+        view: page.view.clone(),
+        toasts: workbench.toasts.clone(),
+        title: workbench.title.clone(),
+        language: RefCell::new(
+            page.state
+                .borrow()
+                .document
+                .language_name()
+                .unwrap_or("")
+                .to_string(),
+        ),
+        problems: RefCell::new(String::new()),
+        detail: RefCell::new(String::new()),
+    });
+    shell.pages.borrow_mut().insert(key.clone(), handles);
+    // Always re-arm: a page saved under a new path must watch the new
+    // file, not the old one (or nothing).
+    page::install_file_monitor(page);
+    page::apply_project_editor_overrides(page);
+    if let Some(language) = page.state.borrow().document.language_name() {
+        let text = page.state.borrow().document.text();
+        shell.pool.borrow_mut().did_open(path, language, &text);
+    }
+    crate::spell::run(page);
+    workbench.refresh_chrome();
+    workbench.refresh_sidebar();
+    crate::session::save();
+    true
 }
 
 /// The configured preprocessor chain for a page, if any.

@@ -499,6 +499,18 @@ mod tests {
     }
 
     #[test]
+    fn save_as_detects_the_new_extension_language() {
+        let mut doc = Document::new();
+        doc.replace_utf16(0, 0, "fn main() {}\n").unwrap();
+        assert_eq!(doc.language_name(), None);
+        let path = temp_dir().join("gains-language.rs");
+        doc.save_as(&path).unwrap();
+        assert_eq!(doc.language_name(), Some("rust"));
+        assert!(!doc.highlights(0, 12).unwrap().is_empty());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn edit_undo_redo_round_trip() {
         let mut doc = Document::new();
         doc.replace_utf16(0, 0, "hello").unwrap();

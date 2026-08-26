@@ -919,7 +919,7 @@ fn install_completion_keys(page: &Rc<Page>) {
 /// silently while the buffer is clean, and offer a toast (with a
 /// Reload button) when local edits would be lost. The app's own saves
 /// are recognized and ignored.
-fn install_file_monitor(page: &Rc<Page>) {
+pub fn install_file_monitor(page: &Rc<Page>) {
     let Some(path) = page.path.borrow().clone() else { return };
     let file = gtk::gio::File::for_path(&path);
     let Ok(monitor) =
@@ -1000,7 +1000,7 @@ fn install_control_click(page: &Rc<Page>) {
 /// size provider stays the fallback. (The per-widget style context is
 /// deprecated upstream but remains the one per-view hook.)
 #[allow(deprecated)]
-fn apply_project_editor_overrides(page: &Rc<Page>) {
+pub fn apply_project_editor_overrides(page: &Rc<Page>) {
     let Some(path) = page.path.borrow().clone() else { return };
     let Some(root) = textchum_core::workspace::project_root_for(Path::new(&path)) else {
         return;
