@@ -524,9 +524,14 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
-    /// Reformats the whole document through its language server.
+    /// Reformats the whole document: the language server's formatter,
+    /// or the save-preprocessor chain when no server can help (untitled
+    /// documents included — servers speak in files, chains do not care).
     @objc func formatDocument(_ sender: Any?) {
-        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        guard let lspApp, let path = lspOpenPath, let textView else {
+            formatViaPreprocessors()
+            return
+        }
         // Respect what the document already does: a tab-indented file
         // keeps tabs, everything else formats with spaces.
         let usesTabs =
@@ -536,10 +541,25 @@ final class EditorWindowController: NSWindowController {
             guard let self else { return }
             let edits = LSPEdits.textEdits(fromResultJSON: json)
             guard !edits.isEmpty else {
-                NSSound.beep()
+                self.formatViaPreprocessors()
                 return
             }
             self.apply(textEdits: edits)
+        }
+    }
+
+    /// Format Document's fallback: the configured chain, or a beep when
+    /// neither a server nor a chain can help.
+    private func formatViaPreprocessors() {
+        guard let language = coreDocument.languageName,
+            !preprocessorCommands(projectRoot, language).isEmpty
+        else {
+            NSSound.beep()
+            return
+        }
+        if case .failed(let failure) = preprocessBuffer() {
+            presentError(
+                "Preprocessor failed: \(failure.command)", details: failure.details)
         }
     }
 

@@ -44,6 +44,10 @@ nadie.
   según haga falta.
 - **Buscar referencias** (⇧⌘R) lista cada uso del símbolo bajo el
   cursor en un panel flotante — ↑/↓ para moverse, ⏎ para saltar.
+- **Formatear documento** (⌥⇧⌘F) pregunta primero al servidor y cae a
+  la cadena de preprocesadores de guardado — así el formateo funciona
+  en documentos sin título y en lenguajes sin servidor, siempre que
+  haya una cadena configurada.
 - **Renombrar símbolo…** (⌃⌘R) renombra en todo el espacio de trabajo:
   las ventanas abiertas se editan en el sitio (el deshacer funciona por
   ventana) y los archivos que nadie tiene abiertos se reescriben en

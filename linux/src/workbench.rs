@@ -1023,6 +1023,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                     Shell::instance().note_own_save(path);
                 }
                 workbench.refresh_chrome();
+                page.view.grab_focus();
             } else {
                 let _ = gtk::prelude::WidgetExt::activate_action(
                     &workbench.window,
@@ -1300,11 +1301,14 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.toast("No save preprocessors configured for this language.");
             return;
         }
-        if let Err(failure) = run_preprocessor_chain(&page) {
-            workbench.toast(&format!(
+        match run_preprocessor_chain(&page) {
+            Ok(()) => {
+                page.view.grab_focus();
+            }
+            Err(failure) => workbench.toast(&format!(
                 "Preprocessor failed: {} — {}",
                 failure.command, failure.details
-            ));
+            )),
         }
     });
     add("revert", workbench, |workbench, _| {
@@ -1432,14 +1436,12 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let _ = page;
     });
     add("format", workbench, |workbench, _| {
-        let Some((page, path)) = workbench
-            .selected()
-            .and_then(|page| {
-                let path = page.path.borrow().clone();
-                path.map(|path| (page, path))
-            })
-        else {
-            workbench.toast("Save the file first — untitled documents have no server.");
+        let Some(page) = workbench.selected() else { return };
+        let path = page.path.borrow().clone();
+        // Untitled documents have no server to ask (servers speak in
+        // files) — but a configured preprocessor chain formats fine.
+        let Some(path) = path else {
+            format_via_preprocessors(workbench, &page);
             return;
         };
         // A tab-indented file keeps tabs; everything else gets spaces.
@@ -1452,20 +1454,24 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .borrow_mut()
             .formatting(Path::new(&path), tab_width, !uses_tabs);
         if id == 0 {
-            workbench.toast("No language server is running for this document.");
+            format_via_preprocessors(workbench, &page);
             return;
         }
         let weak = Rc::downgrade(workbench);
+        let fallback_page = Rc::clone(&page);
         shell.expect_response(id, move |json| {
             let Some(workbench) = weak.upgrade() else { return };
             let edits = crate::lsp_edits::text_edits(json);
             if edits.is_empty() {
-                workbench.toast("The server had no formatting to offer.");
+                // The server answered with nothing; the chain gets its
+                // chance before an excuse does.
+                format_via_preprocessors(&workbench, &fallback_page);
                 return;
             }
             let Some(page) = workbench.page_for(&path) else { return };
             apply_edits_to_page(&page, edits);
             workbench.refresh_chrome();
+            page.view.grab_focus();
         });
     });
     add("outline", workbench, |workbench, _| {
@@ -1518,6 +1524,9 @@ fn replay(workbench: &Rc<Workbench>, is_undo: bool) {
     workbench.refresh_chrome();
     page::recolor(buffer);
     page::apply_highlights(buffer, &page.state.borrow().document);
+    // The menu stole focus to run this; give it back so the selection
+    // and caret show again.
+    page.view.grab_focus();
 }
 
 /// Parses a definition result (Location, Location[], or LocationLink[])
@@ -2163,11 +2172,43 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
     true
 }
 
-/// The configured preprocessor chain for a page, if any.
+/// Formats through the save-preprocessor chain — Format Document's
+/// fallback when no server can help — or says exactly what would make
+/// formatting possible.
+fn format_via_preprocessors(workbench: &Rc<Workbench>, page: &Rc<Page>) {
+    if preprocessor_chain(page).is_none() {
+        let language = page.state.borrow().document.language_name();
+        workbench.toast(&match language {
+            Some(language) => format!(
+                "Nothing can format this yet — save the file so a {language} server can                  attach, or add a save preprocessor for {language} in Preferences."
+            ),
+            None => "Nothing can format plain text — save with an extension so a                      language attaches."
+                .to_string(),
+        });
+        return;
+    }
+    match run_preprocessor_chain(page) {
+        Ok(()) => {
+            workbench.refresh_chrome();
+            page.view.grab_focus();
+        }
+        Err(failure) => workbench.toast(&format!(
+            "Preprocessor failed: {} — {}",
+            failure.command, failure.details
+        )),
+    }
+}
+
+/// The configured preprocessor chain for a page, if any. Untitled
+/// documents qualify too — the chain runs over the buffer, and
+/// {filename} gets `Untitled` plus the language's extension, same as
+/// the Mac.
 fn preprocessor_chain(page: &Rc<Page>) -> Option<(Vec<String>, Option<PathBuf>, String)> {
-    let path = page.path.borrow().clone()?;
     let language = page.state.borrow().document.language_name()?;
-    let root = workspace::project_root_for(Path::new(&path));
+    let path = page.path.borrow().clone();
+    let root = path
+        .as_deref()
+        .and_then(|path| workspace::project_root_for(Path::new(path)));
     let root_string = root.as_deref().map(|r| r.to_string_lossy().into_owned());
     let commands = Shell::instance()
         .config
@@ -2176,7 +2217,13 @@ fn preprocessor_chain(page: &Rc<Page>) -> Option<(Vec<String>, Option<PathBuf>, 
     if commands.is_empty() {
         return None;
     }
-    Some((commands, root, path))
+    let document_path = path.unwrap_or_else(|| {
+        let extension = textchum_core::syntax::languages::by_name(language)
+            .and_then(|entry| entry.spec.extensions.first().copied())
+            .unwrap_or("txt");
+        format!("Untitled.{extension}")
+    });
+    Some((commands, root, document_path))
 }
 
 /// Runs the chain over the buffer and applies the result as one

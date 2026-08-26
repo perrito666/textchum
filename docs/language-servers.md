@@ -39,6 +39,10 @@ never join someone else's workspace either.
 - **Rename Symbol…** (⌃⌘R) renames across the whole workspace: open
   windows edit in place (undo works per window), files nobody has open
   are rewritten on disk.
+- **Format Document** (⌥⇧⌘F) asks the server first and falls back to
+  the save-preprocessor chain — so formatting works on untitled
+  documents and languages without a server, whenever a chain is
+  configured.
 - **Format Document** (⌥⇧⌘F) reformats through the server, keeping tabs
   if the document indents with tabs and spaces otherwise.
 - **Document Outline** (⇧⌘O) lists the file's symbols — nesting shown

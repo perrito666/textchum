@@ -44,6 +44,10 @@ quelqu'un d'autre.
 - **Chercher les références** (⇧⌘R) liste chaque usage du symbole sous
   le curseur dans un panneau flottant — ↑/↓ pour se déplacer, ⏎ pour
   sauter.
+- **Formater le document** (⌥⇧⌘F) demande d'abord au serveur puis
+  retombe sur la chaîne de préprocesseurs de sauvegarde — le formatage
+  marche donc sur les documents sans titre et les langages sans
+  serveur, dès qu'une chaîne est configurée.
 - **Renommer le symbole…** (⌃⌘R) renomme dans tout l'espace de
   travail : les fenêtres ouvertes sont éditées sur place (l'annulation
   fonctionne par fenêtre) et les fichiers que personne n'a ouverts sont
