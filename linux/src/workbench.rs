@@ -3435,7 +3435,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         for name in &installed {
             dictionaries.append(
                 Some(name),
-                Some(&format!("win.spell-pick('{}')", name.replace('\'', "\\'"))),
+                Some(&format!("spell.pick('{}')", name.replace('\'', "\\'"))),
             );
         }
         let button = gtk::MenuButton::builder()
@@ -3450,7 +3450,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         // never disagrees with the file.
         let row = spell_row.clone();
         let shell_for_pick = Rc::clone(&shell);
-        let action = gtk::gio::SimpleAction::new("spell-pick", Some(glib::VariantTy::STRING));
+        let action = gtk::gio::SimpleAction::new("pick", Some(glib::VariantTy::STRING));
         action.connect_activate(move |_, parameter| {
             let Some(name) = parameter.and_then(|p| p.str().map(str::to_owned)) else {
                 return;
@@ -3471,9 +3471,12 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             shell_for_pick.save_config();
             recheck_every_page();
         });
-        // On the Preferences window, since that is where the menu is:
-        // `win.` resolves against the window a widget is inside.
-        window.add_action(&action);
+        // The action group hangs off the button rather than the window:
+        // AdwPreferencesWindow is a GtkWindow, and a plain GtkWindow is
+        // not a GActionMap — only GtkApplicationWindow is.
+        let actions = gtk::gio::SimpleActionGroup::new();
+        actions.add_action(&action);
+        button.insert_action_group("spell", Some(&actions));
     }
     {
         let shell = Rc::clone(&shell);
