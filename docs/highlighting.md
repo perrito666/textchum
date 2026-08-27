@@ -62,9 +62,18 @@ Should a coloring artifact ever survive an edit, **View → Redraw**
 (⌥⌘L, rebindable as `redraw`) rebuilds every visual layer from scratch:
 base attributes, syntax colors, diagnostic marks, and the gutter.
 
+Colouring follows the viewport: the visible stretch plus a generous
+margin is what gets queried and painted, repainted as you scroll. A
+megabyte file is coloured as cheaply as a small one, and there is no
+size past which colour silently stops — only the core's parse ceiling,
+beyond which a document is plain text by design.
+
+A theme's **bold and italic** are honoured too. Colour rides TextKit's
+rendering attributes, which never disturb layout; the typographic
+traits are applied as fonts, which is why they are painted for the
+visible stretch rather than the whole document. Monospaced faces keep
+their advance width across weights, so nothing reflows.
+
 ## Not there yet
 
-- Bold/italic style nuances — the overlay is currently color only.
 - Manual language selection from the UI for files with odd extensions.
-- Viewport-scoped queries for documents in the hundreds of kilobytes
-  (currently they are colored whole or, past a cap, not at all).

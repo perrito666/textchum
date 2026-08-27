@@ -428,6 +428,45 @@ func runSmokeTest() -> Int32 {
     }
     print("hugo ok (headings outline, front matter and shortcodes out of the prose)")
 
+    // Highlighting: the theme's typographic flags survive the trip to
+    // the palette, and a document past the old colouring cap still has
+    // spans to paint (viewport scoping decides how many are asked for,
+    // but the core must answer for any offset).
+    guard HighlightPalette.hasTypographicStyles else {
+        print("FAIL: the built-in theme lost its bold/italic flags")
+        return 1
+    }
+    let commentTraits = HighlightPalette.traits(forStyle: 1)
+    guard commentTraits.italic else {
+        print("FAIL: comments are meant to be italic in the default theme")
+        return 1
+    }
+    do {
+        let big = CoreDocument()
+        let unit = "/// a comment\npub fn f() {}\n"
+        try big.replace(
+            utf16Range: NSRange(location: 0, length: 0),
+            with: String(repeating: unit, count: 12_000))
+        big.setLanguage("rust")
+        let length = big.lengthInUTF16
+        guard length > 300_000 else {
+            print("FAIL: test document too small to prove the point: \(length)")
+            return 1
+        }
+        // Deep inside the document, far past the cap colouring used to
+        // give up at.
+        let window = NSRange(location: length - 20_000, length: 8_000)
+        let spans = big.highlights(in: window)
+        guard !spans.isEmpty, spans.contains(where: { $0.styleIndex == 1 }) else {
+            print("FAIL: no spans deep inside a large document")
+            return 1
+        }
+        print("highlighting ok (typographic flags, spans at \(length) UTF-16 units)")
+    } catch {
+        print("FAIL: large-document highlighting: \(error)")
+        return 1
+    }
+
     // Async event round trip: core dispatch thread → main queue.
     var receivedSequence: UInt64?
     let coreApp = CoreApp { event in
