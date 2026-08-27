@@ -74,10 +74,17 @@ current document and highlights it (turn it off in Settings ▸ General ▸
 menu) does it on demand — uncollapsing the navigator if needed.
 
 What the tree hides is configuration: glob patterns over file names,
-`.*` (dotfiles) by default. The Projects tab edits the default list —
-with presets for the usual suspects (`target`, `node_modules`,
-`__pycache__`, …) — and each project root can carry its own list,
-which replaces the defaults. In the file:
+`.*` (dotfiles) by default. Clicking a **Hide** button opens an editor
+with one pattern per line and an **Add preset** menu that appends a
+named set. Each project root can carry its own list, which replaces
+the defaults.
+
+The presets are yours too: the **Presets** tab edits them the same way
+— one pattern per line — with add, remove, and Restore Built-ins.
+Editing any preset takes ownership of the whole set, so a preset you
+delete stays deleted; the built-ins come back only when you ask. They
+live in `workspace.hide_presets`, and the Linux Preferences edit the
+same section. In the file:
 
 ```json
 { "workspace": { "hide": [".*", "target", "node_modules"] } }

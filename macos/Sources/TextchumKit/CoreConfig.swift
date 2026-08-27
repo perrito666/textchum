@@ -432,6 +432,48 @@ public final class CoreConfig {
         }
     }
 
+    /// The hidden-glob presets the settings UI offers, sorted by name.
+    public var hidePresets: [(name: String, globs: [String])] {
+        guard let cString = tc_config_hide_presets(handle) else { return [] }
+        defer { tc_string_free(cString) }
+        return String(cString: cString)
+            .split(separator: "\n")
+            .compactMap { line in
+                let halves = line.split(separator: "\u{1f}", maxSplits: 1)
+                guard let name = halves.first, !name.isEmpty else { return nil }
+                let globs =
+                    halves.count > 1
+                    ? halves[1].split(separator: " ").map(String.init) : []
+                return (String(name), globs)
+            }
+    }
+
+    /// Sets (nil or blank removes) one preset by name.
+    public func setHidePreset(name: String, globs: String?) {
+        var name = name
+        var globs = globs ?? ""
+        name.withUTF8 { nameBytes in
+            globs.withUTF8 { globBytes in
+                tc_config_set_hide_preset(
+                    handle,
+                    nameBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(nameBytes.count),
+                    globBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(globBytes.count)
+                )
+            }
+        }
+    }
+
+    /// Forgets the user's presets, restoring the built-ins.
+    public func resetHidePresets() {
+        tc_config_reset_hide_presets(handle)
+    }
+
     /// Whether the navigator reveals the current file as focus moves.
     public var followFile: Bool {
         get { tc_config_follow_file(handle) }

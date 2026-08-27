@@ -2204,6 +2204,65 @@ pub unsafe extern "C" fn tc_workspace_is_hidden(
     textchum_core::workspace::is_hidden(name, &globs)
 }
 
+/// The hidden-glob presets, one per line as `name\x1fglob glob …`,
+/// sorted by name. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_hide_presets(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    let joined = config
+        .inner
+        .hide_presets()
+        .into_iter()
+        .map(|(name, globs)| format!("{name}\x1f{}", globs.join(" ")))
+        .collect::<Vec<_>>()
+        .join("\n");
+    owned_c_string(joined)
+}
+
+/// Sets (or removes, with `globs_len == 0`) one preset by name.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_hide_preset(
+    config: *mut TcConfig,
+    name: *const c_char,
+    name_len: usize,
+    globs: *const c_char,
+    globs_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let (name, globs) = unsafe {
+        (str_from_raw(name, name_len), str_from_raw(globs, globs_len))
+    };
+    let (Some(name), Some(globs)) = (name, globs) else { return };
+    if name.is_empty() {
+        return;
+    }
+    config
+        .inner
+        .set_hide_preset(name, (!globs.is_empty()).then_some(globs));
+}
+
+/// Forgets the user's presets, restoring the built-ins.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_reset_hide_presets(config: *mut TcConfig) {
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.reset_hide_presets();
+    }
+}
+
 /// Whether the navigator follows the current file (default true).
 ///
 /// # Safety

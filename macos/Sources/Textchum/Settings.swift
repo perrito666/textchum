@@ -163,6 +163,37 @@ final class SettingsModel: ObservableObject {
         persistWorkspaceChange()
     }
 
+    // MARK: Hide presets
+
+    /// The named glob sets the hide editors offer, sorted by name.
+    @Published private(set) var hidePresets: [(name: String, globs: [String])] = []
+
+    private func reloadHidePresets() {
+        hidePresets = config.hidePresets
+    }
+
+    func setHidePreset(name: String, globs: String?) {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        config.setHidePreset(name: name, globs: globs)
+        persistPresetChange()
+    }
+
+    func resetHidePresets() {
+        config.resetHidePresets()
+        persistPresetChange()
+    }
+
+    private func persistPresetChange() {
+        do {
+            try config.save()
+        } catch {
+            NSLog("could not save configuration: \(error)")
+        }
+        reloadHidePresets()
+        onChange?()
+    }
+
     /// Built-ins plus the user's theme files; a user file sharing a
     /// built-in's name shows once (the file wins when applied).
     var availableThemes: [String] {
@@ -192,6 +223,7 @@ final class SettingsModel: ObservableObject {
         reloadLSPEntries()
         reloadWorkspaceEntries()
         reloadPreprocessorEntries()
+        reloadHidePresets()
     }
 
     init(config: CoreConfig) {
@@ -211,6 +243,7 @@ final class SettingsModel: ObservableObject {
         reloadLSPEntries()
         reloadWorkspaceEntries()
         reloadPreprocessorEntries()
+        reloadHidePresets()
     }
 
     // MARK: Workspace behavior
@@ -486,6 +519,9 @@ struct SettingsView: View {
             PreprocessorsTab(model: model)
                 .tabItem { Label("Preprocessors", systemImage: "wand.and.rays") }
                 .tag("preprocessors")
+            PresetsTab(model: model)
+                .tabItem { Label("Presets", systemImage: "eye.slash") }
+                .tag("presets")
         }
         .frame(width: 640, height: 480)
         .padding(20)
@@ -560,16 +596,192 @@ private struct GeneralSettingsTab: View {
     }
 }
 
-/// Ready-made hidden-glob sets for the ecosystems that scatter build
-/// residue everywhere.
-enum HidePresets {
-    static let all: [(name: String, globs: [String])] = [
-        ("Version control", [".git", ".hg", ".svn"]),
-        ("Python", ["__pycache__", "*.pyc", ".venv", ".mypy_cache", ".ruff_cache"]),
-        ("Node", ["node_modules", ".next", "dist"]),
-        ("Rust", ["target"]),
-        ("macOS noise", [".DS_Store"]),
-    ]
+/// The presets themselves, edited the same way the hide lists are:
+/// one pattern per line. Editing any preset takes ownership of the
+/// whole set, so a deleted one stays deleted until Restore Built-ins.
+private struct PresetsTab: View {
+    @ObservedObject var model: SettingsModel
+    @State private var newName = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(
+                "Named glob sets the hide editors can add in one click. "
+                    + "They are yours to change: edit any preset and this list "
+                    + "replaces the built-in one, so removals stick."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            List {
+                if model.hidePresets.isEmpty {
+                    Text("No presets — add one below, or restore the built-ins.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.hidePresets, id: \.name) { preset in
+                    HStack(alignment: .top, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(preset.name)
+                                .fontWeight(.semibold)
+                            PresetGlobsField(
+                                name: preset.name,
+                                initial: preset.globs.joined(separator: "\n")
+                            ) { globs in
+                                model.setHidePreset(name: preset.name, globs: globs)
+                            }
+                        }
+                        Spacer()
+                        Button {
+                            model.setHidePreset(name: preset.name, globs: nil)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+            .frame(minHeight: 200)
+
+            HStack(spacing: 8) {
+                TextField("New preset name", text: $newName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 200)
+                Button("Add") {
+                    // A fresh preset starts with a placeholder pattern:
+                    // an empty one would remove itself immediately.
+                    model.setHidePreset(name: newName, globs: newName.lowercased())
+                    newName = ""
+                }
+                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                Spacer()
+                Button("Restore Built-ins") {
+                    model.resetHidePresets()
+                }
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+    }
+}
+
+/// One preset's patterns, committed when focus leaves — the same
+/// multi-line editor the hide lists use.
+private struct PresetGlobsField: View {
+    let name: String
+    let initial: String
+    let commit: (String) -> Void
+    @State private var text: String
+
+    init(name: String, initial: String, commit: @escaping (String) -> Void) {
+        self.name = name
+        self.initial = initial
+        self.commit = commit
+        _text = State(initialValue: initial)
+    }
+
+    var body: some View {
+        CommandsEditor(placeholder: "one pattern per line", text: $text) {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed != initial else { return }
+            commit(trimmed.split(whereSeparator: \.isNewline).joined(separator: " "))
+        }
+        .frame(maxWidth: 360)
+    }
+}
+
+/// A multi-line glob list with a presets menu: one pattern per line,
+/// because a space-separated one-liner is unreadable past two entries.
+/// Presets append their patterns, skipping ones already present.
+struct GlobEditor: View {
+    let presets: [(name: String, globs: [String])]
+    @Binding var text: String
+    var onCommit: () -> Void = {}
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            CommandsEditor(
+                placeholder: "one pattern per line — *.pyc, target, .git",
+                text: $text, onFocusLost: onCommit)
+            HStack {
+                Menu("Add preset") {
+                    if presets.isEmpty {
+                        Text("No presets — add some in the Presets tab")
+                    }
+                    ForEach(presets, id: \.name) { preset in
+                        Button(preset.name) { append(preset.globs) }
+                    }
+                }
+                .fixedSize()
+                Spacer()
+                Text("Glob patterns: * and ? match; names only, not paths.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func append(_ globs: [String]) {
+        var lines = text.split(whereSeparator: \.isNewline).map(String.init)
+        for glob in globs where !lines.contains(glob) {
+            lines.append(glob)
+        }
+        text = lines.joined(separator: "\n")
+        onCommit()
+    }
+}
+
+/// The button + popover pair the hide rows use: the list stays out of
+/// the way until asked for, and edits commit when the popover closes.
+struct GlobEditorButton: View {
+    let title: String
+    let presets: [(name: String, globs: [String])]
+    /// Space-separated on the way in and out; the editor works in lines.
+    let initial: String
+    let commit: (String) -> Void
+    /// Debug hook: opens the popover as soon as the row appears, so the
+    /// editor is screenshot-verifiable without synthesizing clicks.
+    var autoOpen: Bool = false
+
+    @State private var showing = false
+    @State private var text = ""
+
+    var body: some View {
+        Button(label) { 
+            text = initial.split(separator: " ").joined(separator: "\n")
+            showing = true
+        }
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(title)
+                    .font(.headline)
+                GlobEditor(presets: presets, text: $text)
+                    .frame(width: 320)
+                HStack {
+                    Spacer()
+                    Button("Done") {
+                        commit(
+                            text.split(whereSeparator: \.isNewline)
+                                .map(String.init).joined(separator: " "))
+                        showing = false
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(14)
+        }
+        .onAppear {
+            guard autoOpen else { return }
+            text = initial.split(separator: " ").joined(separator: "\n")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { showing = true }
+        }
+    }
+
+    private var label: String {
+        let count = initial.split(separator: " ").count
+        if count == 0 { return "Hide: inherit" }
+        return "Hide: \(count) pattern\(count == 1 ? "" : "s")"
+    }
 }
 
 /// A small inherit-when-empty field for per-project editor overrides:
@@ -643,22 +855,22 @@ private struct ProjectsTab: View {
                         Text("Hide in tree:")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        TextField(".* target node_modules", text: $model.hideGlobsDefault)
-                            .textFieldStyle(.roundedBorder)
+                        GlobEditorButton(
+                            title: "Hidden in every project",
+                            presets: model.hidePresets,
+                            initial: model.hideGlobsDefault,
+                            commit: { globs in
+                                model.hideGlobsDefault = globs.isEmpty ? ".*" : globs
+                            },
+                            autoOpen: ProcessInfo.processInfo
+                                .environment["TEXTCHUM_DEBUG_GLOBS"] != nil
+                        )
+                        Text(model.hideGlobsDefault)
                             .font(.system(.caption, design: .monospaced))
-                        Menu("Presets") {
-                            ForEach(HidePresets.all, id: \.name) { preset in
-                                Button(preset.name) {
-                                    var globs = model.hideGlobsDefault
-                                        .split(separator: " ").map(String.init)
-                                    for glob in preset.globs where !globs.contains(glob) {
-                                        globs.append(glob)
-                                    }
-                                    model.hideGlobsDefault = globs.joined(separator: " ")
-                                }
-                            }
-                        }
-                        .fixedSize()
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer()
                     }
                 }
                 .padding(6)
@@ -743,11 +955,12 @@ private struct ProjectsTab: View {
                                     scope: entry.scope, key: "tab_width",
                                     valueJSON: Int(text).map(String.init))
                             }
-                            OverrideField(
-                                placeholder: "hide globs (empty = inherit)",
-                                width: 180, initial: entry.hideGlobs
-                            ) { text in
-                                model.setHideGlobs(scope: entry.scope, globs: text)
+                            GlobEditorButton(
+                                title: "Hidden in \(entry.scopeLabel)",
+                                presets: model.hidePresets,
+                                initial: entry.hideGlobs
+                            ) { globs in
+                                model.setHideGlobs(scope: entry.scope, globs: globs)
                             }
                         }
                     }

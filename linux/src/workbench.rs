@@ -2049,6 +2049,114 @@ fn show_palette(workbench: &Rc<Workbench>) {
     entry.grab_focus();
 }
 
+/// A multi-line glob editor as a preferences row: one pattern per
+/// line (a space-separated one-liner is unreadable past two entries),
+/// with a menu that appends a preset's patterns. Commits when the
+/// text view loses focus.
+fn glob_editor_row(
+    title: &str,
+    subtitle: Option<&str>,
+    globs: &[String],
+    presets: Vec<(String, Vec<String>)>,
+    commit: impl Fn(&str) + 'static,
+) -> adw::ExpanderRow {
+    let row = adw::ExpanderRow::new();
+    row.set_title(title);
+    let summary = if globs.is_empty() {
+        "inherit".to_string()
+    } else {
+        format!("{} pattern{}", globs.len(), if globs.len() == 1 { "" } else { "s" })
+    };
+    row.set_subtitle(&match subtitle {
+        Some(subtitle) => format!("{subtitle} — {summary}"),
+        None => summary,
+    });
+
+    let buffer = gtk::TextBuffer::new(None);
+    buffer.set_text(&globs.join("\n"));
+    let view = gtk::TextView::with_buffer(&buffer);
+    view.set_monospace(true);
+    view.set_top_margin(6);
+    view.set_bottom_margin(6);
+    view.set_left_margin(8);
+    view.set_right_margin(8);
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&view)
+        .min_content_height(96)
+        .build();
+    scrolled.add_css_class("card");
+
+    let commit = Rc::new(commit);
+    {
+        // Focus leaving the view is the commit point, like the Mac's.
+        let buffer = buffer.clone();
+        let commit = Rc::clone(&commit);
+        let focus = gtk::EventControllerFocus::new();
+        focus.connect_leave(move |_| {
+            let text = buffer
+                .text(&buffer.start_iter(), &buffer.end_iter(), false)
+                .to_string();
+            commit(&text.split_whitespace().collect::<Vec<_>>().join(" "));
+        });
+        view.add_controller(focus);
+    }
+
+    let menu = gtk::gio::Menu::new();
+    for (name, _) in &presets {
+        menu.append(Some(name), Some(&format!("globs.preset::{name}")));
+    }
+    let preset_button = gtk::MenuButton::builder()
+        .label("Add preset")
+        .menu_model(&menu)
+        .halign(gtk::Align::Start)
+        .build();
+    // The action group lives on the button, so several rows can each
+    // carry their own without colliding.
+    let actions = gtk::gio::SimpleActionGroup::new();
+    let action = gtk::gio::SimpleAction::new("preset", Some(gtk::glib::VariantTy::STRING));
+    {
+        let buffer = buffer.clone();
+        let commit = Rc::clone(&commit);
+        let presets = presets.clone();
+        action.connect_activate(move |_, parameter| {
+            let Some(name) = parameter.and_then(|p| p.str().map(str::to_owned)) else {
+                return;
+            };
+            let Some((_, globs)) = presets.iter().find(|(preset, _)| *preset == name) else {
+                return;
+            };
+            let current = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
+            let mut lines: Vec<String> =
+                current.split_whitespace().map(str::to_owned).collect();
+            for glob in globs {
+                if !lines.contains(glob) {
+                    lines.push(glob.clone());
+                }
+            }
+            buffer.set_text(&lines.join("\n"));
+            commit(&lines.join(" "));
+        });
+    }
+    actions.add_action(&action);
+    preset_button.insert_action_group("globs", Some(&actions));
+
+    let box_ = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    box_.set_margin_top(6);
+    box_.set_margin_bottom(6);
+    box_.set_margin_start(12);
+    box_.set_margin_end(12);
+    box_.append(&scrolled);
+    box_.append(&preset_button);
+    let hint = gtk::Label::new(Some(
+        "One pattern per line. Glob patterns: * and ? match; names only, not paths.",
+    ));
+    hint.set_xalign(0.0);
+    hint.add_css_class("dim-label");
+    box_.append(&hint);
+    row.add_row(&box_);
+    row
+}
+
 /// A live view of the pool: what runs where, and the recent status
 /// transitions — the at-a-glance answer to "is my server alive?".
 fn show_server_status(workbench: &Rc<Workbench>) {
@@ -3357,6 +3465,24 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
         workspace_defaults.add(&row);
     }
+    {
+        let presets = shell.config.borrow().hide_presets();
+        let globs = shell.config.borrow().hide_globs(None);
+        let shell = Rc::clone(&shell);
+        workspace_defaults.add(&glob_editor_row(
+            "Hide in tree",
+            Some("every project"),
+            &globs,
+            presets,
+            move |globs| {
+                shell
+                    .config
+                    .borrow_mut()
+                    .set_hide_globs(None, (!globs.is_empty()).then_some(globs));
+                shell.save_config();
+            },
+        ));
+    }
     projects_page.add(&workspace_defaults);
 
     let workspace_overrides = adw::PreferencesGroup::new();
@@ -3455,6 +3581,25 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
                 expander.add_row(&row);
             }
             workspace_overrides.add(&expander);
+            {
+                let presets = shell.config.borrow().hide_presets();
+                let globs = shell.config.borrow().hide_globs(Some(root));
+                let shell = Rc::clone(&shell);
+                let root = root.clone();
+                workspace_overrides.add(&glob_editor_row(
+                    "Hide in tree",
+                    Some(&basename),
+                    &globs,
+                    presets,
+                    move |globs| {
+                        shell.config.borrow_mut().set_hide_globs(
+                            Some(&root),
+                            (!globs.is_empty()).then_some(globs),
+                        );
+                        shell.save_config();
+                    },
+                ));
+            }
         }
     }
     let add_workspace_root = adw::EntryRow::new();
@@ -3482,6 +3627,66 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     workspace_overrides.add(&add_workspace_root);
     projects_page.add(&workspace_overrides);
+
+    // The presets themselves, edited the same way: one pattern per
+    // line. Editing any preset takes ownership of the whole set.
+    let presets_group = adw::PreferencesGroup::new();
+    presets_group.set_title("Hide presets");
+    presets_group.set_description(Some(
+        "Named glob sets the hide editors add in one click. Edit any preset          and this list replaces the built-in one, so removals stick.",
+    ));
+    for (name, globs) in shell.config.borrow().hide_presets() {
+        let shell = Rc::clone(&shell);
+        let preset_name = name.clone();
+        presets_group.add(&glob_editor_row(
+            &name,
+            None,
+            &globs,
+            Vec::new(),
+            move |globs| {
+                shell
+                    .config
+                    .borrow_mut()
+                    .set_hide_preset(&preset_name, (!globs.is_empty()).then_some(globs));
+                shell.save_config();
+            },
+        ));
+    }
+    let add_preset = adw::EntryRow::new();
+    add_preset.set_title("new preset name");
+    add_preset.set_show_apply_button(true);
+    {
+        let shell = Rc::clone(&shell);
+        add_preset.connect_apply(move |row| {
+            let name = row.text().trim().to_string();
+            if name.is_empty() {
+                return;
+            }
+            // A fresh preset starts with a placeholder pattern: an
+            // empty one would remove itself immediately.
+            shell
+                .config
+                .borrow_mut()
+                .set_hide_preset(&name, Some(&name.to_lowercase()));
+            shell.save_config();
+            row.set_text("");
+        });
+    }
+    presets_group.add(&add_preset);
+    let restore = adw::ActionRow::new();
+    restore.set_title("Restore built-in presets");
+    let restore_button = gtk::Button::with_label("Restore");
+    restore_button.set_valign(gtk::Align::Center);
+    {
+        let shell = Rc::clone(&shell);
+        restore_button.connect_clicked(move |_| {
+            shell.config.borrow_mut().reset_hide_presets();
+            shell.save_config();
+        });
+    }
+    restore.add_suffix(&restore_button);
+    presets_group.add(&restore);
+    projects_page.add(&presets_group);
     window.add(&projects_page);
 
     window.present();

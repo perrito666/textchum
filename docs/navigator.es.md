@@ -87,11 +87,16 @@ de las filas de búferes) lo hace a demanda — desplegando el navegador
 si hace falta.
 
 Lo que el árbol oculta es configuración: patrones glob sobre nombres
-de archivo, `.*` (los ocultos) por defecto. La pestaña Proyectos edita
-la lista por defecto — con preajustes para los sospechosos habituales
-(`target`, `node_modules`, `__pycache__`, …) — y cada raíz de proyecto
-puede llevar su propia lista, que reemplaza a la por defecto. En el
-archivo:
+de archivo, `.*` (los ocultos) por defecto. Al pulsar un botón
+**Hide** se abre un editor con un patrón por línea y un menú **Add
+preset** que añade un conjunto con nombre. Cada raíz de proyecto puede
+llevar su propia lista, que reemplaza a la por defecto.
+
+Los preajustes también son tuyos: la pestaña **Presets** los edita del
+mismo modo — un patrón por línea — con añadir, quitar y restaurar los
+integrados. Editar cualquiera toma posesión del conjunto entero, así
+que el que borres sigue borrado. Viven en `workspace.hide_presets`, y
+las Preferencias de Linux editan la misma sección. En el archivo:
 
 ```json
 { "workspace": { "hide": [".*", "target", "node_modules"] } }

@@ -84,11 +84,17 @@ Général ▸ « Reveal the current file in the tree »), et
 le fait à la demande — en rouvrant le navigateur au besoin.
 
 Ce que l'arbre cache est de la configuration : des motifs glob sur les
-noms de fichiers, `.*` (les fichiers cachés) par défaut. L'onglet
-Projets édite la liste par défaut — avec des préréglages pour les
-suspects habituels (`target`, `node_modules`, `__pycache__`, …) — et
-chaque racine de projet peut porter sa propre liste, qui remplace
-celle par défaut. Dans le fichier :
+noms de fichiers, `.*` (les fichiers cachés) par défaut. Cliquer un
+bouton **Hide** ouvre un éditeur avec un motif par ligne et un menu
+**Add preset** qui ajoute un ensemble nommé. Chaque racine de projet
+peut porter sa propre liste, qui remplace celle par défaut.
+
+Les préréglages sont à vous aussi : l'onglet **Presets** les édite de
+la même façon — un motif par ligne — avec ajout, suppression et
+restauration des intégrés. Éditer l'un d'eux prend possession de tout
+l'ensemble, donc celui que vous supprimez le reste. Ils vivent dans
+`workspace.hide_presets`, et les Préférences Linux éditent la même
+section. Dans le fichier :
 
 ```json
 { "workspace": { "hide": [".*", "target", "node_modules"] } }

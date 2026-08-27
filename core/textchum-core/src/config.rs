@@ -33,6 +33,19 @@ use crate::fsutil::write_atomically;
 pub const DEFAULT_FONT_SIZE: f64 = 13.0;
 pub const FONT_SIZE_RANGE: (f64, f64) = (6.0, 72.0);
 pub const DEFAULT_TAB_WIDTH: u32 = 4;
+
+/// The hidden-glob presets the settings UI offers out of the box —
+/// the ecosystems that scatter build residue through a project.
+pub const BUILTIN_HIDE_PRESETS: &[(&str, &[&str])] = &[
+    ("Version control", &[".git", ".hg", ".svn"]),
+    (
+        "Python",
+        &["__pycache__", "*.pyc", ".venv", ".mypy_cache", ".ruff_cache"],
+    ),
+    ("Node", &["node_modules", ".next", "dist"]),
+    ("Rust", &["target"]),
+    ("Editor noise", &[".DS_Store", "*.swp"]),
+];
 pub const TAB_WIDTH_RANGE: (u32, u32) = (1, 16);
 
 /// Where opening a file puts it: a tab of the current window's group, or
@@ -435,6 +448,92 @@ impl Config {
                     workspace.insert("hide".into(), Value::Array(list));
                 }
             }
+        }
+        prune_empty(top, "workspace");
+    }
+
+    /// The named hidden-glob presets offered by the settings UI, sorted
+    /// by name. The built-ins below apply until the user edits any of
+    /// them; from then on `workspace.hide_presets` is authoritative
+    /// (so a deleted preset stays deleted), and clearing the section
+    /// brings the built-ins back.
+    pub fn hide_presets(&self) -> Vec<(String, Vec<String>)> {
+        let stored = self
+            .root
+            .get("workspace")
+            .and_then(|w| w.get("hide_presets"))
+            .and_then(Value::as_object);
+        let mut presets: Vec<(String, Vec<String>)> = match stored {
+            Some(stored) => stored
+                .iter()
+                .map(|(name, globs)| {
+                    let globs = globs
+                        .as_array()
+                        .map(|items| {
+                            items
+                                .iter()
+                                .filter_map(Value::as_str)
+                                .map(str::to_owned)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    (name.clone(), globs)
+                })
+                .collect(),
+            None => BUILTIN_HIDE_PRESETS
+                .iter()
+                .map(|(name, globs)| {
+                    (
+                        (*name).to_owned(),
+                        globs.iter().map(|glob| (*glob).to_owned()).collect(),
+                    )
+                })
+                .collect(),
+        };
+        presets.sort_by(|a, b| a.0.cmp(&b.0));
+        presets
+    }
+
+    /// Sets (or, with `None`/blank, removes) one preset. Editing any
+    /// preset materializes the whole set, so removals stick.
+    pub fn set_hide_preset(&mut self, name: &str, globs: Option<&str>) {
+        let current = self.hide_presets();
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let section = ensure_object(ensure_object(top, "workspace"), "hide_presets");
+        if section.is_empty() {
+            for (existing, globs) in current {
+                section.insert(
+                    existing,
+                    Value::Array(globs.into_iter().map(Value::String).collect()),
+                );
+            }
+        }
+        let list: Vec<Value> = globs
+            .unwrap_or_default()
+            .split_whitespace()
+            .map(|glob| Value::String(glob.to_owned()))
+            .collect();
+        if list.is_empty() {
+            section.remove(name);
+        } else {
+            section.insert(name.to_owned(), Value::Array(list));
+        }
+        // An emptied set would read as "no presets"; that is what the
+        // user asked for, so keep it — only a reset restores built-ins.
+        prune_empty(top, "workspace");
+    }
+
+    /// Forgets the user's presets, restoring the built-ins.
+    pub fn reset_hide_presets(&mut self) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        if let Some(workspace) = top.get_mut("workspace").and_then(Value::as_object_mut) {
+            workspace.remove("hide_presets");
         }
         prune_empty(top, "workspace");
     }
@@ -915,6 +1014,34 @@ mod tests {
         config.save().unwrap();
         let (reloaded, _) = Config::load(&path);
         assert_eq!(reloaded.new_file_target(), OpenTarget::Window);
+    }
+
+    #[test]
+    fn hide_presets_builtin_edit_and_reset() {
+        let path = temp_path("presets.json");
+        let (mut config, _) = Config::load(&path);
+        let builtin = config.hide_presets();
+        assert_eq!(builtin.len(), BUILTIN_HIDE_PRESETS.len());
+        assert!(builtin.iter().any(|(name, globs)| name == "Rust"
+            && globs == &vec!["target".to_owned()]));
+
+        // Editing one materializes the set; deleting another sticks.
+        config.set_hide_preset("Rust", Some("target target-wasm"));
+        config.set_hide_preset("Node", None);
+        config.save().unwrap();
+        let (mut reloaded, _) = Config::load(&path);
+        let presets = reloaded.hide_presets();
+        assert!(presets.iter().any(|(name, globs)| name == "Rust"
+            && globs == &vec!["target".to_owned(), "target-wasm".to_owned()]));
+        assert!(!presets.iter().any(|(name, _)| name == "Node"));
+        // Names come back sorted, so the UI does not shuffle.
+        let names: Vec<&str> = presets.iter().map(|(name, _)| name.as_str()).collect();
+        let mut sorted = names.clone();
+        sorted.sort();
+        assert_eq!(names, sorted);
+
+        reloaded.reset_hide_presets();
+        assert_eq!(reloaded.hide_presets().len(), BUILTIN_HIDE_PRESETS.len());
     }
 
     #[test]

@@ -1238,6 +1238,36 @@ bool tc_workspace_is_hidden(const char *name,
                             uintptr_t globs_len);
 
 /**
+ * The hidden-glob presets, one per line as `name\x1fglob glob …`,
+ * sorted by name. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_hide_presets(const struct TcConfig *config);
+
+/**
+ * Sets (or removes, with `globs_len == 0`) one preset by name.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_hide_preset(struct TcConfig *config,
+                               const char *name,
+                               uintptr_t name_len,
+                               const char *globs,
+                               uintptr_t globs_len);
+
+/**
+ * Forgets the user's presets, restoring the built-ins.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_reset_hide_presets(struct TcConfig *config);
+
+/**
  * Whether the navigator follows the current file (default true).
  *
  * # Safety
