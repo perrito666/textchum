@@ -10,6 +10,13 @@ struct EditorSettings {
     let lineNumbers: Bool
     let hoverDocs: Bool
     let spellLanguage: String?
+    /// The setting split into the dictionaries it names — several can
+    /// apply at once, and a word any of them knows is spelled right.
+    let spellLanguages: [String]
+    /// Words to accept whatever the dictionaries say.
+    let spellWords: [String]
+    /// Seconds of quiet before an unattended save; zero is off.
+    let autosaveSeconds: UInt32
 
     /// Resolves configuration values into a usable font: the configured
     /// family if it exists on this system, the platform monospaced font
@@ -38,6 +45,9 @@ struct EditorSettings {
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
         self.spellLanguage = config.spellLanguage
+        self.spellLanguages = config.spellLanguages
+        self.spellWords = config.spellWords
+        self.autosaveSeconds = config.autosaveSeconds
     }
 }
 
@@ -100,9 +110,27 @@ final class SettingsModel: ObservableObject {
     @Published var followFile: Bool {
         didSet { persist { $0.followFile = followFile } }
     }
-    /// Prose spell-check choice: "" = off, "auto", or a language code.
+    /// Prose spell-check choice: "" = off, "auto", one language code, or
+    /// several separated by commas.
     @Published var spellLanguage: String {
         didSet { persist { $0.spellLanguage = spellLanguage.isEmpty ? nil : spellLanguage } }
+    }
+    /// The personal word list, one per line for editing — the shape the
+    /// preprocessor and glob editors already use for the same reason: a
+    /// list grown a word at a time is unreadable on one line.
+    @Published var spellWords: String {
+        didSet {
+            persist {
+                $0.spellWords = spellWords
+                    .split(separator: "\n")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+            }
+        }
+    }
+    /// Seconds of quiet before an unattended save; 0 is off.
+    @Published var autosaveSeconds: Int {
+        didSet { persist { $0.autosaveSeconds = UInt32(max(0, autosaveSeconds)) } }
     }
     @Published private(set) var lspEntries: [LSPEntry] = []
 
@@ -219,6 +247,8 @@ final class SettingsModel: ObservableObject {
         hoverDocs = config.hoverDocs
         followFile = config.followFile
         spellLanguage = config.spellLanguage ?? ""
+        spellWords = config.spellWords.joined(separator: "\n")
+        autosaveSeconds = Int(config.autosaveSeconds)
         isLoading = false
         reloadLSPEntries()
         reloadWorkspaceEntries()
@@ -239,6 +269,8 @@ final class SettingsModel: ObservableObject {
         self.hoverDocs = config.hoverDocs
         self.followFile = config.followFile
         self.spellLanguage = config.spellLanguage ?? ""
+        self.spellWords = config.spellWords.joined(separator: "\n")
+        self.autosaveSeconds = Int(config.autosaveSeconds)
         self.isLoading = false
         reloadLSPEntries()
         reloadWorkspaceEntries()
@@ -536,11 +568,41 @@ private struct GeneralSettingsTab: View {
     /// otherwise select nothing and read as "off".
     private var spellLanguages: [String] {
         var languages = NSSpellChecker.shared.availableLanguages
-        let configured = model.spellLanguage
-        if !configured.isEmpty, configured != "auto", !languages.contains(configured) {
+        for configured in chosenSpellLanguages
+        where configured != "auto" && !languages.contains(configured) {
             languages.insert(configured, at: 0)
         }
         return languages
+    }
+
+    /// The setting read as the list it is allowed to be.
+    private var chosenSpellLanguages: [String] {
+        model.spellLanguage
+            .split(whereSeparator: { $0 == "," || $0 == " " })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// What the menu says when closed.
+    private var spellSummary: String {
+        let chosen = chosenSpellLanguages
+        if chosen.isEmpty { return "Off" }
+        if chosen == ["auto"] { return "Automatic by content" }
+        return chosen
+            .map { Locale.current.localizedString(forIdentifier: $0) ?? $0 }
+            .joined(separator: ", ")
+    }
+
+    private func toggleSpellLanguage(_ language: String, on: Bool) {
+        // "auto" and a named dictionary contradict each other; naming one
+        // is the more specific instruction, so it wins.
+        var chosen = chosenSpellLanguages.filter { $0 != "auto" }
+        if on {
+            if !chosen.contains(language) { chosen.append(language) }
+        } else {
+            chosen.removeAll { $0 == language }
+        }
+        model.spellLanguage = chosen.joined(separator: ", ")
     }
 
     /// Font families with a fixed-pitch face, plus the platform default.
@@ -589,18 +651,57 @@ private struct GeneralSettingsTab: View {
             Toggle("Show line numbers", isOn: $model.lineNumbers)
             Toggle("Hover documentation", isOn: $model.hoverDocs)
             Toggle("Reveal the current file in the tree", isOn: $model.followFile)
-            Picker("Spell check prose", selection: $model.spellLanguage) {
-                Text("Off").tag("")
-                Text("Automatic by content").tag("auto")
-                Divider()
-                ForEach(spellLanguages, id: \.self) { language in
-                    Text(Locale.current.localizedString(forIdentifier: language) ?? language)
-                        .tag(language)
+            // Not a Picker: several dictionaries can apply at once, and
+            // a picker can only say one thing. Each language is a toggle
+            // that adds itself to the list.
+            LabeledContent("Spell check prose") {
+                Menu(spellSummary) {
+                    Button("Off") { model.spellLanguage = "" }
+                    Button("Automatic by content") { model.spellLanguage = "auto" }
+                    Divider()
+                    ForEach(spellLanguages, id: \.self) { language in
+                        Toggle(
+                            Locale.current.localizedString(forIdentifier: language)
+                                ?? language,
+                            isOn: Binding(
+                                get: { chosenSpellLanguages.contains(language) },
+                                set: { on in toggleSpellLanguage(language, on: on) }
+                            ))
+                    }
                 }
             }
-            Text("Checks comments in code, and everything in Markdown, git commit messages, and plain text.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text(
+                "Checks comments in code, and everything in Markdown, git commit "
+                    + "messages, and plain text. Several dictionaries can apply at "
+                    + "once; a word any of them knows is spelled correctly."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            LabeledContent("Dictionary") {
+                VStack(alignment: .leading, spacing: 4) {
+                    CommandsEditor(placeholder: "SBX\nTextchum", text: $model.spellWords)
+                    Text("Words to accept whatever the dictionaries say, one per line.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Stepper(value: $model.autosaveSeconds, in: 0...600, step: 5) {
+                Text(
+                    model.autosaveSeconds == 0
+                        ? "Autosave: off"
+                        : "Autosave after \(model.autosaveSeconds) s of quiet")
+            }
+            Text(
+                "Files that have a name only, and without running save "
+                    + "preprocessors — a formatter reflowing the line you are typing "
+                    + "is not a favour."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 20)
@@ -1086,6 +1187,37 @@ private struct LanguageServersTab: View {
                 }
             }
             .frame(minHeight: 140)
+
+            // What there is to configure, and whether it would start.
+            // A screen listing only overrides cannot answer either
+            // question, and "not installed" is the answer behind "I
+            // installed a server and nothing happened".
+            GroupBox("Built-in servers") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(CoreLSPRegistry.all, id: \.id) { server in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(server.languages.joined(separator: ", "))
+                                .fontWeight(.semibold)
+                                .frame(width: 110, alignment: .leading)
+                            Text(server.command)
+                                .font(.system(.caption, design: .monospaced))
+                            Spacer()
+                            if CoreLSPRegistry.isInstalled(server.command) {
+                                Label("found", systemImage: "checkmark.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Label("not installed", systemImage: "exclamationmark.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                                    .help(server.installHint)
+                            }
+                        }
+                    }
+                }
+                .padding(6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             GroupBox("Add override") {
                 VStack(spacing: 8) {

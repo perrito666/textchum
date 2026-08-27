@@ -808,6 +808,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Adds a word to the personal dictionary from an editor's spelling
+    /// menu, then re-applies settings so every open window stops
+    /// flagging it. The list is a setting like any other, so it goes
+    /// through the settings model rather than straight to the file —
+    /// otherwise the Settings window would show a stale list.
+    func addSpellWord(_ word: String) {
+        guard let config, let model = settingsModel else { return }
+        guard config.addSpellWord(word) else { return }
+        lastOwnConfigSave = Date()
+        try? config.save()
+        model.reloadFromConfig()
+        for editor in editors {
+            editor.apply(settings: model.currentSettings(forRoot: editor.projectRoot))
+        }
+    }
+
     // MARK: Command-click navigation
 
     /// ⌘-click jumps to the definition under the pointer — the caret
