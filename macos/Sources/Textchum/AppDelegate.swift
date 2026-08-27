@@ -200,6 +200,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         }
                         return
                     }
+                    if allArguments[flagIndex + 1] == "hoverat" {
+                        // scope=line, query=character: park the caret and
+                        // ask the server, so the balloon holds real content.
+                        let line = Int(scope) ?? 0
+                        let character = Int(query) ?? 0
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            MainActor.assumeIsolated {
+                                guard let editor = self?.editors.first else { return }
+                                editor.reveal(line: line, character: character)
+                                editor.showHoverAtCaret(nil)
+                            }
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "status" {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                             MainActor.assumeIsolated {
@@ -264,9 +278,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         // scope=line, query=character for this mode.
                         let line = Int(scope) ?? 0
                         let character = Int(query) ?? 0
-                        if let editor = self?.editors.first {
-                            editor.reveal(line: line, character: character)
-                            editor.triggerCompletion(nil)
+                        // The pool needs a moment to spawn and shake
+                        // hands before a completion can be answered.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            MainActor.assumeIsolated {
+                                guard let editor = self?.editors.first else { return }
+                                editor.reveal(line: line, character: character)
+                                editor.triggerCompletion(nil)
+                            }
                         }
                         return
                     }

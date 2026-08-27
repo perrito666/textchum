@@ -531,6 +531,18 @@ struct SettingsView: View {
 private struct GeneralSettingsTab: View {
     @ObservedObject var model: SettingsModel
 
+    /// The system's dictionaries, plus whatever the file already names
+    /// — a hand-written `en_US` on a machine that spells it `en` would
+    /// otherwise select nothing and read as "off".
+    private var spellLanguages: [String] {
+        var languages = NSSpellChecker.shared.availableLanguages
+        let configured = model.spellLanguage
+        if !configured.isEmpty, configured != "auto", !languages.contains(configured) {
+            languages.insert(configured, at: 0)
+        }
+        return languages
+    }
+
     /// Font families with a fixed-pitch face, plus the platform default.
     private var monospacedFamilies: [String] {
         NSFontManager.shared.availableFontFamilies.filter { family in
@@ -581,7 +593,7 @@ private struct GeneralSettingsTab: View {
                 Text("Off").tag("")
                 Text("Automatic by content").tag("auto")
                 Divider()
-                ForEach(NSSpellChecker.shared.availableLanguages, id: \.self) { language in
+                ForEach(spellLanguages, id: \.self) { language in
                     Text(Locale.current.localizedString(forIdentifier: language) ?? language)
                         .tag(language)
                 }

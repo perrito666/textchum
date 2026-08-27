@@ -271,7 +271,16 @@ final class EditorWindowController: NSWindowController {
             splitController.addSplitViewItem(sidebarItem)
             splitController.addSplitViewItem(NSSplitViewItem(viewController: editorController))
             window.contentViewController = splitController
-            window.setContentSize(NSSize(width: 920, height: 480))
+            // Screenshot hook: a fixed content size makes documentation
+            // captures reproducible (TEXTCHUM_DEBUG_WINDOW=1200x760).
+            var contentSize = NSSize(width: 920, height: 480)
+            if let spec = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_WINDOW"] {
+                let parts = spec.split(separator: "x").compactMap { Double($0) }
+                if parts.count == 2 {
+                    contentSize = NSSize(width: parts[0], height: parts[1])
+                }
+            }
+            window.setContentSize(contentSize)
             window.center()
             self.splitController = splitController
         } else {

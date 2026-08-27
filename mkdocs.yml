@@ -44,6 +44,7 @@ plugins:
           nav_translations:
             Home: Inicio
             Getting started: Primeros pasos
+            Tour: Recorrido
             Architecture: Arquitectura
             Documents: Documentos
             Search: Búsqueda
@@ -60,6 +61,7 @@ plugins:
           nav_translations:
             Home: Accueil
             Getting started: Premiers pas
+            Tour: Visite
             Architecture: Architecture
             Documents: Documents
             Search: Recherche
@@ -74,6 +76,7 @@ plugins:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Tour: tour.md
   - Architecture: architecture.md
   - Documents: documents.md
   - Search: search.md
