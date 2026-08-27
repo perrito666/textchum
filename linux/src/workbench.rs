@@ -44,6 +44,9 @@ pub struct Workbench {
     /// Momentary path display: buffer rows show project-relative paths
     /// instead of bare names while this is on.
     show_full_paths: std::cell::Cell<bool>,
+    /// The explanation currently on screen, so a failure that repeats
+    /// does not queue a second identical notice behind the first.
+    explaining: Rc<RefCell<Option<String>>>,
     /// Tabs that were closed, newest last, with where the caret was.
     /// Only saved documents go here: an untitled buffer has nothing to
     /// reopen from, and pretending otherwise would reopen it empty.
@@ -320,6 +323,7 @@ impl Workbench {
             jumps: RefCell::new(JumpStack::default()),
             retracing: std::cell::Cell::new(false),
             show_full_paths: std::cell::Cell::new(false),
+            explaining: Rc::new(RefCell::new(None)),
             closed_tabs: RefCell::new(Vec::new()),
         });
         WORKBENCHES.with(|list| list.borrow_mut().push(Rc::clone(&workbench)));
@@ -486,8 +490,22 @@ impl Workbench {
     /// dismissed. A default toast is one ellipsized line that fades
     /// after a few seconds, which is fine for "saved" and useless for
     /// "here is the package you need to install".
+    ///
+    /// Repeats of the explanation already on screen are dropped. Waiting
+    /// to be dismissed is what makes these readable, and it is also what
+    /// would make a language server that fails on every keystroke pile
+    /// up a queue of identical notices to click through.
     pub fn explain(&self, text: &str) {
-        self.toasts.add_toast(long_toast(text));
+        if self.explaining.borrow().as_deref() == Some(text) {
+            return;
+        }
+        *self.explaining.borrow_mut() = Some(text.to_owned());
+        let toast = long_toast(text);
+        let showing = Rc::clone(&self.explaining);
+        toast.connect_dismissed(move |_| {
+            showing.borrow_mut().take();
+        });
+        self.toasts.add_toast(toast);
     }
 
     pub fn selected(&self) -> Option<Rc<Page>> {
