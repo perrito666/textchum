@@ -1848,6 +1848,69 @@ pub unsafe extern "C" fn tc_fuzzy_files(
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// A Markdown document's headings, one per line as
+/// `level \x1f line \x1f character \x1f text` — the outline a post
+/// deserves when no language server is answering. Front matter and
+/// fenced code are skipped. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `text` must point to its stated number of readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_markdown_headings(
+    text: *const c_char,
+    text_len: usize,
+) -> *mut c_char {
+    let Some(text) = (unsafe { str_from_raw(text, text_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let joined = catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::hugo::headings(text)
+            .into_iter()
+            .map(|heading| {
+                format!(
+                    "{}\x1f{}\x1f{}\x1f{}",
+                    heading.level, heading.line, heading.character, heading.text
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }))
+    .unwrap_or_default();
+    owned_c_string(joined)
+}
+
+/// The UTF-16 ranges a spell checker must skip in a Hugo document —
+/// front matter and shortcode calls — one per line as `start \x1f end`.
+/// Empty when the document has neither. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `text` must point to its stated number of readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_hugo_non_prose_ranges(
+    text: *const c_char,
+    text_len: usize,
+) -> *mut c_char {
+    let Some(text) = (unsafe { str_from_raw(text, text_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let joined = catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::hugo::non_prose_ranges(text)
+            .into_iter()
+            .map(|range| {
+                // Byte ranges become UTF-16 ones, which is what the
+                // shells address text with.
+                let start = text[..range.start].encode_utf16().count();
+                let end = start + text[range.clone()].encode_utf16().count();
+                format!("{start}\x1f{end}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }))
+    .unwrap_or_default();
+    owned_c_string(joined)
+}
+
 /// The project's file list under `root` (ignore-aware), `\n`-joined
 /// (release with [`tc_string_free`]). Walk once, then match many times
 /// with [`tc_match_files`] — re-walking per keystroke is what makes a

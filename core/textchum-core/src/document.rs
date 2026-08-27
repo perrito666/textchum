@@ -212,7 +212,43 @@ impl Document {
             return Ok(Vec::new());
         };
         let (start_byte, end_byte) = self.buffer.utf16_range_to_bytes(start, end)?;
-        Ok(syntax.highlights(self.buffer.rope(), start_byte..end_byte))
+        let mut spans = syntax.highlights(self.buffer.rope(), start_byte..end_byte);
+        // Hugo shortcodes are template calls inside prose, which no
+        // Markdown grammar models — scanned and painted over the
+        // prose spans, so `{{< figure >}}` reads as a call, not text.
+        let template_ranges = match self.language_name() {
+            // Shortcodes are template calls inside prose.
+            Some("markdown") => Some(
+                crate::hugo::shortcodes(&self.buffer.text())
+                    .into_iter()
+                    .map(|call| call.range)
+                    .collect::<Vec<_>>(),
+            ),
+            // A layout is HTML with template actions all through it.
+            Some("gotmpl") => Some(crate::hugo::template_actions(&self.buffer.text())),
+            _ => None,
+        };
+        if let (Some(ranges), Some(style)) =
+            (template_ranges, crate::syntax::theme::resolve("function"))
+        {
+            for range in ranges {
+                if range.end <= start_byte || range.start >= end_byte {
+                    continue;
+                }
+                let (Ok(from), Ok(to)) = (
+                    self.buffer.byte_to_utf16(range.start),
+                    self.buffer.byte_to_utf16(range.end),
+                ) else {
+                    continue;
+                };
+                spans.push(crate::syntax::HighlightSpan {
+                    start_utf16: from,
+                    end_utf16: to,
+                    style,
+                });
+            }
+        }
+        Ok(spans)
     }
 
     pub fn path(&self) -> Option<&Path> {
@@ -496,6 +532,29 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("textchum-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn hugo_layouts_are_go_templates_by_directory() {
+        use crate::syntax::languages;
+        let layout = std::path::Path::new("/site/layouts/partials/head.html");
+        assert_eq!(languages::by_path(layout).map(|l| l.spec.name), Some("gotmpl"));
+        // An ordinary page stays HTML.
+        let page = std::path::Path::new("/site/static/index.html");
+        assert_eq!(languages::by_path(page).map(|l| l.spec.name), Some("html"));
+
+        // Template actions paint over the markup.
+        let mut doc = Document::new();
+        doc.replace_utf16(0, 0, "<h1>{{ .Title }}</h1>\n").unwrap();
+        doc.set_language(Some("gotmpl"));
+        let spans = doc.highlights(0, 21).unwrap();
+        let function = crate::syntax::theme::resolve("function").unwrap();
+        assert!(
+            spans.iter().any(|span| span.style == function
+                && span.start_utf16 == 4
+                && span.end_utf16 == 16),
+            "no action span: {spans:?}"
+        );
     }
 
     #[test]

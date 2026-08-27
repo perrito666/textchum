@@ -589,6 +589,32 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    /// The document's headings as an outline — what a long post needs,
+    /// and what no Markdown language server is required for. Returns
+    /// whether there was anything to show.
+    @discardableResult
+    private func showMarkdownOutline() -> Bool {
+        guard coreDocument.languageName == "markdown", let textView else { return false }
+        let headings = CoreWorkspace.markdownHeadings(in: textView.string)
+        guard !headings.isEmpty else { return false }
+        let symbols = headings.map { heading in
+            OutlinePanel.Symbol(
+                name: heading.text,
+                kind: "h\(heading.level)",
+                line: heading.line,
+                character: heading.character,
+                // Nesting mirrors heading depth, so a post reads like
+                // its own table of contents.
+                depth: heading.level - 1
+            )
+        }
+        OutlinePanel.shared.show(symbols: symbols, over: window) { [weak self] symbol in
+            guard let self, let path = self.coreDocument.path else { return }
+            self.openLocation?(path, symbol.line, symbol.character)
+        }
+        return true
+    }
+
     /// Applies LSP edits to this window's document through the normal
     /// text-view path, so the core stays synchronized and undo works —
     /// bottom-up, so earlier ranges never shift.
@@ -604,12 +630,16 @@ final class EditorWindowController: NSWindowController {
     /// server, fuzzy-filterable; selecting one jumps (via the jump
     /// stack, so Go Back returns here).
     @objc func showDocumentOutline(_ sender: Any?) {
-        guard let lspApp, let path = lspOpenPath else { return }
+        guard let lspApp, let path = lspOpenPath else {
+            // Markdown has an outline without any server: its headings.
+            if !showMarkdownOutline() { NSSound.beep() }
+            return
+        }
         lspApp.lspDocumentSymbols(path: path) { [weak self] json in
             guard let self else { return }
             let symbols = OutlinePanel.symbols(fromResultJSON: json)
             guard !symbols.isEmpty else {
-                NSSound.beep()
+                if !self.showMarkdownOutline() { NSSound.beep() }
                 return
             }
             OutlinePanel.shared.show(symbols: symbols, over: self.window) {
@@ -887,6 +917,21 @@ final class EditorWindowController: NSWindowController {
         pre { background: rgba(128,128,128,.12); border-radius: 6px;
               padding: .8em 1em; overflow-x: auto; }
         pre code { background: none; padding: 0; }
+        .front-matter { display: grid; grid-template-columns: auto 1fr;
+               gap: .15em 1em; margin: 0 0 1.4em;
+               padding: .8em 1em; border-radius: 6px;
+               background: rgba(128,128,128,.10);
+               border-left: 3px solid rgba(128,128,128,.45);
+               font-size: .9em; }
+        .front-matter dt { grid-column: 1; margin: 0; font-weight: 600;
+               opacity: .75; }
+        .front-matter dd { grid-column: 2; margin: 0;
+               font-family: ui-monospace, monospace; }
+        .shortcode { display: inline-block; padding: .05em .5em;
+               border-radius: 999px; font-size: .85em;
+               font-family: ui-monospace, monospace;
+               background: rgba(128,128,128,.18);
+               border: 1px solid rgba(128,128,128,.35); }
         blockquote { border-left: 4px solid rgba(128,128,128,.4);
                      margin-left: 0; padding-left: 1em; opacity: .85; }
         table { border-collapse: collapse; }
@@ -1081,13 +1126,34 @@ final class EditorWindowController: NSWindowController {
     private func proseRanges(in text: NSString) -> [NSRange] {
         let language = coreDocument.languageName
         if language == nil || language == "markdown" || language == "gitcommit" {
-            return [NSRange(location: 0, length: text.length)]
+            let whole = NSRange(location: 0, length: text.length)
+            guard language == "markdown" else { return [whole] }
+            // Hugo posts carry structured data and template calls in
+            // among the prose; a slug is not a misspelling.
+            let skip = CoreWorkspace.hugoNonProseRanges(in: text as String)
+            return skip.isEmpty ? [whole] : Self.ranges(of: whole, excluding: skip)
         }
         guard text.length <= Self.highlightSizeCap else { return [] }
         // Style index 1 is the canonical comment capture (theme contract).
         return coreDocument.highlights(in: NSRange(location: 0, length: text.length))
             .filter { $0.styleIndex == 1 }
             .map(\.range)
+    }
+
+    /// `whole` with every excluded range cut out of it, in order.
+    static func ranges(of whole: NSRange, excluding excluded: [NSRange]) -> [NSRange] {
+        var kept: [NSRange] = []
+        var cursor = whole.location
+        for range in excluded.sorted(by: { $0.location < $1.location }) {
+            if range.location > cursor {
+                kept.append(NSRange(location: cursor, length: range.location - cursor))
+            }
+            cursor = max(cursor, NSMaxRange(range))
+        }
+        if cursor < NSMaxRange(whole) {
+            kept.append(NSRange(location: cursor, length: NSMaxRange(whole) - cursor))
+        }
+        return kept
     }
 
     private func runSpellPass() {

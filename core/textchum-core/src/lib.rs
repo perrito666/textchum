@@ -16,6 +16,7 @@ mod config;
 mod document;
 mod fsutil;
 mod history;
+pub mod hugo;
 pub mod markdown;
 pub mod search;
 pub mod syntax;

@@ -1075,6 +1075,28 @@ char *tc_fuzzy_files(const char *root,
                      uintptr_t limit);
 
 /**
+ * A Markdown document's headings, one per line as
+ * `level \x1f line \x1f character \x1f text` — the outline a post
+ * deserves when no language server is answering. Front matter and
+ * fenced code are skipped. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `text` must point to its stated number of readable bytes.
+ */
+char *tc_markdown_headings(const char *text, uintptr_t text_len);
+
+/**
+ * The UTF-16 ranges a spell checker must skip in a Hugo document —
+ * front matter and shortcode calls — one per line as `start \x1f end`.
+ * Empty when the document has neither. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `text` must point to its stated number of readable bytes.
+ */
+char *tc_hugo_non_prose_ranges(const char *text, uintptr_t text_len);
+
+/**
  * The project's file list under `root` (ignore-aware), `\n`-joined
  * (release with [`tc_string_free`]). Walk once, then match many times
  * with [`tc_match_files`] — re-walking per keystroke is what makes a

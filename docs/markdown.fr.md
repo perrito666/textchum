@@ -22,6 +22,36 @@ et l'affiche.
 Le rendu se fait dans le noyau (la coque ne possède que le volet) ; le
 même HTML alimentera plus tard d'autres sorties.
 
+## Hugo
+
+Les billets écrits pour [Hugo](https://gohugo.io) sont du Markdown
+avec deux ajouts, et Textchum lit les deux sans que Hugo soit
+installé.
+
+Le **front matter** — TOML entre `+++`, YAML entre `---` — est coloré
+comme le langage qu'il est vraiment, tenu hors de la prose que lit le
+correcteur (un slug n'est pas une faute), et rendu dans l'aperçu comme
+un petit bloc de métadonnées plutôt qu'un paragraphe de signes.
+
+Les **shortcodes** — `{{< figure src="…" >}}` et
+`{{% notice %}}…{{% /notice %}}` — sont colorés comme les appels
+qu'ils sont, ignorés par le correcteur, et affichés dans l'aperçu
+comme un marqueur nommé. Ils ne sont jamais exécutés : il faudrait le
+moteur de gabarits de Hugo et les layouts de votre site, donc un
+marqueur est la chose honnête à montrer. Le corps d'un `{{% … %}}`
+apparié continue d'être rendu comme du Markdown, comme le fait Hugo.
+
+Le **plan** (⇧⌘O) liste les titres d'un billet même sans serveur de
+langage, imbriqués par profondeur. Les titres dans un bloc de code ou
+dans le front matter ne sont pas pris pour de la structure.
+
+Enfin, les fichiers sous un répertoire `layouts/` sont traités comme
+des **gabarits Go** plutôt que du HTML brut : le balisage est coloré
+comme du HTML et les actions `{{ … }}` s'en détachent.
+
+Le front matter JSON (la forme à accolades) n'est pas encore reconnu ;
+TOML et YAML couvrent ce que Hugo écrit par défaut.
+
 ## Pas encore là
 
 - La synchronisation de défilement précise par ancres de source (celle

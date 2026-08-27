@@ -1486,23 +1486,32 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         });
     });
     add("outline", workbench, |workbench, _| {
-        let Some(path) = workbench
-            .selected()
-            .and_then(|page| page.path.borrow().clone())
-        else {
-            workbench.toast("Save the file first — untitled documents have no server.");
+        let Some(page) = workbench.selected() else { return };
+        let Some(path) = page.path.borrow().clone() else {
+            // Markdown outlines itself; anything else needs a server,
+            // and a server needs a file.
+            if !show_markdown_outline(workbench, &page) {
+                workbench.toast("Save the file first — untitled documents have no server.");
+            }
             return;
         };
         let shell = Shell::instance();
         let id = shell.pool.borrow_mut().document_symbols(Path::new(&path));
         if id == 0 {
-            workbench.toast("No language server is running for this document.");
+            if !show_markdown_outline(workbench, &page) {
+                workbench.toast("No language server is running for this document.");
+            }
             return;
         }
         let weak = Rc::downgrade(workbench);
+        let fallback = Rc::clone(&page);
         shell.expect_response(id, move |json| {
             if let Some(workbench) = weak.upgrade() {
-                show_outline(&workbench, &path, json);
+                if !show_outline(&workbench, &path, json)
+                    && !show_markdown_outline(&workbench, &fallback)
+                {
+                    workbench.toast("The server offered no outline.");
+                }
             }
         });
     });
@@ -2438,10 +2447,9 @@ fn show_locations(workbench: &Rc<Workbench>, title: &str, json: &str) {
 }
 
 /// The document's symbols, flattened; activating a row jumps.
-fn show_outline(workbench: &Rc<Workbench>, path: &str, json: &str) {
+fn show_outline(workbench: &Rc<Workbench>, path: &str, json: &str) -> bool {
     let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
-        workbench.toast("The server offered no outline.");
-        return;
+        return false;
     };
     let mut rows: Vec<(String, i32, usize)> = Vec::new();
     fn walk(rows: &mut Vec<(String, i32, usize)>, items: &serde_json::Value, depth: usize) {
@@ -2462,8 +2470,7 @@ fn show_outline(workbench: &Rc<Workbench>, path: &str, json: &str) {
     }
     walk(&mut rows, &parsed, 0);
     if rows.is_empty() {
-        workbench.toast("The server offered no outline.");
-        return;
+        return false;
     }
     let path = path.to_owned();
     let labels: Vec<String> = rows.iter().map(|(label, _, _)| label.clone()).collect();
@@ -2471,6 +2478,51 @@ fn show_outline(workbench: &Rc<Workbench>, path: &str, json: &str) {
         let (_, line, character) = rows[index];
         workbench.open(Some(PathBuf::from(&path)), Some((line, character)));
     });
+    true
+}
+
+/// A Markdown document outlines itself: its headings, nested by depth.
+/// No language server required, which is what a blog post needs.
+fn show_markdown_outline(workbench: &Rc<Workbench>, page: &Rc<Page>) -> bool {
+    if page.state.borrow().document.language_name() != Some("markdown") {
+        return false;
+    }
+    let text = page.state.borrow().document.text();
+    let headings = textchum_core::hugo::headings(&text);
+    if headings.is_empty() {
+        return false;
+    }
+    let rows: Vec<(i32, usize)> = headings
+        .iter()
+        .map(|heading| (heading.line as i32, heading.character))
+        .collect();
+    let labels: Vec<String> = headings
+        .iter()
+        .map(|heading| format!("{}{}", "  ".repeat(heading.level - 1), heading.text))
+        .collect();
+    let path = page.path.borrow().clone();
+    present_picker(workbench, "Document Outline", labels, move |workbench, index| {
+        let (line, character) = rows[index];
+        match &path {
+            Some(path) => {
+                workbench.open(Some(PathBuf::from(path)), Some((line, character)))
+            }
+            // An unsaved post still navigates, in place.
+            None => {
+                if let Some(page) = workbench.selected() {
+                    if let Some(iter) =
+                        crate::page::iter_at_lsp(&page.buffer, line, character)
+                    {
+                        page.buffer.place_cursor(&iter);
+                        page.view
+                            .scroll_to_iter(&mut iter.clone(), 0.1, false, 0.0, 0.0);
+                        page.view.grab_focus();
+                    }
+                }
+            }
+        }
+    });
+    true
 }
 
 /// A small modal list; activating a row runs `choose` and closes.

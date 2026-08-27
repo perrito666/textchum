@@ -174,6 +174,18 @@ static SPECS: &[LanguageSpec] = &[
         tree_sitter_html::HIGHLIGHTS_QUERY,
         Some(tree_sitter_html::INJECTIONS_QUERY)
     ),
+    // Hugo layouts: Go templating inside HTML. The HTML grammar
+    // carries the markup; the template actions are painted over it by
+    // the document, since no maintained tree-sitter grammar for Go
+    // templates ships on crates.io.
+    lang!(
+        "gotmpl",
+        &["go-html-template", "gohtml", "hugo-template"],
+        &["gohtml", "gotmpl", "tmpl"],
+        tree_sitter_html::LANGUAGE,
+        tree_sitter_html::HIGHLIGHTS_QUERY,
+        Some(tree_sitter_html::INJECTIONS_QUERY)
+    ),
     lang!(
         "css",
         &[],
@@ -259,6 +271,17 @@ pub fn by_name(name: &str) -> Option<&'static RegisteredLanguage> {
 /// Finds a language by a file path: an exact file-name match first
 /// (Makefile, COMMIT_EDITMSG), then the extension.
 pub fn by_path(path: &std::path::Path) -> Option<&'static RegisteredLanguage> {
+    // A Hugo layout is Go templating that happens to live in an .html
+    // file; the directory is what says so, since the extension cannot.
+    if path.extension().and_then(|ext| ext.to_str()) == Some("html")
+        && path
+            .components()
+            .any(|component| component.as_os_str() == "layouts")
+    {
+        if let Some(entry) = by_name("gotmpl") {
+            return Some(entry);
+        }
+    }
     if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
         if let Some(entry) = registry()
             .iter()

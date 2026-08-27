@@ -1239,12 +1239,38 @@ pub fn hover_text(json: &str) -> Option<String> {
 }
 
 
+/// The preview's page furniture: the shell owns the chrome around the
+/// core's HTML, including how Hugo's front matter and shortcode
+/// placeholders look.
+const PREVIEW_STYLE: &str = r#"<style>
+:root { color-scheme: light dark; }
+body { font: 15px/1.6 system-ui, sans-serif; margin: 0; padding: 1.5em 2em; }
+h1, h2 { border-bottom: 1px solid rgba(128,128,128,.3); padding-bottom: .3em; }
+code { font-family: monospace; font-size: .9em; background: rgba(128,128,128,.15);
+       border-radius: 4px; padding: .1em .35em; }
+pre { background: rgba(128,128,128,.12); border-radius: 6px; padding: .8em 1em;
+      overflow-x: auto; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid rgba(128,128,128,.4); margin-left: 0;
+             padding-left: 1em; opacity: .85; }
+.front-matter { display: grid; grid-template-columns: auto 1fr; gap: .15em 1em;
+                margin: 0 0 1.4em; padding: .8em 1em; border-radius: 6px;
+                background: rgba(128,128,128,.10);
+                border-left: 3px solid rgba(128,128,128,.45); font-size: .9em; }
+.front-matter dt { grid-column: 1; margin: 0; font-weight: 600; opacity: .75; }
+.front-matter dd { grid-column: 2; margin: 0; font-family: monospace; }
+.shortcode { display: inline-block; padding: .05em .5em; border-radius: 999px;
+             font-size: .85em; font-family: monospace;
+             background: rgba(128,128,128,.18);
+             border: 1px solid rgba(128,128,128,.35); }
+</style>"#;
+
 fn update_preview(page: &Rc<Page>) {
     let Some(web) = &page.preview else { return };
     if !web.is_visible() {
         return;
     }
     if let Some(html) = page.state.borrow().document.markdown_html() {
-        web.load_html(&html, None);
+        web.load_html(&format!("{PREVIEW_STYLE}{html}"), None);
     }
 }

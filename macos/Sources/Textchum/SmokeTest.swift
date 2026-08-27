@@ -395,6 +395,39 @@ func runSmokeTest() -> Int32 {
     }
     print("snippet expansion ok (placeholder selection, exit point, escapes)")
 
+    // Hugo: a post's headings outline it, and the prose the spell
+    // checker reads excludes front matter and shortcode calls.
+    let post = [
+        "+++",
+        "title = \"Harbor\"",
+        "slug = \"harbr\"",
+        "+++",
+        "",
+        "# Opening",
+        "",
+        "Prose with {{< figure src=\"a.png\" >}} inside.",
+        "",
+        "## Later",
+    ].joined(separator: "\n")
+    let headings = CoreWorkspace.markdownHeadings(in: post)
+    guard headings.map(\.text) == ["Opening", "Later"],
+        headings.first?.level == 1, headings.last?.level == 2
+    else {
+        print("FAIL: markdown headings: \(headings)")
+        return 1
+    }
+    let skipped = CoreWorkspace.hugoNonProseRanges(in: post)
+    let whole = NSRange(location: 0, length: (post as NSString).length)
+    let prose = EditorWindowController.ranges(of: whole, excluding: skipped)
+    let proseText = prose.map { (post as NSString).substring(with: $0) }.joined()
+    guard skipped.count == 2, !proseText.contains("harbr"),
+        !proseText.contains("{{<"), proseText.contains("Prose with")
+    else {
+        print("FAIL: hugo prose ranges: \(skipped) -> \(proseText)")
+        return 1
+    }
+    print("hugo ok (headings outline, front matter and shortcodes out of the prose)")
+
     // Async event round trip: core dispatch thread → main queue.
     var receivedSequence: UInt64?
     let coreApp = CoreApp { event in

@@ -102,11 +102,32 @@ fn prose_char_ranges(page: &Rc<Page>, text: &str) -> Vec<(usize, usize)> {
     let language = state.document.language_name();
     let total_chars = text.chars().count();
     if language.is_none() || language == Some("markdown") || language == Some("gitcommit") {
-        return if total_chars == 0 {
-            Vec::new()
-        } else {
-            vec![(0, total_chars)]
-        };
+        if total_chars == 0 {
+            return Vec::new();
+        }
+        if language != Some("markdown") {
+            return vec![(0, total_chars)];
+        }
+        // Hugo posts carry structured data and template calls among
+        // the prose; a slug is not a misspelling.
+        let skip = textchum_core::hugo::non_prose_ranges(text);
+        if skip.is_empty() {
+            return vec![(0, total_chars)];
+        }
+        let mut kept = Vec::new();
+        let mut cursor = 0usize;
+        for range in skip {
+            let start = text[..range.start].chars().count();
+            let end = start + text[range.clone()].chars().count();
+            if start > cursor {
+                kept.push((cursor, start));
+            }
+            cursor = cursor.max(end);
+        }
+        if cursor < total_chars {
+            kept.push((cursor, total_chars));
+        }
+        return kept;
     }
     let total_utf16 = text.encode_utf16().count();
     let Ok(spans) = state.document.highlights(0, total_utf16) else {
