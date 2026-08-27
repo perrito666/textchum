@@ -12,7 +12,9 @@ two halves: the open buffers grouped by project on top, that project's
 file tree below.
 
 ![The editor window: sidebar with open buffers and the project tree, a
-Rust file with syntax highlighting and line numbers](images/editor.png)
+Rust file with syntax highlighting and line numbers](images/editor.png#only-light)
+![The editor window: sidebar with open buffers and the project tree, a
+Rust file with syntax highlighting and line numbers](images/editor-dark.png#only-dark)
 
 The title bar carries the facts about the document — encoding, size,
 language, and the problem count once a language server has an opinion.
@@ -26,7 +28,9 @@ title bar. Nothing about the editor waits on the server: it attaches
 when it can, and says so when it cannot.
 
 ![A warning from the language server marked in the text, counted in the
-title bar](images/diagnostics.png)
+title bar](images/diagnostics.png#only-light)
+![A warning from the language server marked in the text, counted in the
+title bar](images/diagnostics-dark.png#only-dark)
 
 Resting the pointer on a symbol shows the server's documentation, with
 the Markdown it sends rendered — code blocks monospaced, emphasis
@@ -34,25 +38,33 @@ styled. ⌃⌘H asks for the symbol under the caret instead, which works
 with mouse hover switched off.
 
 ![Hover documentation over a function, showing a rendered signature and
-prose](images/hover.png)
+prose](images/hover.png#only-light)
+![Hover documentation over a function, showing a rendered signature and
+prose](images/hover-dark.png#only-dark)
 
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
 first placeholder selected, so typing replaces it.
 
 ![The completion popup listing members with their
-types](images/completion.png)
+types](images/completion.png#only-light)
+![The completion popup listing members with their
+types](images/completion-dark.png#only-dark)
 
 **⇧⌘O** lists the file's symbols, filterable from the keyboard.
 
 ![The document outline panel, listing a struct and its
-methods](images/outline.png)
+methods](images/outline.png#only-light)
+![The document outline panel, listing a struct and its
+methods](images/outline-dark.png#only-dark)
 
 **View ▸ Language Server Status** answers "is my server alive?" — what
 runs where, and the session's recent transitions, refreshed live.
 
 ![The language server status panel listing one running instance and its
-status transitions](images/server-status.png)
+status transitions](images/server-status.png#only-light)
+![The language server status panel listing one running instance and its
+status transitions](images/server-status-dark.png#only-dark)
 
 ## Finding things
 
@@ -63,7 +75,9 @@ strip says how many of how many files matched, and which keys do what
 accident.
 
 ![Open Quickly: a fuzzy query, one matching path, and the status strip
-naming the keys](images/open-quickly.png)
+naming the keys](images/open-quickly.png#only-light)
+![Open Quickly: a fuzzy query, one matching path, and the status strip
+naming the keys](images/open-quickly-dark.png#only-dark)
 
 **⇧⌘F** searches contents with a regular expression, with stacked
 filters that refine the results by line text or file path. The status
@@ -71,13 +85,17 @@ line always says what the search did — matches, files searched, or why
 nothing was read.
 
 ![Find in Project: regex results with a file filter
-applied](images/find-in-project.png)
+applied](images/find-in-project.png#only-light)
+![Find in Project: regex results with a file filter
+applied](images/find-in-project-dark.png#only-dark)
 
 **⇧⌘P** is the command palette: every menu action, fuzzy-searchable,
 with its shortcut alongside.
 
 ![The command palette listing menu actions and their
-shortcuts](images/palette.png)
+shortcuts](images/palette.png#only-light)
+![The command palette listing menu actions and their
+shortcuts](images/palette-dark.png#only-dark)
 
 ## Markdown and prose
 
@@ -87,10 +105,14 @@ misspellings in purple, distinct from diagnostics. In code it looks
 only at comments; identifiers are never flagged.
 
 ![A Markdown document with its rendered preview beside
-it](images/preview.png)
+it](images/preview.png#only-light)
+![A Markdown document with its rendered preview beside
+it](images/preview-dark.png#only-dark)
 
 ![Misspellings marked in prose, with the rendered preview
-alongside](images/spell-check.png)
+alongside](images/spell-check.png#only-light)
+![Misspellings marked in prose, with the rendered preview
+alongside](images/spell-check-dark.png#only-dark)
 
 ## Settings
 
@@ -99,38 +121,49 @@ escape hatch, and it is watched, so an edit in another editor applies
 at once.
 
 ![Settings, General tab: appearance, theme, placement, font, and the
-editor toggles](images/settings-general.png)
+editor toggles](images/settings-general.png#only-light)
+![Settings, General tab: appearance, theme, placement, font, and the
+editor toggles](images/settings-general-dark.png#only-dark)
 
 **Projects** decides how project roots are found, what the tree hides,
 and which editor settings a root overrides.
 
 ![Settings, Projects tab: detection toggles, hide patterns, and
-per-project overrides](images/settings-projects.png)
+per-project overrides](images/settings-projects.png#only-light)
+![Settings, Projects tab: detection toggles, hide patterns, and
+per-project overrides](images/settings-projects-dark.png#only-dark)
 
 Hidden names are glob patterns, edited one per line, with a menu that
 adds a named preset in one click.
 
 ![The hide editor open as a popover, one pattern per line, with the Add
-preset menu](images/hide-globs.png)
+preset menu](images/hide-globs.png#only-light)
+![The hide editor open as a popover, one pattern per line, with the Add
+preset menu](images/hide-globs-dark.png#only-dark)
 
 **Presets** edits those named sets the same way. They start as
 built-ins; edit any of them and your list takes over, so a preset you
 delete stays deleted until you restore the built-ins.
 
 ![Settings, Presets tab: named glob sets, each editable one pattern per
-line](images/settings-presets.png)
+line](images/settings-presets.png#only-light)
+![Settings, Presets tab: named glob sets, each editable one pattern per
+line](images/settings-presets-dark.png#only-dark)
 
 **Language Servers** overrides which command serves a language, for
 every project or for one root.
 
 ![Settings, Language Servers tab: default and per-project server
-commands](images/settings-servers.png)
+commands](images/settings-servers.png#only-light)
+![Settings, Language Servers tab: default and per-project server
+commands](images/settings-servers-dark.png#only-dark)
 
 **Preprocessors** runs formatters before every save: one command per
 line, each reading the document on standard input and writing it back
 on standard output.
 
-![Settings, Preprocessors tab: per-language command chains](images/settings-preprocessors.png)
+![Settings, Preprocessors tab: per-language command chains](images/settings-preprocessors.png#only-light)
+![Settings, Preprocessors tab: per-language command chains](images/settings-preprocessors-dark.png#only-dark)
 
 ## Small things
 
@@ -138,10 +171,14 @@ on standard output.
 keyboard, so highlighting works before the first save.
 
 ![The New with Format picker, filtering the language
-list](images/new-with-format.png)
+list](images/new-with-format.png#only-light)
+![The New with Format picker, filtering the language
+list](images/new-with-format-dark.png#only-dark)
 
 And the About panel says which build you are running — a real version,
 even for a local build.
 
 ![The About panel showing the build version, author, repository, and
-license](images/about.png)
+license](images/about.png#only-light)
+![The About panel showing the build version, author, repository, and
+license](images/about-dark.png#only-dark)

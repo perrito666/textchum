@@ -13,7 +13,10 @@ abajo el árbol de archivos de ese proyecto.
 
 ![La ventana del editor: barra lateral con búferes abiertos y el árbol
 del proyecto, un archivo Rust con coloreado y números de
-línea](images/editor.png)
+línea](images/editor.png#only-light)
+![La ventana del editor: barra lateral con búferes abiertos y el árbol
+del proyecto, un archivo Rust con coloreado y números de
+línea](images/editor-dark.png#only-dark)
 
 La barra de título lleva los datos del documento — codificación,
 tamaño, lenguaje y el número de problemas en cuanto el servidor de
@@ -27,7 +30,9 @@ en la barra de título. Nada del editor espera al servidor: se conecta
 cuando puede, y lo dice cuando no.
 
 ![Un aviso del servidor de lenguaje marcado en el texto y contado en la
-barra de título](images/diagnostics.png)
+barra de título](images/diagnostics.png#only-light)
+![Un aviso del servidor de lenguaje marcado en el texto y contado en la
+barra de título](images/diagnostics-dark.png#only-dark)
 
 Dejar el puntero sobre un símbolo muestra la documentación del
 servidor, con el Markdown que envía ya renderizado — bloques de código
@@ -35,26 +40,34 @@ en monoespaciada, énfasis con estilo. ⌃⌘H la pide para el símbolo bajo
 el cursor, lo que funciona incluso con el hover del ratón apagado.
 
 ![Documentación al pasar sobre una función, con firma y prosa
-renderizadas](images/hover.png)
+renderizadas](images/hover.png#only-light)
+![Documentación al pasar sobre una función, con firma y prosa
+renderizadas](images/hover-dark.png#only-dark)
 
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
 primer marcador seleccionado, así que escribir lo reemplaza.
 
 ![El desplegable de autocompletado listando miembros con sus
-tipos](images/completion.png)
+tipos](images/completion.png#only-light)
+![El desplegable de autocompletado listando miembros con sus
+tipos](images/completion-dark.png#only-dark)
 
 **⇧⌘O** lista los símbolos del archivo, filtrables desde el teclado.
 
 ![El panel de esquema del documento, con una estructura y sus
-métodos](images/outline.png)
+métodos](images/outline.png#only-light)
+![El panel de esquema del documento, con una estructura y sus
+métodos](images/outline-dark.png#only-dark)
 
 **Vista ▸ Estado de servidores** responde a «¿está vivo mi servidor?» —
 qué corre y dónde, y las transiciones recientes de la sesión,
 refrescado en vivo.
 
 ![El panel de estado de servidores con una instancia en ejecución y sus
-transiciones](images/server-status.png)
+transiciones](images/server-status.png#only-light)
+![El panel de estado de servidores con una instancia en ejecución y sus
+transiciones](images/server-status-dark.png#only-dark)
 
 ## Encontrar cosas
 
@@ -65,20 +78,26 @@ coinciden y qué hace cada tecla — **⏎ busca, ⌘⏎ abre**, para que
 afinar una consulta nunca abra un archivo por accidente.
 
 ![Abrir rápidamente: una consulta difusa, una ruta coincidente y la
-línea de estado con las teclas](images/open-quickly.png)
+línea de estado con las teclas](images/open-quickly.png#only-light)
+![Abrir rápidamente: una consulta difusa, una ruta coincidente y la
+línea de estado con las teclas](images/open-quickly-dark.png#only-dark)
 
 **⇧⌘F** busca en el contenido con una expresión regular, con filtros
 apilados que refinan por texto de línea o por ruta. La línea de estado
 siempre dice qué hizo la búsqueda.
 
 ![Buscar en el proyecto: resultados de regex con un filtro de archivo
-aplicado](images/find-in-project.png)
+aplicado](images/find-in-project.png#only-light)
+![Buscar en el proyecto: resultados de regex con un filtro de archivo
+aplicado](images/find-in-project-dark.png#only-dark)
 
 **⇧⌘P** es la paleta de comandos: cada acción de menú, buscable de
 forma difusa, con su atajo al lado.
 
 ![La paleta de comandos listando acciones de menú y sus
-atajos](images/palette.png)
+atajos](images/palette.png#only-light)
+![La paleta de comandos listando acciones de menú y sus
+atajos](images/palette-dark.png#only-dark)
 
 ## Markdown y prosa
 
@@ -89,10 +108,14 @@ diagnósticos. En código solo mira los comentarios; los identificadores
 nunca se marcan.
 
 ![Un documento Markdown con su vista previa al
-lado](images/preview.png)
+lado](images/preview.png#only-light)
+![Un documento Markdown con su vista previa al
+lado](images/preview-dark.png#only-dark)
 
 ![Faltas marcadas en la prosa, con la vista previa
-al lado](images/spell-check.png)
+al lado](images/spell-check.png#only-light)
+![Faltas marcadas en la prosa, con la vista previa
+al lado](images/spell-check-dark.png#only-dark)
 
 ## Ajustes
 
@@ -101,39 +124,51 @@ es la escotilla de escape, y está vigilado, así que una edición en
 otro editor se aplica al instante.
 
 ![Ajustes, pestaña General: apariencia, tema, ubicación, tipografía y
-los interruptores del editor](images/settings-general.png)
+los interruptores del editor](images/settings-general.png#only-light)
+![Ajustes, pestaña General: apariencia, tema, ubicación, tipografía y
+los interruptores del editor](images/settings-general-dark.png#only-dark)
 
 **Proyectos** decide cómo se encuentran las raíces, qué oculta el árbol
 y qué ajustes del editor sobrescribe una raíz.
 
 ![Ajustes, pestaña Proyectos: detección, patrones ocultos y
-sobrescrituras por proyecto](images/settings-projects.png)
+sobrescrituras por proyecto](images/settings-projects.png#only-light)
+![Ajustes, pestaña Proyectos: detección, patrones ocultos y
+sobrescrituras por proyecto](images/settings-projects-dark.png#only-dark)
 
 Los nombres ocultos son patrones glob, editados uno por línea, con un
 menú que añade un preajuste con nombre en un clic.
 
 ![El editor de ocultos abierto como globo, un patrón por línea, con el
-menú de preajustes](images/hide-globs.png)
+menú de preajustes](images/hide-globs.png#only-light)
+![El editor de ocultos abierto como globo, un patrón por línea, con el
+menú de preajustes](images/hide-globs-dark.png#only-dark)
 
 **Presets** edita esos conjuntos con nombre del mismo modo. Empiezan
 como integrados; edita cualquiera y tu lista toma el mando, así que el
 que borres sigue borrado hasta que restaures los integrados.
 
 ![Ajustes, pestaña Presets: conjuntos glob con nombre, cada uno
-editable un patrón por línea](images/settings-presets.png)
+editable un patrón por línea](images/settings-presets.png#only-light)
+![Ajustes, pestaña Presets: conjuntos glob con nombre, cada uno
+editable un patrón por línea](images/settings-presets-dark.png#only-dark)
 
 **Servidores de lenguaje** sobrescribe qué comando sirve un lenguaje,
 para todos los proyectos o para una raíz.
 
 ![Ajustes, pestaña Servidores de lenguaje: comandos por defecto y por
-proyecto](images/settings-servers.png)
+proyecto](images/settings-servers.png#only-light)
+![Ajustes, pestaña Servidores de lenguaje: comandos por defecto y por
+proyecto](images/settings-servers-dark.png#only-dark)
 
 **Preprocesadores** ejecuta formateadores antes de cada guardado: un
 comando por línea, cada uno leyendo el documento por la entrada
 estándar y devolviéndolo por la salida estándar.
 
 ![Ajustes, pestaña Preprocesadores: cadenas de comandos por
-lenguaje](images/settings-preprocessors.png)
+lenguaje](images/settings-preprocessors.png#only-light)
+![Ajustes, pestaña Preprocesadores: cadenas de comandos por
+lenguaje](images/settings-preprocessors-dark.png#only-dark)
 
 ## Cosas pequeñas
 
@@ -142,10 +177,14 @@ desde el teclado, para que el coloreado funcione antes del primer
 guardado.
 
 ![El selector Nuevo con formato, filtrando la lista de
-lenguajes](images/new-with-format.png)
+lenguajes](images/new-with-format.png#only-light)
+![El selector Nuevo con formato, filtrando la lista de
+lenguajes](images/new-with-format-dark.png#only-dark)
 
 Y el panel Acerca de dice qué compilación estás usando — una versión
 real, incluso para una compilación local.
 
 ![El panel Acerca de con la versión, el autor, el repositorio y la
-licencia](images/about.png)
+licencia](images/about.png#only-light)
+![El panel Acerca de con la versión, el autor, el repositorio y la
+licencia](images/about-dark.png#only-dark)

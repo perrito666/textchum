@@ -1,0 +1,13 @@
+/* Screenshots come in pairs: a light shot and a dark one, chosen by
+   the reader's colour scheme. Material ships the rule that hides
+   #only-dark in the light scheme but not its mirror, so both are
+   written out here — explicit, and independent of the theme version. */
+[data-md-color-scheme="default"] img[src$="#only-dark"] { display: none; }
+[data-md-color-scheme="slate"] img[src$="#only-light"] { display: none; }
+
+/* A screenshot is a window: give it an edge so it reads as a picture
+   of the app rather than part of the page. */
+.md-typeset img[src*="#only-"] {
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+}
