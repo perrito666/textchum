@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>to.perri.textchum</id>
+  <name>Textchum</name>
+  <summary>A native text editor with language servers and tree-sitter highlighting</summary>
+
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+
+  <developer id="to.perri">
+    <name>Horacio Duran</name>
+  </developer>
+
+  <description>
+    <p>
+      A text editor in the spirit of TextMate: native, fast, and focused
+      on editing. One portable core in Rust owns every document; this is
+      its GTK 4 and libadwaita shell, alongside a Cocoa one on macOS.
+    </p>
+    <p>Editing:</p>
+    <ul>
+      <li>Tree-sitter highlighting, with themes carrying a light and a dark palette in one file</li>
+      <li>Language servers for diagnostics, completion, hover, definitions, references and rename</li>
+      <li>Save preprocessors: your own formatters, run in a chain before each save</li>
+      <li>Fuzzy file opening, regular-expression search across a project, and a command palette</li>
+      <li>A live Markdown preview, with Hugo front matter and shortcodes understood</li>
+      <li>Prose spell check that reads comments in code and leaves identifiers alone</li>
+    </ul>
+    <p>
+      Language servers and formatters are the ones you installed, found
+      on your PATH: the editor uses your toolchain rather than bundling
+      a guess at it.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">to.perri.textchum.desktop</launchable>
+
+  <url type="homepage">https://perrito666.github.io/textchum/</url>
+  <url type="bugtracker">https://github.com/perrito666/textchum/issues</url>
+  <url type="vcs-browser">https://github.com/perrito666/textchum</url>
+
+  <content_rating type="oars-1.1"/>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f2eee9</color>
+    <color type="primary" scheme_preference="dark">#2b2724</color>
+  </branding>
+
+  <categories>
+    <category>Utility</category>
+    <category>TextEditor</category>
+    <category>Development</category>
+  </categories>
+
+  <keywords>
+    <keyword>editor</keyword>
+    <keyword>text</keyword>
+    <keyword>code</keyword>
+    <keyword>lsp</keyword>
+    <keyword>markdown</keyword>
+  </keywords>
+
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <screenshots>
+    <screenshot type="default">
+      <image>https://perrito666.github.io/textchum/images/editor-gtk.png</image>
+      <caption>A Rust file with the navigator open beside it</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://perrito666.github.io/textchum/images/preview-gtk.png</image>
+      <caption>A Markdown document with its rendered preview</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://perrito666.github.io/textchum/images/find-in-project-gtk.png</image>
+      <caption>Searching a project with a regular expression</caption>
+    </screenshot>
+  </screenshots>
+
+  <releases>
+    <release version="0.0.10" date="2026-08-27">
+      <description>
+        <p>
+          The Linux shell answers a round of field reports: Ctrl+Q quits,
+          Ctrl+Shift+T reopens a closed tab, several spell-check
+          dictionaries can apply at once, and misspellings offer
+          corrections from the context menu.
+        </p>
+      </description>
+    </release>
+  </releases>
+</component>

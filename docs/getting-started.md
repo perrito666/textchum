@@ -115,6 +115,33 @@ linux/target/release/textchum-gtk notes.md
 
 CI builds it and runs its headless smoke test on every push.
 
+### Packages
+
+Each release carries a `.deb` and an `.rpm` beside the tarball, and the
+repository has a `PKGBUILD` and a flake for the two distributions that
+build from source:
+
+```sh
+sudo apt install ./textchum_0.0.10_amd64.deb     # Debian, Ubuntu
+sudo dnf install ./textchum-0.0.10-1.x86_64.rpm  # Fedora, RHEL, openSUSE
+(cd packaging && makepkg -si)                    # Arch
+nix profile install github:perrito666/textchum   # Nix
+```
+
+`make deb` and `make rpm` build the first two from a checkout;
+`nix build` and `nix develop` cover the last, the dev shell bringing
+the GTK toolchain and the optional tools with it.
+
+What every one of them depends on is the four libraries the shell links
+against — GTK 4, libadwaita, GtkSourceView 5 and WebKitGTK 6. hunspell,
+Universal Ctags and git are recommendations rather than requirements:
+each switches off exactly one feature (prose spell check, the Jump to
+Definition fallback, and Copy Forge URL) and nothing else.
+
+Language servers and formatters are deliberately in nobody's dependency
+list. They are yours, in versions only you know, and the editor runs
+whatever is on your `PATH`.
+
 ## Building the documentation
 
 The documentation is a [MkDocs](https://www.mkdocs.org) site using the

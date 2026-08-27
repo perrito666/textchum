@@ -67,6 +67,13 @@ fi
 # shellcheck disable=SC1091
 source "$HOME/.cargo/env"
 rustc --version
+# --no-modify-path above keeps rustup out of the profile, which then
+# makes this machine unlike the one a user has: ~/.cargo/bin is missing
+# from the login shell's PATH, and anything that asks a login shell
+# where a tool is — the Flatpak build does, to find language servers on
+# the host — correctly reports that it is nowhere.
+grep -q '.cargo/env' "$HOME/.profile" 2>/dev/null \
+    || printf '\n. "$HOME/.cargo/env"\n' >> "$HOME/.profile"
 
 echo "==> An Xorg session"
 # Deliberate, and the single most useful thing here. Under Wayland the
