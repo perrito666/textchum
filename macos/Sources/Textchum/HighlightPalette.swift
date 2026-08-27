@@ -19,6 +19,22 @@ enum HighlightPalette {
         return table[index]
     }
 
+    /// The typographic traits a style asks for. The core has carried
+    /// these all along; until now the overlay dropped them on the
+    /// floor, so a theme asking for italic comments got the colour and
+    /// silence.
+    static func traits(forStyle index: Int) -> (bold: Bool, italic: Bool) {
+        let styles = CoreTheme.styles
+        guard styles.indices.contains(index) else { return (false, false) }
+        return (styles[index].isBold, styles[index].isItalic)
+    }
+
+    /// Whether any style in the active theme asks for bold or italic —
+    /// themes that do not get the cheap colour-only path.
+    static var hasTypographicStyles: Bool {
+        CoreTheme.styles.contains { $0.isBold || $0.isItalic }
+    }
+
     private static func color(rgba: UInt32) -> NSColor {
         NSColor(
             srgbRed: CGFloat((rgba >> 24) & 0xFF) / 255,

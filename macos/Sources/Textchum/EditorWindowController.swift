@@ -886,6 +886,17 @@ final class EditorWindowController: NSWindowController {
         hoverPopover = popover
     }
 
+    /// Debug hook: scrolls to a fraction of the document, so the
+    /// viewport-scoped colouring can be checked far from the start.
+    func debugScroll(toFraction fraction: Double) {
+        guard let textView, let scrollView = textView.enclosingScrollView else { return }
+        let total = scrollView.documentView?.frame.height ?? 0
+        let visible = scrollView.contentView.bounds.height
+        let target = max(0, (total - visible) * fraction)
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: target))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
     /// Debug hook: renders a hover balloon with known content at a fixed
     /// spot, so the popover's layout is screenshot-verifiable without
     /// synthesizing mouse events.
@@ -1042,6 +1053,10 @@ final class EditorWindowController: NSWindowController {
     @objc private func editorDidScroll(_ notification: Notification) {
         lineRuler?.needsDisplay = true
         completionPopup.dismiss()
+        // Colouring follows the viewport, so scrolling into fresh text
+        // has to paint it. Coalesced: one pass per runloop turn, not
+        // one per scroll tick.
+        scheduleHighlightRefresh()
         guard let previewWebView, let scrollView = textView?.enclosingScrollView else { return }
         // Ignore echoes of a preview-driven sync.
         if lastScrollSync.fromPreview, Date().timeIntervalSince(lastScrollSync.at) < 0.15 {
@@ -1269,10 +1284,67 @@ final class EditorWindowController: NSWindowController {
     /// viewport-scoped pass exists; the editor itself stays fast.
     private static let highlightSizeCap = 256 * 1024
 
-    /// Paints the core's styled spans as TextKit 2 rendering attributes —
-    /// a color-only overlay that never invalidates layout, so coloring is
-    /// cheap and cannot disturb the edit pipeline. (Bold/italic style
-    /// flags are ignored for now: font changes would invalidate layout.)
+    /// Set while a viewport recolour is already queued.
+    private var highlightRefreshPending = false
+
+    /// Repaints the visible stretch once the current runloop turn ends.
+    private func scheduleHighlightRefresh() {
+        guard !highlightRefreshPending else { return }
+        highlightRefreshPending = true
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.highlightRefreshPending = false
+                self.applyHighlights()
+                self.renderDiagnostics()
+            }
+        }
+    }
+
+    /// The stretch of document worth colouring: what the reader can
+    /// see, plus a margin so a flick of the scroll wheel lands on
+    /// coloured text rather than black. Nil means "colour everything",
+    /// which is what a document smaller than one margin deserves.
+    private func highlightRange() -> NSRange? {
+        let length = coreDocument.lengthInUTF16
+        guard length > Self.viewportMargin * 2 else {
+            return length > 0 ? NSRange(location: 0, length: length) : nil
+        }
+        guard let textView, let scrollView = textView.enclosingScrollView,
+            let layoutManager = textView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager
+        else { return NSRange(location: 0, length: min(length, Self.viewportMargin * 2)) }
+
+        // The viewport controller knows exactly what is laid out; fall
+        // back to the caret when it has not settled yet (first paint).
+        var start = 0
+        var end = 0
+        if let viewport = layoutManager.textViewportLayoutController.viewportRange {
+            start = contentManager.offset(
+                from: contentManager.documentRange.location, to: viewport.location)
+            end = contentManager.offset(
+                from: contentManager.documentRange.location, to: viewport.endLocation)
+        } else {
+            let caret = min(textView.selectedRange().location, length)
+            start = caret
+            end = caret
+        }
+        _ = scrollView
+        let from = max(0, start - Self.viewportMargin)
+        let to = min(length, end + Self.viewportMargin)
+        guard to > from else { return nil }
+        return NSRange(location: from, length: to - from)
+    }
+
+    /// Paints the core's styled spans over the visible stretch: colour
+    /// as TextKit 2 rendering attributes (which never invalidate
+    /// layout), and — only for themes that ask for them — bold and
+    /// italic as storage attributes, since a font is layout and cannot
+    /// ride the rendering layer.
+    ///
+    /// Scoping to the viewport is what lets a large file be coloured at
+    /// all: colouring whole documents meant a hard cap past which text
+    /// arrived with no colour whatsoever.
     private func applyHighlights() {
         guard let textView,
             let layoutManager = textView.textLayoutManager,
@@ -1281,14 +1353,19 @@ final class EditorWindowController: NSWindowController {
         let documentRange = layoutManager.documentRange
         layoutManager.removeRenderingAttribute(.foregroundColor, for: documentRange)
 
-        let length = coreDocument.lengthInUTF16
-        guard length > 0, length <= Self.highlightSizeCap else { return }
-        let spans = coreDocument.highlights(in: NSRange(location: 0, length: length))
+        guard let painted = highlightRange(), painted.length > 0 else { return }
+        let spans = coreDocument.highlights(in: painted)
         guard !spans.isEmpty else { return }
 
         let darkAppearance =
             (window?.effectiveAppearance ?? NSApp.effectiveAppearance)
                 .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let wantsTraits = HighlightPalette.hasTypographicStyles
+        if wantsTraits, let storage = textView.textStorage {
+            // Start from the plain font: a span that lost its bold on
+            // the last pass must not keep it.
+            storage.addAttribute(.font, value: appliedFont, range: painted)
+        }
         for span in spans {
             guard
                 let color = HighlightPalette.color(
@@ -1303,7 +1380,27 @@ final class EditorWindowController: NSWindowController {
             // `set` replaces within the range, so later spans win — the
             // ordering contract the core's span list is built around.
             layoutManager.setRenderingAttributes([.foregroundColor: color], for: range)
+
+            guard wantsTraits, let storage = textView.textStorage else { continue }
+            let traits = HighlightPalette.traits(forStyle: span.styleIndex)
+            guard traits.bold || traits.italic else { continue }
+            let clamped = NSIntersectionRange(span.range, NSRange(location: 0, length: storage.length))
+            guard clamped.length > 0 else { continue }
+            storage.addAttribute(
+                .font, value: Self.font(appliedFont, bold: traits.bold, italic: traits.italic),
+                range: clamped)
         }
+    }
+
+    /// The editor font with traits applied. Monospaced families keep
+    /// their advance width across weights, so this does not reflow the
+    /// document — it just makes a comment look like a comment.
+    private static func font(_ base: NSFont, bold: Bool, italic: Bool) -> NSFont {
+        var traits: NSFontDescriptor.SymbolicTraits = []
+        if bold { traits.insert(.bold) }
+        if italic { traits.insert(.italic) }
+        let descriptor = base.fontDescriptor.withSymbolicTraits(traits)
+        return NSFont(descriptor: descriptor, size: base.pointSize) ?? base
     }
 
     /// View → Redraw (⌥⌘L): rebuilds every visual layer from scratch —
@@ -1427,6 +1524,15 @@ final class EditorWindowController: NSWindowController {
     /// The text view, for app-level interactions (⌘-click navigation).
     var editorTextView: NSTextView? { textView }
 
+    /// How much beyond the viewport gets coloured, in UTF-16 units:
+    /// enough that a scroll flick lands on coloured text, small enough
+    /// that a megabyte file costs the same as a small one.
+    private static let viewportMargin = 8_000
+
+    /// The editor font as configured, so highlight traits derive from
+    /// it rather than from whatever a span inherited.
+    private var appliedFont: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)
+
     /// The configured tab width, remembered for formatting requests.
     private var appliedTabWidth = 4
 
@@ -1437,6 +1543,7 @@ final class EditorWindowController: NSWindowController {
     /// Applies configuration-derived settings to the view: the font, and
     /// tab stops sized to the configured width in that font.
     func apply(settings: EditorSettings) {
+        appliedFont = settings.font
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
         applySpellLanguage(settings.spellLanguage)
@@ -1467,6 +1574,10 @@ final class EditorWindowController: NSWindowController {
                 textView.typingAttributes,
                 range: NSRange(location: 0, length: storage.length)
             )
+            // That reset just erased the bold and italic the highlight
+            // pass had applied — colour lives in the rendering layer
+            // and survives, fonts do not. Repaint them.
+            refreshDecorations()
         }
     }
 

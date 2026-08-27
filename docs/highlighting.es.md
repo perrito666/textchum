@@ -73,6 +73,20 @@ Redraw** (⌥⌘L, reasignable como `redraw`) reconstruye desde cero cada
 capa visual: atributos base, colores de sintaxis, marcas de
 diagnóstico y el margen.
 
+El coloreado sigue al viewport: se consulta y pinta la porción
+visible más un margen generoso, y se repinta al desplazarse. Un
+archivo de un megabyte cuesta lo mismo que uno pequeño, y no hay un
+tamaño a partir del cual el color desaparezca en silencio — solo el
+techo de parseo del núcleo, más allá del cual un documento es texto
+plano por diseño.
+
+La **negrita y la cursiva** de un tema también se respetan. El color
+viaja en los atributos de renderizado de TextKit, que no tocan el
+diseño; los rasgos tipográficos se aplican como fuentes, y por eso se
+pintan para la porción visible y no para todo el documento. Las
+tipografías monoespaciadas mantienen su ancho entre pesos, así que
+nada se recoloca.
+
 ## Aún no está
 
 - Matices de negrita/cursiva — la capa es solo de color por ahora.

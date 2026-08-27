@@ -205,6 +205,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         }
                         return
                     }
+                    if allArguments[flagIndex + 1] == "scrollto" {
+                        // scope = fraction of the document to scroll to,
+                        // so viewport-scoped colouring is verifiable
+                        // deep inside a large file.
+                        let fraction = Double(scope) ?? 0.5
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            MainActor.assumeIsolated {
+                                self?.editors.first?.debugScroll(toFraction: fraction)
+                            }
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "quitafter" {
                         // Quit through the real path, so the session
                         // written at shutdown is the one under test.

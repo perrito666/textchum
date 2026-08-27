@@ -72,6 +72,20 @@ Si un artefact de coloration survivait à une édition, **View → Redraw**
 depuis zéro : attributs de base, couleurs de syntaxe, marques de
 diagnostic et la marge.
 
+La coloration suit la zone visible : c'est elle, plus une marge
+généreuse, qui est interrogée et peinte, puis repeinte au défilement.
+Un fichier d'un mégaoctet coûte autant qu'un petit, et il n'existe plus
+de taille au-delà de laquelle la couleur s'arrête en silence — sauf le
+plafond d'analyse du cœur, au-delà duquel un document est du texte brut
+par choix.
+
+Le **gras et l'italique** d'un thème sont honorés aussi. La couleur
+passe par les attributs de rendu de TextKit, qui ne touchent pas à la
+mise en page ; les traits typographiques sont appliqués comme polices,
+d'où leur peinture sur la portion visible plutôt que sur tout le
+document. Les fontes à chasse fixe gardent leur largeur d'une graisse à
+l'autre, donc rien ne se replace.
+
 ## Pas encore là
 
 - Les nuances gras/italique — la surcouche est couleur seule pour le
