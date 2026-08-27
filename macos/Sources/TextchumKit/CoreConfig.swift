@@ -333,6 +333,66 @@ public final class CoreConfig {
         }
     }
 
+    /// The spell setting split into the dictionaries it names. A
+    /// bilingual document wants both at once, and the natural way to ask
+    /// for that is "en_US, es_ES"; one dictionary is the one-element
+    /// case, and "auto" stays a single entry.
+    public var spellLanguages: [String] {
+        guard let cString = tc_config_spell_languages_json(handle) else { return [] }
+        defer { tc_string_free(cString) }
+        let json = String(cString: cString)
+        return (try? JSONDecoder().decode([String].self, from: Data(json.utf8))) ?? []
+    }
+
+    /// Words the spell checker accepts whatever the dictionary says:
+    /// project names, acronyms, and the rest of the vocabulary no
+    /// dictionary ships with.
+    public var spellWords: [String] {
+        get {
+            guard let cString = tc_config_spell_words_json(handle) else { return [] }
+            defer { tc_string_free(cString) }
+            let json = String(cString: cString)
+            return (try? JSONDecoder().decode([String].self, from: Data(json.utf8))) ?? []
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue),
+                  var json = String(data: data, encoding: .utf8)
+            else { return }
+            json.withUTF8 { bytes in
+                tc_config_set_spell_words_json(
+                    handle,
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count)
+                )
+            }
+        }
+    }
+
+    /// Adds one word to the personal list. Returns whether it was new,
+    /// so a caller can skip a re-check that would change nothing.
+    @discardableResult
+    public func addSpellWord(_ word: String) -> Bool {
+        var word = word
+        return word.withUTF8 { bytes in
+            tc_config_add_spell_word(
+                handle,
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count)
+            )
+        }
+    }
+
+    /// Seconds of quiet before the editor saves by itself; zero means
+    /// off, which is the default.
+    public var autosaveSeconds: UInt32 {
+        get { tc_config_autosave_seconds(handle) }
+        set { tc_config_set_autosave_seconds(handle, newValue) }
+    }
+
     /// Re-reads the file, replacing in-memory state — for following
     /// external edits while running. Returns a warning to show once when
     /// the file existed but was unusable.

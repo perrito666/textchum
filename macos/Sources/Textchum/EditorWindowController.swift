@@ -1104,15 +1104,27 @@ final class EditorWindowController: NSWindowController {
     private var spellingRanges: [NSRange] = []
     private var spellTimer: Timer?
 
-    /// The configured spelling language ("auto", "en_US", …; nil = off),
-    /// set from `apply(settings:)`.
-    private var appliedSpellLanguage: String?
+    /// The configured spelling dictionaries ("auto", "en_US", … — empty
+    /// means off), set from `apply(settings:)`. Several can apply at
+    /// once, which is what a bilingual document needs.
+    private var appliedSpellLanguages: [String] = []
+
+    /// Words to accept whatever the dictionaries say, folded for
+    /// comparison. A personal list is an allowlist someone typed, not a
+    /// dictionary with rules about capitalization, so case is ignored.
+    private var acceptedWords: Set<String> = []
+
+    /// Words waved through for this session only — the middle ground
+    /// between "this is a word" and "fix it".
+    private var ignoredWords: Set<String> = []
 
     /// Applies the settings' choice and re-checks (or clears the marks).
-    func applySpellLanguage(_ language: String?) {
-        guard language != appliedSpellLanguage else { return }
-        appliedSpellLanguage = language
-        if language == nil {
+    func applySpellSettings(languages: [String], words: [String]) {
+        let folded = Set(words.map { $0.lowercased() })
+        guard languages != appliedSpellLanguages || folded != acceptedWords else { return }
+        appliedSpellLanguages = languages
+        acceptedWords = folded
+        if languages.isEmpty {
             spellTimer?.invalidate()
             if !spellingRanges.isEmpty {
                 spellingRanges = []
@@ -1123,9 +1135,15 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    /// Accepts a word for the rest of the session, without saving it.
+    func ignoreWordForSession(_ word: String) {
+        ignoredWords.insert(word)
+        runSpellPass()
+    }
+
     /// Debounced pass so typing does not spell-check every keystroke.
     private func scheduleSpellCheck() {
-        guard appliedSpellLanguage != nil else { return }
+        guard !appliedSpellLanguages.isEmpty else { return }
         spellTimer?.invalidate()
         spellTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: false) {
             [weak self] _ in
@@ -1172,7 +1190,42 @@ final class EditorWindowController: NSWindowController {
     }
 
     private func runSpellPass() {
-        guard let textView, let language = appliedSpellLanguage else { return }
+        guard let textView, !appliedSpellLanguages.isEmpty else { return }
+        let text = textView.string as NSString
+        let prose = proseRanges(in: text).filter { $0.length > 0 }
+
+        // Each dictionary gets its own pass, and only a word that every
+        // one of them rejects is a misspelling: a Spanish word in an
+        // otherwise English document is not a mistake when the user
+        // asked for both dictionaries.
+        var found: Set<NSRange>?
+        for language in appliedSpellLanguages {
+            let flagged = misspellings(in: text, prose: prose, language: language)
+            found = found.map { $0.intersection(flagged) } ?? flagged
+            // Nothing left to narrow, and each pass costs a full walk.
+            if found?.isEmpty == true { break }
+        }
+
+        let accepted = acceptedWords
+        let ignored = ignoredWords
+        let ranges = (found ?? [])
+            .filter { range in
+                let word = text.substring(with: range)
+                return !accepted.contains(word.lowercased()) && !ignored.contains(word)
+            }
+            .sorted { $0.location < $1.location }
+        if ranges != spellingRanges {
+            spellingRanges = ranges
+            renderDiagnostics()
+        }
+    }
+
+    /// Every range one dictionary flags across the prose of a document.
+    private func misspellings(
+        in text: NSString,
+        prose: [NSRange],
+        language: String
+    ) -> Set<NSRange> {
         let checker = NSSpellChecker.shared
         if language == "auto" {
             checker.automaticallyIdentifiesLanguages = true
@@ -1180,9 +1233,8 @@ final class EditorWindowController: NSWindowController {
             checker.automaticallyIdentifiesLanguages = false
             checker.setLanguage(language)
         }
-        let text = textView.string as NSString
-        var found: [NSRange] = []
-        for range in proseRanges(in: text) where range.length > 0 {
+        var found: Set<NSRange> = []
+        for range in prose {
             let segment = text.substring(with: range)
             var offset = 0
             while offset < range.length {
@@ -1195,14 +1247,61 @@ final class EditorWindowController: NSWindowController {
                     wordCount: nil
                 )
                 guard miss.location != NSNotFound, miss.length > 0 else { break }
-                found.append(NSRange(location: range.location + miss.location, length: miss.length))
+                found.insert(
+                    NSRange(location: range.location + miss.location, length: miss.length))
                 offset = NSMaxRange(miss)
             }
         }
-        if found != spellingRanges {
-            spellingRanges = found
-            renderDiagnostics()
+        return found
+    }
+
+    /// The misspelled range containing `location`, if any — what a
+    /// context menu needs to know before it can offer replacements.
+    func misspelledRange(at location: Int) -> NSRange? {
+        spellingRanges.first { NSLocationInRange(location, $0) }
+    }
+
+    /// What a spelling menu item is about, carried on the item itself so
+    /// the action does not have to ask where the pointer was.
+    final class SpellingFix: NSObject {
+        let range: NSRange
+        let word: String
+        let replacement: String?
+
+        init(range: NSRange, word: String, replacement: String?) {
+            self.range = range
+            self.word = word
+            self.replacement = replacement
         }
+    }
+
+    @objc func replaceMisspelling(_ sender: NSMenuItem) {
+        guard let fix = sender.representedObject as? SpellingFix,
+            let replacement = fix.replacement,
+            let textView
+        else { return }
+        let text = textView.string as NSString
+        // The document may have moved on between the right-click and the
+        // choice; replacing whatever now sits at those offsets would
+        // corrupt it.
+        guard NSMaxRange(fix.range) <= text.length,
+            text.substring(with: fix.range) == fix.word
+        else { return }
+        guard textView.shouldChangeText(in: fix.range, replacementString: replacement) else {
+            return
+        }
+        textView.textStorage?.replaceCharacters(in: fix.range, with: replacement)
+        textView.didChangeText()
+    }
+
+    @objc func addMisspellingToDictionary(_ sender: NSMenuItem) {
+        guard let fix = sender.representedObject as? SpellingFix else { return }
+        (NSApp.delegate as? AppDelegate)?.addSpellWord(fix.word)
+    }
+
+    @objc func ignoreMisspelling(_ sender: NSMenuItem) {
+        guard let fix = sender.representedObject as? SpellingFix else { return }
+        ignoreWordForSession(fix.word)
     }
 
     /// Marks each finding with a tinted background: red for errors,
@@ -1546,7 +1645,8 @@ final class EditorWindowController: NSWindowController {
         appliedFont = settings.font
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
-        applySpellLanguage(settings.spellLanguage)
+        applySpellSettings(languages: settings.spellLanguages, words: settings.spellWords)
+        applyAutosave(seconds: settings.autosaveSeconds)
         if !settings.hoverDocs {
             hoverTimer?.invalidate()
             hoverPopover?.close()
@@ -1999,6 +2099,53 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    // MARK: Autosave
+
+    private var autosaveTimer: Timer?
+    private var autosaveSeconds: UInt32 = 0
+
+    func applyAutosave(seconds: UInt32) {
+        autosaveSeconds = seconds
+        if seconds == 0 {
+            autosaveTimer?.invalidate()
+            autosaveTimer = nil
+        }
+    }
+
+    /// Restarts the autosave clock. Counting from the last keystroke
+    /// rather than on a fixed interval means the save happens once the
+    /// typing stops, not in the middle of a sentence.
+    private func scheduleAutosave() {
+        guard autosaveSeconds > 0, coreDocument.path != nil else { return }
+        autosaveTimer?.invalidate()
+        autosaveTimer = Timer.scheduledTimer(
+            withTimeInterval: TimeInterval(autosaveSeconds),
+            repeats: false
+        ) { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.autosave() }
+            }
+        }
+    }
+
+    /// Saves without the interactive parts: no save panel (there is a
+    /// path, or this never runs) and no preprocessor chain. A formatter
+    /// reflowing the line being typed is not a favour; explicit saves
+    /// remain the place for that.
+    private func autosave() {
+        autosaveTimer = nil
+        guard coreDocument.path != nil, coreDocument.isDirty else { return }
+        do {
+            try coreDocument.save()
+            noteOwnSave()
+            updateChrome()
+        } catch {
+            // Not quiet: this is the case where the work is not where
+            // the user believes it is.
+            presentError("Autosave could not write the document.", details: "\(error)")
+        }
+    }
+
     @objc func saveDocument(_ sender: Any?) {
         saveInteractively()
     }
@@ -2092,6 +2239,73 @@ extension EditorWindowController: NSWindowDelegate {
 // MARK: - Text view synchronization
 
 extension EditorWindowController: NSTextViewDelegate {
+    /// Spelling actions for the word under the pointer.
+    ///
+    /// AppKit builds this menu from its own spell checking, which is off
+    /// here — the marks come from the prose-scoped pass instead, so the
+    /// menu has to be filled in from the same source. The word's range is
+    /// captured into the menu items rather than looked up when one is
+    /// chosen: a menu can stay open while the document moves underneath.
+    func textView(
+        _ textView: NSTextView,
+        menu: NSMenu,
+        for event: NSEvent,
+        at charIndex: Int
+    ) -> NSMenu? {
+        guard let range = misspelledRange(at: charIndex) else { return menu }
+        let word = (textView.string as NSString).substring(with: range)
+        let spelling = NSMenu()
+        let checker = NSSpellChecker.shared
+        let guesses =
+            checker.guesses(
+                forWordRange: range,
+                in: textView.string,
+                language: appliedSpellLanguages.first == "auto"
+                    ? nil : appliedSpellLanguages.first,
+                inSpellDocumentWithTag: 0
+            ) ?? []
+        if guesses.isEmpty {
+            // An empty section is a gap the reader has to interpret; a
+            // disabled label says why it is empty.
+            let none = NSMenuItem(title: "No Suggestions", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            spelling.addItem(none)
+        }
+        for guess in guesses.prefix(8) {
+            let item = NSMenuItem(
+                title: guess,
+                action: #selector(replaceMisspelling(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = SpellingFix(range: range, word: word, replacement: guess)
+            spelling.addItem(item)
+        }
+        spelling.addItem(.separator())
+        let add = NSMenuItem(
+            title: "Add to Dictionary",
+            action: #selector(addMisspellingToDictionary(_:)),
+            keyEquivalent: ""
+        )
+        add.target = self
+        add.representedObject = SpellingFix(range: range, word: word, replacement: nil)
+        spelling.addItem(add)
+        let ignore = NSMenuItem(
+            title: "Ignore While This Runs",
+            action: #selector(ignoreMisspelling(_:)),
+            keyEquivalent: ""
+        )
+        ignore.target = self
+        ignore.representedObject = SpellingFix(range: range, word: word, replacement: nil)
+        spelling.addItem(ignore)
+        spelling.addItem(.separator())
+        for item in menu.items {
+            guard let copy = item.copy() as? NSMenuItem else { continue }
+            spelling.addItem(copy)
+        }
+        return spelling
+    }
+
     func textView(
         _ textView: NSTextView,
         shouldChangeTextIn affectedCharRange: NSRange,
@@ -2159,6 +2373,7 @@ extension EditorWindowController: NSTextViewDelegate {
         schedulePreviewUpdate()
         lineRuler?.invalidateLineStarts()
         completionAfterTyping()
+        scheduleAutosave()
         assertInSync()
     }
 

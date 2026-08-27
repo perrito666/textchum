@@ -2386,6 +2386,169 @@ pub unsafe extern "C" fn tc_config_set_spell_language(
         .set_spell_language((!language.is_empty()).then_some(language));
 }
 
+/// The spell-check setting split into the dictionaries it names, as a
+/// JSON array of strings. `"en_US, es_ES"` is two; `"auto"` is one.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_spell_languages_json(
+    config: *const TcConfig,
+) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    let languages = config.inner.spell_languages();
+    owned_c_string(serde_json::to_string(&languages).unwrap_or_else(|_| "[]".into()))
+}
+
+/// The personal word list (`editor.spell_words`) as a JSON array of
+/// strings — words the spell checker accepts whatever the dictionary
+/// says. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_spell_words_json(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    let words = config.inner.spell_words();
+    owned_c_string(serde_json::to_string(&words).unwrap_or_else(|_| "[]".into()))
+}
+
+/// Replaces the personal word list from a JSON array of strings. A
+/// malformed document is ignored rather than emptying the list.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; the pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_spell_words_json(
+    config: *mut TcConfig,
+    json: *const c_char,
+    len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(json) = (unsafe { str_from_raw(json, len) }) else {
+        return;
+    };
+    let Ok(words) = serde_json::from_str::<Vec<String>>(json) else {
+        return;
+    };
+    config.inner.set_spell_words(&words);
+}
+
+/// Adds one word to the personal list. Returns true when it was new, so
+/// the caller can skip a re-check that would change nothing.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; the pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_add_spell_word(
+    config: *mut TcConfig,
+    word: *const c_char,
+    len: usize,
+) -> bool {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return false;
+    };
+    let Some(word) = (unsafe { str_from_raw(word, len) }) else {
+        return false;
+    };
+    config.inner.add_spell_word(word)
+}
+
+/// Seconds of quiet before the editor saves by itself (`editor.autosave`);
+/// zero means autosave is off, which is the default.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_autosave_seconds(config: *const TcConfig) -> u32 {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return 0;
+    };
+    config.inner.autosave_seconds()
+}
+
+/// Sets the autosave delay; zero removes the key and turns it off.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_autosave_seconds(
+    config: *mut TcConfig,
+    seconds: u32,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config.inner.set_autosave_seconds(seconds)
+    }));
+}
+
+/// Whether a file is one the editor can meaningfully open: text rather
+/// than a PNG the desktop's recent-files list happens to remember. The
+/// content decides, not the extension.
+///
+/// # Safety
+/// The pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_path_looks_editable(path: *const c_char, len: usize) -> bool {
+    let Some(path) = (unsafe { str_from_raw(path, len) }) else {
+        return false;
+    };
+    textchum_core::workspace::looks_editable(std::path::Path::new(path))
+}
+
+/// Whether a language server command would start: an absolute path that
+/// exists, or a bare name found on `PATH`. Only the command's first word
+/// is looked at, because that is what the pool runs.
+///
+/// # Safety
+/// The pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_executable_exists(
+    command: *const c_char,
+    len: usize,
+) -> bool {
+    let Some(command) = (unsafe { str_from_raw(command, len) }) else {
+        return false;
+    };
+    textchum_lsp::registry::executable_exists(command)
+}
+
+/// The server registry as JSON: an array of
+/// `{"id", "command", "languages": [...], "installHint"}`, so a settings
+/// screen can list what there is to configure rather than only what has
+/// already been overridden. Release with [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_lsp_registry_json() -> *mut c_char {
+    let entries: Vec<serde_json::Value> = textchum_lsp::registry::all()
+        .iter()
+        .map(|spec| {
+            let command = if spec.args.is_empty() {
+                spec.command.to_string()
+            } else {
+                format!("{} {}", spec.command, spec.args.join(" "))
+            };
+            serde_json::json!({
+                "id": spec.id,
+                "command": command,
+                "languages": spec.languages,
+                "installHint": spec.install_hint,
+            })
+        })
+        .collect();
+    owned_c_string(serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into()))
+}
+
 /// Applies a server configuration (the JSON from [`tc_config_lsp_json`])
 /// to the pool. Takes effect for instances spawned afterwards and clears
 /// the missing-server memory.

@@ -1327,6 +1327,91 @@ void tc_config_set_spell_language(struct TcConfig *config,
                                   uintptr_t language_len);
 
 /**
+ * The spell-check setting split into the dictionaries it names, as a
+ * JSON array of strings. `"en_US, es_ES"` is two; `"auto"` is one.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_spell_languages_json(const struct TcConfig *config);
+
+/**
+ * The personal word list (`editor.spell_words`) as a JSON array of
+ * strings — words the spell checker accepts whatever the dictionary
+ * says. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_spell_words_json(const struct TcConfig *config);
+
+/**
+ * Replaces the personal word list from a JSON array of strings. A
+ * malformed document is ignored rather than emptying the list.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; the pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_spell_words_json(struct TcConfig *config, const char *json, uintptr_t len);
+
+/**
+ * Adds one word to the personal list. Returns true when it was new, so
+ * the caller can skip a re-check that would change nothing.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; the pointer/length
+ * pair must describe readable bytes.
+ */
+bool tc_config_add_spell_word(struct TcConfig *config, const char *word, uintptr_t len);
+
+/**
+ * Seconds of quiet before the editor saves by itself (`editor.autosave`);
+ * zero means autosave is off, which is the default.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+uint32_t tc_config_autosave_seconds(const struct TcConfig *config);
+
+/**
+ * Sets the autosave delay; zero removes the key and turns it off.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_autosave_seconds(struct TcConfig *config, uint32_t seconds);
+
+/**
+ * Whether a file is one the editor can meaningfully open: text rather
+ * than a PNG the desktop's recent-files list happens to remember. The
+ * content decides, not the extension.
+ *
+ * # Safety
+ * The pointer/length pair must describe readable bytes.
+ */
+bool tc_path_looks_editable(const char *path, uintptr_t len);
+
+/**
+ * Whether a language server command would start: an absolute path that
+ * exists, or a bare name found on `PATH`. Only the command's first word
+ * is looked at, because that is what the pool runs.
+ *
+ * # Safety
+ * The pointer/length pair must describe readable bytes.
+ */
+bool tc_lsp_executable_exists(const char *command, uintptr_t len);
+
+/**
+ * The server registry as JSON: an array of
+ * `{"id", "command", "languages": [...], "installHint"}`, so a settings
+ * screen can list what there is to configure rather than only what has
+ * already been overridden. Release with [`tc_string_free`].
+ */
+char *tc_lsp_registry_json(void);
+
+/**
  * Applies a server configuration (the JSON from [`tc_config_lsp_json`])
  * to the pool. Takes effect for instances spawned afterwards and clears
  * the missing-server memory.

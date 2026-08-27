@@ -213,6 +213,7 @@ impl Page {
         install_hover(&page);
         install_file_monitor(&page);
         install_control_click(&page);
+        install_spelling_menu(&page);
         apply_project_editor_overrides(&page);
 
         // --- After every change: recolor, announce, verify -------------
@@ -220,6 +221,7 @@ impl Page {
             let page_weak = Rc::downgrade(&page);
             let recolor_pending = Rc::new(Cell::new(false));
             let lsp_timer: Rc<Cell<Option<glib::SourceId>>> = Rc::new(Cell::new(None));
+            let autosave_timer: Rc<Cell<Option<glib::SourceId>>> = Rc::new(Cell::new(None));
             buffer.connect_changed(move |buffer| {
                 let Some(page) = page_weak.upgrade() else { return };
                 if page.state.borrow().syncing {
@@ -265,6 +267,30 @@ impl Page {
                         },
                     );
                     lsp_timer.set(Some(source));
+                }
+                // Autosave, when it is switched on: the clock restarts
+                // with every keystroke, so it fires once the typing
+                // stops rather than in the middle of a sentence.
+                //
+                // Unlike Save, this does not run the preprocessor
+                // chain. A formatter reflowing the paragraph under the
+                // caret while someone is still writing it is not a
+                // service; explicit saves remain the place for that.
+                let autosave_after = Shell::instance().config.borrow().autosave_seconds();
+                if autosave_after > 0 && document_path.is_some() {
+                    if let Some(previous) = autosave_timer.take() {
+                        previous.remove();
+                    }
+                    let page = Rc::clone(&page);
+                    let timer = Rc::clone(&autosave_timer);
+                    let source = glib::timeout_add_local_once(
+                        std::time::Duration::from_secs(autosave_after as u64),
+                        move || {
+                            timer.set(None);
+                            autosave(&page);
+                        },
+                    );
+                    autosave_timer.set(Some(source));
                 }
                 // Completion: identifier characters and '.' ask the
                 // server after a short rest; anything else dismisses.
@@ -992,6 +1018,126 @@ fn install_control_click(page: &Rc<Page>) {
         gesture.set_state(gtk::EventSequenceState::Claimed);
     });
     page.view.add_controller(gesture);
+}
+
+/// Saves a page on the autosave timer, if it still has anything to
+/// save. Quiet by design: a toast every thirty seconds would be worse
+/// than the problem autosave solves. A failure is not quiet — that is
+/// the case where the user's work is not where they think it is.
+fn autosave(page: &Rc<Page>) {
+    let Some(path) = page.path.borrow().clone() else { return };
+    let saved = {
+        let mut state = page.state.borrow_mut();
+        if !state.document.is_dirty() {
+            return;
+        }
+        state.document.save().is_ok()
+    };
+    if saved {
+        Shell::instance().note_own_save(&path);
+        crate::workbench::refresh_chrome_for(page);
+    } else if let Some(workbench) = crate::workbench::Workbench::active() {
+        workbench.explain(&format!(
+            "Autosave could not write {path} — the file is still unsaved."
+        ));
+    }
+}
+
+/// Builds the text view's context menu for each right-click.
+///
+/// GtkTextView caches its popover but throws the cache away whenever
+/// `extra-menu` is set to a different object, and the capture phase
+/// runs before the view's own bubble-phase handler opens the menu — so
+/// replacing the model here decides what this very click shows.
+///
+/// Two things depend on that. Spelling actions are about the word under
+/// the pointer, which is only known once there is a pointer. And Change
+/// Case only makes sense with a selection: GtkSourceView disables its
+/// four entries in that case, but the submenu holding them still reads
+/// as available, so on an empty document the menu offers an operation
+/// that cannot do anything. Owning the menu means simply not offering
+/// it until there is something to change the case of.
+fn install_spelling_menu(page: &Rc<Page>) {
+    let gesture = gtk::GestureClick::new();
+    gesture.set_button(3);
+    gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let weak = Rc::downgrade(page);
+    gesture.connect_pressed(move |_, _, x, y| {
+        let Some(page) = weak.upgrade() else { return };
+        let (bx, by) = page.view.window_to_buffer_coords(
+            gtk::TextWindowType::Widget,
+            x as i32,
+            y as i32,
+        );
+        let misspelling = page
+            .view
+            .iter_at_location(bx, by)
+            .and_then(|iter| crate::spell::word_at(&page.buffer, iter.offset()));
+        if let Some((word, start, end)) = &misspelling {
+            // The action handlers work from the recorded range rather
+            // than from the pointer, so a menu still open while the
+            // document changes underneath cannot rewrite the wrong
+            // span.
+            crate::spell::note_menu_target(word, *start, *end);
+        }
+        let menu = context_menu(
+            misspelling.as_ref().map(|(word, _, _)| word.as_str()),
+            page.buffer.has_selection(),
+        );
+        // A fresh GMenu every time: the setter compares pointers, and
+        // handing back the same object would leave the cached popover
+        // in place. Never None — GtkSourceView puts Change Case here,
+        // and clearing it would take that away for good.
+        page.view.set_extra_menu(Some(&menu));
+        // Deliberately not claimed: the text view still owns this
+        // click, and it is the one that opens the menu.
+    });
+    page.view.add_controller(gesture);
+}
+
+/// The application's half of the context menu: spelling actions when
+/// the pointer is on a misspelling, and Change Case when there is a
+/// selection to apply it to.
+fn context_menu(misspelling: Option<&str>, has_selection: bool) -> gtk::gio::Menu {
+    let menu = gtk::gio::Menu::new();
+    if let Some(word) = misspelling {
+        let replacements = gtk::gio::Menu::new();
+        let suggestions = crate::spell::suggestions(word);
+        if suggestions.is_empty() {
+            // An empty section is a gap the reader has to interpret;
+            // say why it is empty instead. A menu item with no action
+            // renders as a disabled label, which is exactly right.
+            replacements.append_item(&gtk::gio::MenuItem::new(Some("No suggestions"), None));
+        }
+        for suggestion in suggestions.iter().take(8) {
+            replacements.append(
+                Some(suggestion),
+                Some(&format!(
+                    "win.spell-replace('{}')",
+                    suggestion.replace('\'', "\\'")
+                )),
+            );
+        }
+        menu.append_section(None, &replacements);
+        let dictionary = gtk::gio::Menu::new();
+        dictionary.append(Some("Add to Dictionary"), Some("win.spell-add"));
+        dictionary.append(Some("Ignore While This Runs"), Some("win.spell-ignore"));
+        menu.append_section(None, &dictionary);
+    }
+    if has_selection {
+        // GtkSourceView's own entries, by the action it installs:
+        // `source.change-case` takes the case to change to as its
+        // parameter.
+        let case = gtk::gio::Menu::new();
+        case.append(Some("All Upper Case"), Some("source.change-case('upper')"));
+        case.append(Some("All Lower Case"), Some("source.change-case('lower')"));
+        case.append(Some("Invert Case"), Some("source.change-case('toggle')"));
+        case.append(Some("Title Case"), Some("source.change-case('title')"));
+        let holder = gtk::gio::Menu::new();
+        holder.append_submenu(Some("Change Case"), &case);
+        menu.append_section(None, &holder);
+    }
+    menu
 }
 
 /// Applies the project root's `editor` overrides (font family, size,

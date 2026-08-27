@@ -449,6 +449,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         SessionStore.save(state)
     }
 
+    // MARK: Reopening closed tabs
+
+    /// Documents that were closed, newest last, with where the caret and
+    /// scroll were. Only saved ones: an untitled buffer has nothing to
+    /// reopen from, and reopening it empty would be a lie.
+    private var closedDocuments: [(path: String, caret: Int, scroll: Double)] = []
+
+    /// Deep enough to undo a run of mistaken closes, shallow enough that
+    /// the list stays a list of recent mistakes rather than a second
+    /// history — the session file is already the history.
+    private static let closedDocumentMemory = 20
+
+    /// Remembers a closing window so ⇧⌘T can bring it back.
+    private func noteClosedEditor(_ editor: EditorWindowController) {
+        guard let path = editor.coreDocument.path else { return }
+        let position = editor.sessionPosition
+        closedDocuments.removeAll { $0.path == path }
+        closedDocuments.append((path, position.caret, position.scroll))
+        if closedDocuments.count > Self.closedDocumentMemory {
+            closedDocuments.removeFirst(closedDocuments.count - Self.closedDocumentMemory)
+        }
+    }
+
+    @objc func reopenClosedDocument(_ sender: Any?) {
+        guard let closed = closedDocuments.popLast() else {
+            NSSound.beep()
+            return
+        }
+        guard FileManager.default.fileExists(atPath: closed.path) else {
+            // Gone from disk since it was closed. Drop it and try the one
+            // before it rather than beeping at a file the user cannot see.
+            reopenClosedDocument(sender)
+            return
+        }
+        open(path: closed.path)
+        editors.first { $0.coreDocument.path == closed.path }?
+            .restoreSessionPosition(caret: closed.caret, scroll: closed.scroll)
+    }
+
     /// Reopens the saved session's files and positions.
     private func restoreSession() {
         guard let state = SessionStore.load() else { return }
@@ -820,6 +859,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Adds a word to the personal dictionary from an editor's spelling
+    /// menu, then re-applies settings so every open window stops
+    /// flagging it. The list is a setting like any other, so it goes
+    /// through the settings model rather than straight to the file —
+    /// otherwise the Settings window would show a stale list.
+    func addSpellWord(_ word: String) {
+        guard let config, let model = settingsModel else { return }
+        guard config.addSpellWord(word) else { return }
+        lastOwnConfigSave = Date()
+        try? config.save()
+        model.reloadFromConfig()
+        for editor in editors {
+            editor.apply(settings: model.currentSettings(forRoot: editor.projectRoot))
+        }
+    }
+
     // MARK: Command-click navigation
 
     /// ⌘-click jumps to the definition under the pointer — the caret
@@ -865,6 +920,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.saveDocumentAs(_:)): "saveAs",
             #selector(EditorWindowController.revertToSaved(_:)): "revertToSaved",
             #selector(NSWindow.performClose(_:)): "close",
+            #selector(reopenClosedDocument(_:)): "reopenClosed",
             #selector(EditorWindowController.performUndo(_:)): "undo",
             #selector(EditorWindowController.performRedo(_:)): "redo",
             #selector(EditorWindowController.jumpToDefinition(_:)): "jumpToDefinition",
@@ -1570,6 +1626,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 MainActor.assumeIsolated {
                     if let editor = self?.editors.first(where: { $0.window === closing }) {
                         self?.releaseChumWait(for: editor)
+                        self?.noteClosedEditor(editor)
                     }
                     self?.editors.removeAll { $0.window === closing }
                 }
@@ -1668,6 +1725,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         fileMenu.addItem(.separator())
         fileMenu.addItem(
             withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let reopen = NSMenuItem(
+            title: "Reopen Closed Tab",
+            action: #selector(reopenClosedDocument(_:)),
+            keyEquivalent: "t"
+        )
+        reopen.keyEquivalentModifierMask = [.command, .shift]
+        reopen.target = self
+        fileMenu.addItem(reopen)
         fileMenu.addItem(
             withTitle: "Save",
             action: #selector(EditorWindowController.saveDocument(_:)),

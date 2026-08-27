@@ -233,9 +233,47 @@ sont ceux activés dans Réglages Système ▸ Clavier ▸ Saisie de texte.
 { "editor": { "spell": "auto" } }
 ```
 
-Sous Linux le même réglage passe par hunspell : installez `hunspell`
-plus un paquet de dictionnaire (`hunspell-fr`, `hunspell-en-us`, …) et
-les marques apparaissent ; `"auto"` suit `$LANG`.
+Plusieurs dictionnaires peuvent s'appliquer à la fois : nommez-les
+séparés par des virgules. Un mot que l'un d'eux connaît est bien
+orthographié, ce dont a besoin un texte qui change de langue au milieu
+d'un paragraphe :
+
+```json
+{ "editor": { "spell": "en_US, fr_FR" } }
+```
+
+`editor.spell_words` est votre propre liste : noms de projet, sigles, et
+tout ce qu'aucun dictionnaire ne fournit. Un clic droit sur un mot
+signalé propose les suggestions, **Ajouter au dictionnaire**, qui écrit
+le mot ici, et **Ignorer**, qui l'accepte jusqu'à la fermeture de
+l'éditeur. La liste s'édite aussi dans les préférences.
+
+```json
+{ "editor": { "spell_words": ["SBX", "Textchum"] } }
+```
+
+Sous Linux les mêmes réglages passent par hunspell : installez
+`hunspell` plus un paquet de dictionnaire (`hunspell-fr`,
+`hunspell-en-us`, …) et les marques apparaissent ; `"auto"` suit
+`$LANG`, et les dictionnaires que hunspell trouve sont listés à côté du
+champ dans les préférences.
+
+## Enregistrement automatique
+
+Désactivé par défaut. `editor.autosave` est un nombre de secondes ; le
+compte repart à chaque frappe, donc l'enregistrement a lieu une fois la
+saisie terminée et non au milieu d'une phrase.
+
+```json
+{ "editor": { "autosave": 30 } }
+```
+
+Deux choses qu'il ne fait délibérément pas. Il n'enregistre jamais un
+document sans nom : il n'y a nulle part où le mettre, et lui en
+inventer un n'appartient pas à l'éditeur. Et il n'exécute pas les
+préprocesseurs d'enregistrement : un formateur qui reflue la ligne que
+vous êtes en train d'écrire ne rend pas service, cela reste donc
+l'affaire des enregistrements explicites.
 
 ## Raccourcis clavier
 
@@ -263,7 +301,7 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`,
+`toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à
 la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique

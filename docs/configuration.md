@@ -51,8 +51,7 @@ A file edited by hand might look like:
 default) follows the system. `editor.hover` switches the mouse-rest
 documentation popover off (`true`, the default, keeps it on).
 `editor.new_files_in` places fresh documents in a `"tab"` of the
-frontmost window's group (the default) or a `"window"` of their own. `editor.hover` switches the mouse-rest
-documentation popover off (`true`, the default, keeps it on).
+frontmost window's group (the default) or a `"window"` of their own.
 
 Everything is optional — a missing file, a missing section, or a missing
 key simply means the default. Writes are atomic (temporary file plus
@@ -217,9 +216,44 @@ more there and they appear in the picker).
 { "editor": { "spell": "auto" } }
 ```
 
-On Linux the same setting rides hunspell: install `hunspell` plus a
+Several dictionaries can apply at once — name them separated by commas.
+A word any of them knows is spelled correctly, which is what a document
+that switches languages mid-paragraph needs:
+
+```json
+{ "editor": { "spell": "en_US, es_ES" } }
+```
+
+`editor.spell_words` is your own list: project names, acronyms, and
+everything no dictionary ships with. Right-clicking a misspelling
+offers replacements, **Add to Dictionary**, which writes the word here,
+and **Ignore**, which accepts it until the editor quits. The list is
+also editable in Settings.
+
+```json
+{ "editor": { "spell_words": ["SBX", "Textchum"] } }
+```
+
+On Linux the same settings ride hunspell: install `hunspell` plus a
 dictionary package (`hunspell-es`, `hunspell-en-us`, …) and the marks
-appear; `"auto"` follows `$LANG`.
+appear; `"auto"` follows `$LANG`, and the dictionaries hunspell can
+find are listed beside the field in Preferences.
+
+## Autosave
+
+Off by default. `editor.autosave` is a number of seconds; the clock
+restarts with every keystroke, so the save happens once typing stops
+rather than in the middle of a sentence.
+
+```json
+{ "editor": { "autosave": 30 } }
+```
+
+Two things it deliberately does not do. It never saves a document that
+has no name — there is nowhere to put it, and inventing one is not the
+editor's decision. And it does not run save preprocessors: a formatter
+reflowing the line you are still writing is not a favour, so explicit
+saves remain the place for that.
 
 ## Key shortcuts
 
@@ -247,7 +281,7 @@ Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
 `toggleLineNumbers`, `toggleHover`, `showHover`, `togglePathDisplay`,
-`redraw`, `commandPalette`, `serverStatus`, `newWithFormat`, `revealInTree`,
+`redraw`, `commandPalette`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `settings` — an unknown name is
 logged with the full list. And when a shortcut escapes memory entirely,
 the **Command Palette** (⇧⌘P) fuzzy-searches every menu action by name

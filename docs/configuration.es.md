@@ -228,9 +228,45 @@ habilitados en Ajustes del Sistema ▸ Teclado ▸ Entrada de texto.
 { "editor": { "spell": "auto" } }
 ```
 
-En Linux el mismo ajuste usa hunspell: instala `hunspell` más un
+Pueden aplicarse varios diccionarios a la vez: nómbralos separados por
+comas. Una palabra que cualquiera de ellos conozca está bien escrita,
+que es lo que necesita un texto que cambia de idioma a mitad de
+párrafo:
+
+```json
+{ "editor": { "spell": "en_US, es_ES" } }
+```
+
+`editor.spell_words` es tu propia lista: nombres de proyecto, siglas y
+todo aquello que ningún diccionario trae. Al hacer clic derecho sobre
+una palabra marcada aparecen las sugerencias, **Añadir al diccionario**,
+que escribe la palabra aquí, e **Ignorar**, que la acepta hasta cerrar
+el editor. La lista también se edita en los ajustes.
+
+```json
+{ "editor": { "spell_words": ["SBX", "Textchum"] } }
+```
+
+En Linux los mismos ajustes usan hunspell: instala `hunspell` más un
 paquete de diccionario (`hunspell-es`, `hunspell-en-us`, …) y las
-marcas aparecen; `"auto"` sigue a `$LANG`.
+marcas aparecen; `"auto"` sigue a `$LANG`, y los diccionarios que
+hunspell encuentra se listan junto al campo en las preferencias.
+
+## Autoguardado
+
+Desactivado por defecto. `editor.autosave` son segundos; el reloj se
+reinicia con cada pulsación, así que el guardado ocurre cuando dejas de
+escribir y no en mitad de una frase.
+
+```json
+{ "editor": { "autosave": 30 } }
+```
+
+Dos cosas que a propósito no hace. Nunca guarda un documento sin
+nombre: no hay dónde ponerlo, e inventarle uno no le corresponde al
+editor. Y no ejecuta los preprocesadores de guardado: un formateador
+que te reordena la línea que estás escribiendo no es un favor, así que
+eso se queda en los guardados explícitos.
 
 ## Atajos de teclado
 
@@ -258,7 +294,7 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`,
+`toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nombre desconocido se registra junto a la lista completa. Ir al
 inicio/fin de bloque (⌃⌥↑/⌃⌥↓ por defecto) salta sobre el bloque

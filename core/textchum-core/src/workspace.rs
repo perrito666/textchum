@@ -272,6 +272,102 @@ pub fn is_hidden(name: &str, globs: &[String]) -> bool {
     globs.iter().any(|glob| glob_matches(glob, name))
 }
 
+/// How much of a file is enough to tell text from not-text. One page:
+/// long enough that a header gives itself away, short enough that
+/// asking about a hundred files costs nothing.
+const SNIFF_BYTES: usize = 4096;
+
+/// Whether a file is one this editor can meaningfully open.
+///
+/// Extensions are not the test — plenty of text has none (`Makefile`,
+/// `LICENSE`, a shell script called `deploy`), and an extension can
+/// lie. What decides it is the content: a NUL byte, or bytes that are
+/// not UTF-8, mean the file is not text and opening it would show
+/// mojibake and corrupt it on save.
+///
+/// A file that cannot be read is reported as not editable — offering to
+/// open something that will fail is worse than leaving it out.
+pub fn looks_editable(path: &Path) -> bool {
+    use std::io::Read;
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut sample = [0u8; SNIFF_BYTES];
+    let Ok(read) = file.read(&mut sample) else {
+        return false;
+    };
+    let sample = &sample[..read];
+    // An empty file is a new file, which is text as much as anything.
+    if sample.is_empty() {
+        return true;
+    }
+    if sample.contains(&0) {
+        return false;
+    }
+    match std::str::from_utf8(sample) {
+        Ok(_) => true,
+        // A multi-byte character can straddle the end of the sample;
+        // that is the sample's fault, not the file's. Only an error
+        // before the last few bytes says the content is not UTF-8.
+        Err(error) => error.valid_up_to() + 4 >= sample.len(),
+    }
+}
+
+#[cfg(test)]
+mod editable_tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("textchum-edit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    #[test]
+    fn text_is_editable_whatever_it_is_called() {
+        let makefile = scratch("Makefile");
+        std::fs::write(&makefile, "all:\n\tcargo build\n").unwrap();
+        assert!(looks_editable(&makefile));
+
+        // Accented prose, and a file with no name to go on.
+        let prose = scratch("notes");
+        std::fs::write(&prose, "Ni un solo pingüino en el puerto.\n").unwrap();
+        assert!(looks_editable(&prose));
+
+        let empty = scratch("empty.txt");
+        std::fs::write(&empty, "").unwrap();
+        assert!(looks_editable(&empty));
+    }
+
+    #[test]
+    fn binaries_are_not_offered() {
+        // A PNG: the header alone carries NUL bytes. This is the case
+        // the desktop's recent-files list keeps handing us.
+        let png = scratch("shot.png");
+        std::fs::write(&png, b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00").unwrap();
+        assert!(!looks_editable(&png));
+
+        // Latin-1 bytes are not UTF-8 and would open as mojibake.
+        let latin1 = scratch("latin1.txt");
+        std::fs::write(&latin1, b"caf\xe9 con leche\n").unwrap();
+        assert!(!looks_editable(&latin1));
+
+        assert!(!looks_editable(Path::new("/nonexistent/file")));
+    }
+
+    #[test]
+    fn a_character_split_by_the_sample_edge_is_not_a_binary() {
+        // Fill exactly to the sniff boundary so the last character is
+        // cut in half; the file is text and must read as text.
+        let mut text = "a".repeat(SNIFF_BYTES - 2);
+        text.push('ñ');
+        text.push_str(&"b".repeat(64));
+        let path = scratch("straddle.txt");
+        std::fs::write(&path, &text).unwrap();
+        assert!(looks_editable(&path));
+    }
+}
+
 #[cfg(test)]
 mod glob_tests {
     use super::*;

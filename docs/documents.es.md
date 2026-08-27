@@ -139,6 +139,12 @@ Para arrancar sin memoria (útil persiguiendo un error): lanzar con
 `--fresh`, mantener ⇧ mientras arranca la aplicación o borrar
 `session.json` — cualquiera de las tres es un reinicio completo.
 
+Cerrar una pestaña tampoco es definitivo: **Reabrir pestaña cerrada**
+(⇧⌘T en macOS, Ctrl+Shift+T en Linux) devuelve la última, con su
+cursor, y sigue hacia atrás por las recientes. Solo se recuerdan los
+documentos guardados: un búfer sin nombre no tiene de dónde volver, y
+reabrirlo vacío sería mentir.
+
 ## Aún no está
 
 - Codificaciones más allá de UTF-8 y Latin-1.

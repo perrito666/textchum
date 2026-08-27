@@ -44,7 +44,19 @@ pub struct Workbench {
     /// Momentary path display: buffer rows show project-relative paths
     /// instead of bare names while this is on.
     show_full_paths: std::cell::Cell<bool>,
+    /// The explanation currently on screen, so a failure that repeats
+    /// does not queue a second identical notice behind the first.
+    explaining: Rc<RefCell<Option<String>>>,
+    /// Tabs that were closed, newest last, with where the caret was.
+    /// Only saved documents go here: an untitled buffer has nothing to
+    /// reopen from, and pretending otherwise would reopen it empty.
+    closed_tabs: RefCell<Vec<(PathBuf, i32, usize)>>,
 }
+
+/// How many closed tabs are worth remembering. Deep enough to undo a
+/// run of mistaken closes, shallow enough that the list stays a list of
+/// recent mistakes rather than a second history.
+const CLOSED_TAB_MEMORY: usize = 20;
 
 /// (path, line, UTF-16 column) positions with a cursor into them.
 #[derive(Default)]
@@ -124,22 +136,35 @@ impl Workbench {
         file_section.append_submenu(Some("New with Format"), &formats_menu);
         file_section.append(Some("New Window"), Some("win.new"));
         file_section.append(Some("Open…"), Some("win.open"));
-        // The desktop's shared recent-files list, newest first.
+        // The desktop's shared recent-files list, newest first — and
+        // only the part of it this editor can open. The list belongs to
+        // the whole session, so a photo viewer's PNGs are in it too, and
+        // offering them here promises an edit that cannot happen.
         let recent_menu = gtk::gio::Menu::new();
         let mut recent: Vec<gtk::RecentInfo> = gtk::RecentManager::default().items();
         recent.sort_by_key(|info| std::cmp::Reverse(info.modified()));
-        for info in recent.iter().take(10) {
-            let uri = info.uri();
-            if let Some(path) = uri.strip_prefix("file://") {
-                let path = percent_decode(path);
-                if std::path::Path::new(&path).is_file() {
-                    let name = info.display_name();
-                    recent_menu.append(
-                        Some(&name),
-                        Some(&format!("win.open-recent('{}')", path.replace('\'', "\\'"))),
-                    );
-                }
+        let mut listed = 0;
+        for info in recent.iter() {
+            if listed == 10 {
+                break;
             }
+            let uri = info.uri();
+            let Some(path) = uri.strip_prefix("file://") else { continue };
+            let path = percent_decode(path);
+            if !workspace::looks_editable(Path::new(&path)) {
+                continue;
+            }
+            let name = info.display_name();
+            recent_menu.append(
+                Some(&name),
+                Some(&format!("win.open-recent('{}')", path.replace('\'', "\\'"))),
+            );
+            listed += 1;
+        }
+        if listed == 0 {
+            // An empty submenu renders as an unexplained dead end.
+            let empty = gtk::gio::MenuItem::new(Some("No recent text files"), None);
+            recent_menu.append_item(&empty);
         }
         file_section.append_submenu(Some("Open Recent"), &recent_menu);
         file_section.append(Some("Open Quickly…"), Some("win.quick-open"));
@@ -173,7 +198,9 @@ impl Workbench {
         app_section.append(Some("Preferences…"), Some("win.preferences"));
         app_section.append(Some("About Textchum"), Some("win.about"));
         app_section.append(Some("Close Tab"), Some("win.close-tab"));
+        app_section.append(Some("Reopen Closed Tab"), Some("win.reopen-tab"));
         app_section.append(Some("Close Window"), Some("window.close"));
+        app_section.append(Some("Quit"), Some("app.quit"));
         let menu = gtk::gio::Menu::new();
         menu.append_section(None, &file_section);
         menu.append_section(None, &edit_section);
@@ -296,6 +323,8 @@ impl Workbench {
             jumps: RefCell::new(JumpStack::default()),
             retracing: std::cell::Cell::new(false),
             show_full_paths: std::cell::Cell::new(false),
+            explaining: Rc::new(RefCell::new(None)),
+            closed_tabs: RefCell::new(Vec::new()),
         });
         WORKBENCHES.with(|list| list.borrow_mut().push(Rc::clone(&workbench)));
 
@@ -457,6 +486,28 @@ impl Workbench {
         self.toasts.add_toast(adw::Toast::new(text));
     }
 
+    /// An explanation rather than a note: it wraps, and it waits to be
+    /// dismissed. A default toast is one ellipsized line that fades
+    /// after a few seconds, which is fine for "saved" and useless for
+    /// "here is the package you need to install".
+    ///
+    /// Repeats of the explanation already on screen are dropped. Waiting
+    /// to be dismissed is what makes these readable, and it is also what
+    /// would make a language server that fails on every keystroke pile
+    /// up a queue of identical notices to click through.
+    pub fn explain(&self, text: &str) {
+        if self.explaining.borrow().as_deref() == Some(text) {
+            return;
+        }
+        *self.explaining.borrow_mut() = Some(text.to_owned());
+        let toast = long_toast(text);
+        let showing = Rc::clone(&self.explaining);
+        toast.connect_dismissed(move |_| {
+            showing.borrow_mut().take();
+        });
+        self.toasts.add_toast(toast);
+    }
+
     pub fn selected(&self) -> Option<Rc<Page>> {
         let selected = self.tab_view.selected_page()?;
         self.pages
@@ -542,6 +593,16 @@ impl Workbench {
             let page = pages.remove(index);
             let path = page.path.borrow().clone();
             if let Some(path) = path {
+                // Remember it before the handles go: reopening should
+                // land the caret where it was, not at the top.
+                let (line, character) = page::lsp_caret(&page.buffer);
+                let mut closed = self.closed_tabs.borrow_mut();
+                let path_buf = PathBuf::from(&path);
+                closed.retain(|(other, _, _)| *other != path_buf);
+                closed.push((path_buf, line as i32, character as usize));
+                let overflow = closed.len().saturating_sub(CLOSED_TAB_MEMORY);
+                closed.drain(..overflow);
+                drop(closed);
                 Shell::instance().pages.borrow_mut().remove(&path);
                 Shell::instance()
                     .pool
@@ -1012,17 +1073,34 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("open", workbench, |workbench, _| {
         let dialog = gtk::FileDialog::new();
         let workbench = Rc::clone(workbench);
-        dialog.open(
+        // Opening several at once, because the window has tabs: picking
+        // files one dialog at a time is the only thing a single-select
+        // chooser buys, and it buys nothing.
+        dialog.open_multiple(
             Some(&workbench.window.clone()),
             gtk::gio::Cancellable::NONE,
             move |result| {
-                if let Ok(file) = result {
+                let Ok(files) = result else { return };
+                for file in files.iter::<gtk::gio::File>().flatten() {
                     if let Some(path) = file.path() {
                         workbench.open(Some(path), None);
                     }
                 }
             },
         );
+    });
+    add("reopen-tab", workbench, |workbench, _| {
+        let Some((path, line, character)) = workbench.closed_tabs.borrow_mut().pop() else {
+            workbench.toast("No recently closed tab to reopen.");
+            return;
+        };
+        if !path.is_file() {
+            workbench.toast(&format!("{} is no longer there.", path.display()));
+            return;
+        }
+        // Reopening is a jump to where the caret was, not a plain open,
+        // so `at` carries the remembered position.
+        workbench.open(Some(path), Some((line, character)));
     });
     add("save", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
@@ -1173,7 +1251,8 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .application_icon("to.perri.textchum")
             .version(env!("TEXTCHUM_BUILD_VERSION"))
             .comments(
-                "A text editor in the spirit of TextMate: native, fast, and                  focused on editing.",
+                "A text editor in the spirit of TextMate: native, fast, and \
+                 focused on editing.",
             )
             .developer_name("Horacio Duran")
             .website("https://perri.to")
@@ -1186,6 +1265,19 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             &["Juan Diaz https://github.com/nueces"],
         );
         about.present();
+    });
+    add("spell-add", workbench, |_workbench, _| {
+        let Some((word, _, _)) = crate::spell::menu_target() else { return };
+        let shell = Shell::instance();
+        if shell.config.borrow_mut().add_spell_word(&word) {
+            shell.save_config();
+        }
+        recheck_every_page();
+    });
+    add("spell-ignore", workbench, |_workbench, _| {
+        let Some((word, _, _)) = crate::spell::menu_target() else { return };
+        crate::spell::ignore(&word);
+        recheck_every_page();
     });
     add("block-start", workbench, |workbench, _| move_to_block_edge(workbench, true));
     add("block-end", workbench, |workbench, _| move_to_block_edge(workbench, false));
@@ -1220,6 +1312,38 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 page::apply_highlights(&page.buffer, &page.state.borrow().document);
                 workbench.refresh_chrome();
             }
+        });
+        workbench.window.add_action(&action);
+    }
+    // Replacing a misspelling: the parameter is the chosen suggestion,
+    // and the span it goes into is the one recorded when the menu was
+    // built.
+    {
+        let action =
+            gtk::gio::SimpleAction::new("spell-replace", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(workbench);
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some(replacement) = parameter.and_then(|p| p.str().map(str::to_owned)) else {
+                return;
+            };
+            let Some((word, start, end)) = crate::spell::menu_target() else { return };
+            let Some(page) = workbench.selected() else { return };
+            let buffer = &page.buffer;
+            let mut from = buffer.iter_at_offset(start);
+            let mut to = buffer.iter_at_offset(end);
+            // The document may have moved on between the right-click
+            // and the choice; replacing whatever now sits at those
+            // offsets would corrupt it. Only proceed if the span still
+            // holds the word the menu was built for.
+            if buffer.text(&from, &to, false) != word {
+                workbench.toast("The text moved — nothing was replaced.");
+                return;
+            }
+            buffer.delete(&mut from, &mut to);
+            let mut at = from;
+            buffer.insert(&mut at, &replacement);
+            crate::spell::run(&page);
         });
         workbench.window.add_action(&action);
     }
@@ -1452,7 +1576,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         // Untitled documents have no server to ask (servers speak in
         // files) — but a configured preprocessor chain formats fine.
         let Some(path) = path else {
-            format_via_preprocessors(workbench, &page);
+            format_via_preprocessors(workbench, &page, FormatFallback::Untitled);
             return;
         };
         // A tab-indented file keeps tabs; everything else gets spaces.
@@ -1465,7 +1589,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .borrow_mut()
             .formatting(Path::new(&path), tab_width, !uses_tabs);
         if id == 0 {
-            format_via_preprocessors(workbench, &page);
+            format_via_preprocessors(workbench, &page, FormatFallback::NoServer);
             return;
         }
         let weak = Rc::downgrade(workbench);
@@ -1476,7 +1600,11 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             if edits.is_empty() {
                 // The server answered with nothing; the chain gets its
                 // chance before an excuse does.
-                format_via_preprocessors(&workbench, &fallback_page);
+                format_via_preprocessors(
+                    &workbench,
+                    &fallback_page,
+                    FormatFallback::ServerHadNothing,
+                );
                 return;
             }
             let Some(page) = workbench.page_for(&path) else { return };
@@ -1597,7 +1725,8 @@ fn ctags_jump(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &str) -> bool {
     let Some((target, line)) = crate::ctags::definition(&symbol, &root) else {
         if !crate::ctags::available() {
             workbench.toast(
-                "The ctags fallback needs Universal Ctags — install the                  universal-ctags package.",
+                "The ctags fallback needs Universal Ctags — install the \
+                 universal-ctags package.",
             );
             return true;
         }
@@ -2058,6 +2187,63 @@ fn show_palette(workbench: &Rc<Workbench>) {
     entry.grab_focus();
 }
 
+/// A plain list of words as a preferences row, one per line. Same
+/// shape as the glob editor and for the same reason: a list someone
+/// adds to a word at a time over months is unreadable on one line.
+/// Commits when the text view loses focus.
+fn word_list_row(
+    title: &str,
+    subtitle: &str,
+    words: &[String],
+    commit: impl Fn(&[String]) + 'static,
+) -> adw::ExpanderRow {
+    let row = adw::ExpanderRow::new();
+    row.set_title(title);
+    row.set_subtitle(&format!(
+        "{subtitle} — {} word{}",
+        words.len(),
+        if words.len() == 1 { "" } else { "s" }
+    ));
+
+    let buffer = gtk::TextBuffer::new(None);
+    buffer.set_text(&words.join("\n"));
+    let view = gtk::TextView::with_buffer(&buffer);
+    view.set_monospace(true);
+    view.set_top_margin(6);
+    view.set_bottom_margin(6);
+    view.set_left_margin(8);
+    view.set_right_margin(8);
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&view)
+        .min_content_height(96)
+        .build();
+    scrolled.add_css_class("card");
+
+    let focus = gtk::EventControllerFocus::new();
+    focus.connect_leave(move |_| {
+        let text = buffer
+            .text(&buffer.start_iter(), &buffer.end_iter(), false)
+            .to_string();
+        let words: Vec<String> = text
+            .lines()
+            .map(str::trim)
+            .filter(|word| !word.is_empty())
+            .map(str::to_owned)
+            .collect();
+        commit(&words);
+    });
+    view.add_controller(focus);
+
+    let holder = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    holder.set_margin_top(6);
+    holder.set_margin_bottom(6);
+    holder.set_margin_start(12);
+    holder.set_margin_end(12);
+    holder.append(&scrolled);
+    row.add_row(&holder);
+    row
+}
+
 /// A multi-line glob editor as a preferences row: one pattern per
 /// line (a space-separated one-liner is unreadable past two entries),
 /// with a menu that appends a preset's patterns. Commits when the
@@ -2303,15 +2489,61 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
 /// Formats through the save-preprocessor chain — Format Document's
 /// fallback when no server can help — or says exactly what would make
 /// formatting possible.
-fn format_via_preprocessors(workbench: &Rc<Workbench>, page: &Rc<Page>) {
+/// Why Format Document reached the preprocessor fallback. It decides
+/// what the failure message may claim: telling someone to save a file
+/// they just saved is the fastest way to make an error message useless.
+#[derive(Clone, Copy)]
+enum FormatFallback {
+    /// The document has never been saved, so no server can attach to it.
+    Untitled,
+    /// The document is on disk but no server is running for it.
+    NoServer,
+    /// A server is running and returned no edits.
+    ServerHadNothing,
+}
+
+fn format_via_preprocessors(
+    workbench: &Rc<Workbench>,
+    page: &Rc<Page>,
+    why: FormatFallback,
+) {
     if preprocessor_chain(page).is_none() {
         let language = page.state.borrow().document.language_name();
-        workbench.toast(&match language {
-            Some(language) => format!(
-                "Nothing can format this yet — save the file so a {language} server can                  attach, or add a save preprocessor for {language} in Preferences."
+        let Some(language) = language else {
+            workbench.explain(
+                "Textchum does not know what kind of document this is, so it has \
+                 nothing to format it with. Save it with a file extension, or start \
+                 it from New with Format.",
+            );
+            return;
+        };
+        let preprocessor_advice = format!(
+            "add a save preprocessor for {language} in Preferences → Preprocessors"
+        );
+        workbench.explain(&match why {
+            FormatFallback::Untitled => format!(
+                "Save the file first: a {language} language server formats files on \
+                 disk, and this one has never been saved. Or {preprocessor_advice}."
             ),
-            None => "Nothing can format plain text — save with an extension so a                      language attaches."
-                .to_string(),
+            FormatFallback::NoServer => {
+                match textchum_lsp::registry::server_for_language(language) {
+                    Some(spec) => format!(
+                        "Nothing here can format {language}: no language server is \
+                         running and no save preprocessor is configured. Install \
+                         {} ({}), or {preprocessor_advice}.",
+                        spec.command, spec.install_hint
+                    ),
+                    None => format!(
+                        "Nothing here can format {language}: Textchum knows no \
+                         language server for it. To format it anyway, \
+                         {preprocessor_advice}."
+                    ),
+                }
+            }
+            FormatFallback::ServerHadNothing => format!(
+                "The {language} language server had no changes to make. To run a \
+                 formatter of your own as well, {preprocessor_advice}."
+            ),
         });
         return;
     }
@@ -2320,7 +2552,7 @@ fn format_via_preprocessors(workbench: &Rc<Workbench>, page: &Rc<Page>) {
             workbench.refresh_chrome();
             page.view.grab_focus();
         }
-        Err(failure) => workbench.toast(&format!(
+        Err(failure) => workbench.explain(&format!(
             "Preprocessor failed: {} — {}",
             failure.command, failure.details
         )),
@@ -3058,12 +3290,37 @@ fn grep_filters(filters_box: &gtk::Box) -> Vec<textchum_core::search::Filter> {
 
 /// The preferences window, over the same config.json contract as
 /// everywhere else: every change applies immediately and saves.
+thread_local! {
+    /// The one Preferences window. Settings are application-wide, so a
+    /// second copy of the screen is never a second thing to look at —
+    /// it is two views of one file that disagree the moment either is
+    /// edited.
+    static PREFERENCES: RefCell<Option<adw::PreferencesWindow>> = const { RefCell::new(None) };
+}
+
 fn show_preferences(parent: &adw::ApplicationWindow) {
+    if let Some(existing) = PREFERENCES.with(|slot| slot.borrow().clone()) {
+        existing.present();
+        return;
+    }
     let shell = Shell::instance();
     let window = adw::PreferencesWindow::new();
-    window.set_transient_for(Some(parent));
+    // Deliberately not transient for the editor window, and never
+    // modal: a transient utility window is kept above its parent and,
+    // on some window managers, above the desktop's other applications
+    // too — which reads as "Textchum will not let go of the focus".
+    // Belonging to the application instead makes it an ordinary window
+    // that can be left behind.
+    if let Some(app) = parent.application() {
+        window.set_application(Some(&app));
+    }
     window.set_modal(false);
     window.set_title(Some("Preferences"));
+    PREFERENCES.with(|slot| *slot.borrow_mut() = Some(window.clone()));
+    window.connect_close_request(|_| {
+        PREFERENCES.with(|slot| *slot.borrow_mut() = None);
+        glib::Propagation::Proceed
+    });
 
     let general = adw::PreferencesPage::new();
     general.set_title("General");
@@ -3171,7 +3428,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&hover_row);
     let spell_row = adw::EntryRow::new();
-    spell_row.set_title("Spell check prose (off, auto, or a dictionary like es_ES)");
+    spell_row.set_title("Spell check prose (off, auto, or dictionaries like en_US, es_ES)");
     spell_row.set_text(
         shell
             .config
@@ -3182,8 +3439,63 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     );
     spell_row.set_show_apply_button(true);
     spell_row.set_tooltip_text(Some(
-        "Checks comments in code, and everything in Markdown, git commit          messages, and plain text. Needs hunspell and its dictionaries.",
+        "Checks comments in code, and everything in Markdown, git commit \
+         messages, and plain text. Several dictionaries can apply at once, \
+         separated by commas. Needs hunspell and its dictionaries.",
     ));
+    // The field stays free text — a dictionary can be named that
+    // hunspell finds and this list does not — but what is installed is
+    // one click away, because "es_ES" is only guessable if you already
+    // know the convention.
+    let installed = crate::spell::available_dictionaries();
+    if !installed.is_empty() {
+        let dictionaries = gtk::gio::Menu::new();
+        for name in &installed {
+            dictionaries.append(
+                Some(name),
+                Some(&format!("spell.pick('{}')", name.replace('\'', "\\'"))),
+            );
+        }
+        let button = gtk::MenuButton::builder()
+            .icon_name("view-more-symbolic")
+            .menu_model(&dictionaries)
+            .valign(gtk::Align::Center)
+            .tooltip_text("Installed dictionaries")
+            .build();
+        button.add_css_class("flat");
+        spell_row.add_suffix(&button);
+        // The menu writes the setting; the row follows it so the field
+        // never disagrees with the file.
+        let row = spell_row.clone();
+        let shell_for_pick = Rc::clone(&shell);
+        let action = gtk::gio::SimpleAction::new("pick", Some(glib::VariantTy::STRING));
+        action.connect_activate(move |_, parameter| {
+            let Some(name) = parameter.and_then(|p| p.str().map(str::to_owned)) else {
+                return;
+            };
+            // Adding to what is there rather than replacing it: picking
+            // a second dictionary is how a bilingual document gets set
+            // up, and that is the harder thing to type by hand.
+            let mut chosen = shell_for_pick.config.borrow().spell_languages();
+            if !chosen.iter().any(|existing| *existing == name) {
+                chosen.push(name);
+            }
+            let value = chosen.join(", ");
+            row.set_text(&value);
+            shell_for_pick
+                .config
+                .borrow_mut()
+                .set_spell_language(Some(&value));
+            shell_for_pick.save_config();
+            recheck_every_page();
+        });
+        // The action group hangs off the button rather than the window:
+        // AdwPreferencesWindow is a GtkWindow, and a plain GtkWindow is
+        // not a GActionMap — only GtkApplicationWindow is.
+        let actions = gtk::gio::SimpleActionGroup::new();
+        actions.add_action(&action);
+        button.insert_action_group("spell", Some(&actions));
+    }
     {
         let shell = Rc::clone(&shell);
         spell_row.connect_apply(move |row| {
@@ -3195,18 +3507,49 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             };
             shell.config.borrow_mut().set_spell_language(value);
             shell.save_config();
-            for handles in Shell::instance().pages.borrow().values() {
-                let _ = handles;
-            }
-            // Re-check every open page under the new choice.
-            Workbench::for_each(|workbench| {
-                for page in workbench.all_pages() {
-                    crate::spell::run(&page);
-                }
-            });
+            recheck_every_page();
         });
     }
     editor_group.add(&spell_row);
+
+    // The personal word list, edited the way the hide globs are: one
+    // word per line, because that is what the context menu's "Add to
+    // Dictionary" builds up and someone eventually wants to prune.
+    let words = shell.config.borrow().spell_words();
+    let words_row = word_list_row(
+        "Dictionary",
+        "Words to accept everywhere — project names, acronyms",
+        &words,
+        {
+            let shell = Rc::clone(&shell);
+            move |words: &[String]| {
+                shell.config.borrow_mut().set_spell_words(words);
+                shell.save_config();
+                recheck_every_page();
+            }
+        },
+    );
+    editor_group.add(&words_row);
+
+    let autosave_row = adw::SpinRow::with_range(0.0, 600.0, 5.0);
+    autosave_row.set_title("Autosave after (seconds)");
+    autosave_row.set_subtitle(
+        "0 keeps saving manual. Files that have a name only, and without \
+         running save preprocessors — a formatter reflowing the line you are \
+         typing is not a favour.",
+    );
+    autosave_row.set_value(shell.config.borrow().autosave_seconds() as f64);
+    {
+        let shell = Rc::clone(&shell);
+        autosave_row.connect_value_notify(move |row| {
+            shell
+                .config
+                .borrow_mut()
+                .set_autosave_seconds(row.value() as u32);
+            shell.save_config();
+        });
+    }
+    editor_group.add(&autosave_row);
     general.add(&editor_group);
     window.add(&general);
 
@@ -3223,29 +3566,70 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
          Unlisted languages use the built-in registry.",
     ));
 
-    let existing: Vec<(String, String)> = serde_json::from_str::<serde_json::Value>(
-        &shell.config.borrow().lsp_json(),
-    )
-    .ok()
-    .and_then(|parsed| {
-        parsed["defaults"].as_object().map(|defaults| {
-            defaults
-                .iter()
-                .filter_map(|(language, command)| {
-                    command
-                        .as_str()
-                        .map(|command| (language.clone(), command.to_string()))
+    let configured: std::collections::BTreeMap<String, String> =
+        serde_json::from_str::<serde_json::Value>(&shell.config.borrow().lsp_json())
+            .ok()
+            .and_then(|parsed| {
+                parsed["defaults"].as_object().map(|defaults| {
+                    defaults
+                        .iter()
+                        .filter_map(|(language, command)| {
+                            command
+                                .as_str()
+                                .map(|command| (language.clone(), command.to_string()))
+                        })
+                        .collect()
                 })
-                .collect()
-        })
-    })
-    .unwrap_or_default();
-    for (language, command) in existing {
+            })
+            .unwrap_or_default();
+
+    // Every language the registry knows gets a row, whether or not it
+    // has been overridden: a screen that lists only what you already
+    // configured cannot tell you what there is to configure. Languages
+    // configured for something the registry does not know follow.
+    let mut listed: Vec<(String, String, bool)> = Vec::new();
+    for spec in textchum_lsp::registry::all() {
+        for language in spec.languages {
+            let default = if spec.args.is_empty() {
+                spec.command.to_string()
+            } else {
+                format!("{} {}", spec.command, spec.args.join(" "))
+            };
+            let command = configured
+                .get(*language)
+                .cloned()
+                .unwrap_or_else(|| default.clone());
+            let overridden = configured.contains_key(*language);
+            listed.push(((*language).to_string(), command, overridden));
+        }
+    }
+    for (language, command) in &configured {
+        if !listed.iter().any(|(name, _, _)| name == language) {
+            listed.push((language.clone(), command.clone(), true));
+        }
+    }
+    listed.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (language, command, overridden) in listed {
         let row = adw::EntryRow::new();
         row.set_title(&language);
         row.set_text(&command);
+        row.set_show_apply_button(true);
+        // Whether the command would actually start, which is the
+        // question a settings screen is otherwise silent about — and
+        // the one behind "I installed a server and nothing happened".
+        let initial = describe_server(&language, &command, overridden);
+        row.set_tooltip_text(Some(&initial));
+        let status = gtk::Label::new(Some(&initial));
+        status.set_wrap(true);
+        status.set_max_width_chars(48);
+        status.set_xalign(1.0);
+        status.set_valign(gtk::Align::Center);
+        status.add_css_class("dim-label");
+        status.add_css_class("caption");
+        row.add_suffix(&status);
         let shell = Rc::clone(&shell);
-        let language = language.clone();
+        let status_for_apply = status.clone();
         row.connect_apply(move |row| {
             let text = row.text();
             let trimmed = text.trim();
@@ -3256,8 +3640,12 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             );
             shell.save_config();
             shell.reconfigure_pool();
+            status_for_apply.set_text(&describe_server(
+                &language,
+                trimmed,
+                !trimmed.is_empty(),
+            ));
         });
-        row.set_show_apply_button(true);
         servers_group.add(&row);
     }
 
@@ -3685,7 +4073,8 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     let presets_group = adw::PreferencesGroup::new();
     presets_group.set_title("Hide presets");
     presets_group.set_description(Some(
-        "Named glob sets the hide editors add in one click. Edit any preset          and this list replaces the built-in one, so removals stick.",
+        "Named glob sets the hide editors add in one click. Edit any preset \
+         and this list replaces the built-in one, so removals stick.",
     ));
     for (name, globs) in shell.config.borrow().hide_presets() {
         let shell = Rc::clone(&shell);
@@ -3742,6 +4131,56 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     window.add(&projects_page);
 
     window.present();
+}
+
+/// One line saying whether a configured server command would start,
+/// and what to install when it would not.
+fn describe_server(language: &str, command: &str, overridden: bool) -> String {
+    if command.trim().is_empty() {
+        return "not configured".to_string();
+    }
+    if textchum_lsp::registry::executable_exists(command) {
+        if overridden {
+            return "found on PATH — overriding the built-in".to_string();
+        }
+        return "found on PATH".to_string();
+    }
+    match textchum_lsp::registry::server_for_language(language) {
+        Some(spec) => format!("not installed — {}", spec.install_hint),
+        None => "not installed".to_string(),
+    }
+}
+
+/// Re-runs the spell checker over every open document, in every
+/// window: the dictionary and the personal word list are application
+/// settings, so accepting one word changes what every page shows.
+fn recheck_every_page() {
+    Workbench::for_each(|workbench| {
+        for page in workbench.all_pages() {
+            crate::spell::run(&page);
+        }
+    });
+}
+
+/// A toast built to be read: the text wraps over as many lines as it
+/// needs, and it stays up until dismissed.
+///
+/// AdwToast's own title is a single ellipsized line with a few seconds
+/// on the clock — a sentence naming a package to install does not
+/// survive either. A custom title widget replaces the label, and a
+/// timeout of zero replaces the clock.
+pub fn long_toast(text: &str) -> adw::Toast {
+    let label = gtk::Label::new(Some(text));
+    label.set_wrap(true);
+    label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+    label.set_xalign(0.0);
+    // Without a width to wrap against, the label asks for one very long
+    // line and the toast grows past the window instead of wrapping.
+    label.set_max_width_chars(60);
+    let toast = adw::Toast::new("");
+    toast.set_custom_title(Some(&label));
+    toast.set_timeout(0);
+    toast
 }
 
 /// Re-applies the global editor look after a configuration reload:

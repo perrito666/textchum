@@ -348,3 +348,39 @@ private func withUTF8<R>(
         return body(pointer, UInt(bytes.count))
     }
 }
+
+/// The language servers Textchum knows how to talk to, and whether they
+/// are actually on this machine. A settings screen that lists only what
+/// has been overridden cannot say what there is to configure, nor why a
+/// freshly installed server did nothing.
+public enum CoreLSPRegistry {
+    public struct Server: Decodable {
+        public let id: String
+        /// The full command line, arguments included.
+        public let command: String
+        public let languages: [String]
+        public let installHint: String
+    }
+
+    public static let all: [Server] = {
+        guard let cString = tc_lsp_registry_json() else { return [] }
+        defer { tc_string_free(cString) }
+        let json = String(cString: cString)
+        return (try? JSONDecoder().decode([Server].self, from: Data(json.utf8))) ?? []
+    }()
+
+    /// Whether a command would start: an absolute path that exists, or a
+    /// bare name found on `PATH`. Only the first word is looked at,
+    /// because that is what the pool runs.
+    public static func isInstalled(_ command: String) -> Bool {
+        var command = command
+        return command.withUTF8 { bytes in
+            tc_lsp_executable_exists(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count)
+            )
+        }
+    }
+}
