@@ -166,7 +166,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           DEB="$(packaging/build-deb.sh "${GITHUB_REF_NAME#v}")"
-          sha256sum "$DEB" > "$DEB.sha256"
+          # Checksummed from its own directory: sha256sum writes the
+          # path it was given, and a file saying the digest belongs to
+          # /home/runner/work/... is no use to anyone verifying a
+          # download.
+          ( cd "$(dirname "$DEB")" && sha256sum "$(basename "$DEB")" \
+              > "$(basename "$DEB").sha256" )
           gh release upload "$GITHUB_REF_NAME" "$DEB" "$DEB.sha256"
       - name: RPM package
         env:
@@ -177,6 +182,13 @@ jobs:
           # BuildRequires cannot be satisfied here. They are correct for
           # the distributions that consume this package; the build is
           # what is being exercised.
-          RPM="$(RPMBUILD_FLAGS=--nodeps packaging/build-rpm.sh "${GITHUB_REF_NAME#v}" | tail -1)"
-          sha256sum "$RPM" > "$RPM.sha256"
-          gh release upload "$GITHUB_REF_NAME" "$RPM" "$RPM.sha256"
+          RPMBUILD_FLAGS=--nodeps packaging/build-rpm.sh "${GITHUB_REF_NAME#v}"
+          # Every .rpm the build produced, not just the last line of its
+          # output: rpmbuild splits out debuginfo and debugsource
+          # packages on some distributions, and picking one by tail
+          # would drop the rest without saying so.
+          find build/rpm/RPMS -name '*.rpm' -print0 | while IFS= read -r -d '' RPM; do
+            ( cd "$(dirname "$RPM")" && sha256sum "$(basename "$RPM")" \
+                > "$(basename "$RPM").sha256" )
+            gh release upload "$GITHUB_REF_NAME" "$RPM" "$RPM.sha256"
+          done
