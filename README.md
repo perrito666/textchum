@@ -85,6 +85,14 @@ The app icon is a tulip photographed by Horacio Duran in the flower
 fields near Lisse, the Netherlands (52°19'54.1"N 4°37'25.9"E) on
 21 April 2026 at 11:25.
 
+## Contributing
+
+[AGENTS.md](AGENTS.md) records how this codebase is worked on — where
+the core/shell line falls, the principles the code already follows, how
+changes are verified, and what a commit and its documentation are
+expected to carry. It is written for anyone sending changes, human or
+AI assistant.
+
 ## Contributors
 
 Textchum is written by [Horacio Duran](https://perri.to), with
