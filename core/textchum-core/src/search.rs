@@ -61,6 +61,30 @@ impl Filter {
     }
 }
 
+/// The project's file list (ignore-aware, relative paths), for callers
+/// that want to walk once and match many times — the shape Open
+/// Quickly needs, since re-walking a real repository on every
+/// keystroke is what makes a fuzzy finder feel broken.
+pub fn list_files(root: &Path) -> Vec<String> {
+    walk(root)
+}
+
+/// Fuzzy-matches an already-walked list, best first. An empty query
+/// lists alphabetically, like [`fuzzy_files`].
+pub fn match_files(paths: &[String], query: &str, limit: usize) -> Vec<String> {
+    if query.trim().is_empty() {
+        let mut sorted = paths.to_vec();
+        sorted.sort();
+        sorted.truncate(limit);
+        return sorted;
+    }
+    let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
+    let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
+    let mut scored = pattern.match_list(paths.to_vec(), &mut matcher);
+    scored.truncate(limit);
+    scored.into_iter().map(|(path, _)| path).collect()
+}
+
 /// Walks `root` (ignore-aware) collecting relative file paths.
 fn walk(root: &Path) -> Vec<String> {
     let mut paths = Vec::new();
@@ -84,17 +108,7 @@ fn walk(root: &Path) -> Vec<String> {
 /// Fuzzy-matches file paths under `root` against `query`, best first.
 /// An empty query lists files alphabetically instead.
 pub fn fuzzy_files(root: &Path, query: &str, limit: usize) -> Vec<String> {
-    let mut paths = walk(root);
-    if query.trim().is_empty() {
-        paths.sort();
-        paths.truncate(limit);
-        return paths;
-    }
-    let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
-    let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
-    let mut scored = pattern.match_list(paths, &mut matcher);
-    scored.truncate(limit);
-    scored.into_iter().map(|(path, _)| path).collect()
+    match_files(&walk(root), query, limit)
 }
 
 /// Searches file contents under `root` for `pattern` (a regex), returning
@@ -253,6 +267,12 @@ mod tests {
         let all = fuzzy_files(&root, "", 10);
         assert!(all.contains(&"README.md".to_owned()));
         assert!(!all.iter().any(|p| p.starts_with("target/")));
+
+        // Walking once and matching many times is the same answer as
+        // walking per query — the whole point of the split.
+        let listed = list_files(&root);
+        assert_eq!(match_files(&listed, "mainrs", 10), fuzzy_files(&root, "mainrs", 10));
+        assert_eq!(match_files(&listed, "", 10), all);
     }
 
     #[test]

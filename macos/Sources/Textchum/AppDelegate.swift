@@ -162,6 +162,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         }
                         return
                     }
+                    if allArguments[flagIndex + 1] == "typefiles" {
+                        self?.showQuickFinder(mode: .files)
+                        let typedScope =
+                            scope == "-" ? (self?.currentScope ?? "") : scope
+                        self?.quickFinder.debugType(scope: typedScope, query: query)
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "newformat" {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                             MainActor.assumeIsolated {
@@ -1238,7 +1245,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let path = keyEditor?.coreDocument.path {
             return (path as NSString).deletingLastPathComponent
         }
-        return NSHomeDirectory()
+        // Any open document's project beats the home directory: an
+        // untitled window in front used to send the finder walking
+        // every file the user owns, which is slow and ranks nonsense.
+        if let root = editors.compactMap(\.projectRoot).first { return root }
+        if let path = editors.compactMap(\.coreDocument.path).first {
+            return (path as NSString).deletingLastPathComponent
+        }
+        return QuickFinderPanel.lastScope ?? NSHomeDirectory()
     }
 
     private func showQuickFinder(mode: QuickFinderPanel.Mode) {

@@ -2516,6 +2516,10 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
         .child(&list)
         .vexpand(true)
         .build();
+    let status = gtk::Label::new(None);
+    status.set_xalign(0.0);
+    status.add_css_class("dim-label");
+    status.set_margin_start(4);
     let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
     content.set_margin_top(10);
     content.set_margin_bottom(10);
@@ -2523,6 +2527,7 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
     content.set_margin_end(10);
     content.append(&entry);
     content.append(&scrolled);
+    content.append(&status);
 
     let dialog = adw::Window::builder()
         .transient_for(&workbench.window)
@@ -2533,21 +2538,31 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
         .content(&content)
         .build();
 
+    // Walk once, match many: re-walking a real repository on every
+    // keystroke is what makes a fuzzy finder feel broken.
+    let index: Rc<Vec<String>> = Rc::new(textchum_core::search::list_files(&root));
     let refill = {
         let list = list.clone();
-        let root = root.clone();
+        let index = Rc::clone(&index);
+        let status = status.clone();
         move |query: &str| {
             while let Some(child) = list.first_child() {
                 list.remove(&child);
             }
-            for relative in textchum_core::search::fuzzy_files(&root, query, 50) {
-                let label = gtk::Label::new(Some(&relative));
+            let matches = textchum_core::search::match_files(&index, query, 50);
+            for relative in &matches {
+                let label = gtk::Label::new(Some(relative));
                 label.set_xalign(0.0);
                 label.set_margin_start(6);
                 label.set_margin_top(3);
                 label.set_margin_bottom(3);
                 list.append(&label);
             }
+            status.set_text(&format!(
+                "{} of {} files   ·   ↑↓ select · ⏎ search · Ctrl+⏎ open · Esc close",
+                matches.len(),
+                index.len()
+            ));
             if let Some(first) = list.row_at_index(0) {
                 list.select_row(Some(&first));
             }
@@ -2576,12 +2591,36 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
         list.connect_row_activated(move |_, row| open_row(row));
     }
     {
+        // ⏎ re-runs the search; Ctrl+⏎ is what opens, so a keystroke
+        // meant to refine the query never opens the wrong file.
+        let refill = refill.clone();
+        let entry_for_activate = entry.clone();
+        entry.connect_activate(move |_| refill(&entry_for_activate.text()));
+    }
+    {
         let list = list.clone();
-        entry.connect_activate(move |_| {
-            if let Some(row) = list.selected_row().or_else(|| list.row_at_index(0)) {
-                open_row(&row);
+        let open_row = open_row.clone();
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(move |_, key, _, state| {
+            let is_return = key == gtk::gdk::Key::Return || key == gtk::gdk::Key::KP_Enter;
+            if is_return && state.contains(gtk::gdk::ModifierType::CONTROL_MASK) {
+                if let Some(row) = list.selected_row().or_else(|| list.row_at_index(0)) {
+                    open_row(&row);
+                }
+                return glib::Propagation::Stop;
             }
+            if key == gtk::gdk::Key::Down || key == gtk::gdk::Key::Up {
+                let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
+                let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
+                if let Some(row) = list.row_at_index(next.max(0)) {
+                    list.select_row(Some(&row));
+                }
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
         });
+        dialog.add_controller(keys);
     }
     wire_escape(&dialog, &entry);
     dialog.present();

@@ -19,6 +19,16 @@ alphabetically. The same stacked filters as Find in Project apply
 here too — every filter kind refines the matched paths — and the
 status line says how many matches the filters pruned.
 
+**⏎ searches, ⌘⏎ opens** (Ctrl+⏎ on Linux): refining a query should
+never open a file by accident. ↑/↓ move the selection, ⎋ closes, and
+a double-click opens too. The status strip spells this out.
+
+The scope is walked once when the panel opens, then matched in memory
+— typing stays instant on a real repository, and the file count in the
+status line tells you what is being searched. A scope with more files
+than the walk limit says so, so "narrow the scope" is advice rather
+than a guess.
+
 ## Find in Project (⇧⌘F)
 
 The query is a regular expression; results stream in as

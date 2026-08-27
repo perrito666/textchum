@@ -31,7 +31,24 @@ final class QuickFinderPanel: NSObject {
     }
 
     private var panel: NSPanel?
+    /// Spelled out in the status strip, because a finder whose ⏎ does
+    /// not open is only friendly if it says so.
+    private static let keyHint = "↑↓ select · ⏎ search · ⌘⏎ open · ⎋ close"
+
     private var mode: Mode = .files
+    /// The scope's file list, walked once when the panel opens (or the
+    /// scope changes) and matched in memory per keystroke — re-walking
+    /// a real repository on every character is what made results
+    /// arrive late, or never.
+    private var fileIndex: [String] = []
+    /// The last scope the finder actually used, so reopening it
+    /// without a project in front does not fall back to the home
+    /// directory and index the world.
+    private(set) static var lastScope: String?
+    private var keyMonitor: Any?
+    /// The scope `fileIndex` belongs to, and whether its walk is done.
+    private var indexedScope: String?
+    private var isIndexing = false
     private let scopeField = NSTextField()
     private let queryField = NSTextField()
     /// Stacked refinements (grep mode): one row per filter, below the
@@ -55,6 +72,7 @@ final class QuickFinderPanel: NSObject {
         self.panel = panel
         panel.title = mode.title
         scopeField.stringValue = scope
+        Self.lastScope = scope
         queryField.placeholderString = mode.placeholder
         queryField.stringValue = ""
         rows = []
@@ -71,7 +89,39 @@ final class QuickFinderPanel: NSObject {
         }
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(queryField)
-        runSearch()
+        // Files mode indexes the scope once; grep asks the core per
+        // query (it streams from disk by design).
+        if mode == .files {
+            refreshFileIndex(force: true)
+        } else {
+            runSearch()
+        }
+    }
+
+    /// Walks the scope off the main thread, then runs the pending query
+    /// against the fresh list. Cheap to call: it no-ops when the scope
+    /// is already indexed and `force` is false.
+    private func refreshFileIndex(force: Bool) {
+        let scope = (scopeField.stringValue as NSString).expandingTildeInPath
+        guard force || indexedScope != scope else { return }
+        indexedScope = scope
+        fileIndex = []
+        isIndexing = true
+        statusLabel.stringValue =
+            "Indexing \((scope as NSString).lastPathComponent)…   ·   \(Self.keyHint)"
+        searchGeneration += 1
+        let generation = searchGeneration
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let paths = CoreSearch.listFiles(root: scope)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.searchGeneration == generation else { return }
+                    self.fileIndex = paths
+                    self.isIndexing = false
+                    self.runSearch()
+                }
+            }
+        }
     }
 
     private func makePanel() -> NSPanel {
@@ -83,6 +133,18 @@ final class QuickFinderPanel: NSObject {
         )
         panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = false
+
+        // ⏎ searches, ⌘⏎ opens: the finder should never open something
+        // on the strength of a keystroke meant to refine the query.
+        // The text field swallows plain keys, so ⌘⏎ is caught here.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
+            [weak self] event in
+            guard let self, self.panel?.isKeyWindow == true else { return event }
+            let isReturn = event.keyCode == 36 || event.keyCode == 76
+            guard isReturn, event.modifierFlags.contains(.command) else { return event }
+            self.openSelection()
+            return nil
+        }
 
         scopeField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         scopeField.placeholderString = "scope path"
@@ -201,14 +263,37 @@ final class QuickFinderPanel: NSObject {
 
     // MARK: Searching
 
+    /// Debounced scope re-walk: typing a path should not walk after
+    /// every character.
+    private func scheduleIndexRefresh() {
+        debounce?.invalidate()
+        let timer = Timer(timeInterval: 0.3, repeats: false) { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if self.mode == .files {
+                        self.refreshFileIndex(force: true)
+                    } else {
+                        self.runSearch()
+                    }
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        debounce = timer
+    }
+
     private func scheduleSearch() {
         debounce?.invalidate()
-        debounce = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) {
-            [weak self] _ in
+        // .common mode: a timer scheduled while the field editor is
+        // tracking would otherwise wait for typing to stop entirely.
+        let timer = Timer(timeInterval: 0.05, repeats: false) { [weak self] _ in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.runSearch() }
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        debounce = timer
     }
 
     private func runSearch() {
@@ -216,6 +301,10 @@ final class QuickFinderPanel: NSObject {
         let query = queryField.stringValue
         let mode = self.mode
         let filters = currentFilters()
+        let index = fileIndex
+        // The walk owns the status line until it finishes; matching an
+        // empty index would blank the panel and look like "no results".
+        if mode == .files, isIndexing { return }
         searchGeneration += 1
         let generation = searchGeneration
 
@@ -228,7 +317,7 @@ final class QuickFinderPanel: NSObject {
             case .files:
                 // Over-fetch so the stacked filters have something to
                 // prune; every filter kind applies to the path here.
-                let names = CoreSearch.fuzzyFiles(root: scope, query: query, limit: 400)
+                let names = CoreSearch.matchFiles(paths: index, query: query, limit: 400)
                 let filtered = names.filter { name in
                     filters.allSatisfy { filter in
                         name.lowercased().contains(filter.pattern.lowercased())
@@ -240,12 +329,19 @@ final class QuickFinderPanel: NSObject {
                     status =
                         !names.isEmpty
                         ? "\(names.count) files matched, all filtered out."
-                        : FileManager.default.fileExists(atPath: scope)
-                            ? "No files match — is the scope right?"
-                            : "That scope does not exist."
+                        : index.isEmpty
+                            ? (FileManager.default.fileExists(atPath: scope)
+                                ? "No files under this scope."
+                                : "That scope does not exist.")
+                            : "No files match \u{201c}\(query)\u{201d} in \(index.count) files."
                 } else if filtered.count < names.count {
                     status =
                         "\(filtered.count) of \(names.count) matches survive the filters."
+                } else if index.count >= 100_000 {
+                    status =
+                        "\(filtered.count) of \(index.count)+ files — narrow the scope."
+                } else {
+                    status = "\(filtered.count) of \(index.count) files."
                 }
             case .grep:
                 if query.isEmpty {
@@ -282,7 +378,9 @@ final class QuickFinderPanel: NSObject {
                 MainActor.assumeIsolated {
                     guard let self, self.searchGeneration == generation else { return }
                     self.rows = results
-                    self.statusLabel.stringValue = finalStatus
+                    self.statusLabel.stringValue =
+                        finalStatus.isEmpty
+                        ? Self.keyHint : "\(finalStatus)   ·   \(Self.keyHint)"
                     self.table.reloadData()
                     if !results.isEmpty {
                         self.table.selectRowIndexes([0], byExtendingSelection: false)
@@ -319,6 +417,20 @@ final class QuickFinderPanel: NSObject {
     /// Debug hook: force scope and query and search immediately.
     /// `filters` use the compact spec `line+foo`, `line-foo`, `file+foo`,
     /// `file-foo`.
+    /// Debug hook: types `query` the way a person does — through the
+    /// field editor, so the delegate chain (and its debounce timer)
+    /// runs exactly as it would live.
+    func debugType(scope: String, query: String) {
+        scopeField.stringValue = scope
+        refreshFileIndex(force: true)
+        queryField.stringValue = ""
+        panel?.makeFirstResponder(queryField)
+        guard let editor = queryField.currentEditor() else { return }
+        for character in query {
+            editor.insertText(String(character))
+        }
+    }
+
     func debugSet(scope: String, query: String, filters: [String] = []) {
         scopeField.stringValue = scope
         queryField.stringValue = query
@@ -355,7 +467,12 @@ final class QuickFinderPanel: NSObject {
 
 extension QuickFinderPanel: NSTextFieldDelegate {
     func controlTextDidChange(_ notification: Notification) {
-        scheduleSearch()
+        // A new scope needs a new walk; a new query only re-matches.
+        if notification.object as AnyObject? === scopeField {
+            scheduleIndexRefresh()
+        } else {
+            scheduleSearch()
+        }
     }
 
     /// Keyboard control from the text fields: arrows move the result
@@ -371,7 +488,16 @@ extension QuickFinderPanel: NSTextFieldDelegate {
             moveSelection(by: -1)
             return true
         case #selector(NSResponder.insertNewline(_:)):
-            openSelection()
+            // Search now (flushing the debounce). ⌘⏎ is what opens —
+            // see the hint in the status line.
+            debounce?.invalidate()
+            if mode == .files, indexedScope
+                != (scopeField.stringValue as NSString).expandingTildeInPath
+            {
+                refreshFileIndex(force: true)
+            } else {
+                runSearch()
+            }
             return true
         case #selector(NSResponder.cancelOperation(_:)):
             panel?.orderOut(nil)

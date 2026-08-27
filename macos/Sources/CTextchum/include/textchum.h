@@ -1075,6 +1075,34 @@ char *tc_fuzzy_files(const char *root,
                      uintptr_t limit);
 
 /**
+ * The project's file list under `root` (ignore-aware), `\n`-joined
+ * (release with [`tc_string_free`]). Walk once, then match many times
+ * with [`tc_match_files`] — re-walking per keystroke is what makes a
+ * fuzzy finder feel broken on a real repository. Pure function —
+ * callable from any thread.
+ *
+ * # Safety
+ * `root` must point to its stated number of readable bytes.
+ */
+char *tc_list_files(const char *root, uintptr_t root_len);
+
+/**
+ * Fuzzy-matches an already-walked `\n`-joined file list (from
+ * [`tc_list_files`]) against `query`, best first; an empty query lists
+ * alphabetically. Returns the `\n`-joined matches (release with
+ * [`tc_string_free`]). Pure function — callable from any thread.
+ *
+ * # Safety
+ * `paths` and `query` must point to their stated numbers of readable
+ * bytes.
+ */
+char *tc_match_files(const char *paths,
+                     uintptr_t paths_len,
+                     const char *query,
+                     uintptr_t query_len,
+                     uintptr_t limit);
+
+/**
  * Searches file contents under `root` for the regex `pattern`. Returns
  * one string (release with [`tc_string_free`]) of `\n`-joined records:
  * the **first line is always statistics** —

@@ -31,6 +31,40 @@ public enum CoreSearch {
         return joined.components(separatedBy: "\n")
     }
 
+    /// The project's file list under `root` (ignore-aware). Walk once,
+    /// then match many times with ``matchFiles(paths:query:limit:)`` —
+    /// re-walking per keystroke is what makes a fuzzy finder feel
+    /// broken on a real repository.
+    public static func listFiles(root: String) -> [String] {
+        let joined: String? = withUTF8(root) { root, rootLen in
+            guard let cString = tc_list_files(root, rootLen) else { return nil }
+            defer { tc_string_free(cString) }
+            return String(cString: cString)
+        }
+        guard let joined, !joined.isEmpty else { return [] }
+        return joined.components(separatedBy: "\n")
+    }
+
+    /// Fuzzy-matches an already-listed set of paths, best first.
+    public static func matchFiles(
+        paths: [String], query: String, limit: Int = 100
+    ) -> [String] {
+        var joinedPaths = paths.joined(separator: "\n")
+        let joined: String? = withUTF8(joinedPaths) { pathBytes, pathLen in
+            withUTF8(query) { query, queryLen in
+                guard
+                    let cString = tc_match_files(
+                        pathBytes, pathLen, query, queryLen, UInt(limit))
+                else { return nil }
+                defer { tc_string_free(cString) }
+                return String(cString: cString)
+            }
+        }
+        joinedPaths = ""
+        guard let joined, !joined.isEmpty else { return [] }
+        return joined.components(separatedBy: "\n")
+    }
+
     /// A stacked refinement over grep hits: the line's text or the file's
     /// relative path must (or must not) contain `pattern`, matched as a
     /// case-insensitive substring.

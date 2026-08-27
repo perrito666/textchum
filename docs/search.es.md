@@ -22,6 +22,14 @@ en el proyecto aplican aquí — cada tipo de filtro refina las rutas
 encontradas — y la línea de estado dice cuántas coincidencias podaron
 los filtros.
 
+**⏎ busca, ⌘⏎ abre** (Ctrl+⏎ en Linux): refinar una consulta nunca
+debería abrir un archivo por accidente. ↑/↓ mueven la selección, ⎋
+cierra, y el doble clic también abre. La línea de estado lo explica.
+
+El ámbito se recorre una vez al abrir el panel y luego se filtra en
+memoria — escribir es instantáneo en un repositorio real, y el número
+de archivos en la línea de estado dice qué se está buscando.
+
 ## Buscar en el proyecto (⇧⌘F)
 
 La consulta es una expresión regular; los resultados llegan como

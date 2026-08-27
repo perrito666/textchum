@@ -1848,6 +1848,59 @@ pub unsafe extern "C" fn tc_fuzzy_files(
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// The project's file list under `root` (ignore-aware), `\n`-joined
+/// (release with [`tc_string_free`]). Walk once, then match many times
+/// with [`tc_match_files`] — re-walking per keystroke is what makes a
+/// fuzzy finder feel broken on a real repository. Pure function —
+/// callable from any thread.
+///
+/// # Safety
+/// `root` must point to its stated number of readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_list_files(root: *const c_char, root_len: usize) -> *mut c_char {
+    let Some(root) = (unsafe { str_from_raw(root, root_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let paths = textchum_core::search::list_files(std::path::Path::new(root));
+        owned_c_string(paths.join("\n"))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Fuzzy-matches an already-walked `\n`-joined file list (from
+/// [`tc_list_files`]) against `query`, best first; an empty query lists
+/// alphabetically. Returns the `\n`-joined matches (release with
+/// [`tc_string_free`]). Pure function — callable from any thread.
+///
+/// # Safety
+/// `paths` and `query` must point to their stated numbers of readable
+/// bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_match_files(
+    paths: *const c_char,
+    paths_len: usize,
+    query: *const c_char,
+    query_len: usize,
+    limit: usize,
+) -> *mut c_char {
+    let (paths, query) =
+        unsafe { (str_from_raw(paths, paths_len), str_from_raw(query, query_len)) };
+    let (Some(paths), Some(query)) = (paths, query) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let list: Vec<String> = if paths.is_empty() {
+            Vec::new()
+        } else {
+            paths.split('\n').map(str::to_owned).collect()
+        };
+        let matched = textchum_core::search::match_files(&list, query, limit);
+        owned_c_string(matched.join("\n"))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Searches file contents under `root` for the regex `pattern`. Returns
 /// one string (release with [`tc_string_free`]) of `\n`-joined records:
 /// the **first line is always statistics** —
