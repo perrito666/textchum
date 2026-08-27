@@ -97,7 +97,11 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.redo", &["<Ctrl><Shift>z"]);
     app.set_accels_for_action("win.preferences", &["<Ctrl>comma"]);
     app.set_accels_for_action("win.close-tab", &["<Ctrl>w"]);
+    app.set_accels_for_action("win.reopen-tab", &["<Ctrl><Shift>t"]);
     app.set_accels_for_action("window.close", &["<Ctrl><Shift>w"]);
+    // Ctrl+Q is what a GNOME application quits with; without it the
+    // only way out is the window's close button.
+    app.set_accels_for_action("app.quit", &["<Ctrl>q"]);
     app.set_accels_for_action("win.back", &["<Alt>Left"]);
     app.set_accels_for_action("win.forward", &["<Alt>Right"]);
     app.set_accels_for_action("win.references", &["<Shift>F12"]);
@@ -119,6 +123,15 @@ fn main() -> gtk::glib::ExitCode {
     // apply while running, through the same pipeline a Preferences
     // change uses.
     app.connect_startup(|app| {
+        // Quitting is the application's business, not a window's: it
+        // closes every window, and connect_shutdown saves the session
+        // on the way out.
+        let quit = gio::SimpleAction::new("quit", None);
+        {
+            let app = app.clone();
+            quit.connect_activate(move |_, _| app.quit());
+        }
+        app.add_action(&quit);
         apply_key_overrides(app);
         let app = app.clone();
         shell::Shell::instance().watch_config(move || {

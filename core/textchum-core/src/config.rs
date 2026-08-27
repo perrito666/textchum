@@ -576,6 +576,101 @@ impl Config {
         }
     }
 
+    /// The spell-check setting read as the list it is allowed to be: a
+    /// bilingual document needs both dictionaries at once, and the
+    /// natural way to ask for that is `"en_US, es_ES"`. One dictionary
+    /// is the one-element case, and `"auto"` stays a single entry
+    /// meaning "whatever the desktop's locale says".
+    pub fn spell_languages(&self) -> Vec<String> {
+        self.spell_language()
+            .into_iter()
+            .flat_map(|value| {
+                value
+                    .split([',', ' '])
+                    .map(str::trim)
+                    .filter(|part| !part.is_empty())
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// The words the spell checker should accept regardless of
+    /// dictionary (`editor.spell_words`): project names, acronyms, and
+    /// the rest of the vocabulary no dictionary ships with. Sorted, so
+    /// the file stays readable and diffs stay small.
+    pub fn spell_words(&self) -> Vec<String> {
+        self.editor()
+            .get("spell_words")
+            .and_then(Value::as_array)
+            .map(|words| {
+                words
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::trim)
+                    .filter(|word| !word.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn set_spell_words(&mut self, words: &[String]) {
+        let mut sorted: Vec<String> = words
+            .iter()
+            .map(|word| word.trim().to_owned())
+            .filter(|word| !word.is_empty())
+            .collect();
+        sorted.sort();
+        sorted.dedup();
+        if sorted.is_empty() {
+            self.editor_mut().remove("spell_words");
+            return;
+        }
+        self.editor_mut().insert(
+            "spell_words".into(),
+            Value::Array(sorted.into_iter().map(Value::String).collect()),
+        );
+    }
+
+    /// Adds one word to the personal list. Returns whether it was new,
+    /// so a caller can skip re-checking when nothing changed.
+    pub fn add_spell_word(&mut self, word: &str) -> bool {
+        let word = word.trim();
+        if word.is_empty() {
+            return false;
+        }
+        let mut words = self.spell_words();
+        if words.iter().any(|existing| existing == word) {
+            return false;
+        }
+        words.push(word.to_owned());
+        self.set_spell_words(&words);
+        true
+    }
+
+    /// How long the editor waits after the last keystroke before saving
+    /// a file by itself (`editor.autosave`, seconds). Absent or zero
+    /// means off, which is the default: a save can run preprocessors and
+    /// rewrite the buffer, so it stays something the user asks for.
+    /// Untitled documents are never autosaved — there is nowhere to put
+    /// them.
+    pub fn autosave_seconds(&self) -> u32 {
+        self.editor()
+            .get("autosave")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as u32
+    }
+
+    pub fn set_autosave_seconds(&mut self, seconds: u32) {
+        if seconds == 0 {
+            self.editor_mut().remove("autosave");
+            return;
+        }
+        self.editor_mut()
+            .insert("autosave".into(), Value::Number(seconds.into()));
+    }
+
     /// Whether the editor shows a line-number gutter
     /// (`editor.line_numbers`, default true).
     /// The chosen theme name (a built-in or a user theme file's name);
@@ -1075,6 +1170,53 @@ mod tests {
         assert_eq!(reloaded.spell_language().as_deref(), Some("es_ES"));
         reloaded.set_spell_language(None);
         assert_eq!(reloaded.spell_language(), None);
+    }
+
+    #[test]
+    fn spell_setting_reads_as_a_list_of_dictionaries() {
+        let path = temp_path("spell-multi.json");
+        let (mut config, _) = Config::load(&path);
+        assert!(config.spell_languages().is_empty());
+        config.set_spell_language(Some("en_US"));
+        assert_eq!(config.spell_languages(), vec!["en_US"]);
+        // Both separators a person would reach for, and stray spaces.
+        config.set_spell_language(Some("en_US, es_ES"));
+        assert_eq!(config.spell_languages(), vec!["en_US", "es_ES"]);
+        config.set_spell_language(Some("en_US es_ES  fr_FR"));
+        assert_eq!(config.spell_languages(), vec!["en_US", "es_ES", "fr_FR"]);
+        // "auto" is one entry, not a dictionary name to split.
+        config.set_spell_language(Some("auto"));
+        assert_eq!(config.spell_languages(), vec!["auto"]);
+    }
+
+    #[test]
+    fn personal_words_round_trip_sorted_and_deduplicated() {
+        let path = temp_path("spell-words.json");
+        let (mut config, _) = Config::load(&path);
+        assert!(config.spell_words().is_empty());
+        assert!(config.add_spell_word("SBX"));
+        assert!(config.add_spell_word("Textchum"));
+        // The same word twice is not an edit.
+        assert!(!config.add_spell_word("SBX"));
+        assert!(!config.add_spell_word("   "));
+        config.save().unwrap();
+        let (mut reloaded, _) = Config::load(&path);
+        assert_eq!(reloaded.spell_words(), vec!["SBX", "Textchum"]);
+        reloaded.set_spell_words(&[]);
+        assert!(reloaded.spell_words().is_empty());
+    }
+
+    #[test]
+    fn autosave_is_off_until_asked_for() {
+        let path = temp_path("autosave.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.autosave_seconds(), 0);
+        config.set_autosave_seconds(30);
+        config.save().unwrap();
+        let (mut reloaded, _) = Config::load(&path);
+        assert_eq!(reloaded.autosave_seconds(), 30);
+        reloaded.set_autosave_seconds(0);
+        assert_eq!(reloaded.autosave_seconds(), 0);
     }
 
     #[test]

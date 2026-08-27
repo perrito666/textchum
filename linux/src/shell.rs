@@ -303,9 +303,15 @@ impl Shell {
                         } else {
                             message
                         };
-                        let handles = self.pages.borrow().values().next().cloned();
-                        if let Some(handles) = handles {
-                            handles.toasts.add_toast(adw::Toast::new(&text));
+                        // A missing server is a sentence naming a
+                        // package to install, and it arrives while the
+                        // user is looking at their file rather than at
+                        // the notification — so it wraps and waits to be
+                        // dismissed instead of ellipsizing and fading.
+                        // It goes to the window the user is in, not to
+                        // whichever page happens to be first in the map.
+                        if let Some(workbench) = crate::workbench::Workbench::active() {
+                            workbench.explain(&text);
                         }
                     }
                 }
