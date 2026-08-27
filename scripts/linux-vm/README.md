@@ -121,6 +121,30 @@ That correspondence is the point: the same question — *is what the
 accessibility tree claims actually painted?* — can be asked on both
 platforms, and a screenshot answers it either way.
 
+## The documentation screenshots
+
+`shot.sh` and `capture-tour.sh` run inside the guest and produce the
+Linux half of the tour — every screen, in light and dark, framed the
+same way each time. Copy them over, give the guest the demo project,
+and run them:
+
+```sh
+scp shot.sh capture-tour.sh guest:/tmp/
+./vm-ssh.sh '/tmp/capture-tour.sh light'
+./vm-ssh.sh '/tmp/capture-tour.sh dark'
+```
+
+Two things that are not obvious. Anything a language server answers —
+hover, completion, the outline — needs the demo project to be a real
+crate with a `Cargo.toml`, or rust-analyzer indexes nothing and the
+panels come up empty. And the pointer is parked off the window before
+every capture: left where the last run put it, it rests over whatever
+appears underneath and the hover popover walks into the picture.
+
+Panels are their own X windows, so they are captured by window rather
+than cropped out of the screen — which also means a popover never
+carries the desktop behind it.
+
 Point a run at a scratch configuration, never the real one:
 
 ```sh
