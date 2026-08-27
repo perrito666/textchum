@@ -270,6 +270,15 @@ final class EditorWindowController: NSWindowController {
             sidebarItem.allowsFullHeightLayout = false
             splitController.addSplitViewItem(sidebarItem)
             splitController.addSplitViewItem(NSSplitViewItem(viewController: editorController))
+            // AppKit remembers a divider only for a split view that has
+            // an autosave name, and this one never had one — which is
+            // why the sidebar's width has always reset. The same name in
+            // every window is deliberate: they share one stored
+            // position, so a width set in one is the width the next
+            // window opens with, and the width it has after a relaunch.
+            splitController.splitView.autosaveName = "TextchumEditorSidebar"
+            splitController.splitView.identifier =
+                NSUserInterfaceItemIdentifier("TextchumEditorSidebar")
             window.contentViewController = splitController
             // Screenshot hook: a fixed content size makes documentation
             // captures reproducible (TEXTCHUM_DEBUG_WINDOW=1200x760).
