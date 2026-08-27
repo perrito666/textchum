@@ -528,6 +528,34 @@ func runSmokeTest() -> Int32 {
     // did. That half is verified by looking at the window; this half is
     // the part that can be verified honestly, and it is the part that
     // has actually regressed before.
+
+    // One sidebar width across every window. The wiring needs a window
+    // server, but the two ways it goes wrong are pure decisions and are
+    // checked here: adopting a width already held sets two windows
+    // answering each other forever, and adopting one while collapsed
+    // reopens a navigator the user closed.
+    guard EditorWindowController.shouldAdoptSidebarWidth(320, current: 188, collapsed: false)
+    else {
+        print("FAIL: a different width from another window should be adopted")
+        return 1
+    }
+    guard !EditorWindowController.shouldAdoptSidebarWidth(188, current: 188, collapsed: false)
+    else {
+        print("FAIL: adopting the width already held is how a feedback loop starts")
+        return 1
+    }
+    guard !EditorWindowController.shouldAdoptSidebarWidth(188.2, current: 188, collapsed: false)
+    else {
+        print("FAIL: a sub-point difference is the same width coming back")
+        return 1
+    }
+    guard !EditorWindowController.shouldAdoptSidebarWidth(320, current: 0, collapsed: true)
+    else {
+        print("FAIL: a collapsed navigator must stay collapsed")
+        return 1
+    }
+    print("sidebar width sync ok (adopts changes, ignores echoes and collapsed)")
+
     print("smoke test passed")
     return 0
 }

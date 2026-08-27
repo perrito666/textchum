@@ -117,6 +117,10 @@ final class EditorWindowController: NSWindowController {
     private var hoverPopover: NSPopover?
     /// The window's split view controller (sidebar · editor · preview).
     private var splitController: NSSplitViewController?
+    /// True while a broadcast sidebar width is being applied, so
+    /// following a change never looks like making one. Without it two
+    /// windows answer each other forever.
+    private var applyingSidebarWidth = false
     /// The line-number gutter (a sibling of the scroll view, not a ruler).
     private var lineRuler: LineNumberGutterView?
     /// The Markdown preview pane, present while the preview is shown.
@@ -279,6 +283,7 @@ final class EditorWindowController: NSWindowController {
             splitController.splitView.autosaveName = "TextchumEditorSidebar"
             splitController.splitView.identifier =
                 NSUserInterfaceItemIdentifier("TextchumEditorSidebar")
+            self.observeSidebarWidth(of: splitController)
             window.contentViewController = splitController
             // Screenshot hook: a fixed content size makes documentation
             // captures reproducible (TEXTCHUM_DEBUG_WINDOW=1200x760).
@@ -2208,6 +2213,84 @@ extension EditorWindowController: NSWindowDelegate {
         if let path = coreDocument.path {
             followInTree(path)
         }
+    }
+
+    // MARK: One sidebar width for the whole application
+
+    /// Watches this window's divider and keeps every other window's in
+    /// step. The autosave name makes the width outlive a launch; this
+    /// makes it the same width in windows that are already open, which
+    /// is what "the navigator is this wide" ought to mean.
+    private func observeSidebarWidth(of controller: NSSplitViewController) {
+        NotificationCenter.default.addObserver(
+            forName: NSSplitView.didResizeSubviewsNotification,
+            object: controller.splitView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.applyingSidebarWidth else { return }
+                let width = self.currentSidebarWidth
+                // A collapsed sidebar is a different setting — hiding
+                // the navigator in one window should not hide it
+                // everywhere.
+                guard width > 1 else { return }
+                NotificationCenter.default.post(
+                    name: .textchumSidebarWidthChanged,
+                    object: self,
+                    userInfo: ["width": width]
+                )
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .textchumSidebarWidthChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            MainActor.assumeIsolated {
+                guard let self,
+                    note.object as? EditorWindowController !== self,
+                    let width = note.userInfo?["width"] as? CGFloat
+                else { return }
+                self.applySidebarWidth(width)
+            }
+        }
+    }
+
+    private var currentSidebarWidth: CGFloat {
+        splitController?.splitViewItems.first?.viewController.view.frame.width ?? 0
+    }
+
+    private func applySidebarWidth(_ width: CGFloat) {
+        guard let splitView = splitController?.splitView,
+            Self.shouldAdoptSidebarWidth(
+                width,
+                current: currentSidebarWidth,
+                collapsed: splitController?.splitViewItems.first?.isCollapsed ?? true
+            )
+        else { return }
+        applyingSidebarWidth = true
+        splitView.setPosition(width, ofDividerAt: 0)
+        applyingSidebarWidth = false
+    }
+
+    /// Whether a width broadcast by another window is worth adopting.
+    ///
+    /// Separated out because the two ways this goes wrong are not
+    /// visible in a screenshot: adopting a width already held starts
+    /// two windows answering each other, and adopting anything while
+    /// collapsed silently reopens a navigator the user closed. Hiding
+    /// the sidebar in one window is a different decision from choosing
+    /// how wide it is, and only the second one travels.
+    static func shouldAdoptSidebarWidth(
+        _ width: CGFloat,
+        current: CGFloat,
+        collapsed: Bool
+    ) -> Bool {
+        guard !collapsed else { return false }
+        guard width > 1 else { return false }
+        // Sub-point differences are the same width arriving back; acting
+        // on them costs a layout pass and risks a loop.
+        return abs(current - width) > 0.5
     }
 
     /// View → Reveal in Tree: expand the navigator to this document.

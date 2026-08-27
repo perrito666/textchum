@@ -6,6 +6,11 @@ extension Notification.Name {
     /// Posted whenever the set of open documents, or any document's path,
     /// dirty state, or title changes — the sidebar rebuilds from it.
     static let textchumDocumentsChanged = Notification.Name("textchumDocumentsChanged")
+    /// Posted when a window's sidebar divider moves, carrying the new
+    /// width. Every other window follows, so the navigator is one
+    /// width across the application rather than per window.
+    static let textchumSidebarWidthChanged =
+        Notification.Name("textchumSidebarWidthChanged")
 }
 
 /// One open document as the sidebar sees it.
