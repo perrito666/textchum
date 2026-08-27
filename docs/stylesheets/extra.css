@@ -11,3 +11,46 @@
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
 }
+
+/* The same screen on both platforms, beside each other. Side by side is
+   the point — the two shells are meant to be compared, and a reader who
+   has to scroll between them is comparing memory rather than pictures.
+   They stack below the breakpoint, where two columns would leave each
+   window too small to read. */
+.md-typeset .shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1em 0;
+}
+
+.md-typeset .shots figure {
+  /* Two to a row in the content column, and one to a row once the
+     column is too narrow to halve. Material sets the root font size to
+     125%, so a rem here is 20px: 15rem is 300px, and two of those plus
+     the gap fit the column with room to spare. */
+  flex: 1 1 15rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.md-typeset .shots img {
+  width: 100%;
+  height: auto;
+}
+
+/* Each shot links to itself at full size. Side by side, a window is
+   about a third of its real width — enough to compare two shells at a
+   glance, not enough to read what is in them. */
+.md-typeset .shots a {
+  display: block;
+}
+
+.md-typeset .shots figcaption {
+  margin-top: .4rem;
+  text-align: center;
+  font-size: .7rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+}

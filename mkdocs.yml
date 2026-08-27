@@ -31,6 +31,12 @@ markdown_extensions:
   - admonition
   - pymdownx.superfences
   - pymdownx.highlight
+  # Lets the paired screenshots in the tour hold ordinary Markdown
+  # images inside a <div>. Written as raw <img> tags instead, their
+  # paths would be left alone — MkDocs rewrites relative links while
+  # walking the Markdown tree, and raw HTML never enters it, so the
+  # translated pages (one directory deeper) would point at nothing.
+  - md_in_html
 
 plugins:
   - search
