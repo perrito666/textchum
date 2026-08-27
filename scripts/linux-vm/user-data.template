@@ -1,0 +1,35 @@
+#cloud-config
+# First boot only: enough to get in over SSH and run provision.sh.
+# Everything heavier lives there, where failures are visible and the
+# step can be run again without rebuilding the machine.
+hostname: textchum-linux
+
+users:
+  - name: textchum
+    gecos: textchum development
+    groups: [adm, sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    shell: /bin/bash
+    lock_passwd: false
+    # Set so the GNOME greeter can be used from the UTM console when
+    # something has gone wrong with SSH. Not a secret worth protecting:
+    # the machine is local, disposable, and reachable only from this host.
+    plain_text_passwd: textchum
+    ssh_authorized_keys:
+      - __SSH_PUBLIC_KEY__
+
+ssh_pwauth: false
+package_update: true
+package_upgrade: false
+
+packages:
+  - qemu-guest-agent
+  - openssh-server
+  - git
+  - curl
+  - build-essential
+  - pkg-config
+
+runcmd:
+  - [systemctl, enable, --now, qemu-guest-agent]
+  - [touch, /var/lib/cloud/instance/boot-finished-marker]

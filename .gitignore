@@ -13,3 +13,4 @@ site/
 # macOS noise
 .DS_Store
 dist/
+scripts/linux-vm/build/
