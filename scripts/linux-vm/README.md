@@ -35,12 +35,28 @@ writes a cloud-init seed carrying a key generated for this machine, and
 creates and starts the VM through UTM's scripting interface. It prints
 the guest's address and the commands that provision it.
 
+The first call also needs macOS to let this terminal drive UTM. macOS
+asks once, as a dialog nobody sees if the run is unattended; until it
+is answered, every scripting call fails with **AppleEvent timed out
+(-1712)**. Grant it under System Settings → Privacy & Security →
+Automation.
+
 The VM is disposable by design. When it drifts, throw it away and build
 another:
 
 ```sh
 ./create-vm.sh --delete
 ```
+
+Stop it first — `--delete` will not remove a running machine, and it
+removes `build/` either way, so a half-delete leaves a machine UTM
+still lists and a build directory that no longer describes it.
+
+Never kill the QEMU process to end a stuck machine: the guest's disk is
+mid-write and comes back corrupted, which shows up as a boot that
+freezes a second in or a desktop session that never paints. Ask UTM to
+stop it, and if UTM's own state sticks at *stopping*, quit and reopen
+UTM rather than reaching for the process.
 
 Everything downloaded or generated lands in `build/`, which is ignored.
 Nothing identifying is committed: `user-data.template` carries a
