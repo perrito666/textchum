@@ -1,0 +1,64 @@
+# Maintainer: Horacio Duran <https://perri.to>
+#
+# Builds Textchum's GTK shell from a release tarball. To build against
+# a checkout instead, point `source` at the working tree and drop the
+# checksum.
+#
+#   cd packaging && makepkg -si
+
+pkgname=textchum
+pkgver=0.0.10
+pkgrel=1
+pkgdesc='A native text editor with language servers and tree-sitter highlighting'
+arch=('x86_64' 'aarch64')
+url='https://github.com/perrito666/textchum'
+license=('MIT')
+
+# The four libraries the shell links against, under Arch's names.
+depends=('gtk4' 'libadwaita' 'gtksourceview5' 'webkitgtk-6.0')
+makedepends=('cargo' 'git')
+# Each switches off one feature and nothing else. Language servers and
+# formatters are deliberately absent: they are the user's own, and a
+# package manager has no business choosing them.
+optdepends=(
+    'hunspell: prose spell check'
+    'hunspell-en_us: an English dictionary for spell check'
+    'ctags: Jump to Definition without a language server'
+    'git: the Copy Forge URL action'
+)
+
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+# A placeholder until a tag exists to checksum: run `updpkgsums` when
+# cutting the release, which replaces this with the real digest. Left
+# as SKIP, makepkg downloads whatever the URL serves without checking
+# it, so this must not ship to the AUR as it stands.
+sha256sums=('SKIP')
+
+prepare() {
+    cd "$pkgname-$pkgver"
+    # Fetch here rather than during build(): makepkg runs build() with
+    # the network available too, but keeping downloads in prepare()
+    # matches how the rest of the AUR's Rust packages are written.
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --manifest-path linux/Cargo.toml
+}
+
+build() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo build --frozen --release --manifest-path linux/Cargo.toml
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    install -Dm755 target/release/textchum-gtk "$pkgdir/usr/bin/textchum-gtk"
+    install -Dm755 scripts/chum "$pkgdir/usr/bin/chum"
+    install -Dm644 linux/data/to.perri.textchum.desktop \
+        "$pkgdir/usr/share/applications/to.perri.textchum.desktop"
+    install -Dm644 packaging/to.perri.textchum.metainfo.xml \
+        "$pkgdir/usr/share/metainfo/to.perri.textchum.metainfo.xml"
+    install -Dm644 linux/data/to.perri.textchum-512.png \
+        "$pkgdir/usr/share/icons/hicolor/512x512/apps/to.perri.textchum.png"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

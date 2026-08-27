@@ -6,6 +6,6 @@ Exec=textchum-gtk %F
 Icon=to.perri.textchum
 Terminal=false
 Type=Application
-Categories=Utility;TextEditor;Development;
+Categories=Utility;TextEditor;
 MimeType=text/plain;text/markdown;text/x-python;text/x-rust;text/x-go;text/x-csrc;application/json;application/x-yaml;application/x-shellscript;
 StartupNotify=true

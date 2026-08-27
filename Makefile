@@ -13,7 +13,7 @@ DOCS_VENV     := .docs-venv
 
 # `linux` MUST stay in this list: a directory of that name exists, and
 # without .PHONY make declares it up to date and builds nothing.
-.PHONY: all build core run test smoke header-check check app docs docs-serve clean install-cli linux install-linux
+.PHONY: all build core run test smoke header-check check app docs docs-serve clean install-cli linux install-linux deb rpm
 
 all: build
 
@@ -90,6 +90,14 @@ install-linux: linux
 	-gtk-update-icon-cache $(HOME)/.local/share/icons/hicolor 2>/dev/null
 	-update-desktop-database $(HOME)/.local/share/applications 2>/dev/null
 	@echo Installed textchum-gtk for $(USER) — ensure ~/.local/bin is on PATH
+
+## A .deb from the release binary, into build/deb.
+deb: linux
+	packaging/build-deb.sh
+
+## An .rpm, built from source by rpmbuild, into build/rpm.
+rpm:
+	packaging/build-rpm.sh
 
 PREFIX ?= /usr/local
 

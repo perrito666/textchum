@@ -158,3 +158,25 @@ jobs:
           tar -C linux/target/release -czf "$TARBALL" textchum-gtk
           sha256sum "$TARBALL" > "$TARBALL.sha256"
           gh release upload "$GITHUB_REF_NAME" "$TARBALL" "$TARBALL.sha256"
+      # The .deb is built from the binary above, so it costs a moment
+      # rather than a second compile. The .rpm is built from source by
+      # rpmbuild, which is what an RPM is expected to do.
+      - name: Debian package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DEB="$(packaging/build-deb.sh "${GITHUB_REF_NAME#v}")"
+          sha256sum "$DEB" > "$DEB.sha256"
+          gh release upload "$GITHUB_REF_NAME" "$DEB" "$DEB.sha256"
+      - name: RPM package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get install -yq rpm
+          # Ubuntu's rpm cannot see libraries installed as .debs, so the
+          # BuildRequires cannot be satisfied here. They are correct for
+          # the distributions that consume this package; the build is
+          # what is being exercised.
+          RPM="$(RPMBUILD_FLAGS=--nodeps packaging/build-rpm.sh "${GITHUB_REF_NAME#v}" | tail -1)"
+          sha256sum "$RPM" > "$RPM.sha256"
+          gh release upload "$GITHUB_REF_NAME" "$RPM" "$RPM.sha256"
