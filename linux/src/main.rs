@@ -20,7 +20,91 @@ use workbench::Workbench;
 
 const APP_ID: &str = "to.perri.textchum";
 
+/// Set when the WebKit sandbox had to be switched off to start at all,
+/// so the first window can say so once.
+static SANDBOX_NOTE: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+
+/// Keeps the editor startable where WebKit's sandbox cannot run.
+///
+/// The Markdown preview is a WebKitWebView, and WebKit sandboxes its
+/// processes with bubblewrap. Ubuntu 24.04 ships
+/// `kernel.apparmor_restrict_unprivileged_userns=1`, which denies the
+/// user namespace bubblewrap needs to a program with no AppArmor
+/// profile granting it — so `bwrap` fails, and WebKit treats that as
+/// fatal rather than degrading. The editor aborts before drawing
+/// anything, over a preview pane the user may never open.
+///
+/// The probe runs `bwrap` because nothing else predicts it: an ordinary
+/// process on the same machine creates a user namespace happily, and
+/// only bubblewrap's own attempt to write the uid map is refused. So we
+/// ask the exact binary the exact question.
+///
+/// Switching the sandbox off is a real reduction, and it is the lesser
+/// one: the alternative is an editor that does not start. It applies
+/// only where the sandbox was already impossible, and it says so. The
+/// better answer for a packaged build is an AppArmor profile granting
+/// `userns`, which keeps the sandbox — but that needs root, and
+/// `make install-linux` deliberately installs into the user's own
+/// `~/.local`.
+fn accommodate_webkit_sandbox() {
+    // Already decided by whoever launched us — theirs to own.
+    if std::env::var_os("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS").is_some() {
+        return;
+    }
+    let probe = std::process::Command::new("bwrap")
+        .args(["--unshare-user", "--ro-bind", "/", "/", "/bin/true"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    match probe {
+        // bwrap works: leave the sandbox alone.
+        Ok(status) if status.success() => {}
+        // bwrap is there and refused. This is the case that aborts.
+        Ok(_) => {
+            std::env::set_var("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1");
+            let _ = SANDBOX_NOTE.set(
+                "This system does not allow the sandbox the Markdown preview's \
+                 web view normally runs in (Ubuntu 24.04 and later restrict \
+                 unprivileged user namespaces), so it has been switched off for \
+                 this session — otherwise Textchum could not start at all. The \
+                 preview only renders your own documents.",
+            );
+        }
+        // No bwrap to ask. WebKit finds its own sandbox helper or does
+        // without one; either way this is not the failure we know how to
+        // diagnose, so nothing is changed behind the user's back.
+        Err(_) => {}
+    }
+}
+
+/// Tells the user, once, that the sandbox had to go.
+///
+/// Called from both entry points: launching with a file goes through
+/// `open` and launching without one through `activate`, and opening a
+/// file is the common case — a message wired into only one of them is a
+/// message most people never see.
+fn announce_sandbox_note(workbench: &std::rc::Rc<Workbench>) {
+    use std::cell::Cell;
+    thread_local! {
+        static SAID: Cell<bool> = const { Cell::new(false) };
+    }
+    let Some(note) = SANDBOX_NOTE.get() else { return };
+    if SAID.with(|said| said.replace(true)) {
+        return;
+    }
+    // After a beat: AdwToastOverlay drops a toast handed to it before
+    // the window it lives in is on screen.
+    let workbench = std::rc::Rc::clone(workbench);
+    gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
+        workbench.explain(note)
+    });
+}
+
 fn main() -> gtk::glib::ExitCode {
+    // Before anything creates a web view, and before GTK starts: this
+    // works by setting an environment variable WebKit reads once.
+    accommodate_webkit_sandbox();
     let smoke_test = std::env::args().any(|argument| argument == "--smoke-test");
     let fresh = std::env::args().any(|argument| argument == "--fresh");
     // --wait (the GIT_EDITOR contract): a private instance that stays
@@ -54,6 +138,7 @@ fn main() -> gtk::glib::ExitCode {
             workbench.open(None, None);
         }
         workbench.window.present();
+        announce_sandbox_note(&workbench);
     });
     app.connect_shutdown(|_| session::save());
     app.connect_open(|app, files, _hint| {
@@ -80,6 +165,7 @@ fn main() -> gtk::glib::ExitCode {
             workbench.open(Some(path), at);
         }
         workbench.window.present();
+        announce_sandbox_note(&workbench);
     });
 
     app.set_accels_for_action("win.new-tab", &["<Ctrl>t"]);

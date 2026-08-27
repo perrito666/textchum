@@ -1111,7 +1111,7 @@ fn context_menu(misspelling: Option<&str>, has_selection: bool) -> gtk::gio::Men
         }
         for suggestion in suggestions.iter().take(8) {
             replacements.append(
-                Some(suggestion),
+                Some(&crate::workbench::menu_label(suggestion)),
                 Some(&format!(
                     "win.spell-replace('{}')",
                     suggestion.replace('\'', "\\'")
