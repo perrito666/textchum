@@ -438,14 +438,60 @@ pub fn styles() -> Vec<Style> {
         .unwrap_or_else(|| DEFAULT_STYLES.to_vec())
 }
 
+/// Capture names that mean something [`CAPTURES`] already has a style
+/// for, under a different name.
+///
+/// Grammars do not agree on vocabulary. Several of the names they use
+/// are common enough to appear in most of the ones bundled here —
+/// `@boolean` comes from yaml, toml, zig and swift — and every one that
+/// is not in the list above renders as plain text. That is not a
+/// decision anybody made about how booleans should look; it is a word
+/// the table happens not to contain.
+///
+/// Aliasing rather than extending the table is deliberate. [`CAPTURES`]
+/// is append-only within a release because its indices cross the FFI as
+/// style ids, and every built-in theme supplies one style per name in
+/// order — so a new name means editing all of them. An alias needs
+/// none of that, and the colour it lands on is one every theme has
+/// already chosen.
+static ALIASES: &[(&str, &str)] = &[
+    // Literals that are constants by another name.
+    ("boolean", "constant.builtin"),
+    ("float", "number"),
+    ("character", "string"),
+    // Control-flow words some grammars separate out of `keyword`:
+    // SQL's CASE/WHEN, and the same idea in others.
+    ("conditional", "keyword"),
+    ("repeat", "keyword"),
+    ("exception", "keyword"),
+    ("include", "keyword"),
+    ("storageclass", "keyword"),
+    ("keyword.conditional", "keyword"),
+    // A record's or row's named member is a property.
+    ("field", "property"),
+    // A function's own arguments already have a style.
+    ("parameter", "variable.parameter"),
+    ("namespace", "module"),
+];
+
 /// Resolves a capture name to a style id, trimming dotted segments from
-/// the right until a styled name matches. Names that never match (plain
-/// `variable`, grammar-specific extras) are unstyled.
+/// the right until a styled name matches, and consulting [`ALIASES`]
+/// for names other vocabularies use. Names that never match — plain
+/// `variable` above all, which would colour every identifier in a
+/// document — stay unstyled.
 pub fn resolve(capture: &str) -> Option<u32> {
     let mut name = capture;
     loop {
         if let Some(index) = CAPTURES.iter().position(|entry| *entry == name) {
             return Some(index as u32);
+        }
+        if let Some((_, target)) = ALIASES.iter().find(|(from, _)| *from == name) {
+            // One hop only: an alias names a real capture, so a second
+            // lookup would mean the table is wrong rather than deep.
+            return CAPTURES
+                .iter()
+                .position(|entry| entry == target)
+                .map(|index| index as u32);
         }
         match name.rfind('.') {
             Some(dot) => name = &name[..dot],
@@ -464,6 +510,48 @@ mod tests {
         assert!(resolve("keyword").is_some());
         assert_eq!(resolve("variable"), None, "plain text stays unstyled");
         assert!(resolve("variable.builtin").is_some());
+    }
+
+    #[test]
+    fn aliases_land_on_a_real_style() {
+        // Every alias must name a capture that exists, or it silently
+        // resolves to nothing and the alias table is a lie.
+        for (from, target) in ALIASES {
+            assert!(
+                CAPTURES.contains(target),
+                "alias {from} points at {target}, which is not a capture"
+            );
+            assert_eq!(
+                resolve(from),
+                resolve(target),
+                "{from} should paint like {target}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_captures_grammars_actually_emit_are_styled() {
+        // Names taken from the bundled grammars' own highlights.scm.
+        // @boolean comes from yaml, toml, zig and swift; the rest from
+        // sql and the C family.
+        for capture in ["boolean", "float", "conditional", "field", "storageclass"] {
+            assert!(
+                resolve(capture).is_some(),
+                "{capture} is emitted by grammars we ship and renders as plain text"
+            );
+        }
+    }
+
+    #[test]
+    fn an_alias_never_shadows_a_real_capture() {
+        // If a name is ever added to CAPTURES, its alias becomes dead
+        // and misleading — the lookup above would never reach it.
+        for (from, _) in ALIASES {
+            assert!(
+                !CAPTURES.contains(from),
+                "{from} is now a capture of its own; drop its alias"
+            );
+        }
     }
 
     #[test]
