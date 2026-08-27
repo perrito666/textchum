@@ -100,6 +100,17 @@ GTK_A11Y=atspi
 CONF
 gsettings set org.gnome.desktop.interface toolkit-accessibility true || true
 
+echo "==> No screen lock, ever"
+# A development machine that locks itself is worse than it sounds. The
+# lock screen covers the session, but the windows underneath keep their
+# saved pixmaps — so `import -window` still returns a picture, of the
+# application as it looked before the lock. Screenshots quietly stop
+# tracking reality, and every one of them looks plausible.
+gsettings set org.gnome.desktop.screensaver lock-enabled false || true
+gsettings set org.gnome.desktop.screensaver idle-activation-enabled false || true
+gsettings set org.gnome.desktop.session idle-delay 0 || true
+sudo systemctl mask sleep.target suspend.target hibernate.target >/dev/null || true
+
 echo "==> Silencing the first-run wizard"
 # Ubuntu's welcome tour sits on top of everything, which is no way to
 # photograph an application.

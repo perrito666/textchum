@@ -128,7 +128,7 @@ impl Workbench {
         let formats_menu = gtk::gio::Menu::new();
         for name in textchum_core::syntax::languages::selectable_names() {
             formats_menu.append(
-                Some(name),
+                Some(&menu_label(name)),
                 Some(&format!("win.new-with-format('{name}')")),
             );
         }
@@ -156,7 +156,7 @@ impl Workbench {
             }
             let name = info.display_name();
             recent_menu.append(
-                Some(&name),
+                Some(&menu_label(&name)),
                 Some(&format!("win.open-recent('{}')", path.replace('\'', "\\'"))),
             );
             listed += 1;
@@ -1805,7 +1805,7 @@ fn copy_menu(current: &Workbench, path: &str) -> gtk::gio::Menu {
                 .map(|page| other.disambiguated_name(&page))
                 .unwrap_or_else(|| "Empty window".into());
             moves.append(
-                Some(&format!("Move to “{title}”")),
+                Some(&menu_label(&format!("Move to “{title}”"))),
                 Some(&format!("win.move-to-window('{index}|{escaped}')")),
             );
         }
@@ -2298,7 +2298,7 @@ fn glob_editor_row(
 
     let menu = gtk::gio::Menu::new();
     for (name, _) in &presets {
-        menu.append(Some(name), Some(&format!("globs.preset::{name}")));
+        menu.append(Some(&menu_label(name)), Some(&format!("globs.preset::{name}")));
     }
     let preset_button = gtk::MenuButton::builder()
         .label("Add preset")
@@ -3452,7 +3452,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         let dictionaries = gtk::gio::Menu::new();
         for name in &installed {
             dictionaries.append(
-                Some(name),
+                Some(&menu_label(name)),
                 Some(&format!("spell.pick('{}')", name.replace('\'', "\\'"))),
             );
         }
@@ -4160,6 +4160,18 @@ fn recheck_every_page() {
             crate::spell::run(&page);
         }
     });
+}
+
+/// A menu label for text that came from data rather than from us.
+///
+/// GTK reads `_` in a menu label as the mnemonic marker, so a dictionary
+/// called `en_US` appears in the menu as *enUS* with the U underlined,
+/// and a file called `my_notes.md` loses its underscore too. The name is
+/// still correct everywhere it matters — the action target carries the
+/// real string — but the menu tells the reader something false about
+/// what the thing is called. Doubling the underscore renders one.
+pub fn menu_label(text: &str) -> String {
+    text.replace('_', "__")
 }
 
 /// A toast built to be read: the text wraps over as many lines as it
