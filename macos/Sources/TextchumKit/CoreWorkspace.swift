@@ -61,6 +61,26 @@ public enum CoreWorkspace {
 
     /// Points the language-server debug log at a file, created (with
     /// parent directories) on first write and appended to.
+    /// Whether `name` is hidden by any of the navigator globs.
+    public static func isHidden(name: String, globs: [String]) -> Bool {
+        var name = name
+        var joined = globs.joined(separator: "\n")
+        return name.withUTF8 { nameBytes in
+            joined.withUTF8 { globBytes in
+                tc_workspace_is_hidden(
+                    nameBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(nameBytes.count),
+                    globBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(globBytes.count)
+                )
+            }
+        }
+    }
+
     public static func setLSPLogPath(_ path: String) {
         var path = path
         path.withUTF8 { bytes in

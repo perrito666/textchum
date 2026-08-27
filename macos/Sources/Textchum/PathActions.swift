@@ -121,8 +121,15 @@ struct PathCopyMenu: View {
     let path: String
     let projectRoot: String?
     let isDirectory: Bool
+    /// Present where revealing makes sense (buffer rows); the tree's
+    /// own rows leave it nil.
+    var onReveal: ((String) -> Void)? = nil
 
     var body: some View {
+        if let onReveal {
+            Button("Reveal in Tree") { onReveal(path) }
+            Divider()
+        }
         Button("Copy File Name") {
             PathActions.copy((path as NSString).lastPathComponent)
         }

@@ -76,7 +76,23 @@ Les dossiers dépliés sont un état partagé : dépliez un dossier dans un
 onglet et il l'est dans tous (et dans toute fenêtre montrant le même
 projet).
 
-Les fichiers cachés ne sont pas listés.
+L'arbre suit le fichier : changer d'onglet déplie le chemin du
+document courant et le met en évidence (désactivable dans Réglages ▸
+Général ▸ « Reveal the current file in the tree »), et
+**Présentation ▸ Révéler dans l'arbre** (⇧⌘J, nom d'action
+`revealInTree`, aussi dans le menu contextuel des lignes de tampons)
+le fait à la demande — en rouvrant le navigateur au besoin.
+
+Ce que l'arbre cache est de la configuration : des motifs glob sur les
+noms de fichiers, `.*` (les fichiers cachés) par défaut. L'onglet
+Projets édite la liste par défaut — avec des préréglages pour les
+suspects habituels (`target`, `node_modules`, `__pycache__`, …) — et
+chaque racine de projet peut porter sa propre liste, qui remplace
+celle par défaut. Dans le fichier :
+
+```json
+{ "workspace": { "hide": [".*", "target", "node_modules"] } }
+```
 
 ## Pas encore là
 

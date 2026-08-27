@@ -1174,6 +1174,58 @@ char *tc_config_preprocessor_commands(const struct TcConfig *config,
                                       uintptr_t language_len);
 
 /**
+ * The navigator's hidden-name globs for a root (the defaults when
+ * `root_len == 0`), newline-joined. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; the pointer/length
+ * pair must describe readable bytes.
+ */
+char *tc_config_hide_globs(const struct TcConfig *config, const char *root, uintptr_t root_len);
+
+/**
+ * Sets (or removes, with `globs_len == 0`) the hidden-name globs —
+ * whitespace-separated — for a root, or the defaults when
+ * `root_len == 0`.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_hide_globs(struct TcConfig *config,
+                              const char *root,
+                              uintptr_t root_len,
+                              const char *globs,
+                              uintptr_t globs_len);
+
+/**
+ * Whether a name is hidden by any of the newline-joined globs.
+ *
+ * # Safety
+ * Each pointer/length pair must describe readable bytes.
+ */
+bool tc_workspace_is_hidden(const char *name,
+                            uintptr_t name_len,
+                            const char *globs,
+                            uintptr_t globs_len);
+
+/**
+ * Whether the navigator follows the current file (default true).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_follow_file(const struct TcConfig *config);
+
+/**
+ * Sets the follow-the-file choice.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_follow_file(struct TcConfig *config, bool enabled);
+
+/**
  * The prose spell-check language (`editor.spell`): a spelling
  * identifier, `"auto"`, or empty when spell checking is off.
  * Release with [`tc_string_free`].

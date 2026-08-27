@@ -245,3 +245,47 @@ mod tests {
         assert_eq!(project_root_for(&sub), Some(root));
     }
 }
+
+/// Whether `name` matches the shell-style glob `pattern` (`*` any run,
+/// `?` any one character; everything else literal). Matching is over
+/// the bare file name, the way navigator hiding uses it.
+pub fn glob_matches(pattern: &str, name: &str) -> bool {
+    fn matches(pattern: &[char], name: &[char]) -> bool {
+        match (pattern.first(), name.first()) {
+            (None, None) => true,
+            (Some('*'), _) => {
+                matches(&pattern[1..], name)
+                    || (!name.is_empty() && matches(pattern, &name[1..]))
+            }
+            (Some('?'), Some(_)) => matches(&pattern[1..], &name[1..]),
+            (Some(p), Some(n)) if p == n => matches(&pattern[1..], &name[1..]),
+            _ => false,
+        }
+    }
+    let pattern: Vec<char> = pattern.chars().collect();
+    let name: Vec<char> = name.chars().collect();
+    matches(&pattern, &name)
+}
+
+/// Whether any of `globs` hides `name`.
+pub fn is_hidden(name: &str, globs: &[String]) -> bool {
+    globs.iter().any(|glob| glob_matches(glob, name))
+}
+
+#[cfg(test)]
+mod glob_tests {
+    use super::*;
+
+    #[test]
+    fn globs_match_like_a_shell() {
+        assert!(glob_matches(".*", ".git"));
+        assert!(!glob_matches(".*", "src"));
+        assert!(glob_matches("*.pyc", "module.pyc"));
+        assert!(!glob_matches("*.pyc", "module.py"));
+        assert!(glob_matches("node_modules", "node_modules"));
+        assert!(glob_matches("?ar", "bar"));
+        assert!(!glob_matches("?ar", "bazar"));
+        assert!(is_hidden("target", &["*.o".into(), "target".into()]));
+        assert!(!is_hidden("main.rs", &["*.o".into(), "target".into()]));
+    }
+}

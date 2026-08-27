@@ -374,6 +374,85 @@ impl Config {
         .unwrap_or_default()
     }
 
+    /// The navigator's hidden-name globs for a project root: the
+    /// root's own `hide` list when it has one, the `workspace.hide`
+    /// defaults otherwise, and `[".*"]` (dotfiles hidden) when nothing
+    /// is configured — so showing hidden files is just an emptier list.
+    /// A project entry replaces the defaults, never appends.
+    pub fn hide_globs(&self, root: Option<&str>) -> Vec<String> {
+        let workspace = self.root.get("workspace");
+        let list_at = |value: Option<&Value>| -> Option<Vec<String>> {
+            value?.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+        };
+        root.and_then(|root| {
+            list_at(
+                workspace
+                    .and_then(|w| w.get("projects"))
+                    .and_then(|p| p.get(root))
+                    .and_then(|entry| entry.get("hide")),
+            )
+        })
+        .or_else(|| list_at(workspace.and_then(|w| w.get("hide"))))
+        .unwrap_or_else(|| vec![".*".to_owned()])
+    }
+
+    /// Sets (or, with `None`/blank, removes) the hidden-name globs —
+    /// whitespace-separated — for a project root, or the defaults when
+    /// `root` is `None`.
+    pub fn set_hide_globs(&mut self, root: Option<&str>, globs: Option<&str>) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let list: Vec<Value> = globs
+            .unwrap_or_default()
+            .split_whitespace()
+            .map(|glob| Value::String(glob.to_owned()))
+            .collect();
+        match root {
+            Some(root) => {
+                let entry = ensure_object(
+                    ensure_object(ensure_object(top, "workspace"), "projects"),
+                    root,
+                );
+                if list.is_empty() {
+                    entry.remove("hide");
+                } else {
+                    entry.insert("hide".into(), Value::Array(list));
+                }
+            }
+            None => {
+                let workspace = ensure_object(top, "workspace");
+                if list.is_empty() {
+                    workspace.remove("hide");
+                } else {
+                    workspace.insert("hide".into(), Value::Array(list));
+                }
+            }
+        }
+        prune_empty(top, "workspace");
+    }
+
+    /// Whether the navigator reveals the current file in the tree as
+    /// focus moves (`editor.follow_file`, default true).
+    pub fn follow_file(&self) -> bool {
+        self.editor()
+            .get("follow_file")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
+
+    pub fn set_follow_file(&mut self, enabled: bool) {
+        self.editor_mut()
+            .insert("follow_file".into(), Value::Bool(enabled));
+    }
+
     /// The prose spell-check language (`editor.spell`): a spelling
     /// identifier like "en_US", `"auto"` for automatic detection, or
     /// `None` when spell checking is off (the default).
@@ -836,6 +915,26 @@ mod tests {
         config.save().unwrap();
         let (reloaded, _) = Config::load(&path);
         assert_eq!(reloaded.new_file_target(), OpenTarget::Window);
+    }
+
+    #[test]
+    fn hide_globs_default_replace_and_prune() {
+        let path = temp_path("hide.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.hide_globs(None), vec![".*"]);
+        assert_eq!(config.hide_globs(Some("/p")), vec![".*"]);
+        config.set_hide_globs(None, Some(".* target"));
+        config.set_hide_globs(Some("/p"), Some("node_modules"));
+        config.save().unwrap();
+        let (mut reloaded, _) = Config::load(&path);
+        assert_eq!(reloaded.hide_globs(None), vec![".*", "target"]);
+        // The project list replaces the defaults, never appends.
+        assert_eq!(reloaded.hide_globs(Some("/p")), vec!["node_modules"]);
+        assert_eq!(reloaded.hide_globs(Some("/other")), vec![".*", "target"]);
+        reloaded.set_hide_globs(None, None);
+        reloaded.set_hide_globs(Some("/p"), Some("  "));
+        assert_eq!(reloaded.hide_globs(None), vec![".*"]);
+        assert_eq!(reloaded.hide_globs(Some("/p")), vec![".*"]);
     }
 
     #[test]

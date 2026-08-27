@@ -247,7 +247,7 @@ Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
 `toggleLineNumbers`, `toggleHover`, `showHover`, `togglePathDisplay`,
-`redraw`, `commandPalette`, `serverStatus`, `newWithFormat`,
+`redraw`, `commandPalette`, `serverStatus`, `newWithFormat`, `revealInTree`,
 `settings` — an unknown name is
 logged with the full list. And when a shortcut escapes memory entirely,
 the **Command Palette** (⇧⌘P) fuzzy-searches every menu action by name

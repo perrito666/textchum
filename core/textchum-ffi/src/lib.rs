@@ -2082,6 +2082,99 @@ pub unsafe extern "C" fn tc_config_preprocessor_commands(
     owned_c_string(commands.join("\n"))
 }
 
+/// The navigator's hidden-name globs for a root (the defaults when
+/// `root_len == 0`), newline-joined. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer; the pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_hide_globs(
+    config: *const TcConfig,
+    root: *const c_char,
+    root_len: usize,
+) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(root) = (unsafe { str_from_raw(root, root_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let globs = config.inner.hide_globs((!root.is_empty()).then_some(root));
+    owned_c_string(globs.join("\n"))
+}
+
+/// Sets (or removes, with `globs_len == 0`) the hidden-name globs —
+/// whitespace-separated — for a root, or the defaults when
+/// `root_len == 0`.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_hide_globs(
+    config: *mut TcConfig,
+    root: *const c_char,
+    root_len: usize,
+    globs: *const c_char,
+    globs_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let (root, globs) = unsafe {
+        (str_from_raw(root, root_len), str_from_raw(globs, globs_len))
+    };
+    let (Some(root), Some(globs)) = (root, globs) else { return };
+    config.inner.set_hide_globs(
+        (!root.is_empty()).then_some(root),
+        (!globs.is_empty()).then_some(globs),
+    );
+}
+
+/// Whether a name is hidden by any of the newline-joined globs.
+///
+/// # Safety
+/// Each pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_workspace_is_hidden(
+    name: *const c_char,
+    name_len: usize,
+    globs: *const c_char,
+    globs_len: usize,
+) -> bool {
+    let (name, globs) = unsafe {
+        (str_from_raw(name, name_len), str_from_raw(globs, globs_len))
+    };
+    let (Some(name), Some(globs)) = (name, globs) else { return false };
+    let globs: Vec<String> = globs.lines().map(str::to_owned).collect();
+    textchum_core::workspace::is_hidden(name, &globs)
+}
+
+/// Whether the navigator follows the current file (default true).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_follow_file(config: *const TcConfig) -> bool {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return true;
+    };
+    catch_unwind(AssertUnwindSafe(|| config.inner.follow_file())).unwrap_or(true)
+}
+
+/// Sets the follow-the-file choice.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_follow_file(config: *mut TcConfig, enabled: bool) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_follow_file(enabled)));
+}
+
 /// The prose spell-check language (`editor.spell`): a spelling
 /// identifier, `"auto"`, or empty when spell checking is off.
 /// Release with [`tc_string_free`].

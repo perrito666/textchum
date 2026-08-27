@@ -60,9 +60,6 @@ final class QuickFinderPanel: NSObject {
         rows = []
         table.reloadData()
         clearFilters()
-        // Filters only make sense over content hits.
-        filtersStack.isHidden = mode == .files
-        addFilterButton.isHidden = mode == .files
 
         if let window {
             var frame = panel.frame
@@ -229,13 +226,26 @@ final class QuickFinderPanel: NSObject {
             var status = ""
             switch mode {
             case .files:
-                let names = CoreSearch.fuzzyFiles(root: scope, query: query, limit: 100)
-                results = names.map { ($0, "\(scope)/\($0)", 0) }
-                if names.isEmpty {
+                // Over-fetch so the stacked filters have something to
+                // prune; every filter kind applies to the path here.
+                let names = CoreSearch.fuzzyFiles(root: scope, query: query, limit: 400)
+                let filtered = names.filter { name in
+                    filters.allSatisfy { filter in
+                        name.lowercased().contains(filter.pattern.lowercased())
+                            == filter.include
+                    }
+                }
+                results = filtered.prefix(100).map { ($0, "\(scope)/\($0)", 0) }
+                if filtered.isEmpty {
                     status =
-                        FileManager.default.fileExists(atPath: scope)
-                        ? "No files match — is the scope right?"
-                        : "That scope does not exist."
+                        !names.isEmpty
+                        ? "\(names.count) files matched, all filtered out."
+                        : FileManager.default.fileExists(atPath: scope)
+                            ? "No files match — is the scope right?"
+                            : "That scope does not exist."
+                } else if filtered.count < names.count {
+                    status =
+                        "\(filtered.count) of \(names.count) matches survive the filters."
                 }
             case .grep:
                 if query.isEmpty {

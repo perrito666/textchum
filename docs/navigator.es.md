@@ -79,7 +79,23 @@ Las carpetas expandidas son estado compartido: abra una carpeta en una
 pestaña y estará abierta en todas (y en cualquier ventana que muestre el
 mismo proyecto).
 
-Los archivos ocultos no se listan.
+El árbol sigue al archivo: cambiar de pestaña expande la ruta del
+documento actual y lo resalta (se apaga en Ajustes ▸ General ▸ «Reveal
+the current file in the tree»), y **Vista ▸ Revelar en el árbol**
+(⇧⌘J, nombre de acción `revealInTree`, también en el menú contextual
+de las filas de búferes) lo hace a demanda — desplegando el navegador
+si hace falta.
+
+Lo que el árbol oculta es configuración: patrones glob sobre nombres
+de archivo, `.*` (los ocultos) por defecto. La pestaña Proyectos edita
+la lista por defecto — con preajustes para los sospechosos habituales
+(`target`, `node_modules`, `__pycache__`, …) — y cada raíz de proyecto
+puede llevar su propia lista, que reemplaza a la por defecto. En el
+archivo:
+
+```json
+{ "workspace": { "hide": [".*", "target", "node_modules"] } }
+```
 
 ## Aún no está
 

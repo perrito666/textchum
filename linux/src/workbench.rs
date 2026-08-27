@@ -854,7 +854,17 @@ pub fn refresh_subtitle(handles: &PageHandles) {
 /// A lazily-populated tree over the project directory: directories
 /// expand on demand, activating a file opens it as a tab.
 fn build_file_tree(root: &Path) -> gtk::ListView {
-    fn children_of(path: &Path) -> gtk::gio::ListStore {
+    // The configuration decides what the tree hides: dotfiles by
+    // default, plus whatever globs the workspace section adds.
+    let hide_globs: Rc<Vec<String>> = Rc::new(
+        Shell::instance()
+            .config
+            .borrow()
+            .hide_globs(Some(&root.to_string_lossy())),
+    );
+    let children_of = {
+        let hide_globs = Rc::clone(&hide_globs);
+        move |path: &Path| -> gtk::gio::ListStore {
         let store = gtk::gio::ListStore::new::<gtk::StringObject>();
         let mut entries: Vec<(bool, String)> = std::fs::read_dir(path)
             .into_iter()
@@ -862,7 +872,7 @@ fn build_file_tree(root: &Path) -> gtk::ListView {
             .flatten()
             .filter_map(|entry| {
                 let name = entry.file_name().to_string_lossy().into_owned();
-                if name.starts_with('.') {
+                if workspace::is_hidden(&name, &hide_globs) {
                     return None;
                 }
                 let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
@@ -883,10 +893,11 @@ fn build_file_tree(root: &Path) -> gtk::ListView {
             store.append(&gtk::StringObject::new(&path));
         }
         store
-    }
+        }
+    };
 
     let root_model = children_of(root);
-    let tree_model = gtk::TreeListModel::new(root_model, false, false, |item| {
+    let tree_model = gtk::TreeListModel::new(root_model, false, false, move |item| {
         let path = item.downcast_ref::<gtk::StringObject>()?.string();
         let path = Path::new(path.as_str());
         if path.is_dir() {

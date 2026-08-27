@@ -97,6 +97,9 @@ final class SettingsModel: ObservableObject {
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
     }
+    @Published var followFile: Bool {
+        didSet { persist { $0.followFile = followFile } }
+    }
     /// Prose spell-check choice: "" = off, "auto", or a language code.
     @Published var spellLanguage: String {
         didSet { persist { $0.spellLanguage = spellLanguage.isEmpty ? nil : spellLanguage } }
@@ -113,6 +116,8 @@ final class SettingsModel: ObservableObject {
         var fontFamily: String = ""
         var fontSize: String = ""
         var tabWidth: String = ""
+        /// Space-separated hidden-name globs; empty = inherit defaults.
+        var hideGlobs: String = ""
         var id: String { scope }
         var scopeLabel: String { (scope as NSString).lastPathComponent }
     }
@@ -141,7 +146,22 @@ final class SettingsModel: ObservableObject {
             persistLSPChange()
         }
     }
+    /// The default hidden-name globs, space-separated (".*" when unset).
+    @Published var hideGlobsDefault = ".*" {
+        didSet {
+            guard !isLoading else { return }
+            config.setHiddenGlobs(
+                root: nil,
+                globs: hideGlobsDefault == ".*" ? nil : hideGlobsDefault)
+            persistLSPChange()
+        }
+    }
     @Published private(set) var workspaceEntries: [WorkspaceEntry] = []
+
+    func setHideGlobs(scope: String, globs: String) {
+        config.setHiddenGlobs(root: scope, globs: globs.isEmpty ? nil : globs)
+        persistWorkspaceChange()
+    }
 
     /// Built-ins plus the user's theme files; a user file sharing a
     /// built-in's name shows once (the file wins when applied).
@@ -166,6 +186,7 @@ final class SettingsModel: ObservableObject {
         tabWidth = config.tabWidth
         lineNumbers = config.lineNumbers
         hoverDocs = config.hoverDocs
+        followFile = config.followFile
         spellLanguage = config.spellLanguage ?? ""
         isLoading = false
         reloadLSPEntries()
@@ -184,6 +205,7 @@ final class SettingsModel: ObservableObject {
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
+        self.followFile = config.followFile
         self.spellLanguage = config.spellLanguage ?? ""
         self.isLoading = false
         reloadLSPEntries()
@@ -201,10 +223,13 @@ final class SettingsModel: ObservableObject {
             let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         {
             manifestProjectsDefault = parsed["manifest_projects"] as? Bool ?? false
+            hideGlobsDefault =
+                (parsed["hide"] as? [String])?.joined(separator: " ") ?? ".*"
             recursiveConfigDefault = parsed["recursive_config"] as? Bool ?? false
             ctagsFallbackDefault = parsed["ctags_fallback"] as? Bool ?? false
             for (root, raw) in parsed["projects"] as? [String: [String: Any]] ?? [:] {
                 let editor = raw["editor"] as? [String: Any] ?? [:]
+                let hide = (raw["hide"] as? [String])?.joined(separator: " ") ?? ""
                 entries.append(
                     WorkspaceEntry(
                         scope: root,
@@ -218,7 +243,8 @@ final class SettingsModel: ObservableObject {
                         fontSize: (editor["font_size"] as? Double).map { size in
                             size == size.rounded() ? String(Int(size)) : String(size)
                         } ?? "",
-                        tabWidth: (editor["tab_width"] as? Int).map(String.init) ?? ""
+                        tabWidth: (editor["tab_width"] as? Int).map(String.init) ?? "",
+                        hideGlobs: hide
                     ))
             }
         }
@@ -514,6 +540,7 @@ private struct GeneralSettingsTab: View {
             }
             Toggle("Show line numbers", isOn: $model.lineNumbers)
             Toggle("Hover documentation", isOn: $model.hoverDocs)
+            Toggle("Reveal the current file in the tree", isOn: $model.followFile)
             Picker("Spell check prose", selection: $model.spellLanguage) {
                 Text("Off").tag("")
                 Text("Automatic by content").tag("auto")
@@ -531,6 +558,18 @@ private struct GeneralSettingsTab: View {
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
+}
+
+/// Ready-made hidden-glob sets for the ecosystems that scatter build
+/// residue everywhere.
+enum HidePresets {
+    static let all: [(name: String, globs: [String])] = [
+        ("Version control", [".git", ".hg", ".svn"]),
+        ("Python", ["__pycache__", "*.pyc", ".venv", ".mypy_cache", ".ruff_cache"]),
+        ("Node", ["node_modules", ".next", "dist"]),
+        ("Rust", ["target"]),
+        ("macOS noise", [".DS_Store"]),
+    ]
 }
 
 /// A small inherit-when-empty field for per-project editor overrides:
@@ -593,11 +632,34 @@ private struct ProjectsTab: View {
             .fixedSize(horizontal: false, vertical: true)
 
             GroupBox("Defaults (all projects)") {
-                HStack(spacing: 24) {
-                    Toggle("Manifest projects", isOn: $model.manifestProjectsDefault)
-                    Toggle("Recursive config", isOn: $model.recursiveConfigDefault)
-                    Toggle("Ctags fallback", isOn: $model.ctagsFallbackDefault)
-                    Spacer()
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 24) {
+                        Toggle("Manifest projects", isOn: $model.manifestProjectsDefault)
+                        Toggle("Recursive config", isOn: $model.recursiveConfigDefault)
+                        Toggle("Ctags fallback", isOn: $model.ctagsFallbackDefault)
+                        Spacer()
+                    }
+                    HStack(spacing: 8) {
+                        Text("Hide in tree:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField(".* target node_modules", text: $model.hideGlobsDefault)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.caption, design: .monospaced))
+                        Menu("Presets") {
+                            ForEach(HidePresets.all, id: \.name) { preset in
+                                Button(preset.name) {
+                                    var globs = model.hideGlobsDefault
+                                        .split(separator: " ").map(String.init)
+                                    for glob in preset.globs where !globs.contains(glob) {
+                                        globs.append(glob)
+                                    }
+                                    model.hideGlobsDefault = globs.joined(separator: " ")
+                                }
+                            }
+                        }
+                        .fixedSize()
+                    }
                 }
                 .padding(6)
             }
@@ -680,6 +742,12 @@ private struct ProjectsTab: View {
                                 model.setEditorOverride(
                                     scope: entry.scope, key: "tab_width",
                                     valueJSON: Int(text).map(String.init))
+                            }
+                            OverrideField(
+                                placeholder: "hide globs (empty = inherit)",
+                                width: 180, initial: entry.hideGlobs
+                            ) { text in
+                                model.setHideGlobs(scope: entry.scope, globs: text)
                             }
                         }
                     }

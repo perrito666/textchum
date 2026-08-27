@@ -824,6 +824,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(togglePathDisplay(_:)): "togglePathDisplay",
             #selector(EditorWindowController.redrawDocument(_:)): "redraw",
             #selector(EditorWindowController.showDocumentOutline(_:)): "documentOutline",
+            #selector(EditorWindowController.revealInTree(_:)): "revealInTree",
             #selector(showCommandPalette(_:)): "commandPalette",
             #selector(showServerStatus(_:)): "serverStatus",
             #selector(showSettings(_:)): "settings",
@@ -1168,6 +1169,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             preprocessorCommands: { [weak self] root, language in
                 self?.config?.preprocessorCommands(root: root, language: language) ?? []
             },
+            hiddenGlobs: { [weak self] root in
+                self?.config?.hiddenGlobs(root: root) ?? [".*"]
+            },
+            revealInTree: { [weak self] path in
+                guard let self else { return }
+                let root = CoreWorkspace.projectRoot(
+                    forPath: path, settingsJSON: self.config?.workspaceJSON ?? "{}")
+                guard let root else { return }
+                self.fileTreeState.reveal(path: path, under: root)
+            },
+            followEnabled: { [weak self] in self?.config?.followFile ?? true },
             selectDocument: { [weak self] id in
                 guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
                 else { return }
@@ -1808,6 +1820,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyEquivalent: ""
         )
         viewMenu.addItem(serverStatusItem)
+        let revealItem = NSMenuItem(
+            title: "Reveal in Tree",
+            action: #selector(EditorWindowController.revealInTree(_:)),
+            keyEquivalent: "j"
+        )
+        revealItem.keyEquivalentModifierMask = [.command, .shift]
+        viewMenu.addItem(revealItem)
         let outlineItem = NSMenuItem(
             title: "Document Outline…",
             action: #selector(EditorWindowController.showDocumentOutline(_:)),

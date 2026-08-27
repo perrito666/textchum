@@ -17,7 +17,10 @@ Escriba fragmentos del nombre de archivo — `editwc` encuentra
 `EditorWindowController.swift` — con coincidencia difusa y ranking al
 estilo fzf. ↑/↓ mueven la selección, ⏎ abre (trayendo al frente la
 ventana si el archivo ya está abierto), ⎋ cierra. Una consulta vacía
-lista el ámbito alfabéticamente.
+lista el ámbito alfabéticamente. Los mismos filtros apilados de Buscar
+en el proyecto aplican aquí — cada tipo de filtro refina las rutas
+encontradas — y la línea de estado dice cuántas coincidencias podaron
+los filtros.
 
 ## Buscar en el proyecto (⇧⌘F)
 

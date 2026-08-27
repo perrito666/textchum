@@ -89,6 +89,24 @@ final class SidebarModel: ObservableObject {
 @MainActor
 final class FileTreeState: ObservableObject {
     @Published var expanded: Set<URL> = []
+    /// The file last revealed in the tree, briefly emphasized.
+    @Published var highlighted: URL?
+
+    /// Expands every ancestor of `path` under `root` and highlights the
+    /// file — Reveal in Tree, and the follow-the-file behavior.
+    /// Directory URLs are built directory-shaped: the tree's nodes come
+    /// from directory enumeration, whose URLs carry the trailing slash,
+    /// and URL equality cares.
+    func reveal(path: String, under root: String) {
+        let rootURL = treeKey(root, isDirectory: true)
+        highlighted = treeKey(path, isDirectory: false)
+        var ancestor = treeKey(path, isDirectory: false).deletingLastPathComponent()
+        while ancestor.path.hasPrefix(rootURL.path), ancestor.path != "/" {
+            expanded.insert(treeKey(ancestor.path, isDirectory: true))
+            if ancestor.path == rootURL.path { break }
+            ancestor.deleteLastPathComponent()
+        }
+    }
 
     /// Fraction of the sidebar's height given to the buffer list.
     /// Shared like the expansion set, so every tab shows the same split
@@ -110,6 +128,16 @@ final class FileTreeState: ObservableObject {
             }
         )
     }
+}
+
+/// The one URL form every tree key uses. Directory enumeration hands
+/// back `/private/tmp/...` while paths arrive as `/tmp/...` (and
+/// `resolvingSymlinksInPath` deliberately leaves `/tmp` alone), so
+/// every node, expansion entry, and highlight goes through
+/// `standardizingPath` — equal paths, equal URLs, or the disclosure
+/// bindings quietly never match.
+func treeKey(_ path: String, isDirectory: Bool) -> URL {
+    URL(fileURLWithPath: (path as NSString).standardizingPath, isDirectory: isDirectory)
 }
 
 /// One row of the project tree; directories recurse via disclosure
@@ -149,11 +177,18 @@ struct FileTreeRow: View {
             Text(node.name)
             Spacer(minLength: 0)
         }
+        .padding(.horizontal, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(
+                    state.highlighted == node.url
+                        ? Color.accentColor.opacity(0.22) : Color.clear))
         .contextMenu {
             PathCopyMenu(
                 path: node.url.path, projectRoot: projectRoot,
                 isDirectory: node.isDirectory)
         }
+        .id(node.url)
     }
 }
 
@@ -162,25 +197,32 @@ struct FileTreeRow: View {
 struct FileNode: Identifiable, Hashable {
     let url: URL
     let isDirectory: Bool
+    /// The project's effective hidden-name globs, passed down the tree.
+    let hiddenGlobs: [String]
 
     var id: URL { url }
     var name: String { url.lastPathComponent }
 
     /// nil for files (so OutlineGroup shows no disclosure), the sorted
-    /// visible entries for directories.
+    /// visible entries for directories — names the configuration hides
+    /// (dotfiles by default; per-project globs on top) never appear.
     var children: [FileNode]? {
         guard isDirectory else { return nil }
         let entries = (try? FileManager.default.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
+            options: []
         )) ?? []
         return entries
+            .filter { !CoreWorkspace.isHidden(name: $0.lastPathComponent, globs: hiddenGlobs) }
             .map { url in
-                FileNode(
-                    url: url,
-                    isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]))?
-                        .isDirectory ?? false
+                let isDirectory =
+                    (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory
+                    ?? false
+                return FileNode(
+                    url: treeKey(url.path, isDirectory: isDirectory),
+                    isDirectory: isDirectory,
+                    hiddenGlobs: hiddenGlobs
                 )
             }
             .sorted {
@@ -210,6 +252,10 @@ struct SidebarView: View {
     /// The destinations offered by the Gather Into submenu, computed
     /// when the menu opens.
     var windowTargets: () -> [WindowTarget] = { [] }
+    /// The effective hidden-name globs for a project root.
+    var hiddenGlobs: (String) -> [String] = { _ in [".*"] }
+    /// Expands the tree to a path and highlights it.
+    var onRevealInTree: (String) -> Void = { _ in }
 
     private var projectRoot: String? { context.projectRoot }
 
@@ -323,7 +369,10 @@ struct SidebarView: View {
                             if let path = document.path {
                                 PathCopyMenu(
                                     path: path, projectRoot: group.root,
-                                    isDirectory: false)
+                                    isDirectory: false,
+                                    onReveal: { path in
+                                        onRevealInTree(path)
+                                    })
                             }
                         }
                     }
@@ -337,17 +386,30 @@ struct SidebarView: View {
         Group {
             if let projectRoot {
                 let rootNode = FileNode(
-                    url: URL(fileURLWithPath: projectRoot), isDirectory: true)
-                List {
-                    Section((projectRoot as NSString).lastPathComponent) {
-                        ForEach(rootNode.children ?? []) { node in
-                            FileTreeRow(
-                                node: node, state: treeState,
-                                projectRoot: projectRoot, onOpenFile: onOpenFile)
+                    url: treeKey(projectRoot, isDirectory: true),
+                    isDirectory: true,
+                    hiddenGlobs: hiddenGlobs(projectRoot))
+                ScrollViewReader { proxy in
+                    List {
+                        Section((projectRoot as NSString).lastPathComponent) {
+                            ForEach(rootNode.children ?? []) { node in
+                                FileTreeRow(
+                                    node: node, state: treeState,
+                                    projectRoot: projectRoot, onOpenFile: onOpenFile)
+                            }
+                        }
+                    }
+                    .listStyle(.sidebar)
+                    .onChange(of: treeState.highlighted) { _, highlighted in
+                        if let highlighted {
+                            // The ancestors were just expanded; let the
+                            // rows exist before scrolling to one.
+                            DispatchQueue.main.async {
+                                withAnimation { proxy.scrollTo(highlighted) }
+                            }
                         }
                     }
                 }
-                .listStyle(.sidebar)
             } else {
                 Text("No project")
                     .foregroundStyle(.secondary)

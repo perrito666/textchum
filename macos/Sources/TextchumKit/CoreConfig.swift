@@ -391,6 +391,53 @@ public final class CoreConfig {
         }
     }
 
+    /// The navigator's hidden-name globs for a root (nil = the
+    /// defaults). `[".*"]` when nothing is configured.
+    public func hiddenGlobs(root: String?) -> [String] {
+        var root = root ?? ""
+        return root.withUTF8 { bytes in
+            guard
+                let cString = tc_config_hide_globs(
+                    handle,
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count)
+                )
+            else { return [".*"] }
+            defer { tc_string_free(cString) }
+            return String(cString: cString).split(separator: "\n").map(String.init)
+        }
+    }
+
+    /// Sets (nil or blank removes) the hidden-name globs — whitespace
+    /// separated — for a root, or the defaults when `root` is nil.
+    public func setHiddenGlobs(root: String?, globs: String?) {
+        var root = root ?? ""
+        var globs = globs ?? ""
+        root.withUTF8 { rootBytes in
+            globs.withUTF8 { globBytes in
+                tc_config_set_hide_globs(
+                    handle,
+                    rootBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(rootBytes.count),
+                    globBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(globBytes.count)
+                )
+            }
+        }
+    }
+
+    /// Whether the navigator reveals the current file as focus moves.
+    public var followFile: Bool {
+        get { tc_config_follow_file(handle) }
+        set { tc_config_set_follow_file(handle, newValue) }
+    }
+
     /// Writes the configuration back to its file (atomic, pretty-printed,
     /// unknown keys preserved).
     public func save() throws {

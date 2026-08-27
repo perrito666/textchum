@@ -67,11 +67,26 @@ show no tree.
 Expanded folders are shared state: open a folder in one tab and it is
 open in every tab (and in any window showing the same project).
 
-Hidden files are not listed.
+The tree follows the file: switching tabs expands the path to the
+current document and highlights it (turn it off in Settings ▸ General ▸
+"Reveal the current file in the tree"), and **View ▸ Reveal in Tree**
+(⇧⌘J, action name `revealInTree`, also in a buffer row's right-click
+menu) does it on demand — uncollapsing the navigator if needed.
+
+What the tree hides is configuration: glob patterns over file names,
+`.*` (dotfiles) by default. The Projects tab edits the default list —
+with presets for the usual suspects (`target`, `node_modules`,
+`__pycache__`, …) — and each project root can carry its own list,
+which replaces the defaults. In the file:
+
+```json
+{ "workspace": { "hide": [".*", "target", "node_modules"] } }
+```
 
 ## Not there yet
 
 - Rename / reveal-in-Finder actions on tree entries.
-- Respecting `.gitignore` in the tree.
+- Respecting `.gitignore` in the tree (the hide globs are hand-picked,
+  not read from it).
 - A manual "this file belongs to that project" override for cases where
   the marker heuristic guesses wrong.

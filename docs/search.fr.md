@@ -17,7 +17,10 @@ Tapez des fragments du nom de fichier — `editwc` trouve
 `EditorWindowController.swift` — avec correspondance floue et classement
 à la fzf. ↑/↓ déplacent la sélection, ⏎ ouvre (en ramenant la fenêtre au
 premier plan si le fichier est déjà ouvert), ⎋ ferme. Une requête vide
-liste la portée par ordre alphabétique.
+liste la portée par ordre alphabétique. Les mêmes filtres empilés que
+Chercher dans le projet s'appliquent ici — chaque type de filtre
+affine les chemins trouvés — et la ligne d'état dit combien de
+correspondances les filtres ont élaguées.
 
 ## Chercher dans le projet (⇧⌘F)
 

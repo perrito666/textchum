@@ -15,7 +15,9 @@ Type fragments of a file name — `editwc` finds
 `EditorWindowController.swift` — with fzf-style fuzzy matching and
 ranking. ↑/↓ move the selection, ⏎ opens (fronting the window if the
 file is already open), ⎋ closes. An empty query browses the scope
-alphabetically.
+alphabetically. The same stacked filters as Find in Project apply
+here too — every filter kind refines the matched paths — and the
+status line says how many matches the filters pruned.
 
 ## Find in Project (⇧⌘F)
 

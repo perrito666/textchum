@@ -42,6 +42,12 @@ struct SidebarConfiguration {
     var workspaceSettingsJSON: () -> String = { "{}" }
     /// The resolved save-preprocessor chain for (project root, language).
     var preprocessorCommands: (String?, String) -> [String] = { _, _ in [] }
+    /// The effective hidden-name globs for a project root.
+    var hiddenGlobs: (String) -> [String] = { _ in [".*"] }
+    /// Expands the tree to a path and highlights it (Reveal in Tree).
+    var revealInTree: (String) -> Void = { _ in }
+    /// Whether the tree follows the focused file automatically.
+    var followEnabled: () -> Bool = { true }
     let selectDocument: (ObjectIdentifier) -> Void
     let openFile: (String) -> Void
     /// Moves the given documents' windows into a window of their own…
@@ -129,6 +135,12 @@ final class EditorWindowController: NSWindowController {
     private let workspaceSettingsJSON: () -> String
     /// The resolved save-preprocessor chain from the app's configuration.
     private let preprocessorCommands: (String?, String) -> [String]
+    /// The effective hidden-name globs, from the app's configuration.
+    private let hiddenGlobsProvider: (String) -> [String]
+    /// Expands the shared tree to a path (checks the follow setting for
+    /// automatic calls; the explicit action always reveals).
+    private let revealPathInTree: (String) -> Void
+    private let followEnabled: () -> Bool
     /// Where Save As should start for this (untitled) document: the
     /// folder of the file that was frontmost when it was created — the
     /// user was probably adding a file to that project.
@@ -148,6 +160,9 @@ final class EditorWindowController: NSWindowController {
             sidebar?.resolveProjectRoot ?? { CoreWorkspace.projectRoot(forPath: $0) }
         self.workspaceSettingsJSON = sidebar?.workspaceSettingsJSON ?? { "{}" }
         self.preprocessorCommands = sidebar?.preprocessorCommands ?? { _, _ in [] }
+        self.hiddenGlobsProvider = sidebar?.hiddenGlobs ?? { _ in [".*"] }
+        self.revealPathInTree = sidebar?.revealInTree ?? { _ in }
+        self.followEnabled = sidebar?.followEnabled ?? { true }
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 480),
@@ -239,7 +254,9 @@ final class EditorWindowController: NSWindowController {
                 windowTargets: { [weak self] in
                     guard let self else { return [] }
                     return sidebar.windowTargets(ObjectIdentifier(self))
-                }
+                },
+                hiddenGlobs: sidebar.hiddenGlobs,
+                onRevealInTree: sidebar.revealInTree
             )
             let sidebarHost = NSHostingController(rootView: sidebarView)
             // Without this, the list inherits a phantom titlebar inset and
@@ -1839,6 +1856,30 @@ extension EditorWindowController: NSWindowDelegate {
         // Tab membership may have changed (drags, merges); the per-window
         // buffer lists rebuild from it.
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
+        // Follow the file: the tree reveals whoever holds focus now
+        // (the app checks the setting before expanding anything).
+        if let path = coreDocument.path {
+            followInTree(path)
+        }
+    }
+
+    /// View → Reveal in Tree: expand the navigator to this document.
+    @objc func revealInTree(_ sender: Any?) {
+        guard let path = coreDocument.path else {
+            NSSound.beep()
+            return
+        }
+        splitController?.splitViewItems.first?.isCollapsed = false
+        revealPathInTree(path)
+    }
+
+    /// The follow-the-file half: same reveal, but never uncollapses a
+    /// sidebar the user closed.
+    private func followInTree(_ path: String) {
+        guard followEnabled(),
+            splitController?.splitViewItems.first?.isCollapsed == false
+        else { return }
+        revealPathInTree(path)
     }
 
     /// Standard dirty-document close flow: Save / Cancel / Don't Save.
