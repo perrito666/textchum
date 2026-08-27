@@ -180,6 +180,7 @@ fn apply_key_overrides(app: &adw::Application) {
             "saveAs" => "win.save-as",
             "revertToSaved" => "win.revert",
             "close" => "win.close-tab",
+            "reopenClosed" => "win.reopen-tab",
             "undo" => "win.undo",
             "redo" => "win.redo",
             "find" => "win.find",

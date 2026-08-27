@@ -301,7 +301,7 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `documentOutline`, `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
-`toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`,
+`toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à
 la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique

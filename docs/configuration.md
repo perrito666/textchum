@@ -51,8 +51,7 @@ A file edited by hand might look like:
 default) follows the system. `editor.hover` switches the mouse-rest
 documentation popover off (`true`, the default, keeps it on).
 `editor.new_files_in` places fresh documents in a `"tab"` of the
-frontmost window's group (the default) or a `"window"` of their own. `editor.hover` switches the mouse-rest
-documentation popover off (`true`, the default, keeps it on).
+frontmost window's group (the default) or a `"window"` of their own.
 
 Everything is optional — a missing file, a missing section, or a missing
 key simply means the default. Writes are atomic (temporary file plus
@@ -282,7 +281,7 @@ Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `goBack`, `goForward`,
 `goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
 `toggleLineNumbers`, `toggleHover`, `showHover`, `togglePathDisplay`,
-`redraw`, `commandPalette`, `serverStatus`, `newWithFormat`, `revealInTree`,
+`redraw`, `commandPalette`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `settings` — an unknown name is
 logged with the full list. And when a shortcut escapes memory entirely,
 the **Command Palette** (⇧⌘P) fuzzy-searches every menu action by name
