@@ -197,23 +197,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         }
                         return
                     }
-                    if allArguments[flagIndex + 1] == "settings" {
-                        // scope names the tab, so any Settings screen can
-                        // be photographed without driving the keyboard —
-                        // the GTK shell has TEXTCHUM_DEBUG_PREFS for the
-                        // same reason. An unknown name leaves whichever
-                        // tab the window opens on.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                            MainActor.assumeIsolated {
-                                guard let self else { return }
-                                if scope != "-" {
-                                    self.settingsModel?.selectedTab = scope
-                                }
-                                self.showSettings(nil)
-                            }
-                        }
-                        return
-                    }
                     if allArguments[flagIndex + 1] == "about" {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                             MainActor.assumeIsolated {
