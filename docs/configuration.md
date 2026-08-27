@@ -217,9 +217,44 @@ more there and they appear in the picker).
 { "editor": { "spell": "auto" } }
 ```
 
-On Linux the same setting rides hunspell: install `hunspell` plus a
+Several dictionaries can apply at once — name them separated by commas.
+A word any of them knows is spelled correctly, which is what a document
+that switches languages mid-paragraph needs:
+
+```json
+{ "editor": { "spell": "en_US, es_ES" } }
+```
+
+`editor.spell_words` is your own list: project names, acronyms, and
+everything no dictionary ships with. Right-clicking a misspelling
+offers replacements, **Add to Dictionary**, which writes the word here,
+and **Ignore**, which accepts it until the editor quits. The list is
+also editable in Settings.
+
+```json
+{ "editor": { "spell_words": ["SBX", "Textchum"] } }
+```
+
+On Linux the same settings ride hunspell: install `hunspell` plus a
 dictionary package (`hunspell-es`, `hunspell-en-us`, …) and the marks
-appear; `"auto"` follows `$LANG`.
+appear; `"auto"` follows `$LANG`, and the dictionaries hunspell can
+find are listed beside the field in Preferences.
+
+## Autosave
+
+Off by default. `editor.autosave` is a number of seconds; the clock
+restarts with every keystroke, so the save happens once typing stops
+rather than in the middle of a sentence.
+
+```json
+{ "editor": { "autosave": 30 } }
+```
+
+Two things it deliberately does not do. It never saves a document that
+has no name — there is nowhere to put it, and inventing one is not the
+editor's decision. And it does not run save preprocessors: a formatter
+reflowing the line you are still writing is not a favour, so explicit
+saves remain the place for that.
 
 ## Key shortcuts
 

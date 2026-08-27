@@ -141,6 +141,12 @@ Pour démarrer sans mémoire (utile en chassant un bogue) : lancer avec
 `session.json` — chacune des trois options est une remise à zéro
 complète.
 
+Fermer un onglet n'est pas définitif non plus : **Rouvrir l'onglet
+fermé** (⇧⌘T sur macOS, Ctrl+Shift+T sous Linux) ramène le dernier,
+curseur compris, et remonte ensuite les précédents. Seuls les documents
+enregistrés sont mémorisés : un tampon sans nom n'a rien d'où revenir,
+et le rouvrir vide serait un mensonge.
+
 ## Pas encore là
 
 - Les encodages au-delà d'UTF-8 et de Latin-1.

@@ -127,6 +127,12 @@ To start without memory (handy when chasing a bug): launch with
 `--fresh`, hold ⇧ while the app starts, or delete `session.json` —
 any of the three is a complete reset.
 
+Closing a tab is not final either: **Reopen Closed Tab**
+(⇧⌘T on macOS, Ctrl+Shift+T on Linux) brings back the last one, caret
+included, and repeats back through the recent ones. Only saved
+documents are remembered — an untitled buffer has nothing to reopen
+from, and reopening it empty would be a lie.
+
 ## Not there yet
 
 - Encodings beyond UTF-8 and Latin-1.
