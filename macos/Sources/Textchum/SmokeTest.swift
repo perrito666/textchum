@@ -1,4 +1,8 @@
+// AppKit for the Settings window check below: this test builds a
+// real window, not a stand-in.
+import AppKit
 import Foundation
+import SwiftUI
 import TextchumKit
 
 /// Headless verification that the shell and the core actually talk to each
@@ -484,6 +488,41 @@ func runSmokeTest() -> Int32 {
     }
     print("event round trip ok (pong 42)")
 
+    // The Settings window, built for real. It has been broken more than
+    // once by adding a row to the tallest tab: a window that cannot be
+    // resized and content that cannot scroll turns one more setting
+    // into settings nobody can reach, and nothing complains at build
+    // time. These two properties are what make that impossible.
+    // A scratch profile: this must never read or write a real one.
+    let settingsScratch = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-smoke-settings-\(getpid()).json").path
+    let settingsModel = SettingsModel(config: CoreConfig(path: settingsScratch))
+    let settingsWindow = SettingsWindowController(model: settingsModel).window
+    guard let settingsWindow else {
+        print("FAIL: settings window was not created")
+        return 1
+    }
+    guard settingsWindow.styleMask.contains(.resizable) else {
+        print("FAIL: the settings window is not resizable")
+        return 1
+    }
+    // Small enough to prove the content yields rather than pinning the
+    // window open at the height of whatever was added last.
+    guard settingsWindow.contentMinSize.height <= 400,
+        settingsWindow.contentMinSize.width <= 640
+    else {
+        print("FAIL: settings minimum size is \(settingsWindow.contentMinSize)")
+        return 1
+    }
+    print("settings window ok (resizable, minimum \(Int(settingsWindow.contentMinSize.width))x\(Int(settingsWindow.contentMinSize.height)))")
+    // Only the window properties are asserted here. Whether the form
+    // scrolls is a layout question, and a detached NSHostingController
+    // never runs SwiftUI's layout — its scroll view reports a document
+    // of zero — so a headless check of it would pass whatever the code
+    // did. That half is verified by looking at the window; this half is
+    // the part that can be verified honestly, and it is the part that
+    // has actually regressed before.
     print("smoke test passed")
     return 0
 }
+

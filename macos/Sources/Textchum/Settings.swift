@@ -555,12 +555,18 @@ struct SettingsView: View {
                 .tabItem { Label("Presets", systemImage: "eye.slash") }
                 .tag("presets")
         }
-        .frame(width: 640, height: 480)
+        .frame(
+            minWidth: 620, idealWidth: 700,
+            minHeight: 380, idealHeight: 560
+        )
         .padding(20)
     }
 }
 
-private struct GeneralSettingsTab: View {
+/// The tab every new setting lands on, and so the one that outgrows a
+/// fixed window. Its form scrolls: overflow becomes something to scroll
+/// to rather than something that is not drawn.
+struct GeneralSettingsTab: View {
     @ObservedObject var model: SettingsModel
 
     /// The system's dictionaries, plus whatever the file already names
@@ -614,6 +620,12 @@ private struct GeneralSettingsTab: View {
     }
 
     var body: some View {
+        ScrollView {
+            form
+        }
+    }
+
+    private var form: some View {
         Form {
             Picker("Appearance:", selection: $model.appearance) {
                 Text("System").tag(CoreAppearance.system)
@@ -1423,7 +1435,15 @@ final class SettingsWindowController: NSWindowController {
             rootView: SettingsView(model: model)
         ))
         window.title = "Settings"
-        window.styleMask = [.titled, .closable]
+        // Resizable, because the tallest tab grows every time a setting
+        // is added and a fixed window turns that into content nobody
+        // can reach. The minimum keeps the forms from being squeezed
+        // into nonsense; the autosave name means a size chosen once is
+        // the size next time.
+        window.styleMask = [.titled, .closable, .resizable]
+        window.contentMinSize = NSSize(width: 620, height: 380)
+        window.setContentSize(NSSize(width: 700, height: 560))
+        window.setFrameAutosaveName("TextchumSettings")
         super.init(window: window)
     }
 
