@@ -250,6 +250,25 @@ func runSmokeTest() -> Int32 {
             return 1
         }
         print("config reload + project overrides ok")
+
+        // The session belongs to the configuration's profile, so a
+        // scratch run cannot overwrite the real app's session.
+        let realDirectory = SessionStore.directory
+        SessionStore.useProfile(ofConfigAt: configPath)
+        guard SessionStore.path == configDir.appendingPathComponent("session.json").path
+        else {
+            print("FAIL: session did not follow the configuration's profile")
+            return 1
+        }
+        var session = SessionState()
+        session.windows = [.init(path: "/tmp/one.txt", caret: 3, scroll: 0)]
+        SessionStore.save(session)
+        guard SessionStore.load()?.windows.first?.path == "/tmp/one.txt" else {
+            print("FAIL: session round trip")
+            return 1
+        }
+        SessionStore.directory = realDirectory
+        print("session profile ok (scoped to the configuration's directory)")
         try? FileManager.default.removeItem(at: configDir)
     } catch {
         print("FAIL: configuration: \(error)")

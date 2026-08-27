@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let config = CoreConfig(path: Self.configPath)
         self.config = config
+        // The session belongs to the configuration's profile: a scratch
+        // --config run must never write over the real session.
+        SessionStore.useProfile(ofConfigAt: Self.configPath)
         applyKeyOverrides()
         let settingsModel = SettingsModel(config: config)
         settingsModel.onChange = { [weak self] in
@@ -65,7 +68,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self?.rebuildSidebar()
-                    self?.saveSession()
+                    if self?.isTerminating != true {
+                        self?.saveSession()
+                    }
                     // Save-as gives untitled documents a path; recents
                     // track it (the controller cannot reach this list).
                     if let path = changedEditor?.coreDocument.path {
@@ -197,6 +202,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             MainActor.assumeIsolated {
                                 self?.showAbout(nil)
                             }
+                        }
+                        return
+                    }
+                    if allArguments[flagIndex + 1] == "quitafter" {
+                        // Quit through the real path, so the session
+                        // written at shutdown is the one under test.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            MainActor.assumeIsolated { NSApp.terminate(nil) }
                         }
                         return
                     }
@@ -369,7 +382,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// True from the moment quitting begins. Windows close one by one
+    /// during termination, and each close would otherwise schedule a
+    /// session save over an emptying list — the authoritative save
+    /// already happened at the top of `applicationShouldTerminate`.
+    private var isTerminating = false
+
     func applicationWillTerminate(_ notification: Notification) {
+        isTerminating = true
         // Quitting releases every waiter — a hung git is worse than an
         // aborted commit.
         for sentinel in chumWaitSentinels.values {
@@ -442,9 +462,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// freshest positions.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         saveSession()
+        isTerminating = true
         for editor in editors {
             guard let window = editor.window else { continue }
             if !editor.windowShouldClose(window) {
+                // The user changed their mind; windows stay open and
+                // ordinary saves resume.
+                isTerminating = false
                 return .terminateCancel
             }
         }
@@ -1540,7 +1564,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
                         self?.rebuildSidebar()
-                        self?.saveSession()
+                        // Not while quitting: the windows are closing
+                        // because the app is going away, and the real
+                        // session was recorded before they did.
+                        if self?.isTerminating != true {
+                            self?.saveSession()
+                        }
                     }
                 }
             }

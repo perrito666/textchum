@@ -27,9 +27,21 @@ struct SessionState: Codable {
 }
 
 enum SessionStore {
-    static var path: String {
+    /// Where the session lives. It belongs to the same profile as the
+    /// configuration, so a run pointed at a scratch config (tests,
+    /// screenshots, `--config`) keeps its own session and can never
+    /// overwrite the one the real app owns.
+    static var directory: URL =
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Textchum/session.json").path
+        .appendingPathComponent("Textchum", isDirectory: true)
+
+    /// Points the store at the configuration's own directory.
+    static func useProfile(ofConfigAt configPath: String) {
+        directory = URL(fileURLWithPath: configPath).deletingLastPathComponent()
+    }
+
+    static var path: String {
+        directory.appendingPathComponent("session.json").path
     }
 
     static func load() -> SessionState? {
