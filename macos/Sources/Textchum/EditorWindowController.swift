@@ -1641,24 +1641,50 @@ final class EditorWindowController: NSWindowController {
                 viewport: viewport, painted: paintedRange,
                 documentLength: length, paintedLength: paintedLength)
         else { return false }
+        // A scroll only exposes text at one end. Repainting the whole
+        // stretch for it costs a colour per span over sixteen thousand
+        // units — about 3.6 ms, which arrives as a catch in an inertial
+        // scroll. Painting the exposed part instead makes a wheel notch
+        // cost a wheel notch.
+        //
+        // A forced pass — an edit, a theme change — repaints the lot,
+        // because what changed is not confined to an edge.
+        let documentRange = layoutManager.documentRange
+        let previous = paintedRange
+        let incremental =
+            !force && previous != nil && paintedLength == length
+            && NSIntersectionRange(previous!, painted).length > 0
         paintedRange = painted
         paintedLength = length
 
-        let documentRange = layoutManager.documentRange
-        layoutManager.removeRenderingAttribute(.foregroundColor, for: documentRange)
+        var toPaint: [NSRange] = [painted]
+        if incremental, let previous {
+            toPaint = []
+            if painted.location < previous.location {
+                toPaint.append(
+                    NSRange(
+                        location: painted.location,
+                        length: previous.location - painted.location))
+            }
+            if NSMaxRange(painted) > NSMaxRange(previous) {
+                toPaint.append(
+                    NSRange(
+                        location: NSMaxRange(previous),
+                        length: NSMaxRange(painted) - NSMaxRange(previous)))
+            }
+            if toPaint.isEmpty { return true }
+        } else {
+            layoutManager.removeRenderingAttribute(.foregroundColor, for: documentRange)
+        }
 
-        let spans = coreDocument.highlights(in: painted)
+        let spans = toPaint.flatMap { coreDocument.highlights(in: $0) }
         guard !spans.isEmpty else { return true }
 
         let darkAppearance =
             (window?.effectiveAppearance ?? NSApp.effectiveAppearance)
                 .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let wantsTraits = HighlightPalette.hasTypographicStyles
-        if wantsTraits, let storage = textView.textStorage {
-            // Start from the plain font: a span that lost its bold on
-            // the last pass must not keep it.
-            storage.addAttribute(.font, value: appliedFont, range: painted)
-        }
+        var wantedFonts: [NSRange: NSFont] = [:]
         for span in spans {
             guard
                 let color = HighlightPalette.color(
@@ -1677,13 +1703,90 @@ final class EditorWindowController: NSWindowController {
             guard wantsTraits, let storage = textView.textStorage else { continue }
             let traits = HighlightPalette.traits(forStyle: span.styleIndex)
             guard traits.bold || traits.italic else { continue }
-            let clamped = NSIntersectionRange(span.range, NSRange(location: 0, length: storage.length))
+            let clamped = NSIntersectionRange(
+                span.range, NSRange(location: 0, length: storage.length))
             guard clamped.length > 0 else { continue }
-            storage.addAttribute(
-                .font, value: Self.font(appliedFont, bold: traits.bold, italic: traits.italic),
-                range: clamped)
+            wantedFonts[clamped] = Self.font(
+                appliedFont, bold: traits.bold, italic: traits.italic)
+        }
+        if wantsTraits, let storage = textView.textStorage {
+            for stretch in toPaint {
+                _ = Self.applyTraitFonts(
+                    wantedFonts, over: stretch, in: storage, plain: appliedFont)
+            }
         }
         return true
+    }
+
+    /// Writes the theme's bold and italic into the text storage, and
+    /// writes **only what differs**.
+    ///
+    /// Colour rides TextKit 2's rendering attributes, which never
+    /// invalidate layout. A font cannot: it is a storage attribute, and
+    /// setting one invalidates layout over its range whether or not the
+    /// value changed. Starting each pass by resetting the whole painted
+    /// stretch to the plain font therefore invalidated some sixteen
+    /// thousand units of layout on every keystroke, which is enough to
+    /// move the visible area out from under the caret.
+    ///
+    /// Reading attributes costs nothing, so this reads first: runs that
+    /// already carry the font they should are left alone, and text that
+    /// merely shifted keeps the font that shifted with it.
+    /// Returns how many units it wrote, which is what the smoke test
+    /// asserts: a second pass over unchanged text must write nothing.
+    @discardableResult
+    static func applyTraitFonts(
+        _ wanted: [NSRange: NSFont], over painted: NSRange, in storage: NSTextStorage,
+        plain: NSFont
+    ) -> Int {
+        let bounds = NSIntersectionRange(painted, NSRange(location: 0, length: storage.length))
+        guard bounds.length > 0 else { return 0 }
+        var written = 0
+
+        // Which font each position should end up with: plain unless a
+        // span said otherwise.
+        var desired = [NSFont?](repeating: nil, count: bounds.length)
+        for (range, font) in wanted {
+            let inside = NSIntersectionRange(range, bounds)
+            guard inside.length > 0 else { continue }
+            let start = inside.location - bounds.location
+            for offset in start..<(start + inside.length) {
+                desired[offset] = font
+            }
+        }
+
+        // Walk what is there and write only where the two disagree,
+        // coalescing neighbours so one changed word costs one write.
+        var pending: (range: NSRange, font: NSFont)?
+        func flush() {
+            if let open = pending {
+                storage.addAttribute(.font, value: open.font, range: open.range)
+                written += open.range.length
+            }
+            pending = nil
+        }
+        storage.enumerateAttribute(.font, in: bounds, options: []) { value, range, _ in
+            let current = value as? NSFont
+            var index = range.location
+            while index < NSMaxRange(range) {
+                let want = desired[index - bounds.location] ?? plain
+                if current == want {
+                    flush()
+                    index += 1
+                    continue
+                }
+                if var open = pending, open.font == want, NSMaxRange(open.range) == index {
+                    open.range.length += 1
+                    pending = open
+                } else {
+                    flush()
+                    pending = (NSRange(location: index, length: 1), want)
+                }
+                index += 1
+            }
+        }
+        flush()
+        return written
     }
 
     /// The editor font with traits applied. Monospaced families keep

@@ -918,6 +918,54 @@ func runSmokeTest() -> Int32 {
     try? FileManager.default.removeItem(at: blameRepo)
     print("blame ok (buffer-aware, uncommitted lines, past the end, outside a repo)")
 
+    // The theme's bold and italic go into the text storage, which
+    // invalidates layout over whatever range they are written to. The
+    // pass must therefore write only what differs — a pass over
+    // unchanged text writing sixteen thousand units is what moved the
+    // view out from under the caret while typing.
+    do {
+        let plain = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let italic = NSFontManager.shared.convert(plain, toHaveTrait: .italicFontMask)
+        let storage = NSTextStorage(
+            string: String(repeating: "abcdefghij", count: 400),
+            attributes: [.font: plain])
+        let whole = NSRange(location: 0, length: storage.length)
+        let wanted = [NSRange(location: 100, length: 50): italic]
+
+        let first = EditorWindowController.applyTraitFonts(
+            wanted, over: whole, in: storage, plain: plain)
+        guard first == 50 else {
+            print("FAIL: the first trait pass wrote \(first) units, wanted 50")
+            return 1
+        }
+        // Nothing changed, so nothing should be written — this is the
+        // one that matters.
+        let second = EditorWindowController.applyTraitFonts(
+            wanted, over: whole, in: storage, plain: plain)
+        guard second == 0 else {
+            print("FAIL: an unchanged trait pass wrote \(second) units, wanted 0")
+            return 1
+        }
+        // A span that lost its italic is put back to the plain font,
+        // and only over the part that lost it.
+        let narrowed = [NSRange(location: 100, length: 40): italic]
+        let third = EditorWindowController.applyTraitFonts(
+            narrowed, over: whole, in: storage, plain: plain)
+        guard third == 10 else {
+            print("FAIL: narrowing a trait wrote \(third) units, wanted 10")
+            return 1
+        }
+        // 100..<140 is italic now, so 145 is back to plain and 139 is
+        // the last italic character.
+        guard storage.attribute(.font, at: 145, effectiveRange: nil) as? NSFont == plain,
+            storage.attribute(.font, at: 139, effectiveRange: nil) as? NSFont == italic
+        else {
+            print("FAIL: trait fonts did not end up where they belong")
+            return 1
+        }
+    }
+    print("trait fonts ok (writes only what differs, so typing does not relayout)")
+
     print("smoke test passed")
     return 0
 }
