@@ -249,6 +249,9 @@ struct SidebarView: View {
     /// Shared across windows: expansion follows between tabs.
     @ObservedObject var treeState: FileTreeState
     let onSelectDocument: (ObjectIdentifier) -> Void
+    /// Opens File Properties for a document: the badge claims to say
+    /// what a file is, so it is where you go to correct it.
+    let onShowProperties: (ObjectIdentifier) -> Void
     let onOpenFile: (String) -> Void
     /// Moves a project group's windows out into their own window…
     var onSplitGroup: (SidebarProjectGroup) -> Void = { _ in }
@@ -358,7 +361,13 @@ struct SidebarView: View {
                                     .foregroundStyle(.primary)
                                     .frame(width: 17)
                             } else {
+                                // Clicking the badge asks what the file
+                                // is, which is what the badge claims to
+                                // answer.
                                 FileTypeIcon(filename: document.title)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { onShowProperties(document.id) }
+                                    .help("File properties")
                             }
                             Text(document.display)
                                 .fontWeight(
@@ -371,6 +380,10 @@ struct SidebarView: View {
                         .contentShape(Rectangle())
                         .onTapGesture { onSelectDocument(document.id) }
                         .contextMenu {
+                            Button("File Properties…") {
+                                onShowProperties(document.id)
+                            }
+                            Divider()
                             if let path = document.path {
                                 PathCopyMenu(
                                     path: path, projectRoot: group.root,
