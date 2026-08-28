@@ -774,7 +774,37 @@ func runSmokeTest() -> Int32 {
     }
     print("reference split ok (conventions matched, near-misses left alone)")
 
+    // Repainting the syntax colours on every scroll turn was the
+    // stutter; the margin around the viewport is there so that most
+    // turns need no repaint at all. The wiring needs a window server,
+    // the decision does not.
+    let painted = NSRange(location: 1_000, length: 20_000)
+    guard
+        // Nothing painted yet.
+        EditorWindowController.shouldRepaint(
+            viewport: NSRange(location: 5_000, length: 4_000), painted: nil,
+            documentLength: 50_000, paintedLength: nil),
+        // Inside what is painted: the whole point of the margin.
+        !EditorWindowController.shouldRepaint(
+            viewport: NSRange(location: 5_000, length: 4_000), painted: painted,
+            documentLength: 50_000, paintedLength: 50_000),
+        // Off the top of it, and off the bottom of it.
+        EditorWindowController.shouldRepaint(
+            viewport: NSRange(location: 900, length: 4_000), painted: painted,
+            documentLength: 50_000, paintedLength: 50_000),
+        EditorWindowController.shouldRepaint(
+            viewport: NSRange(location: 19_000, length: 4_000), painted: painted,
+            documentLength: 50_000, paintedLength: 50_000),
+        // A document that changed length: the offsets moved under it.
+        EditorWindowController.shouldRepaint(
+            viewport: NSRange(location: 5_000, length: 4_000), painted: painted,
+            documentLength: 60_000, paintedLength: 50_000)
+    else {
+        print("FAIL: scroll repaint decision")
+        return 1
+    }
+    print("scroll repaint ok (skips inside the margin, repaints past it)")
+
     print("smoke test passed")
     return 0
 }
-
