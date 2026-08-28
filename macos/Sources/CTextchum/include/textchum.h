@@ -1254,6 +1254,31 @@ uintptr_t tc_document_len_lines(const struct TcDocument *document);
 bool tc_path_is_test(const char *path, uintptr_t len);
 
 /**
+ * The gutter marks for a file: which lines differ from the same file
+ * at `HEAD`. `text` is the buffer's current contents, so the marks
+ * follow what is being edited rather than what is on disk.
+ *
+ * Returns a nul-terminated JSON array — `[{"line": 12, "kind":
+ * "modified"}, …]`, lines zero-based, kinds `added`, `modified` and
+ * `removed` — released with [`tc_string_free`]. An empty array means
+ * nothing to mark, which covers a file with no committed version, one
+ * outside a repository, and a machine with no `git`: none of those is
+ * an error, and every line of an untracked file being new is true and
+ * useless.
+ *
+ * A `removed` mark sits on the line *after* the lines that are gone,
+ * since nothing occupies their place any more.
+ *
+ * # Safety
+ * `path` must point to `path_len` readable bytes and `text` to
+ * `text_len`.
+ */
+char *tc_changes_for_file(const char *path,
+                          uintptr_t path_len,
+                          const char *text,
+                          uintptr_t text_len);
+
+/**
  * The selectable language names with a representative file extension,
  * one per line as `name \x1f extension` (extension may be empty).
  * Release with [`tc_string_free`]. For "new file with format" pickers.

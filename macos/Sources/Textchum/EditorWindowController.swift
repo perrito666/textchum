@@ -106,6 +106,10 @@ final class EditorWindowController: NSWindowController {
     private var lspOpenPath: String?
     /// Debounces didChange notifications while typing.
     private var lspChangeTimer: Timer?
+    private var changeMarkTimer: Timer?
+    /// Which request the gutter is waiting on: an answer from an
+    /// older one is about text that has since been typed over.
+    private var changeMarkGeneration: UInt64 = 0
     /// The latest language-server findings for this document.
     private var diagnostics: [CoreDiagnostic] = []
     /// The completion popup and its trigger machinery.
@@ -237,6 +241,11 @@ final class EditorWindowController: NSWindowController {
             ))
 
         textView.string = coreDocument.text
+        // A file opens already differing from its committed self as
+        // often as not, so the marks are wanted on the first paint.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.refreshChangeMarks() }
+        }
 
         if let sidebar {
             // Sidebar + editor in a split view controller; the sidebar item
@@ -364,6 +373,44 @@ final class EditorWindowController: NSWindowController {
                 MainActor.assumeIsolated {
                     guard let self, let path = self.lspOpenPath else { return }
                     self.lspApp?.lspDidChange(path: path, text: self.coreDocument.text)
+                }
+            }
+        }
+    }
+
+    /// Recomputes the gutter's git marks once typing pauses.
+    ///
+    /// Debounced and off the main thread: the marks come from asking
+    /// git for the committed file, which is a process to spawn, and
+    /// then diffing it. Neither belongs in a keystroke.
+    private func scheduleChangeMarks() {
+        changeMarkTimer?.invalidate()
+        changeMarkTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.refreshChangeMarks() }
+            }
+        }
+    }
+
+    /// Asks for the marks now. The document is read here, on the main
+    /// thread, and only the two strings cross to the background queue.
+    func refreshChangeMarks() {
+        changeMarkTimer?.invalidate()
+        guard let lineRuler else { return }
+        guard let path = coreDocument.path else {
+            lineRuler.setChangeMarks([])
+            return
+        }
+        let text = coreDocument.text
+        let generation = changeMarkGeneration &+ 1
+        changeMarkGeneration = generation
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let marks = CoreChanges.marks(forPath: path, text: text)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.changeMarkGeneration == generation else { return }
+                    self.lineRuler?.setChangeMarks(marks)
                 }
             }
         }
@@ -1721,8 +1768,14 @@ final class EditorWindowController: NSWindowController {
     private func reloadFromDisk() {
         let selection = textView?.selectedRange()
         do {
-            guard let edit = try coreDocument.reload() else { return }
+            guard let edit = try coreDocument.reload() else {
+                // The buffer already matched the disk, but a commit or
+                // a branch switch moves what git compares against.
+                refreshChangeMarks()
+                return
+            }
             replay([edit])
+            refreshChangeMarks()
             // A whole-document replace should not fling the caret to the
             // end; keep the previous position, clamped.
             if let selection, let textView {
@@ -2242,6 +2295,7 @@ final class EditorWindowController: NSWindowController {
             try coreDocument.save()
             noteOwnSave()
             updateChrome()
+            refreshChangeMarks()
             return true
         } catch {
             presentError("Could not save the document.", details: "\(error)")
@@ -2701,6 +2755,7 @@ extension EditorWindowController: NSTextViewDelegate {
         updateChrome()
         refreshDecorations()
         scheduleLSPChange()
+        scheduleChangeMarks()
         schedulePreviewUpdate()
         lineRuler?.invalidateLineStarts()
         completionAfterTyping()

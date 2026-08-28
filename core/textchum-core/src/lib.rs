@@ -12,6 +12,7 @@
 
 mod app;
 mod buffer;
+pub mod changes;
 mod config;
 mod document;
 mod fsutil;

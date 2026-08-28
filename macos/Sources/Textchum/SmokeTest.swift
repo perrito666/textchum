@@ -805,6 +805,53 @@ func runSmokeTest() -> Int32 {
     }
     print("scroll repaint ok (skips inside the margin, repaints past it)")
 
+    // The gutter's git marks: a committed file, edited three ways.
+    let repo = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-gutter-\(ProcessInfo.processInfo.processIdentifier)")
+    try? FileManager.default.removeItem(at: repo)
+    try? FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+    func git(_ arguments: [String]) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        task.arguments = ["-C", repo.path] + arguments
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()
+        task.waitUntilExit()
+    }
+    let tracked = repo.appendingPathComponent("thing.txt")
+    try? "one\ntwo\nthree\nfour\n".write(to: tracked, atomically: true, encoding: .utf8)
+    git(["init", "-q"])
+    git(["config", "user.email", "t@e.invalid"])
+    git(["config", "user.name", "T"])
+    git(["add", "thing.txt"])
+    git(["commit", "-qm", "first"])
+
+    guard CoreChanges.marks(forPath: tracked.path, text: "one\ntwo\nthree\nfour\n").isEmpty
+    else {
+        print("FAIL: an unchanged file should carry no marks")
+        return 1
+    }
+    // "two" edited, "three" deleted, "five" added at the end. The
+    // removed mark lands on line 2 — the line "three" sat above — since
+    // a deleted line occupies no place of its own.
+    let edited = CoreChanges.marks(
+        forPath: tracked.path, text: "one\nTWO\nfour\nfive\n")
+    let described = edited.map { "\($0.line):\($0.kind.rawValue)" }
+    guard described == ["1:modified", "2:removed", "3:added"] else {
+        print("FAIL: gutter marks: \(described)")
+        return 1
+    }
+    // A file with no committed version is not an error, and not marked.
+    let untracked = repo.appendingPathComponent("never-committed.txt")
+    try? "hello\n".write(to: untracked, atomically: true, encoding: .utf8)
+    guard CoreChanges.marks(forPath: untracked.path, text: "hello\nworld\n").isEmpty else {
+        print("FAIL: an untracked file should carry no marks")
+        return 1
+    }
+    try? FileManager.default.removeItem(at: repo)
+    print("git gutter ok (marks what changed, silent without a baseline)")
+
     print("smoke test passed")
     return 0
 }

@@ -76,6 +76,16 @@ with mouse hover switched off.
 and the trailing noise are ignored, the line is centred, and Go Back
 returns to where reading was interrupted.
 
+A **change bar** runs down the left of the gutter, saying which lines
+differ from the file as it stands in git: a green stripe for a line
+that is new, blue for one that reads differently, and a red wedge on
+the boundary where lines were deleted — deleted lines occupy no height,
+so a stripe would have nothing to cover. It follows the buffer rather
+than the file on disk, so it is right before you save, and it is
+recomputed once typing settles. A file with no committed version, or
+one outside a repository, gets no marks rather than every line claimed
+as new.
+
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
 first placeholder selected, so typing replaces it; ⇥ moves to the next

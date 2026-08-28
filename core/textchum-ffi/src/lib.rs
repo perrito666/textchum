@@ -2133,6 +2133,44 @@ pub unsafe extern "C" fn tc_path_is_test(path: *const c_char, len: usize) -> boo
     .unwrap_or(false)
 }
 
+/// The gutter marks for a file: which lines differ from the same file
+/// at `HEAD`. `text` is the buffer's current contents, so the marks
+/// follow what is being edited rather than what is on disk.
+///
+/// Returns a nul-terminated JSON array — `[{"line": 12, "kind":
+/// "modified"}, …]`, lines zero-based, kinds `added`, `modified` and
+/// `removed` — released with [`tc_string_free`]. An empty array means
+/// nothing to mark, which covers a file with no committed version, one
+/// outside a repository, and a machine with no `git`: none of those is
+/// an error, and every line of an untracked file being new is true and
+/// useless.
+///
+/// A `removed` mark sits on the line *after* the lines that are gone,
+/// since nothing occupies their place any more.
+///
+/// # Safety
+/// `path` must point to `path_len` readable bytes and `text` to
+/// `text_len`.
+#[no_mangle]
+pub unsafe extern "C" fn tc_changes_for_file(
+    path: *const c_char,
+    path_len: usize,
+    text: *const c_char,
+    text_len: usize,
+) -> *mut c_char {
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(text) = (unsafe { str_from_raw(text, text_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let changes = textchum_core::changes::changes_for(std::path::Path::new(path), text);
+        owned_c_string(textchum_core::changes::to_json(&changes))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// The selectable language names with a representative file extension,
 /// one per line as `name \x1f extension` (extension may be empty).
 /// Release with [`tc_string_free`]. For "new file with format" pickers.
