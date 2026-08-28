@@ -430,8 +430,27 @@ final class EditorWindowController: NSWindowController {
     override func mouseMoved(with event: NSEvent) {
         hoverPopover?.close()
         hoverPopover = nil
-        guard appliedHoverDocs, lspApp != nil, lspOpenPath != nil, let textView else { return }
+        guard let textView else { return }
         let point = textView.convert(event.locationInWindow, from: nil)
+        // A diagnostic is already in hand and needs no server: an
+        // underline nobody can read is a notification with the message
+        // taken out. It shows whether or not hover documentation is on,
+        // since the mark is on screen either way.
+        if let index = characterIndex(at: point),
+            let diagnostic = diagnostic(atOffset: index)
+        {
+            hoverTimer?.invalidate()
+            hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) {
+                [weak self] _ in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.showBalloon(Self.diagnosticText(diagnostic), at: point)
+                    }
+                }
+            }
+            return
+        }
+        guard appliedHoverDocs, lspApp != nil, lspOpenPath != nil else { return }
         hoverTimer?.invalidate()
         hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {
             [weak self] _ in
@@ -439,6 +458,111 @@ final class EditorWindowController: NSWindowController {
                 MainActor.assumeIsolated { self?.requestHover(at: point) }
             }
         }
+    }
+
+    /// The diagnostic covering a character offset, if any. The
+    /// narrowest wins: nested findings are common, and the innermost is
+    /// the one about the thing under the pointer.
+    private func diagnostic(atOffset offset: Int) -> CoreDiagnostic? {
+        guard let textView else { return nil }
+        let text = textView.string as NSString
+        return diagnostics
+            .compactMap { diagnostic -> (CoreDiagnostic, NSRange)? in
+                guard let range = nsRange(of: diagnostic, in: text) else { return nil }
+                // A zero-length finding still marks a spot; give it one
+                // character's worth of reach so it can be pointed at.
+                let reach = range.length == 0
+                    ? NSRange(location: range.location, length: 1) : range
+                guard NSLocationInRange(offset, reach) else { return nil }
+                return (diagnostic, range)
+            }
+            .min { $0.1.length < $1.1.length }
+            .map(\.0)
+    }
+
+    /// The character under a point in the text view, or nil past the
+    /// end of a line.
+    private func characterIndex(at point: NSPoint) -> Int? {
+        guard let textView, let layoutManager = textView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager
+        else { return nil }
+        let origin = textView.textContainerOrigin
+        let inText = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
+        guard let fragment = layoutManager.textLayoutFragment(for: inText) else { return nil }
+        let offset = contentManager.offset(
+            from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+        // Within the fragment, the nearest character to the point.
+        guard let line = fragment.textLineFragments.first(where: { line in
+            let frame = line.typographicBounds
+            let top = fragment.layoutFragmentFrame.minY + frame.minY
+            return inText.y >= top && inText.y <= top + frame.height
+        }) ?? fragment.textLineFragments.first else { return nil }
+        let inLine = NSPoint(
+            x: inText.x - fragment.layoutFragmentFrame.minX,
+            y: inText.y - fragment.layoutFragmentFrame.minY - line.typographicBounds.minY)
+        let within = line.characterIndex(for: inLine)
+        return offset + within
+    }
+
+    /// A diagnostic as a balloon reads it: what kind of finding, then
+    /// what it says. The severity is in the gutter as a colour and has
+    /// to be in the words too, or a warning reads like an error.
+    static func diagnosticText(_ diagnostic: CoreDiagnostic) -> NSAttributedString {
+        let kind: String
+        switch diagnostic.severity {
+        case 1: kind = "Error"
+        case 2: kind = "Warning"
+        case 3: kind = "Information"
+        case 4: kind = "Hint"
+        default: kind = "Diagnostic"
+        }
+        let text = NSMutableAttributedString(
+            string: kind + "\n",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+                .foregroundColor: NSColor.secondaryLabelColor,
+            ])
+        text.append(
+            NSAttributedString(
+                string: diagnostic.message,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 13),
+                    .foregroundColor: NSColor.labelColor,
+                ]))
+        return text
+    }
+
+    /// Reads out the diagnostic on the caret's line — the same answer
+    /// the pointer gives, for when your hands are on the keyboard.
+    @objc func showDiagnosticAtCaret(_ sender: Any?) {
+        guard let textView else { return }
+        let text = textView.string as NSString
+        let caret = min(textView.selectedRange().location, text.length)
+        let found = diagnostic(atOffset: caret) ?? diagnosticOnLine(of: caret, in: text)
+        guard let found else {
+            NSSound.beep()
+            return
+        }
+        let screenRect = textView.firstRect(
+            forCharacterRange: NSRange(location: caret, length: 0), actualRange: nil)
+        guard let window = textView.window else { return }
+        let point = textView.convert(window.convertFromScreen(screenRect).origin, from: nil)
+        showBalloon(Self.diagnosticText(found), at: point)
+    }
+
+    /// The first diagnostic anywhere on the caret's line. The caret is
+    /// rarely inside the marked stretch — it is usually at the end of
+    /// the line being fixed — and answering "nothing here" then would
+    /// be true and useless.
+    private func diagnosticOnLine(of offset: Int, in text: NSString) -> CoreDiagnostic? {
+        let line = text.lineRange(for: NSRange(location: offset, length: 0))
+        return diagnostics
+            .compactMap { diagnostic -> (CoreDiagnostic, NSRange)? in
+                guard let range = nsRange(of: diagnostic, in: text) else { return nil }
+                return NSLocationInRange(range.location, line) ? (diagnostic, range) : nil
+            }
+            .min { $0.1.location < $1.1.location }
+            .map(\.0)
     }
 
     /// Shows hover documentation for the symbol under the caret. Works
@@ -992,9 +1116,13 @@ final class EditorWindowController: NSWindowController {
     }
 
     private func showHover(resultJSON: String, at point: NSPoint) {
-        guard let textView, let content = Self.hoverText(fromResultJSON: resultJSON) else {
-            return
-        }
+        guard let content = Self.hoverText(fromResultJSON: resultJSON) else { return }
+        showBalloon(Self.hoverAttributedText(fromMarkdown: content), at: point)
+    }
+
+    /// The balloon hover documentation and diagnostics both appear in.
+    private func showBalloon(_ attributed: NSAttributedString, at point: NSPoint) {
+        guard let textView else { return }
         hoverPopover?.close()
 
         // Measured by hand, framed by hand: Auto Layout inside an
@@ -1002,7 +1130,6 @@ final class EditorWindowController: NSWindowController {
         // an empty balloon — the popover sized itself while the label
         // laid out at zero. Explicit frames cannot disagree with the
         // popover about geometry.
-        let attributed = Self.hoverAttributedText(fromMarkdown: content)
         guard attributed.length > 0 else { return }
         let label = NSTextField(wrappingLabelWithString: "")
         label.attributedStringValue = attributed

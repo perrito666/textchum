@@ -57,6 +57,14 @@ nadie.
   la cadena de preprocesadores de guardado — así el formateo funciona
   en documentos sin título y en lenguajes sin servidor, siempre que
   haya una cadena configurada.
+- **Una línea marcada se puede leer.** Al posar el puntero sobre un
+  subrayado aparece lo que dijo el servidor, y **Mostrar diagnóstico de
+  la línea** (⌃⌘E, Ctrl+Alt+E en Linux) dice lo mismo para la línea del
+  cursor —el cursor suele estar al final de la línea que se arregla y
+  no dentro de la marca, así que responde por la línea—. El mensaje
+  nombra su gravedad, porque un subrayado solo dice que algo va mal y
+  un aviso no debería leerse como un error. Sin ida y vuelta: el
+  hallazgo ya está a mano.
 - **Renombrar símbolo…** (⌃⌘R) renombra en todo el espacio de trabajo:
   las ventanas abiertas se editan en el sitio (el deshacer funciona por
   ventana) y los archivos que nadie tiene abiertos se reescriben en

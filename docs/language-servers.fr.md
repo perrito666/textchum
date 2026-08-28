@@ -56,6 +56,14 @@ quelqu'un d'autre.
   retombe sur la chaîne de préprocesseurs de sauvegarde — le formatage
   marche donc sur les documents sans titre et les langages sans
   serveur, dès qu'une chaîne est configurée.
+- **Une ligne marquée se lit.** Poser le pointeur sur un soulignement
+  montre ce qu'a dit le serveur, et **Afficher le diagnostic de la
+  ligne** (⌃⌘E, Ctrl+Alt+E sous Linux) dit la même chose pour la ligne
+  du curseur — le curseur est d'ordinaire en fin de ligne plutôt que
+  dans la marque, c'est donc la ligne qui répond. Le message nomme sa
+  gravité : un soulignement dit seulement que quelque chose ne va pas,
+  et un avertissement ne doit pas se lire comme une erreur. Sans
+  aller-retour : le diagnostic est déjà là.
 - **Renommer le symbole…** (⌃⌘R) renomme dans tout l'espace de
   travail : les fenêtres ouvertes sont éditées sur place (l'annulation
   fonctionne par fenêtre) et les fichiers que personne n'a ouverts sont

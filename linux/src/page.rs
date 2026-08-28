@@ -675,12 +675,21 @@ pub fn apply_diagnostics(handles: &PageHandles, json: &str) {
     };
     let mut errors = 0usize;
     let mut warnings = 0usize;
+    let mut kept: Vec<crate::shell::Diagnostic> = Vec::new();
     for item in &items {
         let line = item["line"].as_i64().unwrap_or(0) as i32;
         let character = item["character"].as_u64().unwrap_or(0) as usize;
         let end_line = item["endLine"].as_i64().unwrap_or(0) as i32;
         let end_character = item["endCharacter"].as_u64().unwrap_or(0) as usize;
         let severity = item["severity"].as_u64().unwrap_or(1);
+        kept.push(crate::shell::Diagnostic {
+            line,
+            character,
+            end_line,
+            end_character,
+            severity,
+            message: item["message"].as_str().unwrap_or_default().to_owned(),
+        });
         let tag_name = if severity == 1 {
             errors += 1;
             "diag-error"
@@ -715,7 +724,36 @@ pub fn apply_diagnostics(handles: &PageHandles, json: &str) {
         ));
     }
     *handles.problems.borrow_mut() = parts.join(", ");
+    *handles.diagnostics.borrow_mut() = kept;
     crate::workbench::refresh_subtitle(handles);
+}
+
+/// The diagnostic covering a position, or — failing that — the first
+/// one anywhere on its line.
+///
+/// The line matters because the caret is rarely inside the marked
+/// stretch: it is usually at the end of the line being fixed, and
+/// answering "nothing here" then would be true and useless.
+pub fn diagnostic_at(
+    handles: &PageHandles,
+    line: i32,
+    character: usize,
+) -> Option<crate::shell::Diagnostic> {
+    let found = handles.diagnostics.borrow();
+    let covering = found.iter().find(|d| {
+        let after_start = (d.line, d.character) <= (line, character);
+        // A zero-length finding still marks a spot; give it one
+        // character's reach so it can be pointed at.
+        let end = if (d.line, d.character) == (d.end_line, d.end_character) {
+            (d.end_line, d.end_character + 1)
+        } else {
+            (d.end_line, d.end_character)
+        };
+        after_start && (line, character) < end
+    });
+    covering
+        .or_else(|| found.iter().find(|d| d.line == line))
+        .cloned()
 }
 
 // MARK: Completion
@@ -1577,6 +1615,40 @@ pub fn apply_project_editor_overrides(page: &Rc<Page>) {
         .add_provider(&provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
 }
 
+/// The diagnostic under a point in the view, if there is one.
+fn diagnostic_under(page: &Rc<Page>, x: f64, y: f64) -> Option<crate::shell::Diagnostic> {
+    let path = page.path.borrow().clone()?;
+    let shell = Shell::instance();
+    let pages = shell.pages.borrow();
+    let handles = pages.get(&path)?;
+    let (bx, by) = page.view.window_to_buffer_coords(
+        gtk::TextWindowType::Widget,
+        x as i32,
+        y as i32,
+    );
+    let (iter, _) = page.view.iter_at_position(bx, by)?;
+    let line = iter.line();
+    let line_start = page.buffer.iter_at_line(line)?;
+    let character = page
+        .buffer
+        .text(&line_start, &iter, true)
+        .encode_utf16()
+        .count();
+    diagnostic_at(handles, line, character)
+}
+
+/// The balloon hover documentation and diagnostics both appear in.
+fn show_balloon(page: &Rc<Page>, text: &str, x: f64, y: f64) {
+    page.hover_label.set_text(text);
+    page.hover_popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(
+        x as i32,
+        y as i32,
+        1,
+        1,
+    )));
+    page.hover_popover.popup();
+}
+
 fn install_hover(page: &Rc<Page>) {
     let motion = gtk::EventControllerMotion::new();
     let timer: Rc<Cell<Option<glib::SourceId>>> = Rc::new(Cell::new(None));
@@ -1588,6 +1660,13 @@ fn install_hover(page: &Rc<Page>) {
             page.hover_popover.popdown();
             if let Some(previous) = timer.take() {
                 previous.remove();
+            }
+            // A diagnostic is already in hand and needs no server, so
+            // it answers whether or not hover documentation is on: the
+            // mark is on screen either way.
+            if let Some(found) = diagnostic_under(&page, x, y) {
+                show_balloon(&page, &format!("{}\n{}", found.kind(), found.message), x, y);
+                return;
             }
             // Off unless the configuration says otherwise; the
             // deliberate at-caret command ignores the toggle.
