@@ -894,6 +894,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         try? config.save()
     }
 
+    // MARK: Where the time goes when the app comes forward
+
+    /// Set TEXTCHUM_TIME_ACTIVATION=1 to log how long ⌘-tabbing back
+    /// takes, and which part of it is ours. Off by default: this is for
+    /// a report that cannot be reproduced on another machine.
+    ///
+    /// Two numbers, because they blame different things. `to-active` is
+    /// from the click or key to our applicationDidBecomeActive: that is
+    /// the window server and the system, and nothing here can shorten
+    /// it. `handlers` is what our own code then does before the run
+    /// loop is free again — sidebar rebuilds, revealing the file in the
+    /// tree. A slow first number and a fast second is not our bug.
+    private var activationStarted: Date?
+
+    func applicationWillBecomeActive(_ notification: Notification) {
+        guard ProcessInfo.processInfo.environment["TEXTCHUM_TIME_ACTIVATION"] != nil
+        else { return }
+        activationStarted = Date()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard ProcessInfo.processInfo.environment["TEXTCHUM_TIME_ACTIVATION"] != nil,
+            let started = activationStarted
+        else { return }
+        let toActive = Date().timeIntervalSince(started)
+        // After the current run loop pass, so the number covers the
+        // handlers that activation triggers rather than just this one.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let total = Date().timeIntervalSince(started)
+                let tabs = self.editors.first?.window?.tabbedWindows?.count ?? 1
+                NSLog(
+                    "activation: to-active %.0f ms, handlers %.0f ms, "
+                        + "%d editors, %d tabs in the front group",
+                    toActive * 1000,
+                    (total - toActive) * 1000,
+                    self.editors.count,
+                    tabs
+                )
+            }
+        }
+    }
+
     /// Adds a word to the personal dictionary from an editor's spelling
     /// menu, then re-applies settings so every open window stops
     /// flagging it. The list is a setting like any other, so it goes
