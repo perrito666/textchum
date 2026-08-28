@@ -18,7 +18,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{theme, Document};
+use textchum_core::{changes::ChangeKind, theme, Document};
 use webkit6::prelude::*;
 
 use crate::shell::{PageHandles, Shell};
@@ -50,6 +50,9 @@ pub struct Page {
     hover_label: gtk::Label,
     /// The completion popup and its current candidates.
     completion: CompletionState,
+    /// The git change bar, and the marks it draws: line number to kind.
+    change_bar: gtk::DrawingArea,
+    change_marks: RefCell<Vec<(i32, ChangeKind)>>,
 }
 
 /// The completion popup: a popover under the caret, filtered by the
@@ -104,6 +107,18 @@ impl Page {
             .vexpand(true)
             .build();
 
+        // The git change bar: a stripe per line that differs from the
+        // committed file. A sibling of the view rather than a gutter
+        // renderer, which would mean subclassing GtkSourceGutterRenderer
+        // for three coloured rectangles — and this is what the macOS
+        // shell does too, so the two look alike.
+        let change_bar = gtk::DrawingArea::new();
+        change_bar.set_content_width(5);
+        change_bar.set_vexpand(true);
+        let editor_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        editor_row.append(&change_bar);
+        editor_row.append(&scrolled);
+
         // Markdown gets a live preview pane beside the text — the
         // core's HTML, reloaded shortly after edits settle.
         let is_markdown = state.borrow().document.language_name() == Some("markdown");
@@ -112,14 +127,14 @@ impl Page {
             web.set_hexpand(true);
             web.set_vexpand(true);
             let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
-            paned.set_start_child(Some(&scrolled));
+            paned.set_start_child(Some(&editor_row));
             paned.set_end_child(Some(&web));
             paned.set_position(480);
             paned.set_resize_start_child(true);
             paned.set_resize_end_child(true);
             (paned.upcast::<gtk::Widget>(), Some(web))
         } else {
-            (scrolled.clone().upcast::<gtk::Widget>(), None)
+            (editor_row.clone().upcast::<gtk::Widget>(), None)
         };
 
         let search_settings = sourceview5::SearchSettings::new();
@@ -210,9 +225,18 @@ impl Page {
                 items: RefCell::new(Vec::new()),
                 word_start: Cell::new(0),
             },
+            change_bar: change_bar.clone(),
+            change_marks: RefCell::new(Vec::new()),
         });
         install_completion_keys(&page);
         install_snippet_keys(&page);
+        install_change_bar(&page);
+        // A file opens already differing from its committed self as
+        // often as not, so the marks are wanted on the first paint.
+        {
+            let page = Rc::clone(&page);
+            glib::idle_add_local_once(move || refresh_change_marks(&page));
+        }
         install_hover(&page);
         install_file_monitor(&page);
         install_control_click(&page);
@@ -267,6 +291,7 @@ impl Page {
                             }
                             update_preview(&page);
                             crate::spell::run(&page);
+                            refresh_change_marks(&page);
                         },
                     );
                     lsp_timer.set(Some(source));
@@ -364,6 +389,9 @@ impl Page {
         buffer.place_cursor(&target);
         recolor(buffer);
         apply_highlights(buffer, &self.state.borrow().document);
+        // A commit or a branch switch moves what git compares against,
+        // so the marks are recomputed whether or not the text moved.
+        refresh_change_marks(self);
         // The pool sees the fresh text like any other change.
         if let Some(path) = self.path.borrow().clone() {
             let text = self.state.borrow().document.text();
@@ -1048,6 +1076,85 @@ fn install_snippet_keys(page: &Rc<Page>) {
             state.document.snippet_caret_moved(utf16);
         });
     }
+}
+
+/// The git change bar: a stripe beside every line that differs from
+/// the committed file, and a wedge where lines were deleted.
+///
+/// Drawn from the marks the core works out, redrawn on every scroll and
+/// whenever they change. The colours are deliberately not the theme's:
+/// they say what git thinks, not what the language means, and a reader
+/// should not have to wonder whether a green bar is a string.
+fn install_change_bar(page: &Rc<Page>) {
+    let weak = Rc::downgrade(page);
+    page.change_bar.set_draw_func(move |area, context, width, _height| {
+        let Some(page) = weak.upgrade() else { return };
+        let marks = page.change_marks.borrow();
+        if marks.is_empty() {
+            return;
+        }
+        let view = &page.view;
+        let visible = view.visible_rect();
+        let width = width as f64;
+        for (line, kind) in marks.iter() {
+            let Some(iter) = view.buffer().iter_at_line(*line) else { continue };
+            let (top, height) = view.line_yrange(&iter);
+            if top + height < visible.y() || top > visible.y() + visible.height() {
+                continue;
+            }
+            let (_, y) = view.buffer_to_window_coords(gtk::TextWindowType::Widget, 0, top);
+            let y = y as f64;
+            match kind {
+                ChangeKind::Added => {
+                    context.set_source_rgba(0.30, 0.72, 0.36, 0.85);
+                    context.rectangle(0.0, y, width, height as f64);
+                }
+                ChangeKind::Modified => {
+                    context.set_source_rgba(0.25, 0.55, 0.92, 0.85);
+                    context.rectangle(0.0, y, width, height as f64);
+                }
+                // Deleted lines occupy no height, so a stripe would
+                // have nothing to cover: a wedge on the boundary.
+                ChangeKind::Removed => {
+                    context.set_source_rgba(0.90, 0.31, 0.28, 0.85);
+                    context.move_to(0.0, y - 3.0);
+                    context.line_to(width, y);
+                    context.line_to(0.0, y + 3.0);
+                    context.close_path();
+                }
+            }
+            let _ = context.fill();
+        }
+        let _ = area;
+    });
+
+    // The bar is not inside the scroller, so it has to follow it.
+    {
+        let bar = page.change_bar.clone();
+        page.view.vadjustment().inspect(|adjustment| {
+            adjustment.connect_value_changed(move |_| bar.queue_draw());
+        });
+    }
+}
+
+/// Recomputes the change bar's marks for a page.
+///
+/// The git call and the diff both happen here, on the main thread: the
+/// diff is about a tenth of a millisecond for a file with a handful of
+/// edits, and the git call is a process spawn. Callers debounce.
+pub fn refresh_change_marks(page: &Rc<Page>) {
+    let Some(path) = page.path.borrow().clone() else {
+        page.change_marks.borrow_mut().clear();
+        page.change_bar.queue_draw();
+        return;
+    };
+    let text = page.state.borrow().document.text();
+    let marks = textchum_core::changes::changes_for(std::path::Path::new(&path), &text);
+    *page.change_marks.borrow_mut() = marks
+        .into_iter()
+        .map(|mark| (mark.line as i32, mark.kind))
+        .collect();
+    page.change_bar.queue_draw();
 }
 
 /// Keyboard routing while the popup is visible: arrows navigate it,

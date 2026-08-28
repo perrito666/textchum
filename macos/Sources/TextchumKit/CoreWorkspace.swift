@@ -157,3 +157,50 @@ public enum CoreReferences {
         }
     }
 }
+
+/// Which lines of a file differ from the same file at `HEAD` — what the
+/// gutter draws beside the line numbers.
+public enum CoreChanges {
+    public enum Kind: String {
+        case added
+        case modified
+        /// Lines that are gone. Nothing occupies their place, so the
+        /// mark sits on the boundary above `line`.
+        case removed
+    }
+
+    /// A mark on a zero-based line.
+    public struct Mark {
+        public let line: Int
+        public let kind: Kind
+    }
+
+    /// The marks for `path` given the buffer's current `text`. Empty
+    /// when there is nothing to compare against: a file with no
+    /// committed version, one outside a repository, or a machine with
+    /// no git. None of those is an error.
+    public static func marks(forPath path: String, text: String) -> [Mark] {
+        let json = path.withCString { pathPointer -> UnsafeMutablePointer<CChar>? in
+            var text = text
+            return text.withUTF8 { bytes in
+                tc_changes_for_file(
+                    pathPointer, UInt(strlen(pathPointer)),
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count))
+            }
+        }
+        guard let json else { return [] }
+        defer { tc_string_free(json) }
+        let data = Data(String(cString: json).utf8)
+        let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+        return parsed.compactMap { item in
+            guard let line = item["line"] as? Int,
+                let name = item["kind"] as? String,
+                let kind = Kind(rawValue: name)
+            else { return nil }
+            return Mark(line: line, kind: kind)
+        }
+    }
+}

@@ -1,6 +1,9 @@
 import AppKit
+import TextchumKit
 
-/// A line-number gutter for a TextKit 2 text view.
+/// A line-number gutter for a TextKit 2 text view, with a change bar
+/// down its left edge saying which lines differ from the file as it
+/// stands in git.
 ///
 /// Deliberately *not* an `NSRulerView`: installing a ruler mutates the
 /// scroll geometry under TextKit 2's viewport and blanks the text. The
@@ -15,6 +18,10 @@ final class LineNumberGutterView: NSView {
     private var widthConstraint: NSLayoutConstraint?
     private var visibleWidth: CGFloat = 40
     private var shown = true
+    /// Change marks by one-based line, and the lines a deletion sits
+    /// above. Empty when the file has no committed version to compare
+    /// against, which is not an error.
+    private var changeKinds: [Int: CoreChanges.Kind] = [:]
 
     override var isFlipped: Bool { true }
 
@@ -36,6 +43,19 @@ final class LineNumberGutterView: NSView {
     func setVisible(_ visible: Bool) {
         shown = visible
         widthConstraint?.constant = visible ? visibleWidth : 0
+        needsDisplay = true
+    }
+
+    /// The git change marks to draw. Passing an empty array clears
+    /// them, which is what a file outside a repository gets.
+    func setChangeMarks(_ marks: [CoreChanges.Mark]) {
+        var kinds: [Int: CoreChanges.Kind] = [:]
+        for mark in marks {
+            // The core counts from zero; the gutter counts from one.
+            kinds[mark.line + 1] = mark.kind
+        }
+        guard kinds != changeKinds else { return }
+        changeKinds = kinds
         needsDisplay = true
     }
 
@@ -111,6 +131,7 @@ final class LineNumberGutterView: NSView {
             let line = self.lineNumber(forOffset: offset)
             if line != lastLine, top >= -frame.height {
                 lastLine = line
+                self.drawChangeMark(forLine: line, top: top, height: frame.height)
                 let label = NSAttributedString(string: String(line), attributes: attributes)
                 let x = self.bounds.maxX - label.size().width - 8
                 label.draw(at: NSPoint(x: x, y: top + 1))
@@ -118,4 +139,33 @@ final class LineNumberGutterView: NSView {
             return true
         }
     }
+
+    /// The change bar for one line: a stripe down the gutter's left
+    /// edge for a line that is new or edited, and a wedge on the
+    /// boundary where lines were deleted — deleted lines occupy no
+    /// height, so a stripe would have nothing to cover.
+    private func drawChangeMark(forLine line: Int, top: CGFloat, height: CGFloat) {
+        guard let kind = changeKinds[line] else { return }
+        let barWidth: CGFloat = 3
+        switch kind {
+        case .added, .modified:
+            (kind == .added ? Self.addedColor : Self.modifiedColor).setFill()
+            NSRect(x: 0, y: top, width: barWidth, height: height).fill()
+        case .removed:
+            Self.removedColor.setFill()
+            let wedge = NSBezierPath()
+            wedge.move(to: NSPoint(x: 0, y: top - 3))
+            wedge.line(to: NSPoint(x: barWidth + 2, y: top))
+            wedge.line(to: NSPoint(x: 0, y: top + 3))
+            wedge.close()
+            wedge.fill()
+        }
+    }
+
+    // Deliberately not the theme's colours: these say what git thinks,
+    // not what the language means, and a reader should not have to
+    // wonder whether a green bar is a string.
+    private static let addedColor = NSColor.systemGreen.withAlphaComponent(0.85)
+    private static let modifiedColor = NSColor.systemBlue.withAlphaComponent(0.85)
+    private static let removedColor = NSColor.systemRed.withAlphaComponent(0.85)
 }

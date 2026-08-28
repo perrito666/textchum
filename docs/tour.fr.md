@@ -77,6 +77,16 @@ curseur, ce qui marche même souris désactivée.
 nom du fichier et le bruit qui suit sont ignorés, la ligne est centrée,
 et Retour revient là où la lecture s'est interrompue.
 
+Une **barre de changements** descend à gauche de la gouttière et dit
+quelles lignes diffèrent du fichier tel qu'il est dans git : une bande
+verte pour une ligne nouvelle, bleue pour une qui dit autre chose, et
+un coin rouge à la limite où des lignes ont été supprimées — une ligne
+supprimée n'occupe aucune hauteur, une bande n'aurait rien à couvrir.
+Elle suit le tampon et non le fichier sur disque, donc elle est juste
+avant l'enregistrement, et se recalcule quand la frappe s'arrête. Un
+fichier sans version validée, ou hors d'un dépôt, ne porte aucune
+marque plutôt que de voir toutes ses lignes déclarées nouvelles.
+
 La complétion apparaît à la frappe après les caractères d'identifiant
 et `.` ; ↑/↓ choisissent, ⏎ ou ⇥ acceptent, ⎋ ferme. Un snippet arrive
 avec son premier marqueur sélectionné, donc taper le remplace ; ⇥ passe

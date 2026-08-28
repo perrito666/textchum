@@ -589,6 +589,54 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         println!("reference split ok (conventions matched, near-misses left alone)");
     }
 
+    // The gutter's git marks: a committed file, edited three ways.
+    {
+        use textchum_core::changes::{changes_for, ChangeKind};
+        let repo = directory.join("gutter");
+        let _ = std::fs::create_dir_all(&repo);
+        let git = |arguments: &[&str]| {
+            let _ = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&repo)
+                .args(arguments)
+                .output();
+        };
+        let tracked = repo.join("thing.txt");
+        let _ = std::fs::write(&tracked, "one\ntwo\nthree\nfour\n");
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@e.invalid"]);
+        git(&["config", "user.name", "T"]);
+        git(&["add", "thing.txt"]);
+        git(&["commit", "-qm", "first"]);
+
+        if !changes_for(&tracked, "one\ntwo\nthree\nfour\n").is_empty() {
+            eprintln!("FAIL: an unchanged file should carry no marks");
+            return 1;
+        }
+        // "two" edited, "three" deleted, "five" added at the end. The
+        // removed mark lands on the line "three" sat above, since a
+        // deleted line occupies no place of its own.
+        let described: Vec<String> = changes_for(&tracked, "one\nTWO\nfour\nfive\n")
+            .into_iter()
+            .map(|mark| format!("{}:{}", mark.line, mark.kind.name()))
+            .collect();
+        if described != ["1:modified", "2:removed", "3:added"] {
+            eprintln!("FAIL: gutter marks: {described:?}");
+            return 1;
+        }
+        let _ = ChangeKind::Added;
+
+        // A file with no committed version is not an error, and not
+        // marked.
+        let untracked = repo.join("never-committed.txt");
+        let _ = std::fs::write(&untracked, "hello\n");
+        if !changes_for(&untracked, "hello\nworld\n").is_empty() {
+            eprintln!("FAIL: an untracked file should carry no marks");
+            return 1;
+        }
+        println!("git gutter ok (marks what changed, silent without a baseline)");
+    }
+
     let fire = |name: &str| {
         gtk::prelude::WidgetExt::activate_action(&workbench.window, name, None).is_ok()
     };

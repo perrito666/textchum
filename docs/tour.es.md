@@ -78,6 +78,16 @@ el cursor, lo que funciona incluso con el hover del ratón apagado.
 el nombre del archivo y el ruido sobrante se ignoran, la línea queda
 centrada, y Atrás vuelve a donde se interrumpió la lectura.
 
+Una **barra de cambios** baja por la izquierda del margen y dice qué
+líneas difieren del archivo tal como está en git: una franja verde para
+una línea nueva, azul para una que dice otra cosa, y una cuña roja en
+el límite donde se borraron líneas —las líneas borradas no ocupan alto,
+así que una franja no tendría nada que cubrir—. Sigue al búfer y no al
+archivo en disco, así que acierta antes de guardar, y se recalcula
+cuando la escritura se detiene. Un archivo sin versión confirmada, o
+fuera de un repositorio, no lleva marcas en vez de dar todas sus líneas
+por nuevas.
+
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
 primer marcador seleccionado, así que escribir lo reemplaza; ⇥ pasa al

@@ -1169,6 +1169,8 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                     Shell::instance().note_own_save(path);
                 }
                 workbench.refresh_chrome();
+                // Saving moves what git compares against.
+                page::refresh_change_marks(&page);
                 page.view.grab_focus();
             } else {
                 let _ = gtk::prelude::WidgetExt::activate_action(
