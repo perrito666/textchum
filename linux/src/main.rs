@@ -209,6 +209,7 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.goto-line", &["<Ctrl>l"]);
     app.set_accels_for_action("win.blame", &["<Ctrl><Alt>b"]);
     app.set_accels_for_action("win.diagnostic", &["<Ctrl><Alt>e"]);
+    app.set_accels_for_action("win.diagnostic-list", &["<Ctrl><Shift>e"]);
     app.set_accels_for_action("win.block-start", &["<Ctrl><Alt>Up"]);
     app.set_accels_for_action("win.block-end", &["<Ctrl><Alt>Down"]);
     // Key overrides read the configuration, which touches GTK-backed
@@ -295,6 +296,7 @@ fn apply_key_overrides(app: &adw::Application) {
             "fileProperties" => "win.file-properties",
             "blameLine" => "win.blame",
             "showDiagnostic" => "win.diagnostic",
+            "diagnosticList" => "win.diagnostic-list",
             "goToLine" => "win.goto-line",
             "goToBlockStart" => "win.block-start",
             "goToBlockEnd" => "win.block-end",
