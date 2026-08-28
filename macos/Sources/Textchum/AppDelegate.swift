@@ -970,6 +970,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
             #selector(EditorWindowController.runPreprocessors(_:)): "runPreprocessors",
             #selector(EditorWindowController.blameLine(_:)): "blameLine",
+            #selector(EditorWindowController.showDiagnosticAtCaret(_:)): "showDiagnostic",
             #selector(EditorWindowController.goToLine(_:)): "goToLine",
             #selector(EditorWindowController.goToBlockStart(_:)): "goToBlockStart",
             #selector(EditorWindowController.goToBlockEnd(_:)): "goToBlockEnd",
@@ -2112,6 +2113,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         outlineItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(outlineItem)
+        let diagnosticItem = NSMenuItem(
+            title: "Show Diagnostic for Line",
+            action: #selector(EditorWindowController.showDiagnosticAtCaret(_:)),
+            keyEquivalent: "e"
+        )
+        diagnosticItem.keyEquivalentModifierMask = [.command, .control]
+        viewMenu.addItem(diagnosticItem)
         let blameItem = NSMenuItem(
             title: "Blame Line…",
             action: #selector(EditorWindowController.blameLine(_:)),
