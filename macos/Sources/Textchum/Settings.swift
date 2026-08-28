@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import TextchumKit
+import UniformTypeIdentifiers
 
 /// The editor-facing result of the current configuration: concrete values
 /// windows can apply without knowing where they came from.
@@ -85,6 +86,10 @@ final class SettingsModel: ObservableObject {
     }
     @Published var theme: String {
         didSet { persist { $0.theme = theme } }
+    }
+    /// The file-icon pack, as a path; empty for the system's own icons.
+    @Published var iconPack: String {
+        didSet { persist { $0.iconPack = iconPack.isEmpty ? nil : iconPack } }
     }
     @Published var openTarget: CoreOpenTarget {
         didSet { persist { $0.openTarget = openTarget } }
@@ -238,6 +243,7 @@ final class SettingsModel: ObservableObject {
         isLoading = true
         appearance = config.appearance
         theme = config.theme
+        iconPack = config.iconPack ?? ""
         openTarget = config.openTarget
         newFileTarget = config.newFileTarget
         fontFamily = config.fontFamily ?? ""
@@ -260,6 +266,7 @@ final class SettingsModel: ObservableObject {
         self.config = config
         self.appearance = config.appearance
         self.theme = config.theme
+        self.iconPack = config.iconPack ?? ""
         self.openTarget = config.openTarget
         self.newFileTarget = config.newFileTarget
         self.fontFamily = config.fontFamily ?? ""
@@ -625,6 +632,23 @@ struct GeneralSettingsTab: View {
         }
     }
 
+    /// Asks for an icon pack: the theme's JSON, or the extension folder
+    /// holding it. Both are offered because packs are distributed both
+    /// ways, and requiring someone to know which is inside is asking
+    /// them to read a manifest.
+    private func chooseIconPack() {
+        let panel = NSOpenPanel()
+        panel.message = "Choose an icon theme file, or the extension folder holding one."
+        panel.prompt = "Use"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [UTType.json].compactMap { $0 }
+        panel.treatsFilePackagesAsDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.iconPack = url.path
+    }
+
     private var form: some View {
         Form {
             Picker("Appearance:", selection: $model.appearance) {
@@ -636,6 +660,27 @@ struct GeneralSettingsTab: View {
             Picker("Theme:", selection: $model.theme) {
                 ForEach(model.availableThemes, id: \.self) { name in
                     Text(name).tag(name)
+                }
+            }
+            // A pack is a folder of images somewhere on disk, not a
+            // name from a list, so it gets a chooser rather than a
+            // picker — and a way back to the system's icons.
+            LabeledContent("File icons:") {
+                HStack(spacing: 8) {
+                    Text(
+                        model.iconPack.isEmpty
+                            ? "System icons"
+                            : (model.iconPack as NSString).lastPathComponent
+                    )
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(model.iconPack.isEmpty ? .secondary : .primary)
+                    .help(model.iconPack)
+                    Spacer(minLength: 0)
+                    Button("Choose…") { chooseIconPack() }
+                    if !model.iconPack.isEmpty {
+                        Button("Clear") { model.iconPack = "" }
+                    }
                 }
             }
             Picker("Open files in:", selection: $model.openTarget) {

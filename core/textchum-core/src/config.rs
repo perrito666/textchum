@@ -804,6 +804,33 @@ impl Config {
         }
     }
 
+    /// The file-icon pack in use (`icon_pack`), as a path to a VS Code
+    /// icon theme JSON or the extension folder holding one. Absent
+    /// means the desktop's own icons.
+    pub fn icon_pack(&self) -> Option<String> {
+        self.root
+            .get("icon_pack")
+            .and_then(Value::as_str)
+            .filter(|path| !path.is_empty())
+            .map(str::to_owned)
+    }
+
+    /// Sets (or, with `None`, removes) the icon pack.
+    pub fn set_icon_pack(&mut self, path: Option<&str>) {
+        let root = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        match path.map(str::trim).filter(|path| !path.is_empty()) {
+            Some(path) => {
+                root.insert("icon_pack".into(), Value::String(path.to_owned()));
+            }
+            None => {
+                root.remove("icon_pack");
+            }
+        }
+    }
+
     /// Whether hover documentation pops up on mouse rest
     /// (`editor.hover`, default true).
     pub fn hover_docs(&self) -> bool {

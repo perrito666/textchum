@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.lastOwnConfigSave = Date()
             self.applyAppearanceChoice()
             self.applyThemeChoice()
+            self.applyIconPack()
             self.coreApp?.lspConfigure(json: self.combinedLSPConfiguration)
             for editor in self.editors {
                 editor.refreshProjectRoot()
@@ -55,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.settingsModel = settingsModel
         applyAppearanceChoice()
         applyThemeChoice()
+        applyIconPack()
         startWatchingConfig()
         installCommandClickMonitor()
 
@@ -867,6 +869,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyKeyOverrides()
         applyAppearanceChoice()
         applyThemeChoice()
+        applyIconPack()
         coreApp?.lspConfigure(json: combinedLSPConfiguration)
         for editor in editors {
             editor.refreshProjectRoot()
@@ -1072,6 +1075,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// One warning per launch when the chosen theme cannot be used.
     private var warnedBrokenTheme = false
+    /// The icon pack currently loaded, so a configuration reload that
+    /// did not touch it does not reload it.
+    private var appliedIconPack: String?
+    private var warnedBrokenIconPack = false
     /// The theme name currently applied, to skip redundant recolors.
     private var appliedTheme: String?
 
@@ -1088,6 +1095,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSLog("could not save the theme choice: \(error)")
         }
         applyThemeChoice()
+        applyIconPack()
+    }
+
+    /// Loads the configured file-icon pack, or clears it. A pack that
+    /// cannot be read is reported once and the tree keeps the desktop's
+    /// icons — the same escape hatch a broken theme gets, and for the
+    /// same reason: a pack someone moved should not stop the editor.
+    private func applyIconPack() {
+        let chosen = config?.iconPack
+        guard chosen != appliedIconPack else { return }
+        appliedIconPack = chosen
+        guard let chosen else {
+            CoreIcons.clear()
+            refreshFileIcons()
+            return
+        }
+        do {
+            _ = try CoreIcons.load(at: chosen)
+        } catch {
+            CoreIcons.clear()
+            if !warnedBrokenIconPack {
+                warnedBrokenIconPack = true
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "The icon pack could not be used"
+                alert.informativeText =
+                    "\(error) — the file tree keeps the system's icons."
+                alert.runModal()
+            }
+        }
+        refreshFileIcons()
+    }
+
+    /// Redraws every navigator, so a pack put on or taken off shows
+    /// without reopening a window. The rows read the pack as they draw,
+    /// so telling the model it changed is the whole of it.
+    private func refreshFileIcons() {
+        for editor in editors {
+            editor.sidebarModel.objectWillChange.send()
+        }
     }
 
     /// Applies the configured theme: a user file of that name (which

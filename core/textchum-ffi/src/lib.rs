@@ -1471,6 +1471,47 @@ pub unsafe extern "C" fn tc_config_set_theme(
     let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_theme(name)));
 }
 
+/// The configured file-icon pack, as a path to a VS Code icon theme
+/// JSON or the extension folder holding one. Null means the desktop's
+/// own icons; release a non-null result with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_icon_pack(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| match config.inner.icon_pack() {
+        Some(path) => owned_c_string(path),
+        None => std::ptr::null_mut(),
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Sets the file-icon pack (`len` bytes of UTF-8; an empty path, or a
+/// null one, removes the key).
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `path`, if not null,
+/// must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_icon_pack(
+    config: *mut TcConfig,
+    path: *const c_char,
+    len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let path = if path.is_null() {
+        None
+    } else {
+        unsafe { str_from_raw(path, len) }
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_icon_pack(path)));
+}
+
 /// The project root for a file or directory path (`len` bytes of UTF-8),
 /// resolved under the workspace settings passed as JSON (`settings_len`
 /// bytes; may be empty for defaults — the configuration's `workspace`
@@ -1876,6 +1917,90 @@ pub unsafe extern "C" fn tc_theme_set_json(
 #[no_mangle]
 pub extern "C" fn tc_theme_template_json() -> *mut c_char {
     owned_c_string(textchum_core::theme::Theme::template_json())
+}
+
+/// Loads the file-icon pack at `path` — a VS Code icon theme JSON, or
+/// the extension folder holding one — and makes it the one
+/// [`tc_icons_for_file`] answers from. On success returns a
+/// nul-terminated line describing what was loaded; on failure returns
+/// null and fills the optional `error_out`. Release either with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `path` must point to `len` readable bytes; `error_out`, if given,
+/// must point to a writable slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_icons_load(
+    path: *const c_char,
+    len: usize,
+    error_out: *mut *mut c_char,
+) -> *mut c_char {
+    if !error_out.is_null() {
+        unsafe { *error_out = std::ptr::null_mut() };
+    }
+    let Some(path) = (unsafe { str_from_raw(path, len) }) else {
+        unsafe { write_error(error_out, "invalid path string") };
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::icons::set_active_from(std::path::Path::new(path)) {
+            Ok(summary) => owned_c_string(summary),
+            Err(error) => {
+                unsafe { write_error(error_out, &error) };
+                std::ptr::null_mut()
+            }
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Forgets the icon pack, returning the file tree to the desktop's own
+/// icons.
+#[no_mangle]
+pub extern "C" fn tc_icons_clear() {
+    textchum_core::icons::clear_active();
+}
+
+/// Whether an icon pack is loaded, so a shell can skip asking about
+/// every row when none is.
+#[no_mangle]
+pub extern "C" fn tc_icons_active() -> bool {
+    textchum_core::icons::is_active()
+}
+
+/// The icon for `filename` from the loaded pack, as a nul-terminated
+/// path to an image; null when no pack is loaded or it has nothing for
+/// this file. `language` may be null, and is what the editor decided
+/// the file is — which catches files a pack lists by language, and the
+/// ones a reader named through File Properties. `light` picks the
+/// pack's light overrides. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `filename` must point to `filename_len` readable bytes; `language`,
+/// if not null, to `language_len`.
+#[no_mangle]
+pub unsafe extern "C" fn tc_icons_for_file(
+    filename: *const c_char,
+    filename_len: usize,
+    language: *const c_char,
+    language_len: usize,
+    light: bool,
+) -> *mut c_char {
+    let Some(filename) = (unsafe { str_from_raw(filename, filename_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let language = if language.is_null() {
+        None
+    } else {
+        unsafe { str_from_raw(language, language_len) }
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::icons::icon_for(filename, language, light) {
+            Some(path) => owned_c_string(path.to_string_lossy().into_owned()),
+            None => std::ptr::null_mut(),
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
 }
 
 /// Imports every theme at `path` into `themes_dir`, one JSON file per

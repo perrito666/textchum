@@ -12,6 +12,8 @@ reads and writes it; nothing lives only inside the app.
 - **Appearance** — follow the system (switching live when macOS does), or
   force light or dark.
 - **Theme** — the syntax palette; see [Themes](#themes) below.
+- **File icons** — a VS Code icon pack for the file tree; see
+  [File icons](#file-icons) below.
 - **Open files in** — tabs of the current window (the default) or
   separate windows. With separate windows, each window's navigator lists
   only its own tab group's documents.
@@ -151,6 +153,45 @@ Two things are worth knowing before the colours look wrong:
 
 The result is an ordinary theme file in the themes folder, editable
 like any other.
+
+## File icons
+
+The file tree draws an icon per row. Without a pack that is whatever
+the desktop offers for the file's type, which knows Python from
+Markdown and stops not much further along — and has never heard of a
+file called `Dockerfile`.
+
+**Settings → General → File icons** takes a **VS Code icon pack**:
+choose the icon theme's JSON file, or the extension folder holding it
+(its `package.json` says which file). **Clear** returns the tree to the
+system's icons. The choice is a path in `config.json`:
+
+```json
+{"icon_pack": "~/packs/material-icon-theme/dist/material-icons.json"}
+```
+
+A pack is read where it sits — nothing is copied — so moving or
+deleting the folder takes the icons with it. A pack that cannot be read
+is reported once and the tree keeps the system's icons.
+
+Lookup follows VS Code's, most specific first:
+
+1. The whole file name (`Dockerfile`, `cargo.toml`), lowercased.
+2. The longest extension that matches: `component.test.ts` tries
+   `test.ts` before `ts`.
+3. The language Textchum decided the file is — which is also how a
+   language set by hand in **File Properties** reaches the icon.
+4. The pack's own default.
+
+A pack's `light` section overrides any of those on a light background,
+one lookup at a time, so a pack that only redraws a handful keeps the
+rest.
+
+Two things are left out. **Folder icons**: the tree draws its own.
+**Font-based icons** — the `fontCharacter` definitions Seti and its
+descendants use — need the icon font installed and a text run where an
+image goes; a pack with nothing else is refused with that as the
+reason, rather than loaded to draw nothing.
 
 ## Projects
 
