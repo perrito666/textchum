@@ -1319,6 +1319,40 @@ char *tc_blame_line(const char *path,
                     char **error_out);
 
 /**
+ * How many characters backspace should remove, given the text of the
+ * line before the caret.
+ *
+ * One, unless everything between the start of the line and the caret
+ * is spaces — then back to the previous tab stop. Zero at the very
+ * start of a line, where backspace joins with the line above and this
+ * has nothing to say.
+ *
+ * # Safety
+ * `before_caret` must point to `len` readable bytes.
+ */
+uintptr_t tc_indent_backspace_width(const char *before_caret, uintptr_t len, uintptr_t tab_width);
+
+/**
+ * The whitespace a line should be indented with to line up with the
+ * block above it, or one level deeper when it is already level.
+ *
+ * `previous` is the nearest non-blank line above (may be null when
+ * there is none) and `current_indent` the line's own leading
+ * whitespace. Returns a nul-terminated string to put in place of that
+ * indentation; release it with [`tc_string_free`].
+ *
+ * # Safety
+ * `previous`, if not null, must point to `previous_len` readable
+ * bytes; `current_indent` must point to `current_len`.
+ */
+char *tc_indent_aligned(const char *previous,
+                        uintptr_t previous_len,
+                        const char *current_indent,
+                        uintptr_t current_len,
+                        uintptr_t tab_width,
+                        bool use_tabs);
+
+/**
  * The selectable language names with a representative file extension,
  * one per line as `name \x1f extension` (extension may be empty).
  * Release with [`tc_string_free`]. For "new file with format" pickers.

@@ -966,6 +966,42 @@ func runSmokeTest() -> Int32 {
     }
     print("trait fonts ok (writes only what differs, so typing does not relayout)")
 
+    // Backspace in a line's leading spaces takes a whole indent, and
+    // one character anywhere else. It is the position that decides,
+    // which is what keeps it from surprising anyone.
+    guard CoreDocument.backspaceWidth(before: "    ", tabWidth: 4) == 4,
+        CoreDocument.backspaceWidth(before: "      ", tabWidth: 4) == 2,
+        CoreDocument.backspaceWidth(before: "    let x", tabWidth: 4) == 1,
+        CoreDocument.backspaceWidth(before: "let x = ", tabWidth: 4) == 1,
+        // A tab-indented line already has one character per level.
+        CoreDocument.backspaceWidth(before: "\t\t", tabWidth: 4) == 1,
+        CoreDocument.backspaceWidth(before: "", tabWidth: 4) == 0
+    else {
+        print("FAIL: backspace indent widths")
+        return 1
+    }
+    // Tab in the indentation lines up with the block above, and goes a
+    // level deeper once it is already level.
+    guard
+        CoreDocument.alignedIndent(
+            previous: "        deep()", currentIndent: "", tabWidth: 4, useTabs: false)
+            == "        ",
+        CoreDocument.alignedIndent(
+            previous: "    thing()", currentIndent: "    ", tabWidth: 4, useTabs: false)
+            == "        ",
+        CoreDocument.alignedIndent(
+            previous: "    thing()", currentIndent: "  ", tabWidth: 4, useTabs: false)
+            == "    ",
+        CoreDocument.alignedIndent(
+            previous: nil, currentIndent: "", tabWidth: 4, useTabs: false) == "    ",
+        CoreDocument.alignedIndent(
+            previous: "\t\tdeep()", currentIndent: "", tabWidth: 4, useTabs: true) == "\t\t"
+    else {
+        print("FAIL: aligned indentation")
+        return 1
+    }
+    print("indentation ok (backspace by level, tab aligns with the block above)")
+
     print("smoke test passed")
     return 0
 }
