@@ -11,6 +11,7 @@
 //! testable headlessly.
 
 mod app;
+pub mod blame;
 mod buffer;
 pub mod changes;
 mod config;

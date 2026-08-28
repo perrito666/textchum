@@ -852,6 +852,72 @@ func runSmokeTest() -> Int32 {
     try? FileManager.default.removeItem(at: repo)
     print("git gutter ok (marks what changed, silent without a baseline)")
 
+    // Blame: what git knows about one line, asked with the buffer's
+    // text so an unsaved edit cannot shift the answer.
+    let blameRepo = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-blame-\(ProcessInfo.processInfo.processIdentifier)")
+    try? FileManager.default.removeItem(at: blameRepo)
+    try? FileManager.default.createDirectory(at: blameRepo, withIntermediateDirectories: true)
+    func blameGit(_ arguments: [String]) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        task.arguments = ["-C", blameRepo.path] + arguments
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()
+        task.waitUntilExit()
+    }
+    let blamed = blameRepo.appendingPathComponent("thing.txt")
+    try? "first\nsecond\n".write(to: blamed, atomically: true, encoding: .utf8)
+    blameGit(["init", "-q"])
+    blameGit(["config", "user.email", "ada@example.invalid"])
+    blameGit(["config", "user.name", "Ada Lovelace"])
+    blameGit(["add", "thing.txt"])
+    blameGit(["commit", "-qm", "Add two lines\n\nAnd a reason for them."])
+
+    do {
+        // Two lines typed above "second" and not saved: on disk line 4
+        // does not exist, in the buffer it is the committed line.
+        let buffer = "first\ntyped one\ntyped two\nsecond\n"
+        let committed = try CoreBlame.line(4, ofPath: blamed.path, text: buffer)
+        guard !committed.uncommitted, committed.author == "Ada Lovelace",
+            committed.summary == "Add two lines", committed.body == "And a reason for them.",
+            committed.commit.count == 40, !committed.abbreviated.isEmpty,
+            committed.renamedFrom.isEmpty
+        else {
+            print("FAIL: blame of a committed line: \(committed)")
+            return 1
+        }
+        let typed = try CoreBlame.line(2, ofPath: blamed.path, text: buffer)
+        guard typed.uncommitted, typed.commit.isEmpty else {
+            print("FAIL: a typed line should say it is not committed")
+            return 1
+        }
+        // The caret past the end is answered about the last line there
+        // is, and says which line that was.
+        let past = try CoreBlame.line(99, ofPath: blamed.path, text: buffer)
+        guard past.line == 4 else {
+            print("FAIL: blame past the end should answer about the last line, got \(past.line)")
+            return 1
+        }
+    } catch {
+        print("FAIL: blame threw: \(error)")
+        return 1
+    }
+    // A file outside a repository says so rather than answering.
+    let loose = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-loose-\(ProcessInfo.processInfo.processIdentifier).txt")
+    try? "hello\n".write(to: loose, atomically: true, encoding: .utf8)
+    var refused = false
+    do { _ = try CoreBlame.line(1, ofPath: loose.path, text: "hello\n") } catch { refused = true }
+    guard refused else {
+        print("FAIL: a file outside a repository should be refused, not answered")
+        return 1
+    }
+    try? FileManager.default.removeItem(at: loose)
+    try? FileManager.default.removeItem(at: blameRepo)
+    print("blame ok (buffer-aware, uncommitted lines, past the end, outside a repo)")
+
     print("smoke test passed")
     return 0
 }

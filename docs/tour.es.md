@@ -88,6 +88,18 @@ cuando la escritura se detiene. Un archivo sin versión confirmada, o
 fuera de un repositorio, no lleva marcas en vez de dar todas sus líneas
 por nuevas.
 
+**Autoría de la línea** (⌃⌘B, Ctrl+Alt+B en Linux) le pregunta a git
+quién tocó por última vez la línea bajo el cursor: el commit, el autor
+y cuándo la escribió, el asunto y el cuerpo del mensaje —donde suele
+estar el porqué— y el nombre que tenía el archivo entonces si se ha
+renombrado desde. El commit queda a un botón del portapapeles, que es
+para lo que sirve la respuesta. Una línea escrita desde el último
+commit lo dice, en vez de tomar prestado un autor ajeno.
+
+Pregunta con el texto del búfer y no con el archivo en disco, así que
+una edición sin guardar por encima del cursor no puede desplazar la
+respuesta a la línea vecina.
+
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
 primer marcador seleccionado, así que escribir lo reemplaza; ⇥ pasa al

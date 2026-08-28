@@ -1279,6 +1279,46 @@ char *tc_changes_for_file(const char *path,
                           uintptr_t text_len);
 
 /**
+ * What git knows about one line of a file: who wrote it, when, and
+ * which commit it came in on.
+ *
+ * `line` is one-based. `contents` is the buffer's text, not the file
+ * on disk — an unsaved edit above the line shifts the answer onto its
+ * neighbour otherwise, and an answer about the wrong line arrives
+ * looking exactly as right as a correct one.
+ *
+ * Returns a nul-terminated JSON object, released with
+ * [`tc_string_free`]:
+ *
+ * ```json
+ * {"commit": "0123…", "abbreviated": "0123456", "author": "Ada",
+ *  "authorMail": "ada@…", "authorDate": "2026-08-28 14:03:22 +0200",
+ *  "committer": "", "committerDate": "", "summary": "Do the thing",
+ *  "body": "Because.", "renamedFrom": "", "uncommitted": false}
+ * ```
+ *
+ * `committer` and `committerDate` are set only when they differ from
+ * the author's, and `renamedFrom` only when the file has been renamed
+ * since. `uncommitted` marks a line that is typed and not yet
+ * committed, and carries no commit.
+ *
+ * Returns null on failure and fills the optional `error_out` with a
+ * sentence to show — a file outside a repository, or a machine with
+ * no git, arrives here rather than as an empty answer.
+ *
+ * # Safety
+ * `path` must point to `path_len` readable bytes and `contents` to
+ * `contents_len`; `error_out`, if given, must point to a writable
+ * slot.
+ */
+char *tc_blame_line(const char *path,
+                    uintptr_t path_len,
+                    uintptr_t line,
+                    const char *contents,
+                    uintptr_t contents_len,
+                    char **error_out);
+
+/**
  * The selectable language names with a representative file extension,
  * one per line as `name \x1f extension` (extension may be empty).
  * Release with [`tc_string_free`]. For "new file with format" pickers.

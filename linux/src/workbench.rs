@@ -9,7 +9,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{goto, icons, references, theme_import, workspace, Appearance};
+use textchum_core::{blame, goto, icons, references, theme_import, workspace, Appearance};
 
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
@@ -188,6 +188,7 @@ impl Workbench {
         go_section.append(Some("Document Outline…"), Some("win.outline"));
         go_section.append(Some("Show Documentation for Symbol"), Some("win.hover"));
         go_section.append(Some("Go to Line…"), Some("win.goto-line"));
+        go_section.append(Some("Blame Line…"), Some("win.blame"));
         go_section.append(Some("Go to Block Start"), Some("win.block-start"));
         go_section.append(Some("Go to Block End"), Some("win.block-end"));
         go_section.append(Some("Command Palette…"), Some("win.palette"));
@@ -1353,6 +1354,26 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         // field.
         entry_for_focus.grab_focus();
     });
+    add("blame", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        let Some(path) = page.path.borrow().clone() else {
+            workbench.toast("Save the file first — git has nothing to blame yet.");
+            return;
+        };
+        // The buffer's text goes with the line number, so an unsaved
+        // edit above the caret cannot shift the answer onto the
+        // neighbouring line.
+        let text = page.state.borrow().document.text();
+        let line = page.buffer.iter_at_mark(&page.buffer.get_insert()).line().max(0) as usize + 1;
+        let blame = match blame::blame_line(Path::new(&path), line, &text) {
+            Ok(blame) => blame,
+            Err(error) => {
+                workbench.toast(&format!("git could not blame this line: {error}"));
+                return;
+            }
+        };
+        show_blame(workbench, &blame, &path);
+    });
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
     });
@@ -2037,6 +2058,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Document Outline…", "win.outline"),
     ("Show Documentation for Symbol", "win.hover"),
     ("Go to Line…", "win.goto-line"),
+    ("Blame Line…", "win.blame"),
     ("Go to Block Start", "win.block-start"),
     ("Go to Block End", "win.block-end"),
     ("Language Server Status", "win.server-status"),
@@ -3662,6 +3684,64 @@ fn grep_filters(filters_box: &gtk::Box) -> Vec<textchum_core::search::Filter> {
         });
     }
     filters
+}
+
+/// What git said about a line, in a dialog with the commit ready to
+/// copy — pasting the hash into `git show` or a message is most of what
+/// the answer is for.
+fn show_blame(workbench: &Rc<Workbench>, blame: &blame::Blame, path: &str) {
+    let name = Path::new(path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_owned());
+
+    let detail = if blame.uncommitted {
+        "This line is not committed yet. It was typed since the last commit, so git \
+         has nobody to name."
+            .to_owned()
+    } else {
+        let mut rows = Vec::new();
+        let mut row = |label: &str, value: &str| {
+            if !value.is_empty() {
+                rows.push(format!("{label}\n{value}"));
+            }
+        };
+        row("Commit", &blame.abbreviated);
+        row(
+            "Author",
+            &if blame.author_mail.is_empty() {
+                blame.author.clone()
+            } else {
+                format!("{} <{}>", blame.author, blame.author_mail)
+            },
+        );
+        row("Written", &blame.author_date);
+        row("Committed by", &blame.committer);
+        row("Committed", &blame.committer_date);
+        row("Named at the time", &blame.renamed_from);
+        row("Subject", &blame.summary);
+        row("Message", &blame.body);
+        rows.join("\n\n")
+    };
+
+    let dialog = adw::AlertDialog::new(Some(&format!("{name}:{}", blame.line)), Some(&detail));
+    dialog.add_response("close", "Close");
+    if !blame.commit.is_empty() {
+        dialog.add_response("copy", "Copy Commit");
+        dialog.set_response_appearance("copy", adw::ResponseAppearance::Suggested);
+        dialog.set_default_response(Some("copy"));
+        let commit = blame.commit.clone();
+        let window = workbench.window.clone();
+        dialog.connect_response(None, move |_, response| {
+            if response == "copy" {
+                window.clipboard().set_text(&commit);
+            }
+        });
+    } else {
+        dialog.set_default_response(Some("close"));
+    }
+    dialog.set_close_response("close");
+    dialog.present(Some(&workbench.window.clone()));
 }
 
 // MARK: Import a theme

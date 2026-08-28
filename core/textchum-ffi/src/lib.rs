@@ -2171,6 +2171,69 @@ pub unsafe extern "C" fn tc_changes_for_file(
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// What git knows about one line of a file: who wrote it, when, and
+/// which commit it came in on.
+///
+/// `line` is one-based. `contents` is the buffer's text, not the file
+/// on disk — an unsaved edit above the line shifts the answer onto its
+/// neighbour otherwise, and an answer about the wrong line arrives
+/// looking exactly as right as a correct one.
+///
+/// Returns a nul-terminated JSON object, released with
+/// [`tc_string_free`]:
+///
+/// ```json
+/// {"commit": "0123…", "abbreviated": "0123456", "author": "Ada",
+///  "authorMail": "ada@…", "authorDate": "2026-08-28 14:03:22 +0200",
+///  "committer": "", "committerDate": "", "summary": "Do the thing",
+///  "body": "Because.", "renamedFrom": "", "uncommitted": false}
+/// ```
+///
+/// `committer` and `committerDate` are set only when they differ from
+/// the author's, and `renamedFrom` only when the file has been renamed
+/// since. `uncommitted` marks a line that is typed and not yet
+/// committed, and carries no commit.
+///
+/// Returns null on failure and fills the optional `error_out` with a
+/// sentence to show — a file outside a repository, or a machine with
+/// no git, arrives here rather than as an empty answer.
+///
+/// # Safety
+/// `path` must point to `path_len` readable bytes and `contents` to
+/// `contents_len`; `error_out`, if given, must point to a writable
+/// slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_blame_line(
+    path: *const c_char,
+    path_len: usize,
+    line: usize,
+    contents: *const c_char,
+    contents_len: usize,
+    error_out: *mut *mut c_char,
+) -> *mut c_char {
+    if !error_out.is_null() {
+        unsafe { *error_out = std::ptr::null_mut() };
+    }
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        unsafe { write_error(error_out, "invalid path string") };
+        return std::ptr::null_mut();
+    };
+    let Some(contents) = (unsafe { str_from_raw(contents, contents_len) }) else {
+        unsafe { write_error(error_out, "invalid contents string") };
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::blame::blame_line(std::path::Path::new(path), line, contents) {
+            Ok(blame) => owned_c_string(textchum_core::blame::to_json(&blame)),
+            Err(error) => {
+                unsafe { write_error(error_out, &error.to_string()) };
+                std::ptr::null_mut()
+            }
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// The selectable language names with a representative file extension,
 /// one per line as `name \x1f extension` (extension may be empty).
 /// Release with [`tc_string_free`]. For "new file with format" pickers.

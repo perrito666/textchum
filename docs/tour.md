@@ -86,6 +86,18 @@ recomputed once typing settles. A file with no committed version, or
 one outside a repository, gets no marks rather than every line claimed
 as new.
 
+**Blame Line** (⌃⌘B, Ctrl+Alt+B on Linux) asks git who last touched the
+line under the caret: the commit, the author and when they wrote it,
+the subject and the message body — where the reasoning usually is — and
+the file's name at the time if it has been renamed since. The commit is
+one button away from the clipboard, which is most of what the answer is
+for. A line typed since the last commit says so rather than borrowing
+somebody else's.
+
+It asks with the buffer's text, not the file on disk, so an unsaved
+edit above the caret cannot quietly shift the answer onto the
+neighbouring line.
+
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
 first placeholder selected, so typing replaces it; ⇥ moves to the next
