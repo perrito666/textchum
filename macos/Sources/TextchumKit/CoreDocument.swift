@@ -91,6 +91,10 @@ public final class CoreDocument {
     /// ``CoreTheme/styles``.
     public struct HighlightSpan {
         public let range: NSRange
+        /// Index into the theme's style table. A position in an
+        /// alphabetical list, so it moves whenever a capture is added:
+        /// ask `CoreTheme.styleID(for:)` for the name you mean rather
+        /// than comparing to a number.
         public let styleIndex: Int
     }
 
