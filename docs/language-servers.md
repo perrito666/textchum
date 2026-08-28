@@ -52,6 +52,10 @@ never join someone else's workspace either.
   names its severity, because an underline says only that something is
   wrong and a warning should not read like an error. No round trip:
   the finding is already in hand.
+- **Diagnostics…** (⇧⌘E, Ctrl+Shift+E on Linux) lists every finding in
+  the document, in the order they appear — which is the order they get
+  fixed in and the order the gutter shows them, with the severity in
+  each row. ⏎ jumps, and the jump joins the back stack.
 - **Rename Symbol…** (⌃⌘R) renames across the whole workspace: open
   windows edit in place (undo works per window), files nobody has open
   are rewritten on disk.

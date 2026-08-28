@@ -190,6 +190,7 @@ impl Workbench {
         go_section.append(Some("Go to Line…"), Some("win.goto-line"));
         go_section.append(Some("Blame Line…"), Some("win.blame"));
         go_section.append(Some("Show Diagnostic for Line"), Some("win.diagnostic"));
+        go_section.append(Some("Diagnostics…"), Some("win.diagnostic-list"));
         go_section.append(Some("Go to Block Start"), Some("win.block-start"));
         go_section.append(Some("Go to Block End"), Some("win.block-end"));
         go_section.append(Some("Command Palette…"), Some("win.palette"));
@@ -1404,6 +1405,48 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         dialog.set_close_response("close");
         dialog.present(Some(&workbench.window.clone()));
     });
+    add("diagnostic-list", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        let Some(path) = page.path.borrow().clone() else {
+            workbench.toast("No diagnostics for an unsaved document.");
+            return;
+        };
+        let shell = Shell::instance();
+        let mut found = {
+            let pages = shell.pages.borrow();
+            match pages.get(&path) {
+                Some(handles) => handles.diagnostics.borrow().clone(),
+                None => Vec::new(),
+            }
+        };
+        if found.is_empty() {
+            workbench.toast("Nothing reported in this document.");
+            return;
+        }
+        // In the order they appear, which is the order they are fixed
+        // in and the order the gutter shows them.
+        found.sort_by_key(|d| (d.line, d.character));
+        let labels: Vec<String> = found
+            .iter()
+            .map(|d| {
+                let first = d.message.lines().next().unwrap_or_default();
+                format!("{}  {}  {first}", d.line + 1, d.kind())
+            })
+            .collect();
+        let jumps: Vec<(i32, usize)> =
+            found.iter().map(|d| (d.line, d.character)).collect();
+        let path = path.clone();
+        present_picker(
+            workbench,
+            &format!("Diagnostics ({})", jumps.len()),
+            picker_items(labels),
+            move |workbench, index| {
+                let (line, character) = jumps[index];
+                workbench.note_jump();
+                workbench.open(Some(PathBuf::from(&path)), Some((line, character)));
+            },
+        );
+    });
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
     });
@@ -2091,6 +2134,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Go to Line…", "win.goto-line"),
     ("Blame Line…", "win.blame"),
     ("Show Diagnostic for Line", "win.diagnostic"),
+    ("Diagnostics…", "win.diagnostic-list"),
     ("Go to Block Start", "win.block-start"),
     ("Go to Block End", "win.block-end"),
     ("Language Server Status", "win.server-status"),
