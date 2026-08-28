@@ -1593,6 +1593,22 @@ fn refresh_style_table() {
     }
 }
 
+/// The style id a capture name resolves to, or -1 when the capture is
+/// unstyled. Shells need this to ask questions about what a span *is* —
+/// "is this a comment?" for the prose spell checker — without knowing
+/// where `comment` sits in the table. It moves whenever a capture is
+/// added, so nothing may hardcode it.
+///
+/// # Safety
+/// The pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_theme_style_id(capture: *const c_char, len: usize) -> i32 {
+    let Some(capture) = (unsafe { str_from_raw(capture, len) }) else {
+        return -1;
+    };
+    textchum_core::theme::resolve(capture).map_or(-1, |id| id as i32)
+}
+
 /// The active theme's style table, indexed by the `style` of a highlight
 /// span. Owned by the core and valid for the process lifetime; do not
 /// free. Superseded (but not invalidated) by `tc_theme_set_*` — re-fetch

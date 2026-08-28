@@ -1260,7 +1260,8 @@ fn request_hover(page: &Rc<Page>, iter: gtk::TextIter, deliberate: bool) {
             return;
         }
         let offset = utf16_offset(&page.buffer, iter.offset());
-        // Style index 1 is the canonical comment capture.
+        // Asked by name: style ids are positions in an alphabetical
+        // table and move whenever a capture is added.
         let in_comment = page
             .state
             .borrow()
@@ -1269,7 +1270,11 @@ fn request_hover(page: &Rc<Page>, iter: gtk::TextIter, deliberate: bool) {
             .ok()
             .into_iter()
             .flatten()
-            .any(|span| span.style == 1 && span.start_utf16 <= offset && offset < span.end_utf16);
+            .any(|span| {
+                Some(span.style) == textchum_core::theme::resolve("comment")
+                    && span.start_utf16 <= offset
+                    && offset < span.end_utf16
+            });
         if in_comment {
             return;
         }

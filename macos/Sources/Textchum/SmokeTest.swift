@@ -436,7 +436,11 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the built-in theme lost its bold/italic flags")
         return 1
     }
-    let commentTraits = HighlightPalette.traits(forStyle: 1)
+    guard let commentStyle = CoreTheme.commentStyleID else {
+        print("FAIL: the theme has no comment capture")
+        return 1
+    }
+    let commentTraits = HighlightPalette.traits(forStyle: Int(commentStyle))
     guard commentTraits.italic else {
         print("FAIL: comments are meant to be italic in the default theme")
         return 1
@@ -457,7 +461,9 @@ func runSmokeTest() -> Int32 {
         // give up at.
         let window = NSRange(location: length - 20_000, length: 8_000)
         let spans = big.highlights(in: window)
-        guard !spans.isEmpty, spans.contains(where: { $0.styleIndex == 1 }) else {
+        guard !spans.isEmpty,
+            spans.contains(where: { $0.styleIndex == commentStyle })
+        else {
             print("FAIL: no spans deep inside a large document")
             return 1
         }

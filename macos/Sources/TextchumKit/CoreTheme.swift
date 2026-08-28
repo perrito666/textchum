@@ -22,6 +22,33 @@ public enum CoreTheme {
         styles = fetchStyles()
     }
 
+    /// The style id a capture resolves to, or nil when it is unstyled.
+    ///
+    /// Ask rather than count: the ids are positions in an alphabetical
+    /// table, so adding a capture moves every one after it. Looked up
+    /// once per name, since the table only changes when the core does.
+    public static func styleID(for capture: String) -> UInt32? {
+        if let cached = idCache[capture] { return cached }
+        var capture = capture
+        let id: Int32 = capture.withUTF8 { bytes in
+            tc_theme_style_id(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count)
+            )
+        }
+        let resolved = id < 0 ? nil : UInt32(id)
+        idCache[capture] = resolved
+        return resolved
+    }
+
+    private static var idCache: [String: UInt32?] = [:]
+
+    /// The comment style, which the prose spell checker asks for often
+    /// enough to be worth naming.
+    public static var commentStyleID: UInt32? { styleID(for: "comment") }
+
     private static func fetchStyles() -> [CoreStyle] {
         var count: UInt = 0
         guard let table = tc_style_table(&count) else { return [] }

@@ -1,5 +1,6 @@
-//! Captures that grammars emit under names the theme's table does not
-//! carry. Before the alias table these rendered as plain text.
+//! Captures the bundled grammars emit that the theme's table did not
+//! carry. Each has a style of its own now; before, they rendered as
+//! plain text.
 
 fn styles_of(source: &str, language: &str) -> Vec<(String, u32)> {
     let mut doc = textchum_core::Document::new();
@@ -28,8 +29,8 @@ fn toml_booleans_are_coloured() {
     );
     assert_eq!(
         boolean.unwrap().1,
-        textchum_core::theme::resolve("constant.builtin").unwrap(),
-        "a TOML boolean should paint as a builtin constant"
+        textchum_core::theme::resolve("boolean").unwrap(),
+        "a TOML boolean paints with the theme's boolean style"
     );
 }
 
