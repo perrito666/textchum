@@ -88,10 +88,6 @@ l'autre, donc rien ne se replace.
 
 ## Pas encore là
 
-- Les nuances gras/italique — la surcouche est couleur seule pour le
-  moment.
-- Le choix manuel du langage depuis l'interface pour les fichiers aux
-  extensions inhabituelles.
-- Les requêtes limitées à la zone visible pour les documents de plusieurs
-  centaines de kilooctets (pour l'instant ils sont colorés en entier ou,
-  au-delà d'un plafond, pas du tout).
+- Les requêtes limitées à la portion visible pour les documents de
+  plusieurs centaines de kilooctets : aujourd'hui ils sont colorés en
+  entier ou, au-delà d'un plafond, pas du tout.

@@ -89,9 +89,5 @@ nada se recoloca.
 
 ## Aún no está
 
-- Matices de negrita/cursiva — la capa es solo de color por ahora.
-- Selección manual del lenguaje desde la interfaz para archivos con
-  extensiones raras.
 - Consultas limitadas a la zona visible para documentos de cientos de
-  kilobytes (por ahora se colorean enteros o, pasado un tope, no se
-  colorean).
+  kilobytes: hoy se colorean enteros o, pasado un tope, no se colorean.
