@@ -21,6 +21,7 @@ pub mod goto;
 mod history;
 pub mod hugo;
 pub mod icons;
+pub mod indent;
 pub mod markdown;
 pub mod references;
 pub mod search;

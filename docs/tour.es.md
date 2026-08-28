@@ -100,6 +100,15 @@ Pregunta con el texto del búfer y no con el archivo en disco, así que
 una edición sin guardar por encima del cursor no puede desplazar la
 respuesta a la línea vecina.
 
+En el **espacio inicial** de una línea, dos teclas hacen algo más de lo
+habitual. Retroceso borra hasta la parada de tabulación anterior en vez
+de espacio a espacio, y Tab alinea la línea con la primera línea no
+vacía de arriba —al pulsarla otra vez, ya alineada, baja un nivel más—.
+En el resto de la línea ambas teclas son ellas mismas: decide la
+posición y no un modo, que es lo que evita que sorprendan. Una línea
+con tabuladores se deja a su propio carácter, que ya es una pulsación
+por nivel.
+
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
 primer marcador seleccionado, así que escribir lo reemplaza; ⇥ pasa al

@@ -98,6 +98,15 @@ It asks with the buffer's text, not the file on disk, so an unsaved
 edit above the caret cannot quietly shift the answer onto the
 neighbouring line.
 
+In a line's **leading whitespace**, two keys mean something more than
+usual. Backspace deletes back to the previous tab stop rather than one
+space at a time, and Tab lines the line up with the nearest non-blank
+line above it — pressing it again, once already level, goes one level
+deeper. Anywhere else in the line both keys are themselves: it is the
+position that decides, not a mode, which is what keeps them from
+surprising anyone. A tab-indented line is left to its tab character,
+which is already one press per level.
+
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
 first placeholder selected, so typing replaces it; ⇥ moves to the next

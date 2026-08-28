@@ -18,7 +18,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{changes::ChangeKind, theme, Document};
+use textchum_core::{changes::ChangeKind, indent, theme, Document};
 use webkit6::prelude::*;
 
 use crate::shell::{PageHandles, Shell};
@@ -231,6 +231,7 @@ impl Page {
         install_completion_keys(&page);
         install_snippet_keys(&page);
         install_change_bar(&page);
+        install_indent_keys(&page);
         // A file opens already differing from its committed self as
         // often as not, so the marks are wanted on the first paint.
         {
@@ -1076,6 +1077,135 @@ fn install_snippet_keys(page: &Rc<Page>) {
             state.document.snippet_caret_moved(utf16);
         });
     }
+}
+
+/// Backspace and Tab in a line's leading whitespace.
+///
+/// Backspace there deletes back to the previous tab stop rather than
+/// one space at a time; Tab there lines the line up with the block
+/// above, and goes one level deeper once it is already level. Anywhere
+/// else in the line both keys are themselves, which is what keeps the
+/// behaviour from surprising anyone: it is the position that decides.
+fn install_indent_keys(page: &Rc<Page>) {
+    let controller = gtk::EventControllerKey::new();
+    controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let weak = Rc::downgrade(page);
+    controller.connect_key_pressed(move |_, key, _, modifiers| {
+        let Some(page) = weak.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
+        // The completion popup and a running snippet own these keys
+        // first.
+        if page.completion.popover.is_visible()
+            || page.state.borrow().document.snippet_active()
+            || !modifiers.is_empty()
+        {
+            return glib::Propagation::Proceed;
+        }
+        use gtk::gdk::Key;
+        match key {
+            Key::BackSpace => {
+                if delete_back_one_indent(&page) {
+                    glib::Propagation::Stop
+                } else {
+                    glib::Propagation::Proceed
+                }
+            }
+            Key::Tab => {
+                if indent_to_block_above(&page) {
+                    glib::Propagation::Stop
+                } else {
+                    glib::Propagation::Proceed
+                }
+            }
+            _ => glib::Propagation::Proceed,
+        }
+    });
+    page.view.add_controller(controller);
+}
+
+/// The caret's line, and the text of it before the caret.
+fn line_before_caret(page: &Rc<Page>) -> (gtk::TextIter, String, String) {
+    let buffer = &page.buffer;
+    let caret = buffer.iter_at_mark(&buffer.get_insert());
+    let mut start = caret;
+    start.set_line_offset(0);
+    let before = buffer.text(&start, &caret, true).to_string();
+    let mut end = caret;
+    if !end.ends_line() {
+        end.forward_to_line_end();
+    }
+    let whole = buffer.text(&start, &end, true).to_string();
+    (start, before, whole)
+}
+
+fn tab_width(page: &Rc<Page>) -> usize {
+    let _ = page;
+    Shell::instance().config.borrow().tab_width() as usize
+}
+
+fn delete_back_one_indent(page: &Rc<Page>) -> bool {
+    let buffer = &page.buffer;
+    if buffer.selection_bounds().is_some() {
+        return false;
+    }
+    let (start, before, _) = line_before_caret(page);
+    let width = indent::backspace_width(&before, tab_width(page));
+    if width <= 1 {
+        return false;
+    }
+    let caret = buffer.iter_at_mark(&buffer.get_insert());
+    let mut from = buffer.iter_at_offset(caret.offset() - width as i32);
+    let mut to = caret;
+    let _ = start;
+    buffer.delete(&mut from, &mut to);
+    true
+}
+
+fn indent_to_block_above(page: &Rc<Page>) -> bool {
+    let buffer = &page.buffer;
+    if buffer.selection_bounds().is_some() {
+        return false;
+    }
+    let (start, before, whole) = line_before_caret(page);
+    let current_indent = indent::leading_whitespace(&whole).to_string();
+    // Only in the indentation: past it, Tab inserts as it always has.
+    if before.chars().count() > current_indent.chars().count() {
+        return false;
+    }
+    let mut previous = None;
+    let mut line = start.line() - 1;
+    while line >= 0 {
+        let Some(above) = buffer.iter_at_line(line) else { break };
+        let mut end = above;
+        if !end.ends_line() {
+            end.forward_to_line_end();
+        }
+        let text = buffer.text(&above, &end, true).to_string();
+        if !text.trim().is_empty() {
+            previous = Some(text);
+            break;
+        }
+        line -= 1;
+    }
+    // What the document already does, the way auto-indent decides it.
+    let uses_tabs = current_indent.contains('\t')
+        || previous.as_deref().is_some_and(|line| line.starts_with('\t'));
+    let wanted = indent::aligned_indent(
+        previous.as_deref(),
+        &current_indent,
+        tab_width(page),
+        uses_tabs,
+    );
+    if wanted == current_indent {
+        return false;
+    }
+    let mut from = start;
+    let mut to = buffer.iter_at_offset(start.offset() + current_indent.chars().count() as i32);
+    buffer.delete(&mut from, &mut to);
+    let mut at = from;
+    buffer.insert(&mut at, &wanted);
+    true
 }
 
 /// The git change bar: a stripe beside every line that differs from
