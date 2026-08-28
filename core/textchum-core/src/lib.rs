@@ -15,6 +15,7 @@ mod buffer;
 mod config;
 mod document;
 mod fsutil;
+pub mod goto;
 mod history;
 pub mod hugo;
 pub mod icons;

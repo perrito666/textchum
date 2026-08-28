@@ -264,6 +264,31 @@ public final class CoreDocument {
         NSRange(location: Int(region.start), length: Int(region.end - region.start))
     }
 
+    // MARK: Going to a line
+
+    /// Reads a place out of whatever was typed or pasted: `412`,
+    /// `412:8`, `src/main.rs:412:8`, `line 412`. Nil when the text
+    /// names no line at all.
+    public static func parseGoTo(_ text: String) -> (line: Int, column: Int)? {
+        var line: UInt = 0
+        var column: UInt = 0
+        let parsed = withUTF8Pointer(text) { pointer, length in
+            tc_goto_parse(pointer, length, &line, &column)
+        }
+        return parsed ? (Int(line), Int(column)) : nil
+    }
+
+    /// How many lines the document has.
+    public var lineCount: Int {
+        Int(tc_document_len_lines(handle))
+    }
+
+    /// The UTF-16 offset of a one-based line and column, clamped to the
+    /// document.
+    public func offset(ofLine line: Int, column: Int) -> Int {
+        Int(tc_document_offset_for_line(handle, UInt(line), UInt(column)))
+    }
+
     /// Re-reads the document from its file. Returns the single replacement
     /// to replay on the display cache, or nil if the buffer already matched
     /// the disk. The reload is one undo step; the document counts as clean

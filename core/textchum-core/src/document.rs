@@ -551,6 +551,45 @@ impl Document {
         }
     }
 
+    /// How many lines the document has, counted the way a reader
+    /// counts them: a file ending in a newline has not gained a line by
+    /// doing so, though the rope opens one to hold what comes next.
+    pub fn len_lines(&self) -> usize {
+        let rope = self.buffer.rope();
+        let lines = rope.len_lines();
+        if lines > 1 && rope.char(rope.len_chars() - 1) == '\n' {
+            lines - 1
+        } else {
+            lines
+        }
+    }
+
+    /// The UTF-16 offset of a one-based `line` and `column`, clamped to
+    /// what is there: a line past the end is the last line, and a
+    /// column past the end of its line is that line's end. Someone
+    /// typing 9999 means the end of the file, and refusing them the
+    /// jump teaches nothing.
+    pub fn offset_for_line(&self, line: usize, column: usize) -> usize {
+        let rope = self.buffer.rope();
+        // Ropey counts a trailing newline as opening one more line,
+        // which has nothing on it; the last line worth landing on is
+        // the last one with content.
+        let last = rope.len_lines().saturating_sub(1);
+        let index = line.saturating_sub(1).min(last);
+        let start = rope.line_to_char(index);
+        let mut offset: usize = rope.char_to_utf16_cu(start);
+        let wanted = column.saturating_sub(1);
+        let mut seen = 0usize;
+        for character in rope.line(index).chars() {
+            if seen >= wanted || character == '\n' || character == '\r' {
+                break;
+            }
+            offset += character.len_utf16();
+            seen += 1;
+        }
+        offset
+    }
+
     /// Ends the current undo coalescing run. Shells call this when the
     /// user's attention moves — caret jumps, focus changes — so the next
     /// keystroke starts a fresh undo step.
@@ -741,6 +780,41 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("textchum-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_line_and_column_resolve_to_an_offset_and_clamp_to_what_is_there() {
+        let mut doc = Document::new();
+        doc.replace_utf16(0, 0, "one\ntwo\n🙂 three\nfour").unwrap();
+        assert_eq!(doc.len_lines(), 4);
+
+        assert_eq!(doc.offset_for_line(1, 1), 0);
+        assert_eq!(doc.offset_for_line(2, 1), 4);
+        assert_eq!(doc.offset_for_line(2, 3), 6);
+        // A column past the end of its line stops at the line's end,
+        // never on the newline or the line after.
+        assert_eq!(doc.offset_for_line(2, 99), 7);
+        // The emoji is two UTF-16 units, so column 2 is one character
+        // in and two units along.
+        assert_eq!(doc.offset_for_line(3, 2), 10);
+        // A line past the end is the last line.
+        assert_eq!(doc.offset_for_line(9999, 1), doc.offset_for_line(4, 1));
+        // Zero is the first line, whatever printed it.
+        assert_eq!(doc.offset_for_line(0, 0), 0);
+    }
+
+    #[test]
+    fn a_trailing_newline_does_not_add_a_line() {
+        let mut doc = Document::new();
+        doc.replace_utf16(0, 0, "one\ntwo\n").unwrap();
+        // Two lines, which is what anyone reading the file would say.
+        assert_eq!(doc.len_lines(), 2);
+        // Past the end is the end of the text, not somewhere out of
+        // range.
+        assert_eq!(doc.offset_for_line(9999, 1), doc.len_utf16());
+        assert_eq!(doc.offset_for_line(2, 1), 4);
+        // An empty document is one empty line.
+        assert_eq!(Document::new().len_lines(), 1);
     }
 
     #[test]

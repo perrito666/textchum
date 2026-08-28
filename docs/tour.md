@@ -71,6 +71,11 @@ with mouse hover switched off.
 </figure>
 </div>
 
+**Go to Line** (⌘L, Ctrl+L on Linux) takes a number, or the whole
+`src/main.rs:412:8` pasted straight out of a build log — the file name
+and the trailing noise are ignored, the line is centred, and Go Back
+returns to where reading was interrupted.
+
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
 first placeholder selected, so typing replaces it; ⇥ moves to the next

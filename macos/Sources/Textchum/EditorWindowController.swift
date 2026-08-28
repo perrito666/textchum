@@ -763,6 +763,60 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    /// Go to Line (⌘L): a prompt taking a number, and taking the shapes
+    /// a number arrives in — `412:8` from a compiler, a whole
+    /// `src/main.rs:412:8` pasted out of a build log, `line 412` from a
+    /// stack trace. Reading it is the core's job so both shells accept
+    /// the same things.
+    @objc func goToLine(_ sender: Any?) {
+        guard let textView else { return }
+        let alert = NSAlert()
+        alert.messageText = "Go to Line"
+        alert.informativeText = "Line number, or line:column — of \(coreDocument.lineCount)."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        field.placeholderString = "412 or 412:8"
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Go")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard let target = CoreDocument.parseGoTo(field.stringValue) else {
+            // Nothing in what was typed names a line. Saying so beats
+            // jumping somewhere arbitrary.
+            NSSound.beep()
+            return
+        }
+        // The jump is one Go Back should return from: reading was
+        // interrupted here.
+        (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
+        let offset = coreDocument.offset(ofLine: target.line, column: target.column)
+        let clamped = min(offset, (textView.string as NSString).length)
+        selectionChangeIsFromEditing = false
+        textView.setSelectedRange(NSRange(location: clamped, length: 0))
+        // Centred rather than merely visible: a line scrolled to the
+        // last row of the window is a line you have to scroll to read.
+        centerSelection()
+        window?.makeFirstResponder(textView)
+    }
+
+    /// Scrolls so the selection sits near the middle of the view, when
+    /// there is enough document either side of it to do so.
+    private func centerSelection() {
+        guard let textView, let scrollView = textView.enclosingScrollView else { return }
+        let rect = textView.firstRect(
+            forCharacterRange: textView.selectedRange(), actualRange: nil)
+        guard rect.height > 0, let window = textView.window else {
+            textView.scrollRangeToVisible(textView.selectedRange())
+            return
+        }
+        let inWindow = window.convertPoint(fromScreen: rect.origin)
+        let inView = textView.convert(inWindow, from: nil)
+        let height = scrollView.contentView.bounds.height
+        let target = max(0, inView.y - height / 2)
+        textView.scroll(NSPoint(x: 0, y: target))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
     /// Moves the caret to an LSP position and reveals it.
     func reveal(line: Int, character: Int) {
         guard let textView else { return }

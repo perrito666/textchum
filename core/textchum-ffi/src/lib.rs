@@ -2054,6 +2054,66 @@ pub unsafe extern "C" fn tc_theme_import(
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// Reads a place out of whatever was typed or pasted into a "go to
+/// line" prompt: `412`, `412:8`, `src/main.rs:412:8`, `line 412`.
+/// Writes the one-based line and column into the outputs and returns
+/// true; returns false when the text names no line at all.
+///
+/// # Safety
+/// `text` must point to `len` readable bytes; `line_out` and
+/// `column_out` must point to writable slots.
+#[no_mangle]
+pub unsafe extern "C" fn tc_goto_parse(
+    text: *const c_char,
+    len: usize,
+    line_out: *mut usize,
+    column_out: *mut usize,
+) -> bool {
+    if line_out.is_null() || column_out.is_null() {
+        return false;
+    }
+    let Some(text) = (unsafe { str_from_raw(text, len) }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(
+        || match textchum_core::goto::parse(text) {
+            Some(target) => {
+                unsafe {
+                    *line_out = target.line;
+                    *column_out = target.column;
+                }
+                true
+            }
+            None => false,
+        },
+    ))
+    .unwrap_or(false)
+}
+
+/// The UTF-16 offset of a one-based line and column, clamped to the
+/// document: a line past the end is the last line, and a column past
+/// the end of its line is that line's end.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_offset_for_line(
+    document: *const TcDocument,
+    line: usize,
+    column: usize,
+) -> usize {
+    unsafe { document.as_ref() }.map_or(0, |d| d.inner.offset_for_line(line, column))
+}
+
+/// How many lines the document has.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_len_lines(document: *const TcDocument) -> usize {
+    unsafe { document.as_ref() }.map_or(0, |d| d.inner.len_lines())
+}
+
 /// The selectable language names with a representative file extension,
 /// one per line as `name \x1f extension` (extension may be empty).
 /// Release with [`tc_string_free`]. For "new file with format" pickers.
