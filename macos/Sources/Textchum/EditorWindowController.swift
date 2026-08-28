@@ -49,6 +49,9 @@ struct SidebarConfiguration {
     /// Whether the tree follows the focused file automatically.
     var followEnabled: () -> Bool = { true }
     let selectDocument: (ObjectIdentifier) -> Void
+    /// Opens File Properties for a document in the navigator — the
+    /// language badge is the obvious place to say "this is SQL".
+    let showProperties: (ObjectIdentifier) -> Void
     let openFile: (String) -> Void
     /// Moves the given documents' windows into a window of their own…
     var splitGroup: ([ObjectIdentifier]) -> Void = { _ in }
@@ -248,6 +251,7 @@ final class EditorWindowController: NSWindowController {
                 context: sidebarContext,
                 treeState: sidebar.treeState,
                 onSelectDocument: sidebar.selectDocument,
+                onShowProperties: sidebar.showProperties,
                 onOpenFile: sidebar.openFile,
                 onSplitGroup: { group in
                     sidebar.splitGroup(group.documents.map(\.id))

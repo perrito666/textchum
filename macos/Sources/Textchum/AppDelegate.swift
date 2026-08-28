@@ -1339,6 +1339,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 else { return }
                 editor.window?.makeKeyAndOrderFront(nil)
             },
+            showProperties: { [weak self] id in
+                guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
+                else { return }
+                editor.window?.makeKeyAndOrderFront(nil)
+                editor.showFileProperties(nil)
+            },
             openFile: { [weak self] path in
                 guard let self else { return }
                 // Focus an existing window for the file rather than
