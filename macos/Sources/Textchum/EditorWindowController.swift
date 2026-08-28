@@ -2915,6 +2915,12 @@ extension EditorWindowController: NSTextViewDelegate {
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
                 return insertNewlineAutoIndenting(in: textView)
             }
+            if commandSelector == #selector(NSResponder.deleteBackward(_:)) {
+                return deleteBackwardByIndent(in: textView)
+            }
+            if commandSelector == #selector(NSResponder.insertTab(_:)) {
+                return indentToBlockAbove(in: textView)
+            }
             return false
         }
         switch commandSelector {
@@ -2933,6 +2939,79 @@ extension EditorWindowController: NSTextViewDelegate {
         default:
             return false
         }
+    }
+
+    /// Backspace in a line's leading spaces deletes back to the
+    /// previous tab stop rather than one space at a time. Anywhere else
+    /// in the line it is an ordinary backspace, which is what keeps the
+    /// behaviour from ever surprising: it is the position that decides.
+    ///
+    /// Returns false to let AppKit do its usual thing — a selection, a
+    /// caret at the very start of a line, a line indented with tabs.
+    private func deleteBackwardByIndent(in textView: NSTextView) -> Bool {
+        let selection = textView.selectedRange()
+        guard selection.length == 0, selection.location > 0 else { return false }
+        let text = textView.string as NSString
+        let lineStart = text.lineRange(for: NSRange(location: selection.location, length: 0))
+            .location
+        let before = text.substring(
+            with: NSRange(location: lineStart, length: selection.location - lineStart))
+        let width = CoreDocument.backspaceWidth(before: before, tabWidth: appliedTabWidth)
+        guard width > 1 else { return false }
+        let target = NSRange(location: selection.location - width, length: width)
+        // Through insertText, so the edit takes the same synchronized
+        // path (delegate → core → history) as anything typed.
+        textView.insertText("", replacementRange: target)
+        return true
+    }
+
+    /// Tab in a line's leading whitespace lines the line up with the
+    /// block above it, and one level deeper when it is already level.
+    /// Everywhere else in the line Tab is Tab.
+    private func indentToBlockAbove(in textView: NSTextView) -> Bool {
+        let selection = textView.selectedRange()
+        guard selection.length == 0 else { return false }
+        let text = textView.string as NSString
+        let line = text.lineRange(for: NSRange(location: selection.location, length: 0))
+        let currentIndent = Self.leadingWhitespace(
+            of: text.substring(with: line))
+        // Only in the indentation: past it, Tab inserts as it always
+        // has.
+        guard selection.location <= line.location + (currentIndent as NSString).length else {
+            return false
+        }
+        var previous: String?
+        var at = line.location
+        while at > 0 {
+            let above = text.lineRange(for: NSRange(location: at - 1, length: 0))
+            let content = text.substring(with: above)
+            if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                previous = content
+                break
+            }
+            at = above.location
+        }
+        // What the document already does, the way auto-indent decides
+        // it: a tab-indented file keeps tabs.
+        let usesTabs =
+            currentIndent.contains("\t") || (previous ?? "").hasPrefix("\t")
+            || textView.string.contains("\n\t")
+        let wanted = CoreDocument.alignedIndent(
+            previous: previous, currentIndent: currentIndent,
+            tabWidth: appliedTabWidth, useTabs: usesTabs)
+        guard wanted != currentIndent else { return false }
+        let replacing = NSRange(
+            location: line.location, length: (currentIndent as NSString).length)
+        textView.insertText(wanted, replacementRange: replacing)
+        // The caret follows the indentation it just asked for.
+        let caret = line.location + (wanted as NSString).length
+        textView.setSelectedRange(NSRange(location: caret, length: 0))
+        return true
+    }
+
+    /// The whitespace a line starts with.
+    static func leadingWhitespace(of line: String) -> String {
+        String(line.prefix { $0 == " " || $0 == "\t" })
     }
 
     /// Return carries the current line's leading whitespace onto the new

@@ -2234,6 +2234,67 @@ pub unsafe extern "C" fn tc_blame_line(
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// How many characters backspace should remove, given the text of the
+/// line before the caret.
+///
+/// One, unless everything between the start of the line and the caret
+/// is spaces — then back to the previous tab stop. Zero at the very
+/// start of a line, where backspace joins with the line above and this
+/// has nothing to say.
+///
+/// # Safety
+/// `before_caret` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_indent_backspace_width(
+    before_caret: *const c_char,
+    len: usize,
+    tab_width: usize,
+) -> usize {
+    let Some(before) = (unsafe { str_from_raw(before_caret, len) }) else {
+        return 1;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::indent::backspace_width(before, tab_width)
+    }))
+    .unwrap_or(1)
+}
+
+/// The whitespace a line should be indented with to line up with the
+/// block above it, or one level deeper when it is already level.
+///
+/// `previous` is the nearest non-blank line above (may be null when
+/// there is none) and `current_indent` the line's own leading
+/// whitespace. Returns a nul-terminated string to put in place of that
+/// indentation; release it with [`tc_string_free`].
+///
+/// # Safety
+/// `previous`, if not null, must point to `previous_len` readable
+/// bytes; `current_indent` must point to `current_len`.
+#[no_mangle]
+pub unsafe extern "C" fn tc_indent_aligned(
+    previous: *const c_char,
+    previous_len: usize,
+    current_indent: *const c_char,
+    current_len: usize,
+    tab_width: usize,
+    use_tabs: bool,
+) -> *mut c_char {
+    let previous = if previous.is_null() {
+        None
+    } else {
+        unsafe { str_from_raw(previous, previous_len) }
+    };
+    let Some(current) = (unsafe { str_from_raw(current_indent, current_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(textchum_core::indent::aligned_indent(
+            previous, current, tab_width, use_tabs,
+        ))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// The selectable language names with a representative file extension,
 /// one per line as `name \x1f extension` (extension may be empty).
 /// Release with [`tc_string_free`]. For "new file with format" pickers.

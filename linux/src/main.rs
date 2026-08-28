@@ -702,6 +702,32 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         println!("blame ok (buffer-aware, uncommitted lines, past the end, outside a repo)");
     }
 
+    // Backspace in a line's leading spaces takes a whole indent, and
+    // one character anywhere else; Tab in the indentation lines up with
+    // the block above. It is the position that decides.
+    {
+        use textchum_core::indent::{aligned_indent, backspace_width};
+        if backspace_width("    ", 4) != 4
+            || backspace_width("      ", 4) != 2
+            || backspace_width("    let x", 4) != 1
+            || backspace_width("\t\t", 4) != 1
+            || backspace_width("", 4) != 0
+        {
+            eprintln!("FAIL: backspace indent widths");
+            return 1;
+        }
+        if aligned_indent(Some("        deep()"), "", 4, false) != "        "
+            || aligned_indent(Some("    thing()"), "    ", 4, false) != "        "
+            || aligned_indent(Some("    thing()"), "  ", 4, false) != "    "
+            || aligned_indent(None, "", 4, false) != "    "
+            || aligned_indent(Some("\t\tdeep()"), "", 4, true) != "\t\t"
+        {
+            eprintln!("FAIL: aligned indentation");
+            return 1;
+        }
+        println!("indentation ok (backspace by level, tab aligns with the block above)");
+    }
+
     let fire = |name: &str| {
         gtk::prelude::WidgetExt::activate_action(&workbench.window, name, None).is_ok()
     };
