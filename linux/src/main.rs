@@ -206,6 +206,7 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.new-format-picker", &["<Ctrl><Shift>n"]);
     app.set_accels_for_action("win.paths", &["<Ctrl><Alt>t"]);
     app.set_accels_for_action("win.file-properties", &["<Ctrl>i"]);
+    app.set_accels_for_action("win.goto-line", &["<Ctrl>l"]);
     app.set_accels_for_action("win.block-start", &["<Ctrl><Alt>Up"]);
     app.set_accels_for_action("win.block-end", &["<Ctrl><Alt>Down"]);
     // Key overrides read the configuration, which touches GTK-backed
@@ -290,6 +291,7 @@ fn apply_key_overrides(app: &adw::Application) {
             "newWithFormat" => "win.new-format-picker",
             "togglePathDisplay" => "win.paths",
             "fileProperties" => "win.file-properties",
+            "goToLine" => "win.goto-line",
             "goToBlockStart" => "win.block-start",
             "goToBlockEnd" => "win.block-end",
             "toggleNavigator" => "win.sidebar",
@@ -515,6 +517,45 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             return 1;
         }
         println!("icon pack ok (loaded, looked up by name and extension, cleared)");
+    }
+
+    // Go to Line reads what people actually type and paste, and
+    // resolves it against the document, clamped to what is there.
+    {
+        use textchum_core::goto;
+        let shapes = [
+            ("412", 412, 1),
+            ("412:8", 412, 8),
+            ("src/main.rs:412:8", 412, 8),
+            (r"C:\src\main.rs:412:8", 412, 8),
+            ("main.rs, line 412", 412, 1),
+            ("utf8.rs:12", 12, 1),
+        ];
+        for (text, line, column) in shapes {
+            match goto::parse(text) {
+                Some(target) if target.line == line && target.column == column => {}
+                other => {
+                    eprintln!("FAIL: go-to-line parsing {text:?}: {other:?}");
+                    return 1;
+                }
+            }
+        }
+        if goto::parse("nowhere").is_some() {
+            eprintln!("FAIL: text naming no line must name no line");
+            return 1;
+        }
+        let mut line_doc = textchum_core::Document::new();
+        let _ = line_doc.replace_utf16(0, 0, "one\ntwo\nthree");
+        if line_doc.len_lines() != 3
+            || line_doc.offset_for_line(2, 1) != 4
+            || line_doc.offset_for_line(2, 3) != 6
+            || line_doc.offset_for_line(2, 99) != 7
+            || line_doc.offset_for_line(9999, 1) != 8
+        {
+            eprintln!("FAIL: go-to-line offsets");
+            return 1;
+        }
+        println!("go to line ok (compiler shapes, drive letters, clamping)");
     }
 
     let fire = |name: &str| {

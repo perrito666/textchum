@@ -72,6 +72,11 @@ curseur, ce qui marche même souris désactivée.
 </figure>
 </div>
 
+**Aller à la ligne** (⌘L, Ctrl+L sous Linux) accepte un numéro, ou le
+`src/main.rs:412:8` entier collé depuis un journal de compilation — le
+nom du fichier et le bruit qui suit sont ignorés, la ligne est centrée,
+et Retour revient là où la lecture s'est interrompue.
+
 La complétion apparaît à la frappe après les caractères d'identifiant
 et `.` ; ↑/↓ choisissent, ⏎ ou ⇥ acceptent, ⎋ ferme. Un snippet arrive
 avec son premier marqueur sélectionné, donc taper le remplace ; ⇥ passe

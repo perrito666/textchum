@@ -73,6 +73,11 @@ el cursor, lo que funciona incluso con el hover del ratón apagado.
 </figure>
 </div>
 
+**Ir a la línea** (⌘L, Ctrl+L en Linux) acepta un número, o el
+`src/main.rs:412:8` entero pegado desde un registro de compilación —
+el nombre del archivo y el ruido sobrante se ignoran, la línea queda
+centrada, y Atrás vuelve a donde se interrumpió la lectura.
+
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
 primer marcador seleccionado, así que escribir lo reemplaza; ⇥ pasa al

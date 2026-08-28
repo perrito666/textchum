@@ -9,7 +9,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{icons, theme_import, workspace, Appearance};
+use textchum_core::{goto, icons, theme_import, workspace, Appearance};
 
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
@@ -187,6 +187,7 @@ impl Workbench {
         go_section.append(Some("Format Document"), Some("win.format"));
         go_section.append(Some("Document Outline…"), Some("win.outline"));
         go_section.append(Some("Show Documentation for Symbol"), Some("win.hover"));
+        go_section.append(Some("Go to Line…"), Some("win.goto-line"));
         go_section.append(Some("Go to Block Start"), Some("win.block-start"));
         go_section.append(Some("Go to Block End"), Some("win.block-end"));
         go_section.append(Some("Command Palette…"), Some("win.palette"));
@@ -1295,6 +1296,61 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .unwrap_or_else(glib::home_dir);
         show_quick_open(workbench, root);
     });
+    add("goto-line", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        let lines = page.state.borrow().document.len_lines();
+        let dialog = adw::AlertDialog::new(
+            Some("Go to Line"),
+            Some(&format!("Line number, or line:column — of {lines}.")),
+        );
+        let entry = gtk::Entry::new();
+        entry.set_placeholder_text(Some("412 or 412:8"));
+        entry.set_activates_default(true);
+        dialog.set_extra_child(Some(&entry));
+        let entry_for_focus = entry.clone();
+        dialog.add_response("cancel", "Cancel");
+        dialog.add_response("go", "Go");
+        dialog.set_response_appearance("go", adw::ResponseAppearance::Suggested);
+        dialog.set_default_response(Some("go"));
+        let weak = Rc::downgrade(workbench);
+        dialog.connect_response(None, move |_, response| {
+            if response != "go" {
+                return;
+            }
+            let Some(workbench) = weak.upgrade() else { return };
+            // Reading it is the core's job, so both shells accept the
+            // same shapes: a bare number, `412:8` from a compiler, a
+            // whole pasted `src/main.rs:412:8`.
+            let Some(target) = goto::parse(&entry.text()) else {
+                workbench.toast("Nothing in that names a line.");
+                return;
+            };
+            let Some(page) = workbench.selected() else { return };
+            let offset = page
+                .state
+                .borrow()
+                .document
+                .offset_for_line(target.line, target.column);
+            // The jump is one Go Back should return from: reading was
+            // interrupted here.
+            workbench.note_jump();
+            let text = page
+                .buffer
+                .text(&page.buffer.start_iter(), &page.buffer.end_iter(), true);
+            let mut at = page.buffer.iter_at_offset(page::char_offset(&text, offset));
+            page.buffer.place_cursor(&at);
+            // Centred rather than merely visible: a line scrolled to
+            // the last row of the window is one you have to scroll to
+            // read.
+            page.view.scroll_to_iter(&mut at, 0.0, true, 0.0, 0.5);
+            page.view.grab_focus();
+        });
+        dialog.present(Some(&workbench.window.clone()));
+        // The dialog opens with its default button focused, so without
+        // this the number goes nowhere and Return dismisses an empty
+        // field.
+        entry_for_focus.grab_focus();
+    });
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
     });
@@ -1598,7 +1654,9 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let dialog = adw::AlertDialog::new(Some("Rename Symbol"), None);
         let entry = gtk::Entry::new();
         entry.set_placeholder_text(Some("New name"));
+        entry.set_activates_default(true);
         dialog.set_extra_child(Some(&entry));
+        let entry_for_focus = entry.clone();
         dialog.add_response("cancel", "Cancel");
         dialog.add_response("rename", "Rename");
         dialog.set_response_appearance("rename", adw::ResponseAppearance::Suggested);
@@ -1631,6 +1689,9 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             });
         });
         dialog.present(Some(&workbench.window));
+        // Same as Go to Line: the default button takes focus, so the
+        // new name has to be clicked into without this.
+        entry_for_focus.grab_focus();
         let _ = page;
     });
     add("format", workbench, |workbench, _| {
@@ -1973,6 +2034,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Format Document", "win.format"),
     ("Document Outline…", "win.outline"),
     ("Show Documentation for Symbol", "win.hover"),
+    ("Go to Line…", "win.goto-line"),
     ("Go to Block Start", "win.block-start"),
     ("Go to Block End", "win.block-end"),
     ("Language Server Status", "win.server-status"),

@@ -1211,6 +1211,38 @@ char *tc_theme_import(const char *path,
                       uintptr_t dir_len);
 
 /**
+ * Reads a place out of whatever was typed or pasted into a "go to
+ * line" prompt: `412`, `412:8`, `src/main.rs:412:8`, `line 412`.
+ * Writes the one-based line and column into the outputs and returns
+ * true; returns false when the text names no line at all.
+ *
+ * # Safety
+ * `text` must point to `len` readable bytes; `line_out` and
+ * `column_out` must point to writable slots.
+ */
+bool tc_goto_parse(const char *text, uintptr_t len, uintptr_t *line_out, uintptr_t *column_out);
+
+/**
+ * The UTF-16 offset of a one-based line and column, clamped to the
+ * document: a line past the end is the last line, and a column past
+ * the end of its line is that line's end.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+uintptr_t tc_document_offset_for_line(const struct TcDocument *document,
+                                      uintptr_t line,
+                                      uintptr_t column);
+
+/**
+ * How many lines the document has.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+uintptr_t tc_document_len_lines(const struct TcDocument *document);
+
+/**
  * The selectable language names with a representative file extension,
  * one per line as `name \x1f extension` (extension may be empty).
  * Release with [`tc_string_free`]. For "new file with format" pickers.

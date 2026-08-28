@@ -969,6 +969,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.renameSymbol(_:)): "renameSymbol",
             #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
             #selector(EditorWindowController.runPreprocessors(_:)): "runPreprocessors",
+            #selector(EditorWindowController.goToLine(_:)): "goToLine",
             #selector(EditorWindowController.goToBlockStart(_:)): "goToBlockStart",
             #selector(EditorWindowController.goToBlockEnd(_:)): "goToBlockEnd",
             #selector(EditorWindowController.triggerCompletion(_:)): "complete",
@@ -2110,6 +2111,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         outlineItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(outlineItem)
+        let goToLineItem = NSMenuItem(
+            title: "Go to Line…",
+            action: #selector(EditorWindowController.goToLine(_:)),
+            keyEquivalent: "l"
+        )
+        goToLineItem.keyEquivalentModifierMask = [.command]
+        viewMenu.addItem(goToLineItem)
         let redrawItem = NSMenuItem(
             title: "Redraw",
             action: #selector(EditorWindowController.redrawDocument(_:)),

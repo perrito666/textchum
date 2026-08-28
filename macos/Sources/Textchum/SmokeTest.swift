@@ -724,6 +724,35 @@ func runSmokeTest() -> Int32 {
     try? FileManager.default.removeItem(at: packDir)
     print("icon pack ok (loaded, looked up by name and extension, cleared)")
 
+    // Go to Line reads what people actually type and paste, and
+    // resolves it against the document, clamped to what is there.
+    guard CoreDocument.parseGoTo("412")?.line == 412,
+        CoreDocument.parseGoTo("412:8").map({ ($0.line, $0.column) }) ?? (0, 0) == (412, 8),
+        CoreDocument.parseGoTo("src/main.rs:412:8").map({ ($0.line, $0.column) }) ?? (0, 0)
+            == (412, 8),
+        CoreDocument.parseGoTo(#"C:\src\main.rs:412:8"#).map({ ($0.line, $0.column) }) ?? (0, 0)
+            == (412, 8),
+        CoreDocument.parseGoTo("main.rs, line 412")?.line == 412,
+        CoreDocument.parseGoTo("utf8.rs:12")?.line == 12,
+        CoreDocument.parseGoTo("nowhere") == nil
+    else {
+        print("FAIL: go-to-line parsing")
+        return 1
+    }
+    let lineDoc = CoreDocument()
+    try? lineDoc.replace(utf16Range: NSRange(location: 0, length: 0), with: "one\ntwo\nthree")
+    guard lineDoc.lineCount == 3,
+        lineDoc.offset(ofLine: 2, column: 1) == 4,
+        lineDoc.offset(ofLine: 2, column: 3) == 6,
+        // Past the end of the line, and past the end of the document.
+        lineDoc.offset(ofLine: 2, column: 99) == 7,
+        lineDoc.offset(ofLine: 9999, column: 1) == 8
+    else {
+        print("FAIL: go-to-line offsets")
+        return 1
+    }
+    print("go to line ok (compiler shapes, drive letters, clamping)")
+
     print("smoke test passed")
     return 0
 }
