@@ -971,6 +971,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.runPreprocessors(_:)): "runPreprocessors",
             #selector(EditorWindowController.blameLine(_:)): "blameLine",
             #selector(EditorWindowController.showDiagnosticAtCaret(_:)): "showDiagnostic",
+            #selector(EditorWindowController.showDiagnosticList(_:)): "diagnosticList",
             #selector(EditorWindowController.goToLine(_:)): "goToLine",
             #selector(EditorWindowController.goToBlockStart(_:)): "goToBlockStart",
             #selector(EditorWindowController.goToBlockEnd(_:)): "goToBlockEnd",
@@ -1256,6 +1257,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: Jump stack
+
+    /// The format picker's list. The app owns this one; each editor
+    /// window owns its own for the lists that are about a document.
+    private let formatPicker = ListPanel()
 
     let jumpStack = JumpStack()
 
@@ -1619,7 +1624,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// document already speaking the selection.
     @objc func newDocumentWithFormatPicker(_ sender: Any?) {
         let languages = CoreLanguages.all.map { language in
-            OutlinePanel.Symbol(
+            OutlineSymbol(
                 name: language.name,
                 kind: language.fileExtension.isEmpty ? "" : ".\(language.fileExtension)",
                 line: 0,
@@ -1627,11 +1632,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 depth: 0
             )
         }
-        OutlinePanel.shared.show(
-            symbols: languages, over: NSApp.keyWindow,
+        formatPicker.show(
+            rows: languages.map { .item($0.name) }, over: NSApp.keyWindow,
             title: "New with Format", placeholder: "language…"
-        ) { [weak self] symbol in
-            self?.makeUntitled(language: symbol.name)
+        ) { [weak self] index in
+            guard languages.indices.contains(index) else { return }
+            self?.makeUntitled(language: languages[index].name)
         }
     }
 
@@ -2113,6 +2119,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         outlineItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(outlineItem)
+        let diagnosticListItem = NSMenuItem(
+            title: "Diagnostics…",
+            action: #selector(EditorWindowController.showDiagnosticList(_:)),
+            keyEquivalent: "e"
+        )
+        diagnosticListItem.keyEquivalentModifierMask = [.command, .shift]
+        viewMenu.addItem(diagnosticListItem)
         let diagnosticItem = NSMenuItem(
             title: "Show Diagnostic for Line",
             action: #selector(EditorWindowController.showDiagnosticAtCaret(_:)),
