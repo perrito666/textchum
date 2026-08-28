@@ -1002,6 +1002,31 @@ func runSmokeTest() -> Int32 {
     }
     print("indentation ok (backspace by level, tab aligns with the block above)")
 
+    // Every mouse move over the editor asks which character is under
+    // the pointer. The first version of that added a line fragment's
+    // own index to a document offset, and NSTextLineFragment answers
+    // NSNotFound — Int.max — for a point it does not cover, so the
+    // addition overflowed and trapped. Sweep the points that do it.
+    do {
+        let sweepView = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 120))
+        sweepView.string = "one\ntwo\nthree\n"
+        sweepView.textLayoutManager?.ensureLayout(
+            for: sweepView.textLayoutManager!.documentRange)
+        let length = (sweepView.string as NSString).length
+        for x in stride(from: -200.0, through: 900.0, by: 37.0) {
+            for y in stride(from: -200.0, through: 900.0, by: 37.0) {
+                guard let index = EditorWindowController.characterIndex(
+                    at: NSPoint(x: x, y: y), in: sweepView)
+                else { continue }
+                guard index >= 0, index < length else {
+                    print("FAIL: character index \(index) at (\(x), \(y)), length \(length)")
+                    return 1
+                }
+            }
+        }
+    }
+    print("pointer character index ok (in range everywhere, including off the text)")
+
     print("smoke test passed")
     return 0
 }
