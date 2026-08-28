@@ -1167,7 +1167,7 @@ final class EditorWindowController: NSWindowController {
     /// re-add their underlines afterwards. Internal because theme
     /// switches recolor every window from the app delegate.
     func refreshDecorations() {
-        applyHighlights()
+        applyHighlights(force: true)
         renderDiagnostics()
         scheduleSpellCheck()
     }
@@ -1471,7 +1471,7 @@ final class EditorWindowController: NSWindowController {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.highlightRefreshPending = false
-                self.applyHighlights()
+                guard self.applyHighlights(force: false) else { return }
                 self.renderDiagnostics()
             }
         }
@@ -1481,15 +1481,20 @@ final class EditorWindowController: NSWindowController {
     /// see, plus a margin so a flick of the scroll wheel lands on
     /// coloured text rather than black. Nil means "colour everything",
     /// which is what a document smaller than one margin deserves.
-    private func highlightRange() -> NSRange? {
+    private func highlightRange() -> (viewport: NSRange, painted: NSRange)? {
         let length = coreDocument.lengthInUTF16
         guard length > Self.viewportMargin * 2 else {
-            return length > 0 ? NSRange(location: 0, length: length) : nil
+            guard length > 0 else { return nil }
+            let whole = NSRange(location: 0, length: length)
+            return (whole, whole)
         }
         guard let textView, let scrollView = textView.enclosingScrollView,
             let layoutManager = textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager
-        else { return NSRange(location: 0, length: min(length, Self.viewportMargin * 2)) }
+        else {
+            let head = NSRange(location: 0, length: min(length, Self.viewportMargin * 2))
+            return (head, head)
+        }
 
         // The viewport controller knows exactly what is laid out; fall
         // back to the caret when it has not settled yet (first paint).
@@ -1509,7 +1514,33 @@ final class EditorWindowController: NSWindowController {
         let from = max(0, start - Self.viewportMargin)
         let to = min(length, end + Self.viewportMargin)
         guard to > from else { return nil }
-        return NSRange(location: from, length: to - from)
+        return (
+            NSRange(location: start, length: max(0, end - start)),
+            NSRange(location: from, length: to - from)
+        )
+    }
+
+    /// What the last pass painted, and how long the document was then.
+    private var paintedRange: NSRange?
+    private var paintedLength: Int?
+
+    /// Whether a scroll has to repaint at all.
+    ///
+    /// The margin around the viewport exists so that scrolling can move
+    /// most of a screen before anything needs recolouring. Repainting
+    /// on every scroll turn instead does the whole job again for a few
+    /// pixels of movement — several milliseconds of rendering
+    /// attributes and font runs per runloop turn, which is what the
+    /// stutter was.
+    ///
+    /// A document whose length changed is repainted regardless: the
+    /// offsets a remembered range is expressed in have moved.
+    static func shouldRepaint(
+        viewport: NSRange, painted: NSRange?, documentLength: Int, paintedLength: Int?
+    ) -> Bool {
+        guard let painted, paintedLength == documentLength else { return true }
+        return viewport.location < painted.location
+            || NSMaxRange(viewport) > NSMaxRange(painted)
     }
 
     /// Paints the core's styled spans over the visible stretch: colour
@@ -1521,17 +1552,31 @@ final class EditorWindowController: NSWindowController {
     /// Scoping to the viewport is what lets a large file be coloured at
     /// all: colouring whole documents meant a hard cap past which text
     /// arrived with no colour whatsoever.
-    private func applyHighlights() {
+    @discardableResult
+    private func applyHighlights(force: Bool) -> Bool {
         guard let textView,
             let layoutManager = textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager
-        else { return }
+        else { return false }
+        guard let (viewport, painted) = highlightRange(), painted.length > 0 else {
+            paintedRange = nil
+            paintedLength = nil
+            return false
+        }
+        let length = coreDocument.lengthInUTF16
+        guard force
+            || Self.shouldRepaint(
+                viewport: viewport, painted: paintedRange,
+                documentLength: length, paintedLength: paintedLength)
+        else { return false }
+        paintedRange = painted
+        paintedLength = length
+
         let documentRange = layoutManager.documentRange
         layoutManager.removeRenderingAttribute(.foregroundColor, for: documentRange)
 
-        guard let painted = highlightRange(), painted.length > 0 else { return }
         let spans = coreDocument.highlights(in: painted)
-        guard !spans.isEmpty else { return }
+        guard !spans.isEmpty else { return true }
 
         let darkAppearance =
             (window?.effectiveAppearance ?? NSApp.effectiveAppearance)
@@ -1566,6 +1611,7 @@ final class EditorWindowController: NSWindowController {
                 .font, value: Self.font(appliedFont, bold: traits.bold, italic: traits.italic),
                 range: clamped)
         }
+        return true
     }
 
     /// The editor font with traits applied. Monospaced families keep
