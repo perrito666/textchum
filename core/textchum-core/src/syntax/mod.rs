@@ -41,6 +41,11 @@ pub struct HighlightSpan {
     pub start_utf16: usize,
     pub end_utf16: usize,
     /// Index into the theme's style table.
+    ///
+    /// A position in an alphabetical list, so it moves whenever a
+    /// capture is added. Never compare it to a literal: ask
+    /// [`crate::theme::resolve`] for the name you mean. Comparing two
+    /// spans' ids to each other is fine.
     pub style: u32,
 }
 

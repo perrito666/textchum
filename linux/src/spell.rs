@@ -239,14 +239,16 @@ fn prose_char_ranges(page: &Rc<Page>, text: &str) -> Vec<(usize, usize)> {
         }
         return kept;
     }
+    let comment_style = textchum_core::theme::resolve("comment");
     let total_utf16 = text.encode_utf16().count();
     let Ok(spans) = state.document.highlights(0, total_utf16) else {
         return Vec::new();
     };
     spans
         .iter()
-        // Style index 1 is the canonical comment capture.
-        .filter(|span| span.style == 1)
+        // Asked by name: style ids are positions in an alphabetical
+        // table and move whenever a capture is added.
+        .filter(|span| Some(span.style) == comment_style)
         .map(|span| {
             (
                 crate::page::char_offset(text, span.start_utf16) as usize,

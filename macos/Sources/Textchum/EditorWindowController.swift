@@ -443,10 +443,12 @@ final class EditorWindowController: NSWindowController {
         var identifier = CharacterSet.alphanumerics
         identifier.insert("_")
         guard identifier.contains(scalar) else { return false }
-        // Style index 1 is the canonical comment capture (theme contract).
+        // Asked by name: style ids are positions in an alphabetical
+        // table and move whenever a capture is added.
         let spans = coreDocument.highlights(in: NSRange(location: index, length: 1))
         return !spans.contains { span in
-            span.styleIndex == 1 && NSLocationInRange(index, span.range)
+            CoreTheme.commentStyleID.map { span.styleIndex == $0 } ?? false
+                && NSLocationInRange(index, span.range)
         }
     }
 
@@ -1167,9 +1169,12 @@ final class EditorWindowController: NSWindowController {
             return skip.isEmpty ? [whole] : Self.ranges(of: whole, excluding: skip)
         }
         guard text.length <= Self.highlightSizeCap else { return [] }
-        // Style index 1 is the canonical comment capture (theme contract).
+        // Asked by name: style ids are positions in an alphabetical
+        // table and move whenever a capture is added.
         return coreDocument.highlights(in: NSRange(location: 0, length: text.length))
-            .filter { $0.styleIndex == 1 }
+            .filter { span in
+                CoreTheme.commentStyleID.map { span.styleIndex == $0 } ?? false
+            }
             .map(\.range)
     }
 
