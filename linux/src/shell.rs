@@ -162,6 +162,14 @@ impl Shell {
             Appearance::Dark => adw::ColorScheme::ForceDark,
         };
         adw::StyleManager::default().set_color_scheme(scheme);
+        // The text area's background comes from the source view's own
+        // scheme, which does not follow the colour scheme by itself.
+        crate::workbench::Workbench::for_each(|workbench| {
+            for page in workbench.all_pages() {
+                crate::page::apply_source_scheme(&page.buffer);
+                crate::page::recolor(&page.buffer);
+            }
+        });
     }
 
     /// Activates the configured theme — a built-in, or a user JSON
