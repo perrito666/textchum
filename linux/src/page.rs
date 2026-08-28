@@ -81,6 +81,7 @@ impl Page {
         // source; GtkSourceView's own engine stays off.
         buffer.set_highlight_syntax(false);
         buffer.set_highlight_matching_brackets(false);
+        apply_source_scheme(&buffer);
         buffer.set_enable_undo(false);
         install_style_tags(&buffer);
         install_diagnostic_tags(&buffer);
@@ -506,6 +507,29 @@ fn install_style_tags(buffer: &sourceview5::Buffer) {
 /// creation, on theme switches, and on light/dark flips.
 pub fn refresh_style_tags(buffer: &sourceview5::Buffer) {
     recolor(buffer);
+}
+
+/// Gives a buffer the GtkSourceView scheme matching the current colour
+/// scheme.
+///
+/// Without one, the text area's background comes from whatever CSS
+/// happens to apply, which is not reliably the dark one: an untitled
+/// document came up white on a dark desktop while a document with a
+/// language came up dark. GtkSourceView ships Adwaita and Adwaita-dark
+/// for this, and naming the scheme makes the background a decision
+/// rather than a side effect.
+///
+/// The scheme's own syntax colours do not interfere: highlighting is
+/// off and every token is painted with a tag. What it supplies is the
+/// background, the cursor, the selection and the current-line tint.
+pub fn apply_source_scheme(buffer: &sourceview5::Buffer) {
+    let dark = adw::StyleManager::default().is_dark();
+    let manager = sourceview5::StyleSchemeManager::default();
+    let scheme = manager
+        .scheme(if dark { "Adwaita-dark" } else { "Adwaita" })
+        // Older GtkSourceView installs ship classic/classic-dark only.
+        .or_else(|| manager.scheme(if dark { "classic-dark" } else { "classic" }));
+    buffer.set_style_scheme(scheme.as_ref());
 }
 
 pub fn recolor(buffer: &sourceview5::Buffer) {
