@@ -99,6 +99,15 @@ Elle interroge avec le texte du tampon et non le fichier sur disque :
 une modification non enregistrée au-dessus du curseur ne peut donc pas
 déplacer discrètement la réponse sur la ligne voisine.
 
+Dans l'**espace initial** d'une ligne, deux touches font un peu plus
+que d'ordinaire. Retour arrière efface jusqu'au taquet précédent plutôt
+qu'espace par espace, et Tab aligne la ligne sur la première ligne non
+vide au-dessus — une seconde pression, déjà alignée, descend d'un
+niveau. Ailleurs dans la ligne, les deux touches sont elles-mêmes :
+c'est la position qui décide, pas un mode, et c'est ce qui les empêche
+de surprendre. Une ligne indentée avec des tabulations est laissée à
+son propre caractère, déjà d'une frappe par niveau.
+
 La complétion apparaît à la frappe après les caractères d'identifiant
 et `.` ; ↑/↓ choisissent, ⏎ ou ⇥ acceptent, ⎋ ferme. Un snippet arrive
 avec son premier marqueur sélectionné, donc taper le remplace ; ⇥ passe

@@ -264,6 +264,46 @@ public final class CoreDocument {
         NSRange(location: Int(region.start), length: Int(region.end - region.start))
     }
 
+    // MARK: Indentation
+
+    /// How many characters backspace should remove, given the text of
+    /// the line before the caret. One, unless everything before the
+    /// caret is spaces — then back to the previous tab stop.
+    public static func backspaceWidth(before: String, tabWidth: Int) -> Int {
+        Int(
+            withUTF8Pointer(before) { pointer, length in
+                tc_indent_backspace_width(pointer, length, UInt(tabWidth))
+            })
+    }
+
+    /// The whitespace a line should carry to line up with the block
+    /// above, or one level deeper when it is already level.
+    public static func alignedIndent(
+        previous: String?, currentIndent: String, tabWidth: Int, useTabs: Bool
+    ) -> String {
+        var current = currentIndent
+        let result = current.withUTF8 { currentBytes -> UnsafeMutablePointer<CChar>? in
+            let currentPointer = currentBytes.baseAddress.map {
+                UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+            }
+            guard var previous else {
+                return tc_indent_aligned(
+                    nil, 0, currentPointer, UInt(currentBytes.count),
+                    UInt(tabWidth), useTabs)
+            }
+            return previous.withUTF8 { previousBytes in
+                tc_indent_aligned(
+                    previousBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(previousBytes.count),
+                    currentPointer, UInt(currentBytes.count),
+                    UInt(tabWidth), useTabs)
+            }
+        }
+        return takeString(result) ?? currentIndent
+    }
+
     // MARK: Going to a line
 
     /// Reads a place out of whatever was typed or pasted: `412`,
