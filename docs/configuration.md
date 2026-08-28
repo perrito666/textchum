@@ -119,6 +119,39 @@ configuration's: a theme that fails to parse falls back to the default
 with one warning and is never overwritten, and unknown keys survive.
 Theme files are read at launch and when the selection changes.
 
+### Importing one from another editor
+
+**Textchum → Import Theme** brings colours over from VS Code or
+TextMate. Pick a theme file, or a folder holding several — a VS Code
+extension directory (its `package.json` says what it contributes) or a
+TextMate bundle (its themes live in `Themes/`). Everything found is
+imported, and the first is put on.
+
+Both editors describe colour by **TextMate scope**, so importing is a
+matter of translating scopes to Textchum's capture names:
+`entity.name.function` becomes `function`, `keyword.control.loop`
+becomes `repeat`. Scopes stop where captures keep going — no theme
+colours `if` differently from `while` — so a capture the source never
+named takes its colour from the one it is a special case of, in either
+direction: a theme that says `keyword` colours every kind of keyword,
+and one that says only `constant.numeric` colours the whole constant
+family.
+
+Two things are worth knowing before the colours look wrong:
+
+- **A theme fills one appearance.** Both editors write a theme for a
+  light background or a dark one; Textchum's carry both. An import
+  fills the side the source declares and leaves the other at the
+  default palette, and says which side it filled. Importing a dark
+  theme while the editor is in light appearance changes nothing
+  visible.
+- **Scopes with nowhere to go are named.** Anything the source coloured
+  that no capture answers to is listed after the import. Those colours
+  are unused.
+
+The result is an ordinary theme file in the themes folder, editable
+like any other.
+
 ## Projects
 
 The Projects tab decides where a project starts and ends — the boundary

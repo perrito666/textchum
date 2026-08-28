@@ -9,7 +9,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{workspace, Appearance};
+use textchum_core::{theme_import, workspace, Appearance};
 
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
@@ -197,6 +197,10 @@ impl Workbench {
         go_section.append(Some("Toggle Markdown Preview"), Some("win.preview"));
         let app_section = gtk::gio::Menu::new();
         app_section.append(Some("Preferences…"), Some("win.preferences"));
+        let import_theme = gtk::gio::Menu::new();
+        import_theme.append(Some("From VS Code…"), Some("win.import-theme-vscode"));
+        import_theme.append(Some("From TextMate…"), Some("win.import-theme-textmate"));
+        app_section.append_submenu(Some("Import Theme"), &import_theme);
         app_section.append(Some("About Textchum"), Some("win.about"));
         app_section.append(Some("Close Tab"), Some("win.close-tab"));
         app_section.append(Some("Reopen Closed Tab"), Some("win.reopen-tab"));
@@ -1256,6 +1260,12 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
     });
+    add("import-theme-vscode", workbench, |workbench, _| {
+        import_theme(workbench, theme_import::Source::VsCode);
+    });
+    add("import-theme-textmate", workbench, |workbench, _| {
+        import_theme(workbench, theme_import::Source::TextMate);
+    });
     add("file-properties", workbench, |workbench, _| show_file_properties(workbench));
     add("about", workbench, |workbench, _| {
         // The real build version comes from git at compile time (the
@@ -1931,6 +1941,8 @@ const PALETTE: &[(&str, &str)] = &[
     ("Toggle File Tree", "win.sidebar"),
     ("Toggle Markdown Preview", "win.preview"),
     ("Preferences…", "win.preferences"),
+    ("Import Theme from VS Code…", "win.import-theme-vscode"),
+    ("Import Theme from TextMate…", "win.import-theme-textmate"),
     ("About Textchum", "win.about"),
     ("Close Tab", "win.close-tab"),
 ];
@@ -3490,6 +3502,115 @@ fn grep_filters(filters_box: &gtk::Box) -> Vec<textchum_core::search::Filter> {
         });
     }
     filters
+}
+
+// MARK: Import a theme
+
+/// Textchum ▸ Import Theme: bringing colours over from the editor
+/// someone used before this one.
+///
+/// The chooser takes a folder as readily as a file, because a VS Code
+/// theme lives inside an extension directory that may contribute
+/// several, and a TextMate bundle keeps its own in `Themes/`. Someone
+/// who installed a pack of six wanted the pack, so all of them come in
+/// and the first is put on.
+fn import_theme(workbench: &Rc<Workbench>, source: theme_import::Source) {
+    // Two buttons rather than one chooser that accepts both: GTK's file
+    // dialog picks files or folders, never either, and guessing which
+    // one someone meant from a filter is worse than asking.
+    let choose_folder = gtk::AlertDialog::builder()
+        .message(format!("Import a {} theme", source.label()))
+        .detail(
+            "A single theme file, or a folder holding several — an extension \
+             directory or a bundle.",
+        )
+        .buttons(["Cancel", "Choose Folder…", "Choose File…"])
+        .default_button(2)
+        .cancel_button(0)
+        .build();
+    let workbench = Rc::clone(workbench);
+    choose_folder.choose(
+        Some(&workbench.window.clone()),
+        gtk::gio::Cancellable::NONE,
+        move |answer| {
+            let Ok(answer) = answer else { return };
+            if answer == 0 {
+                return;
+            }
+            let dialog = gtk::FileDialog::new();
+            dialog.set_title(&format!("Import a {} theme", source.label()));
+            let window = workbench.window.clone();
+            let done = {
+                let workbench = Rc::clone(&workbench);
+                move |result: Result<gtk::gio::File, glib::Error>| {
+                    let Ok(file) = result else { return };
+                    let Some(path) = file.path() else { return };
+                    finish_theme_import(&workbench, &path, source);
+                }
+            };
+            if answer == 1 {
+                dialog.select_folder(Some(&window), gtk::gio::Cancellable::NONE, done);
+            } else {
+                dialog.open(Some(&window), gtk::gio::Cancellable::NONE, done);
+            }
+        },
+    );
+}
+
+/// Reads what was chosen, writes the themes, puts the first on, and
+/// says what happened — including the parts easy to miss: which side of
+/// the palette was filled, and any scope that had nowhere to go.
+fn finish_theme_import(
+    workbench: &Rc<Workbench>,
+    path: &Path,
+    source: theme_import::Source,
+) {
+    let outcome = theme_import::import_into(path, source, &crate::shell::themes_dir());
+    if outcome.written.is_empty() {
+        let reason = outcome
+            .errors
+            .first()
+            .cloned()
+            .unwrap_or_else(|| format!("No {} theme was found there.", source.label()));
+        workbench.toast(&format!("Nothing was imported. {reason}"));
+        return;
+    }
+
+    let mut lines = Vec::new();
+    for (name, appearance) in outcome.written.iter().zip(&outcome.appearances) {
+        lines.push(format!(
+            "{name} — written for a {appearance} background, so its {appearance} colours \
+             are set and the other side keeps Textchum's."
+        ));
+    }
+    if !outcome.unmapped.is_empty() {
+        let shown = outcome.unmapped.iter().take(6).cloned().collect::<Vec<_>>().join(", ");
+        let rest = outcome.unmapped.len().saturating_sub(6);
+        lines.push(format!(
+            "Nothing here answers to {shown}{} — those colours are unused.",
+            if rest > 0 { format!(", and {rest} more") } else { String::new() }
+        ));
+    }
+    lines.extend(outcome.errors.iter().cloned());
+
+    let heading = if outcome.written.len() == 1 {
+        format!("Imported “{}”", outcome.written[0])
+    } else {
+        format!("Imported {} themes", outcome.written.len())
+    };
+    gtk::AlertDialog::builder()
+        .message(heading)
+        .detail(lines.join("\n\n"))
+        .build()
+        .show(Some(&workbench.window.clone()));
+
+    // Wearing the theme is the point.
+    if let Some(first) = outcome.written.first() {
+        let shell = crate::shell::Shell::instance();
+        shell.config.borrow_mut().set_theme(first);
+        shell.apply_theme();
+        shell.save_config();
+    }
 }
 
 // MARK: Preferences

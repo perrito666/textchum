@@ -112,6 +112,78 @@ public enum CoreTheme {
 
     /// A complete starter theme as pretty-printed JSON — every styled
     /// capture with the default palette's values.
+    /// Which editor a theme file came from.
+    public enum ImportSource: UInt32 {
+        case vsCode = 0
+        case textMate = 1
+
+        /// The name to put in a menu and a file chooser.
+        public var label: String {
+            switch self {
+            case .vsCode: return "VS Code"
+            case .textMate: return "TextMate"
+            }
+        }
+
+        /// The extensions a theme of this kind is kept in.
+        public var extensions: [String] {
+            switch self {
+            case .vsCode: return ["json"]
+            case .textMate: return ["tmTheme", "thTheme"]
+            }
+        }
+    }
+
+    /// What an import did.
+    public struct ImportOutcome {
+        /// The themes now available to choose, in the order they were
+        /// read.
+        public let written: [String]
+        /// Which side of the palette each one filled; the other keeps
+        /// the default palette's colours.
+        public let appearances: [String]
+        /// Scopes no capture answers to — a gap in the mapping rather
+        /// than a fault in the file.
+        public let unmapped: [String]
+        /// One line per file that could not be read.
+        public let errors: [String]
+    }
+
+    /// Imports every theme at `path` into `directory`, one JSON file per
+    /// theme, named after the theme. `path` is a theme file or a folder
+    /// to look inside: a VS Code extension directory, or a `.tmbundle`.
+    public static func importThemes(
+        at path: String,
+        from source: ImportSource,
+        into directory: String
+    ) -> ImportOutcome {
+        let json = path.withCString { pathPointer in
+            directory.withCString { directoryPointer in
+                tc_theme_import(
+                    pathPointer,
+                    UInt(strlen(pathPointer)),
+                    source.rawValue,
+                    directoryPointer,
+                    UInt(strlen(directoryPointer))
+                )
+            }
+        }
+        guard let json else {
+            return ImportOutcome(
+                written: [], appearances: [], unmapped: [],
+                errors: ["the import could not be started"])
+        }
+        defer { tc_string_free(json) }
+        let data = Data(String(cString: json).utf8)
+        let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        return ImportOutcome(
+            written: parsed["written"] as? [String] ?? [],
+            appearances: parsed["appearances"] as? [String] ?? [],
+            unmapped: parsed["unmapped"] as? [String] ?? [],
+            errors: parsed["errors"] as? [String] ?? []
+        )
+    }
+
     public static var templateJSON: String {
         guard let template = tc_theme_template_json() else { return "{}" }
         defer { tc_string_free(template) }

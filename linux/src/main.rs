@@ -416,6 +416,56 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         eprintln!("FAIL: unexpected buffer text");
         return 1;
     }
+    // Importing a theme from another editor: the file goes in, a theme
+    // of ours comes out in the themes directory, and the core can wear
+    // it.
+    {
+        use textchum_core::theme_import::{import_into, Source};
+        let source_dir = directory.join("import-source");
+        let themes_dir = directory.join("import-themes");
+        let _ = std::fs::create_dir_all(&source_dir);
+        let _ = std::fs::write(
+            source_dir.join("night.json"),
+            r##"{
+              // A theme as VS Code writes them, comments and all.
+              "name": "Smoke Night",
+              "type": "dark",
+              "tokenColors": [
+                {"scope": "comment", "settings": {"foreground": "#5A6472"}},
+                {"scope": "keyword", "settings": {"foreground": "#C678DD"}},
+              ]
+            }"##,
+        );
+        let outcome = import_into(&source_dir, Source::VsCode, &themes_dir);
+        if !outcome.errors.is_empty() || outcome.written != vec!["Smoke Night".to_string()] {
+            eprintln!("FAIL: theme import: {:?} {:?}", outcome.written, outcome.errors);
+            return 1;
+        }
+        let Ok(json) = std::fs::read_to_string(themes_dir.join("Smoke Night.json")) else {
+            eprintln!("FAIL: the imported theme was not written where it is looked for");
+            return 1;
+        };
+        let Ok(theme) = textchum_core::theme::Theme::from_json(&json) else {
+            eprintln!("FAIL: an imported theme must be one the core can wear");
+            return 1;
+        };
+        textchum_core::theme::set_active(theme);
+        // A keyword's colour reaches the kinds of keyword the source
+        // never named separately.
+        let Some(id) = textchum_core::theme::resolve("conditional") else {
+            eprintln!("FAIL: no style for conditional");
+            return 1;
+        };
+        if textchum_core::theme::styles()[id as usize].dark != 0xC678_DDFF {
+            eprintln!("FAIL: imported colours did not reach every capture");
+            return 1;
+        }
+        if let Some(default) = textchum_core::theme::Theme::builtin("Textchum") {
+            textchum_core::theme::set_active(default);
+        }
+        println!("theme import ok (VS Code JSON with comments, inherited captures, wearable)");
+    }
+
     let fire = |name: &str| {
         gtk::prelude::WidgetExt::activate_action(&workbench.window, name, None).is_ok()
     };

@@ -21,6 +21,7 @@ pub mod markdown;
 pub mod search;
 pub mod snippet;
 pub mod syntax;
+pub mod theme_import;
 pub mod workspace;
 
 pub use app::{App, Event, EventSender};

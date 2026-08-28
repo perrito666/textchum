@@ -1117,6 +1117,36 @@ bool tc_theme_set_json(const char *json, uintptr_t len, char **error_out);
 char *tc_theme_template_json(void);
 
 /**
+ * Imports every theme at `path` into `themes_dir`, one JSON file per
+ * theme, named after the theme itself. `source` is 0 for VS Code and 1
+ * for TextMate.
+ *
+ * `path` is a theme file or a folder to look inside — a VS Code
+ * extension directory, or a `.tmbundle`. Returns the outcome as a
+ * nul-terminated JSON object, released with [`tc_string_free`]:
+ *
+ * ```json
+ * {"written": ["Night"], "appearances": ["dark"],
+ *  "unmapped": ["meta.brace.round"], "errors": []}
+ * ```
+ *
+ * `written` names the themes now available to choose, `appearances`
+ * says which side of the palette each one filled (the other keeps the
+ * default palette's colours), `unmapped` lists scopes no capture
+ * answers to, and `errors` carries one line per file that could not be
+ * read. A null return means the arguments were unreadable.
+ *
+ * # Safety
+ * `path` must point to `path_len` readable bytes and `themes_dir` to
+ * `dir_len` readable bytes.
+ */
+char *tc_theme_import(const char *path,
+                      uintptr_t path_len,
+                      uint32_t source,
+                      const char *themes_dir,
+                      uintptr_t dir_len);
+
+/**
  * The selectable language names with a representative file extension,
  * one per line as `name \x1f extension` (extension may be empty).
  * Release with [`tc_string_free`]. For "new file with format" pickers.
