@@ -73,7 +73,10 @@ with mouse hover switched off.
 
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
-first placeholder selected, so typing replaces it.
+first placeholder selected, so typing replaces it; ⇥ moves to the next
+placeholder and ⇧⇥ back, and one written twice mirrors as you type.
+The last ⇥ leaves the caret where the snippet asked for it and hands
+the keys back.
 
 <div class="shots" markdown>
 <figure markdown>

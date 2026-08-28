@@ -376,28 +376,72 @@ func runSmokeTest() -> Int32 {
     }
     print("jump stack ok (back, forward, truncation on new jump)")
 
-    // Snippet expansion: the first tabstop's placeholder comes back
-    // selected; $0 parks the caret; escapes survive.
-    let snippet = CompletionPopup.expandSnippet("frob(${1:x}, ${2:y})$0")
-    guard snippet.text == "frob(x, y)",
-        snippet.selection == NSRange(location: 5, length: 1)
+    // Snippets: the core expands the body, hands back the first
+    // placeholder to select, walks the stops on Tab, mirrors linked ones
+    // and gives the keys back at the end.
+    let snippetDoc = CoreDocument()
+    let body = "let ${1:name} = ${1:name}.frob(${2:arg});$0"
+    let expanded = snippetDoc.expandSnippet(body, at: 0)
+    guard expanded == "let name = name.frob(arg);" else {
+        print("FAIL: snippet expansion: \(expanded)")
+        return 1
+    }
+    try? snippetDoc.replace(utf16Range: NSRange(location: 0, length: 0), with: expanded)
+    guard snippetDoc.beginSnippet(at: 0) == NSRange(location: 4, length: 4),
+        snippetDoc.isSnippetActive
     else {
-        print("FAIL: snippet expansion: \(snippet)")
+        print("FAIL: snippet session did not start on the first placeholder")
         return 1
     }
-    let exitOnly = CompletionPopup.expandSnippet("done()$0 end")
-    guard exitOnly.text == "done() end",
-        exitOnly.selection == NSRange(location: 6, length: 0)
+    try? snippetDoc.replace(utf16Range: NSRange(location: 4, length: 4), with: "value")
+    let mirrored = snippetDoc.syncSnippet()
+    guard mirrored.count == 1, snippetDoc.text == "let value = value.frob(arg);" else {
+        print("FAIL: linked stop did not mirror: \(snippetDoc.text)")
+        return 1
+    }
+    guard snippetDoc.advanceSnippet(forward: true) == NSRange(location: 23, length: 3),
+        snippetDoc.advanceSnippet(forward: true) == NSRange(location: 28, length: 0),
+        !snippetDoc.isSnippetActive
     else {
-        print("FAIL: snippet exit point: \(exitOnly)")
+        print("FAIL: tab did not walk the snippet to its exit")
         return 1
     }
-    let escaped = CompletionPopup.expandSnippet(#"cost \$5"#)
-    guard escaped.text == "cost $5", escaped.selection == nil else {
-        print("FAIL: snippet escape: \(escaped)")
+
+    // A snippet with only an exit point is a caret position, not a mode.
+    let exitDoc = CoreDocument()
+    let exitText = exitDoc.expandSnippet("done()$0 end", at: 0)
+    try? exitDoc.replace(utf16Range: NSRange(location: 0, length: 0), with: exitText)
+    guard exitText == "done() end",
+        exitDoc.beginSnippet(at: 0) == NSRange(location: 6, length: 0),
+        !exitDoc.isSnippetActive
+    else {
+        print("FAIL: snippet exit point")
         return 1
     }
-    print("snippet expansion ok (placeholder selection, exit point, escapes)")
+
+    // Escapes survive, and a body with no constructs is left alone.
+    let escapeDoc = CoreDocument()
+    guard escapeDoc.expandSnippet(#"cost \$5"#, at: 0) == "cost $5" else {
+        print("FAIL: snippet escape")
+        return 1
+    }
+
+    // A server's items arrive marked: a declared insertTextFormat
+    // decides, and placeholders written without one speak for
+    // themselves — but a bare dollar does not.
+    let parsed = CompletionPopup.parse(
+        resultJSON: """
+            [{"label": "frob", "insertText": "frob(${1:x})", "insertTextFormat": 2},
+             {"label": "cost", "insertText": "cost $5", "insertTextFormat": 1},
+             {"label": "wrap", "insertText": "wrap(${1:x})"},
+             {"label": "home", "insertText": "echo $HOME"}]
+            """)
+    let flags = parsed.map { "\($0.label):\($0.isSnippet)" }.sorted()
+    guard flags == ["cost:false", "frob:true", "home:false", "wrap:true"] else {
+        print("FAIL: snippet items not recognized: \(flags)")
+        return 1
+    }
+    print("snippets ok (expansion, tabstops, linked stops, exit, escapes)")
 
     // Hugo: a post's headings outline it, and the prose the spell
     // checker reads excludes front matter and shortcode calls.
@@ -555,6 +599,24 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     print("sidebar width sync ok (adopts changes, ignores echoes and collapsed)")
+
+    // Which keys a running snippet takes. The routing needs a window
+    // server; the table it consults is a pure decision and is checked
+    // here — a snippet that swallowed Return, or missed Shift-Tab,
+    // would be a mode with the wrong way out.
+    guard EditorWindowController.snippetKey(for: #selector(NSResponder.insertTab(_:)))
+            == .nextStop,
+        EditorWindowController.snippetKey(for: #selector(NSResponder.insertBacktab(_:)))
+            == .previousStop,
+        EditorWindowController.snippetKey(for: #selector(NSResponder.cancelOperation(_:)))
+            == .cancel,
+        EditorWindowController.snippetKey(for: #selector(NSResponder.insertNewline(_:))) == nil,
+        EditorWindowController.snippetKey(for: #selector(NSResponder.moveDown(_:))) == nil
+    else {
+        print("FAIL: snippet key routing")
+        return 1
+    }
+    print("snippet keys ok (tab, shift-tab, escape; everything else falls through)")
 
     print("smoke test passed")
     return 0

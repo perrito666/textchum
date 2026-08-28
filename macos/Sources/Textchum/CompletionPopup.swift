@@ -13,11 +13,11 @@ final class CompletionPopup: NSObject {
     struct Item {
         let label: String
         let detail: String
+        /// What the server asked to be inserted, verbatim: a snippet
+        /// body when `isSnippet`, plain text otherwise. Expanding a body
+        /// is the core's job, so both shells expand it the same way.
         let insertText: String
-        /// Where the caret belongs after insertion — the first snippet
-        /// tabstop's placeholder (selected so typing replaces it), or
-        /// the `$0` exit point. Relative to `insertText`, UTF-16 units.
-        let selection: NSRange?
+        let isSnippet: Bool
         let sortText: String
         let filterText: String
     }
@@ -34,7 +34,8 @@ final class CompletionPopup: NSObject {
 
     /// Reduces an LSP completion response (`CompletionItem[]` or
     /// `CompletionList`) to items, sorted by the server's preference.
-    /// Snippet placeholders (`${1:x}`, `$0`) are flattened to plain text.
+    /// Snippet bodies are carried through unexpanded; the core expands
+    /// them when one is accepted.
     static func parse(resultJSON: String) -> [Item] {
         guard let data = resultJSON.data(using: .utf8),
             let parsed = try? JSONSerialization.jsonObject(with: data)
@@ -51,12 +52,11 @@ final class CompletionPopup: NSObject {
                 (raw["textEdit"] as? [String: Any])?["newText"] as? String
                 ?? raw["insertText"] as? String
                 ?? label
-            let (expanded, selection) = Self.expandSnippet(insert)
             return Item(
                 label: label,
                 detail: raw["detail"] as? String ?? "",
-                insertText: expanded,
-                selection: selection,
+                insertText: insert,
+                isSnippet: Self.isSnippet(raw, insert: insert),
                 sortText: raw["sortText"] as? String ?? label,
                 filterText: (raw["filterText"] as? String ?? label).lowercased()
             )
@@ -64,70 +64,27 @@ final class CompletionPopup: NSObject {
         .sorted { $0.sortText < $1.sortText }
     }
 
-    /// Expands LSP snippet syntax to plain text and remembers where the
-    /// caret should land: `${1:placeholder}` keeps its placeholder (the
-    /// lowest-numbered one comes back selected, so typing replaces it),
-    /// bare `$1`/`$0` vanish (`$0` marking the exit point), and `\$`
-    /// stays a dollar sign. Later tabstops are plain text — one honest
-    /// stop, not a tabstop mode.
-    static func expandSnippet(_ text: String) -> (text: String, selection: NSRange?) {
-        var out = ""
-        out.reserveCapacity(text.count)
-        // (tabstop number, location, length) in UTF-16 units of `out`.
-        var stops: [(number: Int, location: Int, length: Int)] = []
-        var scanner = Substring(text)
-        func utf16Length(_ string: String) -> Int { string.utf16.count }
-        while let dollar = scanner.firstIndex(of: "$") {
-            let before = scanner[..<dollar]
-            // A backslash right before the dollar escapes it.
-            if before.last == "\\" {
-                out += before.dropLast()
-                out += "$"
-                scanner = scanner[scanner.index(after: dollar)...]
+    /// Whether `insert` is a snippet body. `insertTextFormat` 2 says so
+    /// outright. Servers that leave the field out and write placeholders
+    /// anyway are common enough that a body which plainly contains one
+    /// is taken at its word; a lone `$`, as in a shell variable, is not.
+    private static func isSnippet(_ raw: [String: Any], insert: String) -> Bool {
+        if let format = raw["insertTextFormat"] as? Int { return format == 2 }
+        let characters = Array(insert)
+        var index = 0
+        while index + 1 < characters.count {
+            if characters[index] == "\\" {
+                index += 2
                 continue
             }
-            out += before
-            var rest = scanner[scanner.index(after: dollar)...]
-            if rest.first == "{" {
-                // ${n} or ${n:placeholder} (no nesting).
-                guard let close = rest.firstIndex(of: "}") else {
-                    out += "$"
-                    scanner = rest
-                    continue
-                }
-                let body = rest[rest.index(after: rest.startIndex)..<close]
-                let halves = body.split(separator: ":", maxSplits: 1)
-                let number = Int(halves.first ?? "") ?? 0
-                let placeholder = halves.count > 1 ? String(halves[1]) : ""
-                stops.append(
-                    (number, utf16Length(out), utf16Length(placeholder)))
-                out += placeholder
-                scanner = rest[rest.index(after: close)...]
-            } else {
-                var digits = ""
-                while let first = rest.first, first.isNumber {
-                    digits.append(first)
-                    rest = rest.dropFirst()
-                }
-                if digits.isEmpty {
-                    out += "$"
-                } else {
-                    stops.append((Int(digits) ?? 0, utf16Length(out), 0))
-                }
-                scanner = rest
+            if characters[index] == "$",
+                characters[index + 1] == "{" || characters[index + 1].isNumber
+            {
+                return true
             }
+            index += 1
         }
-        out += scanner
-        // The first real tabstop wins; $0 (the exit point) is the
-        // fallback caret position.
-        let first = stops
-            .filter { $0.number > 0 }
-            .min { $0.number < $1.number }
-            ?? stops.first { $0.number == 0 }
-        return (
-            out,
-            first.map { NSRange(location: $0.location, length: $0.length) }
-        )
+        return false
     }
 
     // MARK: Presentation

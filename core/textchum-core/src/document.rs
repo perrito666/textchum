@@ -33,6 +33,7 @@ use std::path::{Path, PathBuf};
 use crate::buffer::{Buffer, BufferError};
 use crate::fsutil::write_atomically;
 use crate::history::{EditRecord, History};
+use crate::snippet::{self, Region, Session};
 use crate::syntax::{self, HighlightSpan, SyntaxState, SYNTAX_MAX_BYTES};
 
 /// The on-disk encoding of a document.
@@ -102,6 +103,13 @@ pub struct Document {
     path: Option<PathBuf>,
     encoding: Encoding,
     syntax: Option<SyntaxState>,
+    /// The snippet being filled in, if one is. Its regions are kept
+    /// current by [`Document::mutate_buffer`], which every edit passes
+    /// through, so they mean the same thing after an edit as before it.
+    snippet: Option<Session>,
+    /// An expansion handed to the shell to insert, waiting for
+    /// [`Document::begin_snippet`] to say where it landed.
+    pending_snippet: Option<snippet::Expansion>,
 }
 
 impl Default for Document {
@@ -122,6 +130,8 @@ impl Document {
             path: None,
             encoding: Encoding::Utf8,
             syntax: None,
+            snippet: None,
+            pending_snippet: None,
         }
     }
 
@@ -138,6 +148,8 @@ impl Document {
             path: Some(path.to_owned()),
             encoding,
             syntax: None,
+            snippet: None,
+            pending_snippet: None,
         };
         doc.history.mark_saved();
         doc.detect_language();
@@ -322,6 +334,15 @@ impl Document {
 
         self.buffer.replace_utf16(start, end, text)?;
 
+        // Fold the edit into the snippet's live regions. One that the
+        // edit cut across cannot be shifted into meaning anything, so
+        // the session ends here rather than pointing at the wrong text.
+        if let Some(session) = self.snippet.as_mut() {
+            if !session.adjust(start, end, text.encode_utf16().count()) {
+                self.snippet = None;
+            }
+        }
+
         if let Some((start_byte, old_end_byte, start_position, old_end_position)) = edit_geometry {
             let new_end_byte = start_byte + text.len();
             let rope = self.buffer.rope();
@@ -340,6 +361,194 @@ impl Document {
             }
         }
         Ok(())
+    }
+
+    /// Expands an LSP snippet body for an insertion at `at`, returning
+    /// the text to insert. Nothing is inserted here: a shell keeps its
+    /// own copy of the text and puts the string in through the same path
+    /// as anything the user types, so the two never diverge. The stops
+    /// are held until [`Self::begin_snippet`] says where the text
+    /// landed.
+    pub fn expand_snippet(&mut self, at: usize, body: &str) -> String {
+        let expansion = {
+            let variables = self.snippet_variables(at);
+            snippet::expand(body, &variables)
+        };
+        let text = expansion.text.clone();
+        self.pending_snippet = Some(expansion);
+        text
+    }
+
+    /// Starts a tabstop session over the expansion last returned by
+    /// [`Self::expand_snippet`], now sitting at `origin`. Returns the
+    /// region the caret should take: the first stop's placeholder,
+    /// selected so typing replaces it, or where `$0` asked for the caret
+    /// when there is no stop to walk. `None` when nothing is pending.
+    ///
+    /// A session already running is replaced, not nested: a completion
+    /// accepted inside a placeholder is the new thing being filled in.
+    pub fn begin_snippet(&mut self, origin: usize) -> Option<Region> {
+        let expansion = self.pending_snippet.take()?;
+        let inserted_len = expansion.text.encode_utf16().count();
+        self.snippet = Session::begin(&expansion, origin, inserted_len);
+        Some(match self.snippet.as_ref() {
+            Some(session) => session.current_region(),
+            // No stops, or only `$0`: `$0` is where the caret goes, and
+            // the end of the insertion is where it goes without one.
+            None => expansion
+                .stops
+                .iter()
+                .find(|stop| stop.number == 0)
+                .and_then(|stop| stop.regions.first())
+                .map(|region| Region {
+                    start: region.start + origin,
+                    end: region.end + origin,
+                })
+                .unwrap_or(Region {
+                    start: origin + inserted_len,
+                    end: origin + inserted_len,
+                }),
+        })
+    }
+
+    /// Expand, insert and begin in one step, for callers that hold no
+    /// display copy of the text to keep in step.
+    pub fn insert_snippet(
+        &mut self,
+        start: usize,
+        end: usize,
+        body: &str,
+    ) -> Result<Region, DocumentError> {
+        let text = self.expand_snippet(start, body);
+        self.snippet = None;
+        self.replace_utf16(start, end, &text)?;
+        Ok(self
+            .begin_snippet(start)
+            .unwrap_or(Region { start, end: start }))
+    }
+
+    /// Whether a snippet is being filled in, and Tab therefore belongs
+    /// to it.
+    pub fn snippet_active(&self) -> bool {
+        self.snippet.is_some()
+    }
+
+    /// The stop the caret is on.
+    pub fn snippet_region(&self) -> Option<Region> {
+        self.snippet.as_ref().map(Session::current_region)
+    }
+
+    /// Moves to the next stop, or back to the previous one. Returns the
+    /// region to select. Reaching `$0`, or running off the end, gives
+    /// the keys back: the session is over and the caret lands where the
+    /// snippet said it should.
+    pub fn snippet_advance(&mut self, forward: bool) -> Option<Region> {
+        let session = self.snippet.as_mut()?;
+        let (region, finished) = session.advance(forward);
+        if finished {
+            self.snippet = None;
+        }
+        Some(region)
+    }
+
+    /// Tells the session where the caret went. A caret outside the
+    /// snippet has moved on, and the session ends with it — clicking
+    /// elsewhere should not leave Tab captured.
+    pub fn snippet_caret_moved(&mut self, position: usize) {
+        if self
+            .snippet
+            .as_ref()
+            .is_some_and(|session| !session.contains_caret(position))
+        {
+            self.snippet = None;
+        }
+    }
+
+    /// Ends the session, wherever it had got to. Escape, and anything
+    /// else that means the snippet is done being a snippet.
+    pub fn cancel_snippet(&mut self) {
+        self.snippet = None;
+    }
+
+    /// Copies the stop just typed in to the other places that carry the
+    /// same number, so `${1:name}` written twice stays one name.
+    /// Returns the edits performed, to be replayed on the shell's copy
+    /// of the text **in array order**; empty when there was nothing to
+    /// mirror, which is the common case.
+    pub fn snippet_sync(&mut self) -> Vec<AppliedEdit> {
+        let Some((source, mut targets)) = self
+            .snippet
+            .as_mut()
+            .and_then(Session::take_mirror)
+        else {
+            return Vec::new();
+        };
+        let Ok((start_byte, end_byte)) = self.buffer.utf16_range_to_bytes(source.start, source.end)
+        else {
+            return Vec::new();
+        };
+        let Ok(text) = self.buffer.slice_bytes(start_byte, end_byte) else {
+            return Vec::new();
+        };
+
+        // Back to front, so each target's offsets are still the ones
+        // measured before any of these edits were applied.
+        targets.sort_by_key(|region| std::cmp::Reverse(region.start));
+        if let Some(session) = self.snippet.as_mut() {
+            session.set_mirroring(true);
+        }
+        let mut edits = Vec::new();
+        for target in targets {
+            let unchanged = self
+                .buffer
+                .utf16_range_to_bytes(target.start, target.end)
+                .and_then(|(from, to)| self.buffer.slice_bytes(from, to))
+                .is_ok_and(|current| current == text);
+            if unchanged {
+                continue;
+            }
+            if self.replace_utf16(target.start, target.end, &text).is_ok() {
+                edits.push(AppliedEdit {
+                    start_utf16: target.start,
+                    end_utf16: target.end,
+                    text: text.clone(),
+                });
+            }
+        }
+        if let Some(session) = self.snippet.as_mut() {
+            session.set_mirroring(false);
+        }
+        edits
+    }
+
+    /// The snippet variables this document can answer: the ones about
+    /// the file it is, and where in it the snippet went. Anything else
+    /// is left to its default.
+    fn snippet_variables(&self, at: usize) -> impl Fn(&str) -> Option<String> {
+        let path = self.path.clone();
+        let line = self
+            .buffer
+            .utf16_range_to_bytes(at, at)
+            .map(|(byte, _)| self.buffer.rope().byte_to_line(byte))
+            .unwrap_or(0);
+        move |name: &str| match name {
+            "TM_FILENAME" => path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned()),
+            "TM_FILENAME_BASE" => path
+                .as_ref()
+                .and_then(|p| p.file_stem())
+                .map(|n| n.to_string_lossy().into_owned()),
+            "TM_DIRECTORY" => path
+                .as_ref()
+                .and_then(|p| p.parent())
+                .map(|n| n.to_string_lossy().into_owned()),
+            "TM_FILEPATH" => path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+            "TM_LINE_INDEX" => Some(line.to_string()),
+            "TM_LINE_NUMBER" => Some((line + 1).to_string()),
+            _ => None,
+        }
     }
 
     /// Ends the current undo coalescing run. Shells call this when the
@@ -753,5 +962,97 @@ mod tests {
         doc.replace_utf16(0, 1, "A").unwrap();
         doc.save().unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "A\r\nb\r\n");
+    }
+
+    #[test]
+    fn a_snippet_selects_its_first_placeholder_and_tab_walks_the_rest() {
+        let mut doc = Document::new();
+        doc.replace_utf16(0, 0, "call ").unwrap();
+        let first = doc.insert_snippet(5, 5, "frob(${1:x}, ${2:y})$0").unwrap();
+        assert_eq!(doc.text(), "call frob(x, y)");
+        assert_eq!((first.start, first.end), (10, 11));
+        assert!(doc.snippet_active());
+
+        // Typing over the first placeholder drags the second along.
+        doc.replace_utf16(10, 11, "count").unwrap();
+        let second = doc.snippet_advance(true).unwrap();
+        assert_eq!((second.start, second.end), (17, 18));
+
+        // The last Tab lands on $0 and hands the keys back.
+        let exit = doc.snippet_advance(true).unwrap();
+        assert_eq!((exit.start, exit.end), (19, 19));
+        assert!(!doc.snippet_active());
+    }
+
+    #[test]
+    fn a_snippet_with_nothing_to_walk_starts_no_session() {
+        let mut doc = Document::new();
+        let caret = doc.insert_snippet(0, 0, "done()$0").unwrap();
+        assert_eq!(doc.text(), "done()");
+        assert_eq!((caret.start, caret.end), (6, 6));
+        assert!(!doc.snippet_active());
+    }
+
+    #[test]
+    fn a_linked_stop_mirrors_as_it_is_typed() {
+        let mut doc = Document::new();
+        doc.insert_snippet(0, 0, "let ${1:name} = ${1:name}.into();").unwrap();
+        assert_eq!(doc.text(), "let name = name.into();");
+
+        doc.replace_utf16(4, 8, "value").unwrap();
+        let edits = doc.snippet_sync();
+        assert_eq!(doc.text(), "let value = value.into();");
+        assert_eq!(
+            edits,
+            vec![AppliedEdit {
+                start_utf16: 12,
+                end_utf16: 16,
+                text: "value".to_owned(),
+            }]
+        );
+        // The mirroring is not itself an edit worth mirroring.
+        assert!(doc.snippet_sync().is_empty());
+    }
+
+    #[test]
+    fn a_caret_that_leaves_the_snippet_ends_the_session() {
+        let mut doc = Document::new();
+        doc.replace_utf16(0, 0, "before after").unwrap();
+        doc.insert_snippet(7, 7, "${1:a}${2:b}").unwrap();
+        assert!(doc.snippet_active());
+        doc.snippet_caret_moved(8);
+        assert!(doc.snippet_active());
+        doc.snippet_caret_moved(0);
+        assert!(!doc.snippet_active());
+    }
+
+    #[test]
+    fn an_edit_across_a_stop_boundary_ends_the_session() {
+        let mut doc = Document::new();
+        doc.insert_snippet(0, 0, "frob(${1:x}, ${2:y})$0").unwrap();
+        // Selecting "x, y" and typing over it leaves the stops with
+        // nothing to point at.
+        doc.replace_utf16(5, 9, "z").unwrap();
+        assert!(!doc.snippet_active());
+    }
+
+    #[test]
+    fn undoing_a_snippet_ends_the_session_with_it() {
+        let mut doc = Document::new();
+        doc.insert_snippet(0, 0, "${1:a} ${2:b}").unwrap();
+        doc.undo();
+        assert_eq!(doc.text(), "");
+        assert!(!doc.snippet_active());
+    }
+
+    #[test]
+    fn snippet_variables_come_from_the_file_the_document_is() {
+        let dir = temp_dir();
+        let path = dir.join("greeting.txt");
+        std::fs::write(&path, "").unwrap();
+        let mut doc = Document::open(&path).unwrap();
+        doc.insert_snippet(0, 0, "// $TM_FILENAME_BASE line ${TM_LINE_NUMBER} ${NOPE:x}")
+            .unwrap();
+        assert_eq!(doc.text(), "// greeting line 1 x");
     }
 }

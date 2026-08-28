@@ -163,14 +163,11 @@ un cambio de configuración), y una instancia que **ningún documento
 abierto ha necesitado en cinco minutos** se apaga — la siguiente
 apertura arranca una fresca.
 
-- Los snippets del autocompletado llegan como texto plano con el
-  primer marcador seleccionado, así que escribir lo reemplaza — una
-  parada honesta en vez de un modo de tabulaciones.
+- Los snippets del autocompletado se expanden y se recorren. El
+  primer marcador vuelve seleccionado, así que escribir lo reemplaza;
+  ⇥ pasa al siguiente y ⇧⇥ al anterior; un marcador escrito más de una
+  vez copia lo que se teclea en el otro. Llegar al final, pulsar ⎋ o
+  hacer clic fuera devuelve las teclas.
 - **Vista ▸ Estado de servidores** lista las instancias en ejecución y
   las transiciones recientes de la sesión, refrescado en vivo, con un
   puntero al registro completo.
-
-## Aún no está
-
-- El ciclo completo de marcadores de snippet (el primero queda
-  seleccionado; los siguientes son texto plano).

@@ -58,8 +58,9 @@ pub struct Page {
 struct CompletionState {
     popover: gtk::Popover,
     list: gtk::ListBox,
-    /// (label, insert text) per row.
-    items: RefCell<Vec<(String, String)>>,
+    /// (label, insert text, whether the insert text is a snippet body)
+    /// per row.
+    items: RefCell<Vec<(String, String, bool)>>,
     /// Character offset where the word being completed starts.
     word_start: Cell<i32>,
 }
@@ -211,6 +212,7 @@ impl Page {
             },
         });
         install_completion_keys(&page);
+        install_snippet_keys(&page);
         install_hover(&page);
         install_file_monitor(&page);
         install_control_click(&page);
@@ -690,9 +692,10 @@ pub fn apply_diagnostics(handles: &PageHandles, json: &str) {
 // MARK: Completion
 
 /// Parses a completion result — `CompletionItem[]` or a
-/// `CompletionList` — into (label, insert text) pairs. Snippet
-/// placeholders are flattened, like the macOS popup does.
-pub fn parse_completion_items(json: &str) -> Vec<(String, String)> {
+/// `CompletionList` — into (label, insert text, is-snippet) triples.
+/// Snippet bodies are carried through unexpanded; the core expands one
+/// when it is accepted, so both shells expand them the same way.
+pub fn parse_completion_items(json: &str) -> Vec<(String, String, bool)> {
     let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
         return Vec::new();
     };
@@ -714,91 +717,59 @@ pub fn parse_completion_items(json: &str) -> Vec<(String, String)> {
                 .or_else(|| item["textEdit"]["newText"].as_str())
                 .unwrap_or(&label)
                 .to_string();
-            Some((label, insert))
+            let is_snippet = match item["insertTextFormat"].as_u64() {
+                Some(format) => format == 2,
+                None => looks_like_a_snippet(&insert),
+            };
+            Some((label, insert, is_snippet))
         })
         .collect()
 }
 
-/// Expands LSP snippet syntax to plain text and remembers where the
-/// caret should land, in characters of the result: `${1:placeholder}`
-/// keeps its placeholder (the lowest-numbered tabstop comes back
-/// selected so typing replaces it), bare `$1`/`$0` vanish (`$0`
-/// marking the exit point), and `\$` stays a dollar sign. Later
-/// tabstops are plain text — one honest stop, not a tabstop mode.
-pub fn expand_snippet(text: &str) -> (String, Option<(i32, i32)>) {
-    let mut out = String::new();
-    // (tabstop number, char offset, char length) in `out`.
-    let mut stops: Vec<(u32, i32, i32)> = Vec::new();
-    let mut chars = text.chars().peekable();
-    let mut out_chars = 0i32;
-    let push = |out: &mut String, out_chars: &mut i32, c: char| {
-        out.push(c);
-        *out_chars += 1;
-    };
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(next) = chars.next() {
-                push(&mut out, &mut out_chars, next);
-            } else {
-                push(&mut out, &mut out_chars, c);
-            }
+/// Whether a body written without an `insertTextFormat` is a snippet
+/// anyway. Servers that leave the field out and write placeholders are
+/// common enough to take at their word; a lone `$`, as in a shell
+/// variable, is not one.
+fn looks_like_a_snippet(insert: &str) -> bool {
+    let characters: Vec<char> = insert.chars().collect();
+    let mut index = 0;
+    while index + 1 < characters.len() {
+        if characters[index] == '\\' {
+            index += 2;
             continue;
         }
-        if c != '$' {
-            push(&mut out, &mut out_chars, c);
-            continue;
+        if characters[index] == '$'
+            && (characters[index + 1] == '{' || characters[index + 1].is_ascii_digit())
+        {
+            return true;
         }
-        match chars.peek() {
-            Some('{') => {
-                chars.next();
-                let mut body = String::new();
-                for inner in chars.by_ref() {
-                    if inner == '}' {
-                        break;
-                    }
-                    body.push(inner);
-                }
-                let (number, placeholder) = match body.split_once(':') {
-                    Some((number, placeholder)) => (number, placeholder),
-                    None => (body.as_str(), ""),
-                };
-                let number: u32 = number.parse().unwrap_or(0);
-                let length = placeholder.chars().count() as i32;
-                stops.push((number, out_chars, length));
-                for inner in placeholder.chars() {
-                    push(&mut out, &mut out_chars, inner);
-                }
-            }
-            Some(d) if d.is_ascii_digit() => {
-                let mut digits = String::new();
-                while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
-                    digits.push(chars.next().unwrap());
-                }
-                stops.push((digits.parse().unwrap_or(0), out_chars, 0));
-            }
-            _ => push(&mut out, &mut out_chars, c),
-        }
+        index += 1;
     }
-    let first = stops
-        .iter()
-        .filter(|(number, _, _)| *number > 0)
-        .min_by_key(|(number, _, _)| *number)
-        .or_else(|| stops.iter().find(|(number, _, _)| *number == 0));
-    (out, first.map(|(_, offset, length)| (*offset, *length)))
+    false
 }
 
 #[cfg(test)]
 mod snippet_tests {
-    use super::expand_snippet;
+    use super::{looks_like_a_snippet, parse_completion_items};
 
     #[test]
-    fn placeholder_selection_and_exit() {
-        assert_eq!(
-            expand_snippet("frob(${1:x}, ${2:y})$0"),
-            ("frob(x, y)".into(), Some((5, 1)))
-        );
-        assert_eq!(expand_snippet("done()$0 end"), ("done() end".into(), Some((6, 0))));
-        assert_eq!(expand_snippet("cost \\$5"), ("cost $5".into(), None));
+    fn a_declared_format_decides_and_placeholders_speak_for_themselves() {
+        let json = r#"[
+            {"label": "frob", "insertText": "frob(${1:x})", "insertTextFormat": 2},
+            {"label": "plain", "insertText": "cost $5", "insertTextFormat": 1},
+            {"label": "undeclared", "insertText": "wrap(${1:x})"}
+        ]"#;
+        let items = parse_completion_items(json);
+        assert_eq!(items[0], ("frob".into(), "frob(${1:x})".into(), true));
+        assert_eq!(items[1], ("plain".into(), "cost $5".into(), false));
+        assert!(items[2].2);
+    }
+
+    #[test]
+    fn a_bare_dollar_is_not_a_snippet() {
+        assert!(!looks_like_a_snippet("echo $HOME"));
+        assert!(!looks_like_a_snippet("cost \\$5"));
+        assert!(looks_like_a_snippet("$1 and $2"));
     }
 }
 
@@ -836,12 +807,12 @@ fn request_completion(page: &Rc<Page>) {
     });
 }
 
-fn show_completions(page: &Rc<Page>, all: Vec<(String, String)>) {
+fn show_completions(page: &Rc<Page>, all: Vec<(String, String, bool)>) {
     let (word_start, prefix) = word_before_caret(&page.buffer);
     let prefix_lower = prefix.to_lowercase();
-    let matching: Vec<(String, String)> = all
+    let matching: Vec<(String, String, bool)> = all
         .into_iter()
-        .filter(|(label, _)| {
+        .filter(|(label, _, _)| {
             prefix_lower.is_empty() || label.to_lowercase().starts_with(&prefix_lower)
         })
         .collect();
@@ -853,7 +824,7 @@ fn show_completions(page: &Rc<Page>, all: Vec<(String, String)>) {
     while let Some(child) = page.completion.list.first_child() {
         page.completion.list.remove(&child);
     }
-    for (label, _) in &matching {
+    for (label, _, _) in &matching {
         let text = gtk::Label::new(Some(label));
         text.set_xalign(0.0);
         text.set_margin_start(6);
@@ -889,29 +860,193 @@ fn accept_completion(page: &Rc<Page>) {
         .selected_row()
         .map(|row| row.index())
         .unwrap_or(0);
-    let insert = page
+    let chosen = page
         .completion
         .items
         .borrow()
         .get(index as usize)
-        .map(|(_, insert)| insert.clone());
+        .map(|(_, insert, is_snippet)| (insert.clone(), *is_snippet));
     page.completion.popover.popdown();
-    let Some(insert) = insert else { return };
-    let (expanded, selection) = expand_snippet(&insert);
+    let Some((insert, is_snippet)) = chosen else { return };
+
     let buffer = &page.buffer;
     let mut start = buffer.iter_at_offset(page.completion.word_start.get());
     let mut caret = buffer.iter_at_mark(&buffer.get_insert());
     // Through the normal buffer path, so the core sees it as typing.
     buffer.delete(&mut start, &mut caret);
     let insert_at = buffer.iter_at_mark(&buffer.get_insert()).offset();
+    let origin = utf16_offset(buffer, insert_at);
+
+    // The core expands the body and the buffer inserts what comes back,
+    // so the insertion is ordinary typing as far as the sync protocol is
+    // concerned. The core is then told where it landed, which is what
+    // starts the tabstop session.
+    let expanded = {
+        let mut state = page.state.borrow_mut();
+        state.document.cancel_snippet();
+        if is_snippet {
+            state.document.expand_snippet(origin, &insert)
+        } else {
+            insert
+        }
+    };
     let mut at = buffer.iter_at_mark(&buffer.get_insert());
     buffer.insert(&mut at, &expanded);
-    // A snippet's first placeholder comes back selected, so typing
-    // replaces it; a bare tabstop just parks the caret there.
-    if let Some((offset, length)) = selection {
-        let from = buffer.iter_at_offset(insert_at + offset);
-        let to = buffer.iter_at_offset(insert_at + offset + length);
-        buffer.select_range(&to, &from);
+    if !is_snippet {
+        return;
+    }
+    let selection = page.state.borrow_mut().document.begin_snippet(origin);
+    let Some(region) = selection else { return };
+    select_utf16(page, region.start, region.end);
+}
+
+/// Selects the UTF-16 range `start..end`, leaving the caret at the
+/// start so typing replaces the selection.
+fn select_utf16(page: &Rc<Page>, start: usize, end: usize) {
+    let buffer = &page.buffer;
+    let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+    let from = buffer.iter_at_offset(char_offset(&text, start));
+    let to = buffer.iter_at_offset(char_offset(&text, end));
+    buffer.select_range(&to, &from);
+    page.view
+        .scroll_to_iter(&mut buffer.iter_at_offset(char_offset(&text, start)), 0.0, false, 0.0, 0.0);
+}
+
+/// Moves to the next tabstop, or back to the previous one, selecting
+/// its placeholder. Returns false when no snippet is being filled in,
+/// so Tab stays Tab.
+pub fn move_through_snippet(page: &Rc<Page>, forward: bool) -> bool {
+    let region = {
+        let mut state = page.state.borrow_mut();
+        if !state.document.snippet_active() {
+            return false;
+        }
+        state.document.snippet_advance(forward)
+    };
+    let Some(region) = region else { return false };
+    select_utf16(page, region.start, region.end);
+    true
+}
+
+/// Copies the tabstop just typed in to the other places carrying the
+/// same number. The buffer's marks carry the caret over the copies, so
+/// typing a linked placeholder feels like typing anything else.
+fn mirror_snippet_stops(page: &Rc<Page>) {
+    let edits = {
+        let Ok(mut state) = page.state.try_borrow_mut() else { return };
+        if !state.document.snippet_active() {
+            return;
+        }
+        let edits = state.document.snippet_sync();
+        if edits.is_empty() {
+            return;
+        }
+        state.syncing = true;
+        edits
+    };
+    let buffer = &page.buffer;
+    for edit in &edits {
+        let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+        let mut from = buffer.iter_at_offset(char_offset(&text, edit.start_utf16));
+        let mut to = buffer.iter_at_offset(char_offset(&text, edit.end_utf16));
+        buffer.delete(&mut from, &mut to);
+        let mut at = from;
+        buffer.insert(&mut at, &edit.text);
+    }
+    if let Ok(mut state) = page.state.try_borrow_mut() {
+        state.syncing = false;
+    }
+    recolor(buffer);
+    apply_highlights(buffer, &page.state.borrow().document);
+}
+
+/// Tab, Shift-Tab and Escape while a snippet is being filled in: walk
+/// the stops, and give the keys back on the way out. Installed after
+/// the completion controller so the popup, when it is up, still gets
+/// Tab first.
+///
+/// The mirroring of linked stops hangs off the same page: every change
+/// to the buffer is checked for one, which costs a boolean while no
+/// snippet is running.
+fn install_snippet_keys(page: &Rc<Page>) {
+    let controller = gtk::EventControllerKey::new();
+    controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let weak = Rc::downgrade(page);
+    controller.connect_key_pressed(move |_, key, _, modifiers| {
+        let Some(page) = weak.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
+        if page.completion.popover.is_visible() {
+            return glib::Propagation::Proceed;
+        }
+        if !page.state.borrow().document.snippet_active() {
+            return glib::Propagation::Proceed;
+        }
+        use gtk::gdk::Key;
+        match key {
+            Key::Tab if !modifiers.contains(gtk::gdk::ModifierType::SHIFT_MASK) => {
+                if move_through_snippet(&page, true) {
+                    return glib::Propagation::Stop;
+                }
+                glib::Propagation::Proceed
+            }
+            Key::ISO_Left_Tab | Key::Tab => {
+                if move_through_snippet(&page, false) {
+                    return glib::Propagation::Stop;
+                }
+                glib::Propagation::Proceed
+            }
+            Key::Escape => {
+                // Escape gives the keys back where the caret is, rather
+                // than jumping it to the end of the snippet.
+                page.state.borrow_mut().document.cancel_snippet();
+                glib::Propagation::Stop
+            }
+            _ => glib::Propagation::Proceed,
+        }
+    });
+    page.view.add_controller(controller);
+
+    {
+        // Deferred to an idle turn rather than done in the handler: a
+        // caller that is midway through its own buffer work still holds
+        // iterators, and mutating the buffer under it invalidates them.
+        // The caret rides on marks, so waiting costs nothing.
+        let weak = Rc::downgrade(page);
+        page.buffer.connect_changed(move |_| {
+            let Some(page) = weak.upgrade() else { return };
+            let Ok(state) = page.state.try_borrow() else { return };
+            if !state.document.snippet_active() {
+                return;
+            }
+            drop(state);
+            let weak = Rc::downgrade(&page);
+            glib::idle_add_local_once(move || {
+                if let Some(page) = weak.upgrade() {
+                    mirror_snippet_stops(&page);
+                }
+            });
+        });
+    }
+    {
+        // Clicking away from a snippet is done with it; leaving Tab
+        // captured after that would be a mode with no way out.
+        let weak = Rc::downgrade(page);
+        page.buffer.connect_cursor_position_notify(move |buffer| {
+            let Some(page) = weak.upgrade() else { return };
+            let Ok(mut state) = page.state.try_borrow_mut() else { return };
+            if !state.document.snippet_active() {
+                return;
+            }
+            let caret = buffer.iter_at_mark(&buffer.get_insert()).offset();
+            let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+            let utf16 = text
+                .chars()
+                .take(caret.max(0) as usize)
+                .map(char::len_utf16)
+                .sum();
+            state.document.snippet_caret_moved(utf16);
+        });
     }
 }
 

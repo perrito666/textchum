@@ -840,6 +840,176 @@ pub unsafe extern "C" fn tc_applied_edits_free(edits: *mut TcAppliedEdit, count:
     }
 }
 
+/// A span of a document in UTF-16 code units, as a selection to make.
+#[repr(C)]
+pub struct TcRegion {
+    pub start: usize,
+    pub end: usize,
+}
+
+/// Expands an LSP snippet body (`frob(${1:x}, ${2:y})$0`) for an
+/// insertion at UTF-16 offset `at`, returning the text to insert as a
+/// nul-terminated UTF-8 string; release it with [`tc_string_free`].
+/// Nothing is inserted: the shell puts the text in through the same path
+/// as anything typed, so its display copy and the core stay in step, and
+/// then calls [`tc_document_snippet_begin`] with where it landed.
+///
+/// # Safety
+/// `document` must be a live document pointer; `body` must point to
+/// `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_snippet_expand(
+    document: *mut TcDocument,
+    at: usize,
+    body: *const c_char,
+    len: usize,
+) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_mut() }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(body) = (unsafe { str_from_raw(body, len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(document.inner.expand_snippet(at, body))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Starts a tabstop session over the text
+/// [`tc_document_snippet_expand`] returned, now sitting at `origin`.
+/// Writes the range to select into `region_out`: the first placeholder,
+/// or where the caret goes when there is nothing to walk — check
+/// [`tc_document_snippet_active`] to tell those apart. Returns false when
+/// no expansion is pending.
+///
+/// # Safety
+/// `document` must be a live document pointer; `region_out` must point
+/// to a writable slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_snippet_begin(
+    document: *mut TcDocument,
+    origin: usize,
+    region_out: *mut TcRegion,
+) -> bool {
+    if region_out.is_null() {
+        return false;
+    }
+    let Some(document) = (unsafe { document.as_mut() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(
+        || match document.inner.begin_snippet(origin) {
+            Some(region) => {
+                unsafe {
+                    *region_out = TcRegion {
+                        start: region.start,
+                        end: region.end,
+                    }
+                };
+                true
+            }
+            None => false,
+        },
+    ))
+    .unwrap_or(false)
+}
+
+/// Whether a snippet is being filled in, and Tab therefore belongs to it
+/// rather than to the text view.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_snippet_active(document: *const TcDocument) -> bool {
+    unsafe { document.as_ref() }.is_some_and(|d| d.inner.snippet_active())
+}
+
+/// Moves to the next tabstop, or back to the previous one when
+/// `forward` is false, and writes the range to select into
+/// `region_out`. Returns false when no session is running.
+///
+/// Reaching `$0` or running off the end ends the session: the call still
+/// returns the caret position, and [`tc_document_snippet_active`] is
+/// false afterwards.
+///
+/// # Safety
+/// `document` must be a live document pointer; `region_out` must point
+/// to a writable slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_snippet_advance(
+    document: *mut TcDocument,
+    forward: bool,
+    region_out: *mut TcRegion,
+) -> bool {
+    if region_out.is_null() {
+        return false;
+    }
+    let Some(document) = (unsafe { document.as_mut() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(
+        || match document.inner.snippet_advance(forward) {
+            Some(region) => {
+                unsafe {
+                    *region_out = TcRegion {
+                        start: region.start,
+                        end: region.end,
+                    }
+                };
+                true
+            }
+            None => false,
+        },
+    ))
+    .unwrap_or(false)
+}
+
+/// Tells the session where the caret went; a caret outside the snippet
+/// ends it, so a click elsewhere gives Tab back.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_snippet_caret_moved(
+    document: *mut TcDocument,
+    position: usize,
+) {
+    if let Some(document) = unsafe { document.as_mut() } {
+        document.inner.snippet_caret_moved(position);
+    }
+}
+
+/// Ends the session, wherever it had got to.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_snippet_cancel(document: *mut TcDocument) {
+    if let Some(document) = unsafe { document.as_mut() } {
+        document.inner.cancel_snippet();
+    }
+}
+
+/// Copies the tabstop just typed in to the other places carrying the
+/// same number. Same contract as [`tc_document_undo`]: on success an
+/// array of edits to replay on the display cache **in array order**,
+/// released with [`tc_applied_edits_free`]. Returns false when there was
+/// nothing to mirror, which is the common case — call it after every
+/// edit made while a session is running.
+///
+/// # Safety
+/// `document` must be a live document pointer; `edits_out` and
+/// `count_out` must point to writable slots.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_snippet_sync(
+    document: *mut TcDocument,
+    edits_out: *mut *mut TcAppliedEdit,
+    count_out: *mut usize,
+) -> bool {
+    unsafe { pop_history(document, edits_out, count_out, |d| d.snippet_sync()) }
+}
+
 /// Re-reads the document from its file. On success fills `edit_out` with
 /// the single replacement to replay on the display cache (an empty range
 /// and empty text means the buffer already matched the disk; release its
@@ -2880,6 +3050,96 @@ mod tests {
             assert!(!tc_buffer_insert(buf, 0, std::ptr::null(), 3));
             assert!(!tc_buffer_delete(buf, 2, 1));
             tc_buffer_free(buf);
+        }
+    }
+
+    #[test]
+    fn a_snippet_walks_its_stops_and_mirrors_through_ffi() {
+        unsafe {
+            let doc = tc_document_new();
+            let body = "let ${1:name} = ${1:name}.frob(${2:arg});$0";
+            let expanded = tc_document_snippet_expand(
+                doc,
+                0,
+                body.as_ptr() as *const c_char,
+                body.len(),
+            );
+            let text = std::ffi::CStr::from_ptr(expanded).to_str().unwrap().to_owned();
+            tc_string_free(expanded);
+            assert_eq!(text, "let name = name.frob(arg);");
+            // The shell's own insertion, as a text view would make it.
+            assert!(tc_document_replace_utf16(
+                doc,
+                0,
+                0,
+                text.as_ptr() as *const c_char,
+                text.len()
+            ));
+            let mut region = TcRegion { start: 0, end: 0 };
+            assert!(tc_document_snippet_begin(doc, 0, &mut region));
+            assert_eq!((region.start, region.end), (4, 8));
+            assert!(tc_document_snippet_active(doc));
+
+            // Type over the first stop; its twin follows.
+            let typed = "value";
+            assert!(tc_document_replace_utf16(
+                doc,
+                4,
+                8,
+                typed.as_ptr() as *const c_char,
+                typed.len()
+            ));
+            let mut edits: *mut TcAppliedEdit = std::ptr::null_mut();
+            let mut count: usize = 0;
+            assert!(tc_document_snippet_sync(doc, &mut edits, &mut count));
+            assert_eq!(count, 1);
+            tc_applied_edits_free(edits, count);
+            let text = tc_document_text(doc);
+            assert_eq!(
+                std::ffi::CStr::from_ptr(text).to_str().unwrap(),
+                "let value = value.frob(arg);"
+            );
+            tc_string_free(text);
+
+            // Tab to the last stop, then off the end.
+            assert!(tc_document_snippet_advance(doc, true, &mut region));
+            assert_eq!((region.start, region.end), (23, 26));
+            assert!(tc_document_snippet_active(doc));
+            assert!(tc_document_snippet_advance(doc, true, &mut region));
+            assert_eq!((region.start, region.end), (28, 28));
+            assert!(!tc_document_snippet_active(doc));
+            assert!(!tc_document_snippet_advance(doc, true, &mut region));
+
+            tc_document_free(doc);
+        }
+    }
+
+    #[test]
+    fn a_caret_leaving_a_snippet_ends_it_through_ffi() {
+        unsafe {
+            let doc = tc_document_new();
+            let body = "${1:a}${2:b}";
+            let expanded =
+                tc_document_snippet_expand(doc, 0, body.as_ptr() as *const c_char, body.len());
+            let text = std::ffi::CStr::from_ptr(expanded).to_str().unwrap().to_owned();
+            tc_string_free(expanded);
+            assert!(tc_document_replace_utf16(
+                doc,
+                0,
+                0,
+                text.as_ptr() as *const c_char,
+                text.len()
+            ));
+            let mut region = TcRegion { start: 0, end: 0 };
+            assert!(tc_document_snippet_begin(doc, 0, &mut region));
+            tc_document_snippet_caret_moved(doc, 1);
+            assert!(tc_document_snippet_active(doc));
+            tc_document_snippet_caret_moved(doc, 9);
+            assert!(!tc_document_snippet_active(doc));
+
+            // Cancelling an ended session is not an error.
+            tc_document_snippet_cancel(doc);
+            tc_document_free(doc);
         }
     }
 

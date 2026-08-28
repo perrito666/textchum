@@ -75,7 +75,10 @@ el cursor, lo que funciona incluso con el hover del ratón apagado.
 
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
-primer marcador seleccionado, así que escribir lo reemplaza.
+primer marcador seleccionado, así que escribir lo reemplaza; ⇥ pasa al
+siguiente marcador y ⇧⇥ al anterior, y uno escrito dos veces se copia
+mientras se teclea. El último ⇥ deja el cursor donde el snippet lo
+pidió y devuelve las teclas.
 
 <div class="shots" markdown>
 <figure markdown>

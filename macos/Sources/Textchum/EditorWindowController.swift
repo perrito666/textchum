@@ -1794,7 +1794,7 @@ final class EditorWindowController: NSWindowController {
     /// Applies core-reported edits to the display cache, in order. Storage
     /// mutations do not go through the text view delegate, so this cannot
     /// echo back into the core.
-    private func replay(_ edits: [CoreDocument.AppliedEdit]) {
+    private func replay(_ edits: [CoreDocument.AppliedEdit], movingCaret: Bool = true) {
         guard !edits.isEmpty, let textView, let storage = textView.textStorage else { return }
         var caret = 0
         storage.beginEditing()
@@ -1812,11 +1812,15 @@ final class EditorWindowController: NSWindowController {
         storage.endEditing()
 
         // Put the caret at the end of the last replayed change, clamped in
-        // case the document shrank, and reveal it.
-        selectionChangeIsFromEditing = true
-        caret = min(caret, (textView.string as NSString).length)
-        textView.setSelectedRange(NSRange(location: caret, length: 0))
-        textView.scrollRangeToVisible(NSRange(location: caret, length: 0))
+        // case the document shrank, and reveal it. Mirroring a snippet's
+        // linked stops passes false: the caret belongs where the user is
+        // typing, not where the copy went.
+        if movingCaret {
+            selectionChangeIsFromEditing = true
+            caret = min(caret, (textView.string as NSString).length)
+            textView.setSelectedRange(NSRange(location: caret, length: 0))
+            textView.scrollRangeToVisible(NSRange(location: caret, length: 0))
+        }
 
         updateChrome()
         refreshDecorations()
@@ -1893,22 +1897,84 @@ final class EditorWindowController: NSWindowController {
     /// Applies an accepted suggestion by replacing the word prefix — via
     /// `insertText`, so the edit flows through the normal synchronized
     /// path (delegate → core → history).
+    ///
+    /// A snippet is expanded by the core first, and the plain text that
+    /// comes back is what the view inserts; the core is then told where
+    /// it landed, which starts the tabstop session Tab walks.
     private func accept(completion item: CompletionPopup.Item) {
         guard let textView else { return }
         let replacementRange =
             currentWordPrefix()?.range
             ?? NSRange(location: textView.selectedRange().location, length: 0)
-        textView.insertText(item.insertText, replacementRange: replacementRange)
-        // A snippet's first placeholder comes back selected, so typing
-        // replaces it; a bare tabstop just parks the caret there.
-        if let selection = item.selection {
-            let target = NSRange(
-                location: replacementRange.location + selection.location,
-                length: selection.length)
-            if NSMaxRange(target) <= (textView.string as NSString).length {
-                textView.setSelectedRange(target)
-            }
+        guard item.isSnippet else {
+            coreDocument.cancelSnippet()
+            textView.insertText(item.insertText, replacementRange: replacementRange)
+            return
         }
+        let expanded = coreDocument.expandSnippet(
+            item.insertText, at: replacementRange.location)
+        coreDocument.cancelSnippet()
+        textView.insertText(expanded, replacementRange: replacementRange)
+        guard let selection = coreDocument.beginSnippet(at: replacementRange.location),
+            NSMaxRange(selection) <= (textView.string as NSString).length
+        else { return }
+        selectionChangeIsFromEditing = true
+        textView.setSelectedRange(selection)
+    }
+
+    // MARK: Snippet tabstops
+
+    /// What a key means while a snippet is being filled in. Nil leaves
+    /// the key to the text view, which is most of them: a snippet takes
+    /// three keys and gives the rest back.
+    enum SnippetKey {
+        case nextStop
+        case previousStop
+        case cancel
+    }
+
+    /// The snippet meaning of a command selector, if it has one.
+    static func snippetKey(for selector: Selector) -> SnippetKey? {
+        switch selector {
+        case #selector(NSResponder.insertTab(_:)): return .nextStop
+        case #selector(NSResponder.insertBacktab(_:)): return .previousStop
+        case #selector(NSResponder.cancelOperation(_:)): return .cancel
+        default: return nil
+        }
+    }
+
+    /// Moves to the next tabstop, or back to the previous one, and
+    /// selects its placeholder. Returns false when no snippet is being
+    /// filled in, so Tab stays Tab.
+    @discardableResult
+    private func moveThroughSnippet(forward: Bool) -> Bool {
+        guard let textView, coreDocument.isSnippetActive,
+            let selection = coreDocument.advanceSnippet(forward: forward),
+            NSMaxRange(selection) <= (textView.string as NSString).length
+        else { return false }
+        selectionChangeIsFromEditing = true
+        textView.setSelectedRange(selection)
+        textView.scrollRangeToVisible(selection)
+        return true
+    }
+
+    /// Copies the tabstop just typed in to the other places carrying the
+    /// same number. The caret is put back where it was, shifted by
+    /// whatever the mirroring inserted ahead of it, so typing a linked
+    /// placeholder feels like typing anything else.
+    private func mirrorSnippetStops() {
+        guard coreDocument.isSnippetActive, let textView else { return }
+        let edits = coreDocument.syncSnippet()
+        guard !edits.isEmpty else { return }
+        var caret = textView.selectedRange()
+        for edit in edits where NSMaxRange(edit.range) <= caret.location {
+            caret.location += (edit.replacement as NSString).length - edit.range.length
+        }
+        replay(edits, movingCaret: false)
+        caret.location = min(caret.location, (textView.string as NSString).length)
+        caret.length = min(caret.length, (textView.string as NSString).length - caret.location)
+        selectionChangeIsFromEditing = true
+        textView.setSelectedRange(caret)
     }
 
     /// Auto-trigger after identifier characters and member access.
@@ -2531,6 +2597,7 @@ extension EditorWindowController: NSTextViewDelegate {
     }
 
     func textDidChange(_ notification: Notification) {
+        mirrorSnippetStops()
         updateChrome()
         refreshDecorations()
         scheduleLSPChange()
@@ -2547,6 +2614,21 @@ extension EditorWindowController: NSTextViewDelegate {
     /// the auto-indent path.
     func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         guard completionPopup.isVisible else {
+            if coreDocument.isSnippetActive {
+                switch Self.snippetKey(for: commandSelector) {
+                case .nextStop:
+                    if moveThroughSnippet(forward: true) { return true }
+                case .previousStop:
+                    if moveThroughSnippet(forward: false) { return true }
+                case .cancel:
+                    // Escape gives the keys back where the caret is,
+                    // rather than jumping it to the end of the snippet.
+                    coreDocument.cancelSnippet()
+                    return true
+                case nil:
+                    break
+                }
+            }
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
                 return insertNewlineAutoIndenting(in: textView)
             }
@@ -2640,6 +2722,11 @@ extension EditorWindowController: NSTextViewDelegate {
         } else {
             coreDocument.breakUndoCoalescing()
             completionPopup.dismiss()
+            // Clicking away from a snippet is done with it; leaving Tab
+            // captured after that would be a mode with no way out.
+            if let textView = notification.object as? NSTextView {
+                coreDocument.snippetCaretMoved(to: textView.selectedRange().location)
+            }
         }
     }
 }

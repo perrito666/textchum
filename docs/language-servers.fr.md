@@ -164,14 +164,11 @@ jusqu'à un redémarrage ou un changement de configuration), et une
 instance dont **aucun document ouvert n'a eu besoin depuis cinq
 minutes** est arrêtée — l'ouverture suivante en lance une fraîche.
 
-## Pas encore là
-
-- Les snippets de la complétion arrivent en texte brut avec le
-  premier marqueur sélectionné, donc taper le remplace — un arrêt
-  honnête plutôt qu'un mode de tabulations.
+- Les snippets de la complétion se déplient et se parcourent. Le
+  premier marqueur revient sélectionné, donc taper le remplace ; ⇥
+  passe au suivant et ⇧⇥ au précédent ; un marqueur écrit plusieurs
+  fois recopie celui qu'on tape. Arriver au bout, appuyer sur ⎋ ou
+  cliquer ailleurs rend les touches.
 - **Présentation ▸ État des serveurs** liste les instances en cours et
   les transitions récentes de la session, rafraîchi en direct, avec un
   pointeur vers le journal complet.
-- Le cycle complet des marqueurs de snippet (le premier est
-  sélectionné ; les suivants restent du texte brut) n'est pas encore
-  là.
