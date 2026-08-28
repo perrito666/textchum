@@ -558,6 +558,37 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         println!("go to line ok (compiler shapes, drive letters, clamping)");
     }
 
+    // Find References splits its answer: what calls this, then what
+    // checks it. Telling them apart is a convention, so the rules are
+    // held here — including the ones that must not fire.
+    {
+        use textchum_core::references::is_test_path;
+        let tests = [
+            "/p/tests/helpers.rs",
+            "/p/spec/models/user_spec.rb",
+            "/p/src/__tests__/Button.tsx",
+            "/p/src/parser_test.go",
+            "/p/src/test_parser.py",
+            "/p/src/Button.test.ts",
+            "/p/src/ParserTest.java",
+            "/p/src/AppTests.swift",
+        ];
+        let not_tests = [
+            "/p/src/main.rs",
+            "/p/src/latest.rs",
+            "/p/src/protest.go",
+            "/p/src/manifest.json",
+            "/p/testing-library/index.js",
+        ];
+        if !tests.iter().all(|path| is_test_path(path))
+            || not_tests.iter().any(|path| is_test_path(path))
+        {
+            eprintln!("FAIL: test-path classification");
+            return 1;
+        }
+        println!("reference split ok (conventions matched, near-misses left alone)");
+    }
+
     let fire = |name: &str| {
         gtk::prelude::WidgetExt::activate_action(&workbench.window, name, None).is_ok()
     };

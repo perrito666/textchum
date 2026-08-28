@@ -1243,6 +1243,17 @@ uintptr_t tc_document_offset_for_line(const struct TcDocument *document,
 uintptr_t tc_document_len_lines(const struct TcDocument *document);
 
 /**
+ * Whether a path looks like a test, by the naming conventions of the
+ * languages this editor knows: a `tests`/`spec`/`__tests__` directory,
+ * or a name like `parser_test.go`, `test_parser.py`, `Button.test.ts`,
+ * `ParserTests.swift`. Cautious on purpose — `latest.rs` is not one.
+ *
+ * # Safety
+ * `path` must point to `len` readable bytes.
+ */
+bool tc_path_is_test(const char *path, uintptr_t len);
+
+/**
  * The selectable language names with a representative file extension,
  * one per line as `name \x1f extension` (extension may be empty).
  * Release with [`tc_string_free`]. For "new file with format" pickers.

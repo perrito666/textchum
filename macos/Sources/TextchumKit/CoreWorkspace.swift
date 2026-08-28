@@ -145,3 +145,15 @@ public enum CoreWorkspace {
         }
     }
 }
+
+/// Telling a test apart from the code it tests, by the naming
+/// conventions of the languages this editor knows — a `tests` directory,
+/// a `parser_test.go`, a `Button.test.ts`. A heuristic, and a cautious
+/// one: `latest.rs` is not a test.
+public enum CoreReferences {
+    public static func isTest(path: String) -> Bool {
+        path.withCString { pointer in
+            tc_path_is_test(pointer, UInt(strlen(pointer)))
+        }
+    }
+}
