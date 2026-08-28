@@ -436,7 +436,10 @@ final class EditorWindowController: NSWindowController {
         // underline nobody can read is a notification with the message
         // taken out. It shows whether or not hover documentation is on,
         // since the mark is on screen either way.
-        if let index = characterIndex(at: point),
+        //
+        // Nothing reported means nothing to look for: most documents,
+        // most of the time, and this runs on every mouse move.
+        if !diagnostics.isEmpty, let index = characterIndex(at: point),
             let diagnostic = diagnostic(atOffset: index)
         {
             hoverTimer?.invalidate()
@@ -480,28 +483,35 @@ final class EditorWindowController: NSWindowController {
             .map(\.0)
     }
 
-    /// The character under a point in the text view, or nil past the
-    /// end of a line.
+    /// The character under a point in the text view, or nil when the
+    /// point is not over laid-out text.
+    ///
+    /// This asks AppKit rather than doing the arithmetic. The version
+    /// that did it by hand added a line fragment's own character index
+    /// to the fragment's document offset, and
+    /// `NSTextLineFragment.characterIndex(for:)` answers `NSNotFound`
+    /// for a point it does not cover — `Int.max`, which made the
+    /// addition overflow and trap. Every mouse move over the editor ran
+    /// it, so it crashed the app rather than misplacing a balloon.
     private func characterIndex(at point: NSPoint) -> Int? {
-        guard let textView, let layoutManager = textView.textLayoutManager,
-            let contentManager = layoutManager.textContentManager
-        else { return nil }
+        guard let textView else { return nil }
+        return Self.characterIndex(at: point, in: textView)
+    }
+
+    /// Static so it can be swept with points from anywhere, including
+    /// the ones that caused the crash, without a window.
+    static func characterIndex(at point: NSPoint, in textView: NSTextView) -> Int? {
+        guard let layoutManager = textView.textLayoutManager else { return nil }
+        let length = (textView.string as NSString).length
+        guard length > 0 else { return nil }
+        // Over laid-out text at all: below the last line, or beside it,
+        // there is no fragment and no character to name.
         let origin = textView.textContainerOrigin
         let inText = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
-        guard let fragment = layoutManager.textLayoutFragment(for: inText) else { return nil }
-        let offset = contentManager.offset(
-            from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
-        // Within the fragment, the nearest character to the point.
-        guard let line = fragment.textLineFragments.first(where: { line in
-            let frame = line.typographicBounds
-            let top = fragment.layoutFragmentFrame.minY + frame.minY
-            return inText.y >= top && inText.y <= top + frame.height
-        }) ?? fragment.textLineFragments.first else { return nil }
-        let inLine = NSPoint(
-            x: inText.x - fragment.layoutFragmentFrame.minX,
-            y: inText.y - fragment.layoutFragmentFrame.minY - line.typographicBounds.minY)
-        let within = line.characterIndex(for: inLine)
-        return offset + within
+        guard layoutManager.textLayoutFragment(for: inText) != nil else { return nil }
+        let index = textView.characterIndexForInsertion(at: point)
+        guard index >= 0 else { return nil }
+        return min(index, length - 1)
     }
 
     /// A diagnostic as a balloon reads it: what kind of finding, then
