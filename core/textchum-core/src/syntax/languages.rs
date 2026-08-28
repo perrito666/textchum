@@ -88,6 +88,10 @@ impl RegisteredLanguage {
     }
 }
 
+/// The last argument of the shorter forms is the **injections** query.
+/// An extra-highlights query handed to one of them compiles as an
+/// injections query, does nothing, and reports nothing — use the long
+/// form, which names both.
 macro_rules! lang {
     ($name:literal, $aliases:expr, $exts:expr, $lang:expr, $hl:expr, $inj:expr) => {
         lang!($name, $aliases, $exts, &[], $lang, $hl, $inj)
@@ -126,6 +130,17 @@ const SQL_NUMBER_LITERALS: &str = r#"
 ((literal) @float (#match? @float "^[-+]?[0-9]*[.][0-9]+$"))
 "#;
 
+/// `self` and `cls` are not ordinary identifiers: one is the receiver
+/// and the other the class, and telling them apart from the locals
+/// around them is most of what colour is for in a method body. The
+/// grammar's own query says nothing about either, so this does.
+///
+/// Appended after the grammar's patterns, which is what lets it win: a
+/// later match replaces an earlier one over the same range.
+const PYTHON_RECEIVERS: &str = r#"
+((identifier) @variable.builtin (#match? @variable.builtin "^(self|cls)$"))
+"#;
+
 static SPECS: &[LanguageSpec] = &[
     lang!(
         "rust",
@@ -139,8 +154,10 @@ static SPECS: &[LanguageSpec] = &[
         "python",
         &["py", "python3"],
         &["py", "pyi"],
+        &[],
         tree_sitter_python::LANGUAGE,
         tree_sitter_python::HIGHLIGHTS_QUERY,
+        Some(PYTHON_RECEIVERS),
         None
     ),
     lang!(
