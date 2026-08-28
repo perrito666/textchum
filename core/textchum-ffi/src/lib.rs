@@ -2114,6 +2114,25 @@ pub unsafe extern "C" fn tc_document_len_lines(document: *const TcDocument) -> u
     unsafe { document.as_ref() }.map_or(0, |d| d.inner.len_lines())
 }
 
+
+/// Whether a path looks like a test, by the naming conventions of the
+/// languages this editor knows: a `tests`/`spec`/`__tests__` directory,
+/// or a name like `parser_test.go`, `test_parser.py`, `Button.test.ts`,
+/// `ParserTests.swift`. Cautious on purpose — `latest.rs` is not one.
+///
+/// # Safety
+/// `path` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_path_is_test(path: *const c_char, len: usize) -> bool {
+    let Some(path) = (unsafe { str_from_raw(path, len) }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::references::is_test_path(path)
+    }))
+    .unwrap_or(false)
+}
+
 /// The selectable language names with a representative file extension,
 /// one per line as `name \x1f extension` (extension may be empty).
 /// Release with [`tc_string_free`]. For "new file with format" pickers.

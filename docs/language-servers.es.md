@@ -44,6 +44,15 @@ nadie.
   según haga falta.
 - **Buscar referencias** (⇧⌘R) lista cada uso del símbolo bajo el
   cursor en un panel flotante — ↑/↓ para moverse, ⏎ para saltar.
+  Primero el código y después las pruebas, cada parte bajo un
+  encabezado con su cuenta: qué llama a esto es la pregunta, y qué lo
+  comprueba es lo siguiente. Qué archivos son pruebas es una
+  convención y no un hecho —un directorio `tests`, un
+  `parser_test.go`, un `Button.test.ts`, un `ParserTests.swift`—, así
+  que la regla es prudente y `latest.rs` no es una prueba. Un
+  `#[cfg(test)] mod tests` de Rust dentro de un archivo corriente
+  aparece como código, que es lo que dice su ruta. Si todo cae de un
+  lado, no hay encabezados.
 - **Formatear documento** (⌥⇧⌘F) pregunta primero al servidor y cae a
   la cadena de preprocesadores de guardado — así el formateo funciona
   en documentos sin título y en lenguajes sin servidor, siempre que

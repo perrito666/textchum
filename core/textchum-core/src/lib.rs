@@ -20,6 +20,7 @@ mod history;
 pub mod hugo;
 pub mod icons;
 pub mod markdown;
+pub mod references;
 pub mod search;
 pub mod snippet;
 pub mod syntax;

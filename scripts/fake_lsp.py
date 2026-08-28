@@ -140,6 +140,10 @@ def main():
             })
         elif method == "textDocument/references":
             uri = message["params"]["textDocument"]["uri"]
+            # One of them in a sibling test file, so the shells' split
+            # of code from tests has something to split.
+            stem, _, extension = uri.rpartition(".")
+            test_uri = f"{stem}_test.{extension}" if stem else uri
             send({
                 "jsonrpc": "2.0",
                 "id": message["id"],
@@ -148,6 +152,10 @@ def main():
                      "range": {"start": {"line": line, "character": 0},
                                "end": {"line": line, "character": 4}}}
                     for line in (0, 2)
+                ] + [
+                    {"uri": test_uri,
+                     "range": {"start": {"line": 1, "character": 0},
+                               "end": {"line": 1, "character": 4}}}
                 ],
             })
         elif method == "textDocument/rename":

@@ -753,6 +753,27 @@ func runSmokeTest() -> Int32 {
     }
     print("go to line ok (compiler shapes, drive letters, clamping)")
 
+    // Find References splits its answer: what calls this, then what
+    // checks it. Telling them apart is a convention, so the rules are
+    // held here — including the ones that must not fire.
+    let tests = [
+        "/p/tests/helpers.rs", "/p/spec/models/user_spec.rb",
+        "/p/src/__tests__/Button.tsx", "/p/src/parser_test.go",
+        "/p/src/test_parser.py", "/p/src/Button.test.ts",
+        "/p/src/ParserTest.java", "/p/src/AppTests.swift",
+    ]
+    let notTests = [
+        "/p/src/main.rs", "/p/src/latest.rs", "/p/src/protest.go",
+        "/p/src/manifest.json", "/p/testing-library/index.js",
+    ]
+    guard tests.allSatisfy({ CoreReferences.isTest(path: $0) }),
+        notTests.allSatisfy({ !CoreReferences.isTest(path: $0) })
+    else {
+        print("FAIL: test-path classification")
+        return 1
+    }
+    print("reference split ok (conventions matched, near-misses left alone)")
+
     print("smoke test passed")
     return 0
 }

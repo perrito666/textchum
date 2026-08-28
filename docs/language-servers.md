@@ -35,7 +35,15 @@ never join someone else's workspace either.
 - **Jump to Definition** (⌃⌘J, or ⌘-click) goes to the symbol under
   the caret — across files, opening or fronting the target as needed.
 - **Find References** (⇧⌘R) lists every use of the symbol under the
-  caret in a floating panel — ↑/↓ to move, ⏎ to jump.
+  caret in a floating panel — ↑/↓ to move, ⏎ to jump. Code comes
+  first, tests after, each under a heading with a count: what calls
+  this is the question, and what checks it is the follow-up. Which
+  files are tests is a convention rather than a fact — a `tests`
+  directory, a `parser_test.go`, a `Button.test.ts`, a
+  `ParserTests.swift` — so the rule is a cautious one, and `latest.rs`
+  is not a test. A Rust `#[cfg(test)] mod tests` inside an ordinary
+  file is listed as code, which is what its path says. A result that
+  is all one or all the other gets no headings.
 - **Rename Symbol…** (⌃⌘R) renames across the whole workspace: open
   windows edit in place (undo works per window), files nobody has open
   are rewritten on disk.

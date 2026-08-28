@@ -9,7 +9,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{goto, icons, theme_import, workspace, Appearance};
+use textchum_core::{goto, icons, references, theme_import, workspace, Appearance};
 
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
@@ -2977,23 +2977,45 @@ fn show_locations(workbench: &Rc<Workbench>, title: &str, json: &str) {
         workbench.toast("No references found.");
         return;
     }
-    present_picker(
-        workbench,
-        title,
-        rows.iter()
-            .map(|(path, line, _)| {
-                let name = Path::new(path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| path.clone());
-                format!("{name}:{}", line + 1)
-            })
-            .collect(),
-        move |workbench, index| {
-            let (path, line, character) = rows[index].clone();
-            workbench.open(Some(PathBuf::from(path)), Some((line, character)));
-        },
-    );
+    // Code first, tests after. Ask where a function is used and the
+    // answer is usually dominated by its test file; what calls this is
+    // the question, and what checks it is the follow-up. All of one or
+    // the other gets no headings — a heading over every row there is
+    // tells the reader nothing.
+    let describe = |(path, line, _): &(String, i32, usize)| {
+        let name = Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.clone());
+        format!("{name}:{}", line + 1)
+    };
+    let (tests, code): (Vec<_>, Vec<_>) = rows
+        .iter()
+        .cloned()
+        .partition(|(path, _, _)| references::is_test_path(path));
+    let (picker_rows, rows) = if code.is_empty() || tests.is_empty() {
+        (picker_items(rows.iter().map(describe).collect()), rows)
+    } else {
+        let mut labels: Vec<PickerRow> = Vec::with_capacity(rows.len());
+        for (at, reference) in code.iter().enumerate() {
+            labels.push(PickerRow {
+                label: describe(reference),
+                heading: (at == 0).then(|| format!("Code ({})", code.len())),
+            });
+        }
+        for (at, reference) in tests.iter().enumerate() {
+            labels.push(PickerRow {
+                label: describe(reference),
+                heading: (at == 0).then(|| format!("Tests ({})", tests.len())),
+            });
+        }
+        // The order the labels are in is the order the rows must be in.
+        (labels, code.into_iter().chain(tests).collect())
+    };
+    present_picker(workbench, title, picker_rows, move |workbench, index| {
+        let (path, line, character) = rows[index].clone();
+        workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+    });
 }
 
 /// The document's symbols, flattened; activating a row jumps.
@@ -3024,7 +3046,7 @@ fn show_outline(workbench: &Rc<Workbench>, path: &str, json: &str) -> bool {
     }
     let path = path.to_owned();
     let labels: Vec<String> = rows.iter().map(|(label, _, _)| label.clone()).collect();
-    present_picker(workbench, "Document Outline", labels, move |workbench, index| {
+    present_picker(workbench, "Document Outline", picker_items(labels), move |workbench, index| {
         let (_, line, character) = rows[index];
         workbench.open(Some(PathBuf::from(&path)), Some((line, character)));
     });
@@ -3051,7 +3073,7 @@ fn show_markdown_outline(workbench: &Rc<Workbench>, page: &Rc<Page>) -> bool {
         .map(|heading| format!("{}{}", "  ".repeat(heading.level - 1), heading.text))
         .collect();
     let path = page.path.borrow().clone();
-    present_picker(workbench, "Document Outline", labels, move |workbench, index| {
+    present_picker(workbench, "Document Outline", picker_items(labels), move |workbench, index| {
         let (line, character) = rows[index];
         match &path {
             Some(path) => {
@@ -3076,16 +3098,34 @@ fn show_markdown_outline(workbench: &Rc<Workbench>, page: &Rc<Page>) -> bool {
 }
 
 /// A small modal list; activating a row runs `choose` and closes.
+/// One row of a picker: what to show, and the heading that starts a
+/// section above it, if it starts one.
+struct PickerRow {
+    label: String,
+    heading: Option<String>,
+}
+
+/// Every label as a row, for pickers with nothing to divide.
+fn picker_items(labels: Vec<String>) -> Vec<PickerRow> {
+    labels
+        .into_iter()
+        .map(|label| PickerRow {
+            label,
+            heading: None,
+        })
+        .collect()
+}
+
 fn present_picker(
     workbench: &Rc<Workbench>,
     title: &str,
-    labels: Vec<String>,
+    rows: Vec<PickerRow>,
     choose: impl Fn(&Rc<Workbench>, usize) + 'static,
 ) {
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Browse);
-    for label in &labels {
-        let row_label = gtk::Label::new(Some(label));
+    for row in &rows {
+        let row_label = gtk::Label::new(Some(&row.label));
         row_label.set_xalign(0.0);
         row_label.set_margin_start(10);
         row_label.set_margin_end(10);
@@ -3093,6 +3133,24 @@ fn present_picker(
         row_label.set_margin_bottom(4);
         list.append(&row_label);
     }
+    // Headings go on as GtkListBox headers rather than as rows: a
+    // header is not a row, so ↑/↓ never land on one and the row index
+    // stays the item index.
+    let headings: Vec<Option<String>> = rows.iter().map(|row| row.heading.clone()).collect();
+    list.set_header_func(move |row, _| {
+        let Some(heading) = headings.get(row.index().max(0) as usize).cloned().flatten() else {
+            row.set_header(gtk::Widget::NONE);
+            return;
+        };
+        let label = gtk::Label::new(Some(&heading));
+        label.set_xalign(0.0);
+        label.set_margin_start(10);
+        label.set_margin_top(8);
+        label.set_margin_bottom(2);
+        label.add_css_class("dim-label");
+        label.add_css_class("heading");
+        row.set_header(Some(&label));
+    });
     let scrolled = gtk::ScrolledWindow::builder()
         .child(&list)
         .min_content_height(280)

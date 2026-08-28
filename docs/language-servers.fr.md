@@ -43,7 +43,15 @@ quelqu'un d'autre.
   cible au premier plan au besoin.
 - **Chercher les références** (⇧⌘R) liste chaque usage du symbole sous
   le curseur dans un panneau flottant — ↑/↓ pour se déplacer, ⏎ pour
-  sauter.
+  sauter. Le code d'abord, les tests ensuite, chacun sous un titre
+  avec son compte : ce qui appelle ceci est la question, ce qui le
+  vérifie est la suite. Quels fichiers sont des tests est une
+  convention et non un fait — un répertoire `tests`, un
+  `parser_test.go`, un `Button.test.ts`, un `ParserTests.swift` — donc
+  la règle est prudente, et `latest.rs` n'est pas un test. Un
+  `#[cfg(test)] mod tests` de Rust dans un fichier ordinaire est
+  listé comme du code, ce que dit son chemin. Si tout tombe du même
+  côté, il n'y a pas de titres.
 - **Formater le document** (⌥⇧⌘F) demande d'abord au serveur puis
   retombe sur la chaîne de préprocesseurs de sauvegarde — le formatage
   marche donc sur les documents sans titre et les langages sans
