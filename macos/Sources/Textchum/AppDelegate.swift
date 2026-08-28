@@ -969,6 +969,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.renameSymbol(_:)): "renameSymbol",
             #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
             #selector(EditorWindowController.runPreprocessors(_:)): "runPreprocessors",
+            #selector(EditorWindowController.blameLine(_:)): "blameLine",
             #selector(EditorWindowController.goToLine(_:)): "goToLine",
             #selector(EditorWindowController.goToBlockStart(_:)): "goToBlockStart",
             #selector(EditorWindowController.goToBlockEnd(_:)): "goToBlockEnd",
@@ -2111,6 +2112,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         outlineItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(outlineItem)
+        let blameItem = NSMenuItem(
+            title: "Blame Line…",
+            action: #selector(EditorWindowController.blameLine(_:)),
+            keyEquivalent: "b"
+        )
+        blameItem.keyEquivalentModifierMask = [.command, .control]
+        viewMenu.addItem(blameItem)
         let goToLineItem = NSMenuItem(
             title: "Go to Line…",
             action: #selector(EditorWindowController.goToLine(_:)),

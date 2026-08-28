@@ -207,6 +207,7 @@ fn main() -> gtk::glib::ExitCode {
     app.set_accels_for_action("win.paths", &["<Ctrl><Alt>t"]);
     app.set_accels_for_action("win.file-properties", &["<Ctrl>i"]);
     app.set_accels_for_action("win.goto-line", &["<Ctrl>l"]);
+    app.set_accels_for_action("win.blame", &["<Ctrl><Alt>b"]);
     app.set_accels_for_action("win.block-start", &["<Ctrl><Alt>Up"]);
     app.set_accels_for_action("win.block-end", &["<Ctrl><Alt>Down"]);
     // Key overrides read the configuration, which touches GTK-backed
@@ -291,6 +292,7 @@ fn apply_key_overrides(app: &adw::Application) {
             "newWithFormat" => "win.new-format-picker",
             "togglePathDisplay" => "win.paths",
             "fileProperties" => "win.file-properties",
+            "blameLine" => "win.blame",
             "goToLine" => "win.goto-line",
             "goToBlockStart" => "win.block-start",
             "goToBlockEnd" => "win.block-end",
@@ -635,6 +637,69 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             return 1;
         }
         println!("git gutter ok (marks what changed, silent without a baseline)");
+    }
+
+    // Blame: what git knows about one line, asked with the buffer's
+    // text so an unsaved edit cannot shift the answer.
+    {
+        use textchum_core::blame::blame_line;
+        let repo = directory.join("blame");
+        let _ = std::fs::create_dir_all(&repo);
+        let git = |arguments: &[&str]| {
+            let _ = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&repo)
+                .args(arguments)
+                .output();
+        };
+        let path = repo.join("thing.txt");
+        let _ = std::fs::write(&path, "first\nsecond\n");
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "ada@example.invalid"]);
+        git(&["config", "user.name", "Ada Lovelace"]);
+        git(&["add", "thing.txt"]);
+        git(&["commit", "-qm", "Add two lines\n\nAnd a reason for them."]);
+
+        // Two lines typed above "second" and not saved: on disk line 4
+        // does not exist, in the buffer it is the committed line.
+        let buffer = "first\ntyped one\ntyped two\nsecond\n";
+        match blame_line(&path, 4, buffer) {
+            Ok(blame)
+                if !blame.uncommitted
+                    && blame.author == "Ada Lovelace"
+                    && blame.summary == "Add two lines"
+                    && blame.body == "And a reason for them."
+                    && blame.commit.len() == 40
+                    && blame.renamed_from.is_empty() => {}
+            other => {
+                eprintln!("FAIL: blame of a committed line: {other:?}");
+                return 1;
+            }
+        }
+        match blame_line(&path, 2, buffer) {
+            Ok(blame) if blame.uncommitted && blame.commit.is_empty() => {}
+            other => {
+                eprintln!("FAIL: a typed line should say it is not committed: {other:?}");
+                return 1;
+            }
+        }
+        // The caret past the end is answered about the last line there
+        // is, and says which line that was.
+        match blame_line(&path, 99, buffer) {
+            Ok(blame) if blame.line == 4 => {}
+            other => {
+                eprintln!("FAIL: blame past the end: {other:?}");
+                return 1;
+            }
+        }
+        // A file outside a repository says so rather than answering.
+        let loose = directory.join("loose.txt");
+        let _ = std::fs::write(&loose, "hello\n");
+        if blame_line(&loose, 1, "hello\n").is_ok() {
+            eprintln!("FAIL: a file outside a repository should be refused, not answered");
+            return 1;
+        }
+        println!("blame ok (buffer-aware, uncommitted lines, past the end, outside a repo)");
     }
 
     let fire = |name: &str| {

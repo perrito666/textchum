@@ -204,3 +204,75 @@ public enum CoreChanges {
         }
     }
 }
+
+/// What git knows about one line: who wrote it, when, and on which
+/// commit.
+public enum CoreBlame {
+    public struct Line {
+        /// The line this is about. Not always the one asked for: a
+        /// caret past the end of the file is answered about the last
+        /// line there is.
+        public let line: Int
+        public let commit: String
+        public let abbreviated: String
+        public let author: String
+        public let authorMail: String
+        public let authorDate: String
+        /// Set only when the committer is a different story from the
+        /// author — a rebase, a cherry-pick, a patch applied by hand.
+        public let committer: String
+        public let committerDate: String
+        public let summary: String
+        public let body: String
+        /// Set only when the file has been renamed since.
+        public let renamedFrom: String
+        /// Typed and not yet committed; carries no commit.
+        public let uncommitted: Bool
+    }
+
+    /// Blames one-based `line` of `path` against `text` — the buffer's
+    /// contents, so the answer is about the line on screen rather than
+    /// the one at that number in the saved file.
+    public static func line(
+        _ line: Int, ofPath path: String, text: String
+    ) throws -> Line {
+        var error: UnsafeMutablePointer<CChar>?
+        let json = path.withCString { pathPointer -> UnsafeMutablePointer<CChar>? in
+            var text = text
+            return text.withUTF8 { bytes in
+                tc_blame_line(
+                    pathPointer, UInt(strlen(pathPointer)), UInt(line),
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count), &error)
+            }
+        }
+        guard let json else {
+            let message =
+                error.map { pointer -> String in
+                    defer { tc_string_free(pointer) }
+                    return String(cString: pointer)
+                } ?? "git could not blame this line"
+            throw CoreIOError(message: message)
+        }
+        defer { tc_string_free(json) }
+        let data = Data(String(cString: json).utf8)
+        let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        func string(_ key: String) -> String { parsed[key] as? String ?? "" }
+        return Line(
+            line: parsed["line"] as? Int ?? line,
+            commit: string("commit"),
+            abbreviated: string("abbreviated"),
+            author: string("author"),
+            authorMail: string("authorMail"),
+            authorDate: string("authorDate"),
+            committer: string("committer"),
+            committerDate: string("committerDate"),
+            summary: string("summary"),
+            body: string("body"),
+            renamedFrom: string("renamedFrom"),
+            uncommitted: parsed["uncommitted"] as? Bool ?? false
+        )
+    }
+}

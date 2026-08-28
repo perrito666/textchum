@@ -87,6 +87,18 @@ avant l'enregistrement, et se recalcule quand la frappe s'arrête. Un
 fichier sans version validée, ou hors d'un dépôt, ne porte aucune
 marque plutôt que de voir toutes ses lignes déclarées nouvelles.
 
+**Attribuer la ligne** (⌃⌘B, Ctrl+Alt+B sous Linux) demande à git qui a
+touché en dernier la ligne sous le curseur : le commit, l'auteur et la
+date où il l'a écrite, le sujet et le corps du message — où se trouve
+d'ordinaire la raison — et le nom qu'avait le fichier à l'époque s'il a
+été renommé depuis. Le commit est à un bouton du presse-papiers, ce à
+quoi sert l'essentiel de la réponse. Une ligne tapée depuis le dernier
+commit le dit, au lieu d'emprunter l'auteur d'un autre.
+
+Elle interroge avec le texte du tampon et non le fichier sur disque :
+une modification non enregistrée au-dessus du curseur ne peut donc pas
+déplacer discrètement la réponse sur la ligne voisine.
+
 La complétion apparaît à la frappe après les caractères d'identifiant
 et `.` ; ↑/↓ choisissent, ⏎ ou ⇥ acceptent, ⎋ ferme. Un snippet arrive
 avec son premier marqueur sélectionné, donc taper le remplace ; ⇥ passe

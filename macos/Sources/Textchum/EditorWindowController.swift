@@ -810,6 +810,31 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    /// Blame Line (⌃⌘B): what git knows about the line under the caret.
+    ///
+    /// The buffer's text goes to git along with the line number, so an
+    /// unsaved edit above the caret cannot shift the answer onto the
+    /// neighbouring line — which would arrive looking exactly as right
+    /// as a correct one.
+    @objc func blameLine(_ sender: Any?) {
+        guard let textView else { return }
+        guard let path = coreDocument.path else {
+            presentError(
+                "This document has no file yet.",
+                details: "Save it before asking git who wrote a line.")
+            return
+        }
+        let text = textView.string as NSString
+        let caret = min(textView.selectedRange().location, text.length)
+        let line = Self.lspPosition(ofIndex: caret, in: text).0 + 1
+        do {
+            let blame = try CoreBlame.line(line, ofPath: path, text: coreDocument.text)
+            BlamePanel.shared.show(blame, file: path, over: window)
+        } catch {
+            presentError("git could not blame this line.", details: "\(error)")
+        }
+    }
+
     /// Go to Line (⌘L): a prompt taking a number, and taking the shapes
     /// a number arrives in — `412:8` from a compiler, a whole
     /// `src/main.rs:412:8` pasted out of a build log, `line 412` from a
