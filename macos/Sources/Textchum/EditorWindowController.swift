@@ -2294,6 +2294,69 @@ extension EditorWindowController: NSWindowDelegate {
     }
 
     /// View → Reveal in Tree: expand the navigator to this document.
+    /// File → Get Info (⌘I): what this document is, when its name does
+    /// not say. Also reached by clicking the language in the title bar.
+    @objc func showFileProperties(_ sender: Any?) {
+        guard let path = coreDocument.path else {
+            // An untitled document has no path to remember a choice
+            // against; New with Format is where its language is set.
+            NSSound.beep()
+            return
+        }
+        let delegate = NSApp.delegate as? AppDelegate
+        let stored = delegate?.fileOverride(path: path) ?? CoreConfig.FileOverride()
+        let facts =
+            "\(coreDocument.encodingName) · \(coreDocument.lengthInBytes) bytes\n\(path)"
+        FilePropertiesPanel.shared.show(
+            over: window,
+            title: (path as NSString).lastPathComponent,
+            facts: facts,
+            detected: CoreLanguages.detected(forPath: path),
+            properties: .init(
+                language: stored.language,
+                tabWidth: stored.tabWidth,
+                spaces: stored.spaces
+            )
+        ) { [weak self] properties in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                delegate?.setFileOverride(
+                    path: path,
+                    .init(
+                        language: properties.language,
+                        tabWidth: properties.tabWidth,
+                        spaces: properties.spaces
+                    )
+                )
+                self.applyFileProperties(properties)
+            }
+        }
+    }
+
+    /// Applies a properties change to this document now, so picking a
+    /// language recolours the text while the panel is still open.
+    func applyFileProperties(_ properties: FilePropertiesPanel.Properties) {
+        let language = properties.language
+            ?? coreDocument.path.flatMap { CoreLanguages.detected(forPath: $0) }
+        _ = coreDocument.setLanguage(language)
+        if let width = properties.tabWidth, let textView {
+            appliedTabWidth = Int(width)
+            let style = NSMutableParagraphStyle()
+            let font = textView.font ?? .monospacedSystemFont(ofSize: 13, weight: .regular)
+            let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
+            style.tabStops = []
+            style.defaultTabInterval = spaceWidth * CGFloat(width)
+            textView.defaultParagraphStyle = style
+            textView.textStorage?.addAttribute(
+                .paragraphStyle,
+                value: style,
+                range: NSRange(location: 0, length: textView.textStorage?.length ?? 0)
+            )
+        }
+        refreshDecorations()
+        updateChrome()
+    }
+
     @objc func revealInTree(_ sender: Any?) {
         guard let path = coreDocument.path else {
             NSSound.beep()

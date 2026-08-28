@@ -105,6 +105,32 @@ pub struct Config {
     broken_on_disk: bool,
 }
 
+/// What a document has been told about itself, overriding what its
+/// name implies: which language it is, how wide a tab is, whether
+/// indents are tabs or spaces. An absent field means the usual answer
+/// applies.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FileOverride {
+    pub language: Option<String>,
+    pub tab_width: Option<u32>,
+    /// True for spaces, false for tabs.
+    pub spaces: Option<bool>,
+}
+
+impl FileOverride {
+    /// Whether this says anything at all. An override with nothing in
+    /// it is stored as no override.
+    pub fn is_empty(&self) -> bool {
+        self.language.is_none() && self.tab_width.is_none() && self.spaces.is_none()
+    }
+}
+
+/// How many documents keep their overrides. Deep enough to cover the
+/// files somebody works on for weeks, shallow enough that the
+/// configuration stays a file a person can read. The least recently
+/// set drops out.
+pub const FILE_OVERRIDE_MEMORY: usize = 200;
+
 impl Config {
     /// Loads the configuration at `path`.
     ///
@@ -653,6 +679,87 @@ impl Config {
     /// a file by itself (`editor.autosave`, seconds). Absent or zero
     /// means off, which is the default: a save can run preprocessors and
     /// rewrite the buffer, so it stays something the user asks for.
+    /// What `path` has been told about itself, if anything.
+    pub fn file_override(&self, path: &str) -> FileOverride {
+        self.file_overrides()
+            .into_iter()
+            .find(|(stored, _)| stored == path)
+            .map(|(_, entry)| entry)
+            .unwrap_or_default()
+    }
+
+    /// Records what a document is, replacing anything said before about
+    /// the same path and moving it to the front. An empty override
+    /// removes the entry: telling a file to go back to what its name
+    /// implies should leave nothing behind.
+    pub fn set_file_override(&mut self, path: &str, entry: &FileOverride) {
+        let mut entries: Vec<(String, FileOverride)> = self
+            .file_overrides()
+            .into_iter()
+            .filter(|(stored, _)| stored != path)
+            .collect();
+        if !entry.is_empty() {
+            entries.insert(0, (path.to_owned(), entry.clone()));
+        }
+        // Newest first, so the tail is what nobody has touched.
+        entries.truncate(FILE_OVERRIDE_MEMORY);
+        if entries.is_empty() {
+            self.editor_mut().remove("files");
+            return;
+        }
+        let array = entries
+            .into_iter()
+            .map(|(path, entry)| {
+                let mut object = Map::new();
+                object.insert("path".into(), Value::String(path));
+                if let Some(language) = entry.language {
+                    object.insert("language".into(), Value::String(language));
+                }
+                if let Some(width) = entry.tab_width {
+                    object.insert("tab_width".into(), Value::Number(width.into()));
+                }
+                if let Some(spaces) = entry.spaces {
+                    object.insert("spaces".into(), Value::Bool(spaces));
+                }
+                Value::Object(object)
+            })
+            .collect();
+        self.editor_mut().insert("files".into(), Value::Array(array));
+    }
+
+    /// Every remembered override, newest first. An array rather than an
+    /// object because the order is the recency, and that is what decides
+    /// which one drops out when the list is full.
+    pub fn file_overrides(&self) -> Vec<(String, FileOverride)> {
+        self.editor()
+            .get("files")
+            .and_then(Value::as_array)
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| {
+                        let object = entry.as_object()?;
+                        let path = object.get("path")?.as_str()?.to_owned();
+                        Some((
+                            path,
+                            FileOverride {
+                                language: object
+                                    .get("language")
+                                    .and_then(Value::as_str)
+                                    .map(str::to_owned),
+                                tab_width: object
+                                    .get("tab_width")
+                                    .and_then(Value::as_u64)
+                                    .map(|width| width as u32),
+                                spaces: object.get("spaces").and_then(Value::as_bool),
+                            },
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Untitled documents are never autosaved — there is nowhere to put
     /// them.
     pub fn autosave_seconds(&self) -> u32 {
@@ -1204,6 +1311,60 @@ mod tests {
         assert_eq!(reloaded.spell_words(), vec!["SBX", "Textchum"]);
         reloaded.set_spell_words(&[]);
         assert!(reloaded.spell_words().is_empty());
+    }
+
+    #[test]
+    fn a_file_can_be_told_what_it_is() {
+        let path = temp_path("file-overrides.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.file_override("/w/report.txt"), FileOverride::default());
+
+        config.set_file_override(
+            "/w/report.txt",
+            &FileOverride {
+                language: Some("sql".into()),
+                tab_width: Some(2),
+                spaces: Some(true),
+            },
+        );
+        config.save().unwrap();
+        let (mut reloaded, _) = Config::load(&path);
+        let entry = reloaded.file_override("/w/report.txt");
+        assert_eq!(entry.language.as_deref(), Some("sql"));
+        assert_eq!(entry.tab_width, Some(2));
+        assert_eq!(entry.spaces, Some(true));
+
+        // Saying nothing about a file forgets it, so a document that
+        // goes back to what its name implies leaves nothing behind.
+        reloaded.set_file_override("/w/report.txt", &FileOverride::default());
+        assert_eq!(reloaded.file_override("/w/report.txt"), FileOverride::default());
+        assert!(reloaded.file_overrides().is_empty());
+    }
+
+    #[test]
+    fn the_least_recently_set_override_drops_out() {
+        let path = temp_path("file-override-cache.json");
+        let (mut config, _) = Config::load(&path);
+        for index in 0..FILE_OVERRIDE_MEMORY + 20 {
+            config.set_file_override(
+                &format!("/w/{index}.txt"),
+                &FileOverride { language: Some("sql".into()), ..Default::default() },
+            );
+        }
+        let stored = config.file_overrides();
+        assert_eq!(stored.len(), FILE_OVERRIDE_MEMORY, "the list is capped");
+        // The newest is kept and the oldest is gone.
+        assert_eq!(stored[0].0, format!("/w/{}.txt", FILE_OVERRIDE_MEMORY + 19));
+        assert_eq!(config.file_override("/w/0.txt"), FileOverride::default());
+
+        // Setting one again makes it the newest, so it survives the
+        // next round of eviction.
+        let survivor = format!("/w/{}.txt", FILE_OVERRIDE_MEMORY);
+        config.set_file_override(
+            &survivor,
+            &FileOverride { tab_width: Some(8), ..Default::default() },
+        );
+        assert_eq!(config.file_overrides()[0].0, survivor);
     }
 
     #[test]

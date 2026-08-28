@@ -1424,6 +1424,45 @@ bool tc_lsp_executable_exists(const char *command, uintptr_t len);
 char *tc_lsp_registry_json(void);
 
 /**
+ * The language a path implies, by extension or by name — empty when
+ * nothing matches. What "Automatic" means in the file properties
+ * panel, and the answer a document falls back to when its override is
+ * removed. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * The pointer/length pair must describe readable bytes.
+ */
+char *tc_language_for_path(const char *path, uintptr_t len);
+
+/**
+ * What a document has been told about itself, as JSON:
+ * `{"language": "sql", "tab_width": 2, "spaces": true}`, with absent
+ * keys meaning the usual answer applies. `{}` when nothing was said.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; the pointer/length
+ * pair must describe readable bytes.
+ */
+char *tc_config_file_override_json(const struct TcConfig *config,
+                                   const char *path,
+                                   uintptr_t path_len);
+
+/**
+ * Records what a document is, from the same JSON shape. An empty
+ * object forgets the file. Malformed JSON is ignored.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; both pointer/length
+ * pairs must describe readable bytes.
+ */
+void tc_config_set_file_override_json(struct TcConfig *config,
+                                      const char *path,
+                                      uintptr_t path_len,
+                                      const char *json,
+                                      uintptr_t json_len);
+
+/**
  * Applies a server configuration (the JSON from [`tc_config_lsp_json`])
  * to the pool. Takes effect for instances spawned afterwards and clears
  * the missing-server memory.

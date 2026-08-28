@@ -2565,6 +2565,101 @@ pub extern "C" fn tc_lsp_registry_json() -> *mut c_char {
     owned_c_string(serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into()))
 }
 
+/// The language a path implies, by extension or by name — empty when
+/// nothing matches. What "Automatic" means in the file properties
+/// panel, and the answer a document falls back to when its override is
+/// removed. Release with [`tc_string_free`].
+///
+/// # Safety
+/// The pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_language_for_path(
+    path: *const c_char,
+    len: usize,
+) -> *mut c_char {
+    let Some(path) = (unsafe { str_from_raw(path, len) }) else {
+        return std::ptr::null_mut();
+    };
+    let name = textchum_core::syntax::languages::by_path(std::path::Path::new(path))
+        .map(|entry| entry.spec.name)
+        .unwrap_or("");
+    owned_c_string(name.to_owned())
+}
+
+/// What a document has been told about itself, as JSON:
+/// `{"language": "sql", "tab_width": 2, "spaces": true}`, with absent
+/// keys meaning the usual answer applies. `{}` when nothing was said.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer; the pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_file_override_json(
+    config: *const TcConfig,
+    path: *const c_char,
+    path_len: usize,
+) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let entry = config.inner.file_override(path);
+    let mut object = serde_json::Map::new();
+    if let Some(language) = entry.language {
+        object.insert("language".into(), serde_json::Value::String(language));
+    }
+    if let Some(width) = entry.tab_width {
+        object.insert("tab_width".into(), serde_json::Value::Number(width.into()));
+    }
+    if let Some(spaces) = entry.spaces {
+        object.insert("spaces".into(), serde_json::Value::Bool(spaces));
+    }
+    owned_c_string(serde_json::Value::Object(object).to_string())
+}
+
+/// Records what a document is, from the same JSON shape. An empty
+/// object forgets the file. Malformed JSON is ignored.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; both pointer/length
+/// pairs must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_file_override_json(
+    config: *mut TcConfig,
+    path: *const c_char,
+    path_len: usize,
+    json: *const c_char,
+    json_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return;
+    };
+    let Some(json) = (unsafe { str_from_raw(json, json_len) }) else {
+        return;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(json) else {
+        return;
+    };
+    let entry = textchum_core::FileOverride {
+        language: value
+            .get("language")
+            .and_then(|v| v.as_str())
+            .map(str::to_owned),
+        tab_width: value
+            .get("tab_width")
+            .and_then(|v| v.as_u64())
+            .map(|w| w as u32),
+        spaces: value.get("spaces").and_then(|v| v.as_bool()),
+    };
+    config.inner.set_file_override(path, &entry);
+}
+
 /// Applies a server configuration (the JSON from [`tc_config_lsp_json`])
 /// to the pool. Takes effect for instances spawned afterwards and clears
 /// the missing-server memory.

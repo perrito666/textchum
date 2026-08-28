@@ -393,6 +393,74 @@ public final class CoreConfig {
         set { tc_config_set_autosave_seconds(handle, newValue) }
     }
 
+    /// What a document has been told about itself, overriding what its
+    /// name implies. Absent fields mean the usual answer applies.
+    public struct FileOverride: Equatable, Codable {
+        public var language: String?
+        public var tabWidth: UInt32?
+        /// True for spaces, false for tabs.
+        public var spaces: Bool?
+
+        public init(language: String? = nil, tabWidth: UInt32? = nil, spaces: Bool? = nil) {
+            self.language = language
+            self.tabWidth = tabWidth
+            self.spaces = spaces
+        }
+
+        public var isEmpty: Bool {
+            language == nil && tabWidth == nil && spaces == nil
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case language
+            case tabWidth = "tab_width"
+            case spaces
+        }
+    }
+
+    public func fileOverride(path: String) -> FileOverride {
+        var path = path
+        let json: String? = path.withUTF8 { bytes in
+            guard
+                let cString = tc_config_file_override_json(
+                    handle,
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count)
+                )
+            else { return nil }
+            defer { tc_string_free(cString) }
+            return String(cString: cString)
+        }
+        guard let json, let data = json.data(using: .utf8) else { return FileOverride() }
+        return (try? JSONDecoder().decode(FileOverride.self, from: data)) ?? FileOverride()
+    }
+
+    /// Records what a document is. An override with nothing in it
+    /// forgets the file.
+    public func setFileOverride(path: String, _ entry: FileOverride) {
+        guard let data = try? JSONEncoder().encode(entry),
+            var json = String(data: data, encoding: .utf8)
+        else { return }
+        var path = path
+        path.withUTF8 { pathBytes in
+            json.withUTF8 { jsonBytes in
+                tc_config_set_file_override_json(
+                    handle,
+                    pathBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(pathBytes.count),
+                    jsonBytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(jsonBytes.count)
+                )
+            }
+        }
+    }
+
     /// Re-reads the file, replacing in-memory state — for following
     /// external edits while running. Returns a warning to show once when
     /// the file existed but was unusable.
