@@ -191,6 +191,7 @@ impl Workbench {
         go_section.append(Some("Go to Block End"), Some("win.block-end"));
         go_section.append(Some("Command Palette…"), Some("win.palette"));
         go_section.append(Some("Language Server Status"), Some("win.server-status"));
+        go_section.append(Some("File Properties…"), Some("win.file-properties"));
         go_section.append(Some("Toggle Path Display"), Some("win.paths"));
         go_section.append(Some("Toggle File Tree"), Some("win.sidebar"));
         go_section.append(Some("Toggle Markdown Preview"), Some("win.preview"));
@@ -572,6 +573,19 @@ impl Workbench {
                 if let Some(handles) = Shell::instance().pages.borrow().get(&path).cloned() {
                     page::reveal(&handles, line, character);
                 }
+            }
+        }
+        // A document told what it is stays told: reopening a .txt that
+        // holds SQL should not find it plain text again.
+        if let Some(path) = page.path.borrow().clone() {
+            let stored = Shell::instance().config.borrow().file_override(&path);
+            if !stored.is_empty() {
+                apply_file_properties(
+                    self,
+                    &page,
+                    stored.language.as_deref(),
+                    stored.tab_width,
+                );
             }
         }
         self.refresh_chrome();
@@ -1242,6 +1256,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
     });
+    add("file-properties", workbench, |workbench, _| show_file_properties(workbench));
     add("about", workbench, |workbench, _| {
         // The real build version comes from git at compile time (the
         // tag in CI); the rest is the who/where/under-what.
@@ -1923,6 +1938,197 @@ const PALETTE: &[(&str, &str)] = &[
 /// New with Format for keyboards (Ctrl+Shift+N): the language list
 /// behind an editable filter; ⏎ opens an untitled tab already
 /// speaking the selection.
+/// File properties (Ctrl+I): what this document is, when its name does
+/// not say. A .txt holding SQL, a dotfile with no extension, an .inc
+/// that is really C — the filename decides the language everywhere
+/// else, and this is where it can be told otherwise. Indentation too:
+/// tab width and tabs-or-spaces are set per project or globally, and
+/// one file that disagrees had nowhere to say so.
+///
+/// Each choice applies and is saved as it is made, so there is no OK
+/// button to forget.
+fn show_file_properties(workbench: &Rc<Workbench>) {
+    let Some(page) = workbench.selected() else { return };
+    let Some(path) = page.path.borrow().clone() else {
+        // Nothing to remember a choice against; New with Format is
+        // where an untitled document's language is set.
+        workbench.toast("Save the file first — an untitled document has no path.");
+        return;
+    };
+    let shell = Shell::instance();
+    let stored = shell.config.borrow().file_override(&path);
+    let detected = textchum_core::syntax::languages::by_path(Path::new(&path))
+        .map(|entry| entry.spec.name);
+
+    let window = adw::Window::builder()
+        .transient_for(&workbench.window)
+        .modal(false)
+        .title(
+            Path::new(&path)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.clone()),
+        )
+        .default_width(420)
+        .build();
+    let page_box = adw::PreferencesPage::new();
+    let group = adw::PreferencesGroup::new();
+
+    let language_row = adw::ComboRow::new();
+    language_row.set_title("Language");
+    let names: Vec<&'static str> =
+        textchum_core::syntax::languages::selectable_names().to_vec();
+    let automatic = match detected {
+        Some(name) => format!("Automatic ({name})"),
+        None => "Automatic (plain text)".to_string(),
+    };
+    let mut entries: Vec<&str> = vec![automatic.as_str()];
+    entries.extend(names.iter().copied());
+    language_row.set_model(Some(&gtk::StringList::new(&entries)));
+    language_row.set_selected(
+        stored
+            .language
+            .as_deref()
+            .and_then(|chosen| names.iter().position(|name| *name == chosen))
+            .map(|index| index as u32 + 1)
+            .unwrap_or(0),
+    );
+    group.add(&language_row);
+
+    let tab_row = adw::SpinRow::with_range(0.0, 16.0, 1.0);
+    tab_row.set_title("Tab width");
+    tab_row.set_subtitle("0 follows the project");
+    tab_row.set_value(stored.tab_width.unwrap_or(0) as f64);
+    group.add(&tab_row);
+
+    let indent_row = adw::ComboRow::new();
+    indent_row.set_title("Indent with");
+    indent_row.set_model(Some(&gtk::StringList::new(&["Automatic", "Spaces", "Tabs"])));
+    indent_row.set_selected(match stored.spaces {
+        Some(true) => 1,
+        Some(false) => 2,
+        None => 0,
+    });
+    group.add(&indent_row);
+
+    let facts = adw::ActionRow::new();
+    let state = page.state.borrow();
+    facts.set_title(&format!(
+        "{} · {} bytes",
+        match state.document.encoding() {
+            textchum_core::Encoding::Utf8 => "UTF-8",
+            textchum_core::Encoding::Utf8WithBom => "UTF-8 with BOM",
+            textchum_core::Encoding::Latin1 => "Latin-1",
+        },
+        state.document.len_bytes()
+    ));
+    drop(state);
+    facts.set_subtitle(&path);
+    facts.add_css_class("dim-label");
+    group.add(&facts);
+    page_box.add(&group);
+
+    let header = adw::HeaderBar::new();
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    content.append(&header);
+    content.append(&page_box);
+    window.set_content(Some(&content));
+
+    // One closure behind all three rows: read them together, apply, and
+    // save. Reading all three means a change to any one cannot drop
+    // what the others say.
+    let apply: Rc<dyn Fn()> = {
+        let workbench = Rc::downgrade(workbench);
+        let page = Rc::downgrade(&page);
+        let language_row = language_row.clone();
+        let tab_row = tab_row.clone();
+        let indent_row = indent_row.clone();
+        let names = names.clone();
+        let path = path.clone();
+        Rc::new(move || {
+            let (Some(workbench), Some(page)) = (workbench.upgrade(), page.upgrade())
+            else {
+                return;
+            };
+            let selected = language_row.selected() as usize;
+            let language = (selected > 0)
+                .then(|| names.get(selected - 1).map(|name| (*name).to_owned()))
+                .flatten();
+            let tab_width = match tab_row.value() as u32 {
+                0 => None,
+                width => Some(width),
+            };
+            let spaces = match indent_row.selected() {
+                1 => Some(true),
+                2 => Some(false),
+                _ => None,
+            };
+            let shell = Shell::instance();
+            shell.config.borrow_mut().set_file_override(
+                &path,
+                &textchum_core::FileOverride {
+                    language: language.clone(),
+                    tab_width,
+                    spaces,
+                },
+            );
+            shell.save_config();
+            apply_file_properties(&workbench, &page, language.as_deref(), tab_width);
+        })
+    };
+    {
+        let apply = Rc::clone(&apply);
+        language_row.connect_selected_notify(move |_| apply());
+    }
+    {
+        let apply = Rc::clone(&apply);
+        tab_row.connect_value_notify(move |_| apply());
+    }
+    {
+        let apply = Rc::clone(&apply);
+        indent_row.connect_selected_notify(move |_| apply());
+    }
+    window.present();
+}
+
+/// Puts a document's own settings into effect: the language it is read
+/// as, and how wide a tab is drawn. `None` for the language means fall
+/// back to what the filename implies.
+pub fn apply_file_properties(
+    workbench: &Rc<Workbench>,
+    page: &Rc<Page>,
+    language: Option<&str>,
+    tab_width: Option<u32>,
+) {
+    let resolved = language.map(str::to_owned).or_else(|| {
+        page.path.borrow().as_deref().and_then(|path| {
+            textchum_core::syntax::languages::by_path(Path::new(path))
+                .map(|entry| entry.spec.name.to_owned())
+        })
+    });
+    page.state
+        .borrow_mut()
+        .document
+        .set_language(resolved.as_deref());
+    page::refresh_style_tags(&page.buffer);
+    page::recolor(&page.buffer);
+    page::apply_highlights(&page.buffer, &page.state.borrow().document);
+    if let Some(width) = tab_width {
+        page.view.set_tab_width(width);
+    }
+    // The title bar reads a cached language, set when the page was
+    // built. Changing what a document is has to update it, or the
+    // subtitle keeps naming what the filename implied.
+    if let Some(path) = page.path.borrow().clone() {
+        if let Some(handles) = Shell::instance().pages.borrow().get(&path) {
+            *handles.language.borrow_mut() =
+                page.state.borrow().document.language_name().unwrap_or("").to_owned();
+            refresh_subtitle(handles);
+        }
+    }
+    workbench.refresh_chrome();
+}
+
 fn show_format_picker(workbench: &Rc<Workbench>) {
     let names: Vec<&'static str> =
         textchum_core::syntax::languages::selectable_names().to_vec();
