@@ -289,6 +289,26 @@ public final class CoreDocument {
 /// The selectable syntax languages, with a representative file
 /// extension each — for "new file with format" pickers.
 public enum CoreLanguages {
+    /// The language a filename implies, or nil when nothing matches.
+    /// What a document is before anyone tells it otherwise.
+    public static func detected(forPath path: String) -> String? {
+        var path = path
+        let name: String? = path.withUTF8 { bytes in
+            guard
+                let cString = tc_language_for_path(
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count)
+                )
+            else { return nil }
+            defer { tc_string_free(cString) }
+            return String(cString: cString)
+        }
+        guard let name, !name.isEmpty else { return nil }
+        return name
+    }
+
     public static let all: [(name: String, fileExtension: String)] = {
         guard let joined = tc_language_names() else { return [] }
         defer { tc_string_free(joined) }

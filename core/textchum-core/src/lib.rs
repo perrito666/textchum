@@ -24,6 +24,9 @@ pub mod workspace;
 
 pub use app::{App, Event, EventSender};
 pub use buffer::{Buffer, BufferError};
-pub use config::{Appearance, Config, OpenTarget, DEFAULT_FONT_SIZE, DEFAULT_TAB_WIDTH};
+pub use config::{
+    Appearance, Config, FileOverride, OpenTarget, DEFAULT_FONT_SIZE, DEFAULT_TAB_WIDTH,
+    FILE_OVERRIDE_MEMORY,
+};
 pub use document::{AppliedEdit, Document, DocumentError, Encoding};
 pub use syntax::{theme, HighlightSpan};

@@ -293,6 +293,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self?.commandPalette.debugSet(query: scope == "x" ? "" : scope)
                         return
                     }
+                    if allArguments[flagIndex + 1] == "properties" {
+                        // scope = a language to choose, or "-" to just
+                        // open the panel and photograph it.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                guard let editor = self?.editors.first else { return }
+                                editor.showFileProperties(nil)
+                                guard scope != "-", let path = editor.coreDocument.path
+                                else { return }
+                                // The same two steps the panel takes,
+                                // so this exercises saving as well as
+                                // applying.
+                                self?.setFileOverride(
+                                    path: path, .init(language: scope))
+                                editor.applyFileProperties(.init(language: scope))
+                            }
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "settings" {
                         // scope names the tab tag for this mode.
                         self?.settingsModel?.selectedTab = scope
@@ -859,6 +878,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    // MARK: What a document has been told it is
+
+    func fileOverride(path: String) -> CoreConfig.FileOverride {
+        config?.fileOverride(path: path) ?? CoreConfig.FileOverride()
+    }
+
+    /// Records a document's own settings and writes them out. Saved
+    /// straight away: the panel has no OK button, so a change is made
+    /// the moment it is chosen.
+    func setFileOverride(path: String, _ entry: CoreConfig.FileOverride) {
+        guard let config else { return }
+        config.setFileOverride(path: path, entry)
+        lastOwnConfigSave = Date()
+        try? config.save()
+    }
+
     /// Adds a word to the personal dictionary from an editor's spelling
     /// menu, then re-applies settings so every open window stops
     /// flagging it. The list is a setting like any other, so it goes
@@ -921,6 +956,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.revertToSaved(_:)): "revertToSaved",
             #selector(NSWindow.performClose(_:)): "close",
             #selector(reopenClosedDocument(_:)): "reopenClosed",
+            #selector(EditorWindowController.showFileProperties(_:)): "fileProperties",
             #selector(EditorWindowController.performUndo(_:)): "undo",
             #selector(EditorWindowController.performRedo(_:)): "redo",
             #selector(EditorWindowController.jumpToDefinition(_:)): "jumpToDefinition",
@@ -1615,6 +1651,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if placeAsConfigured {
             place(editor: editor, target: target)
         }
+        // A document told what it is stays told: reopening a .txt that
+        // holds SQL should not find it plain text again.
+        if let path = editor.coreDocument.path {
+            let stored = fileOverride(path: path)
+            if !stored.isEmpty {
+                editor.applyFileProperties(
+                    .init(
+                        language: stored.language,
+                        tabWidth: stored.tabWidth,
+                        spaces: stored.spaces
+                    ))
+            }
+        }
         editors.append(editor)
         if let window = editor.window {
             NotificationCenter.default.addObserver(
@@ -1725,6 +1774,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         fileMenu.addItem(.separator())
         fileMenu.addItem(
             withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let properties = NSMenuItem(
+            title: "Get Info",
+            action: #selector(EditorWindowController.showFileProperties(_:)),
+            keyEquivalent: "i"
+        )
+        fileMenu.addItem(properties)
         let reopen = NSMenuItem(
             title: "Reopen Closed Tab",
             action: #selector(reopenClosedDocument(_:)),
