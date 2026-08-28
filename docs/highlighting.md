@@ -76,4 +76,6 @@ their advance width across weights, so nothing reflows.
 
 ## Not there yet
 
-- Manual language selection from the UI for files with odd extensions.
+- Queries limited to the visible stretch for documents of several
+  hundred kilobytes: today they are coloured whole, or past a ceiling
+  not at all.
