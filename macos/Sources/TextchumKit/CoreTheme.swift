@@ -1,3 +1,4 @@
+import AppKit
 import CTextchum
 import Foundation
 
@@ -189,4 +190,76 @@ public enum CoreTheme {
         defer { tc_string_free(template) }
         return String(cString: template)
     }
+}
+
+/// File icons from a VS Code icon pack: the file tree's rows, when the
+/// desktop's own icons run out (which is early — LaunchServices knows
+/// Python from Markdown and has never heard of `Dockerfile`).
+///
+/// The pack is loaded once and lives in the core, so both shells draw
+/// the same icon for the same file.
+@MainActor
+public enum CoreIcons {
+    /// Loads the pack at `path` — an icon theme JSON, or the extension
+    /// folder holding one — returning a line describing what was
+    /// loaded, or throwing with why it could not be.
+    @discardableResult
+    public static func load(at path: String) throws -> String {
+        var error: UnsafeMutablePointer<CChar>?
+        let summary = path.withCString { pointer in
+            tc_icons_load(pointer, UInt(strlen(pointer)), &error)
+        }
+        guard let summary else {
+            let message =
+                error.map { pointer -> String in
+                    defer { tc_string_free(pointer) }
+                    return String(cString: pointer)
+                } ?? "the icon pack could not be read"
+            throw CoreIOError(message: message)
+        }
+        defer { tc_string_free(summary) }
+        cache.removeAll()
+        return String(cString: summary)
+    }
+
+    /// Forgets the pack, returning the tree to the desktop's icons.
+    public static func clear() {
+        tc_icons_clear()
+        cache.removeAll()
+    }
+
+    /// Whether a pack is loaded.
+    public static var isActive: Bool { tc_icons_active() }
+
+    /// The icon for a file, or nil when no pack is loaded or it has
+    /// nothing for this one. Images are cached by what was asked, since
+    /// a file tree asks for the same handful over and over as it
+    /// scrolls.
+    public static func icon(
+        forFilename filename: String, language: String?, light: Bool
+    ) -> NSImage? {
+        guard tc_icons_active() else { return nil }
+        let key = "\(light ? "l" : "d")\u{1f}\(language ?? "")\u{1f}\(filename)"
+        if let cached = cache[key] { return cached }
+        let path = filename.withCString { name -> UnsafeMutablePointer<CChar>? in
+            guard let language else {
+                return tc_icons_for_file(name, UInt(strlen(name)), nil, 0, light)
+            }
+            return language.withCString { languagePointer in
+                tc_icons_for_file(
+                    name, UInt(strlen(name)),
+                    languagePointer, UInt(strlen(languagePointer)), light)
+            }
+        }
+        var image: NSImage?
+        if let path {
+            defer { tc_string_free(path) }
+            image = NSImage(contentsOfFile: String(cString: path))
+            image?.size = NSSize(width: 16, height: 16)
+        }
+        cache[key] = image
+        return image
+    }
+
+    private static var cache: [String: NSImage?] = [:]
 }

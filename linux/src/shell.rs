@@ -129,6 +129,7 @@ impl Shell {
             });
             shell.apply_appearance();
             shell.apply_theme();
+            shell.apply_icon_pack();
             shell.reconfigure_pool();
             let pump = Rc::clone(&shell);
             glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
@@ -192,6 +193,26 @@ impl Shell {
         }
     }
 
+    /// Loads the configured file-icon pack, or clears it. A pack that
+    /// cannot be read is reported to the terminal and the tree keeps
+    /// the desktop's icons — the same escape hatch a broken theme gets,
+    /// and for the same reason: a pack someone moved should not stop
+    /// the editor.
+    pub fn apply_icon_pack(&self) {
+        match self.config.borrow().icon_pack() {
+            Some(path) => {
+                match textchum_core::icons::set_active_from(std::path::Path::new(&path)) {
+                    Ok(summary) => eprintln!("textchum: icons {summary}"),
+                    Err(error) => {
+                        textchum_core::icons::clear_active();
+                        eprintln!("textchum: the icon pack could not be used: {error}");
+                    }
+                }
+            }
+            None => textchum_core::icons::clear_active(),
+        }
+    }
+
     /// Remembers that this process wrote `path` just now, so the file
     /// monitor does not offer to reload the app's own save.
     pub fn note_own_save(&self, path: &str) {
@@ -247,6 +268,7 @@ impl Shell {
             }
             shell.apply_appearance();
             shell.apply_theme();
+            shell.apply_icon_pack();
             shell.reconfigure_pool();
             reapply();
         });

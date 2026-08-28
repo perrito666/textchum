@@ -466,6 +466,57 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         println!("theme import ok (VS Code JSON with comments, inherited captures, wearable)");
     }
 
+    // A file-icon pack: the tree asks the core for an image per file,
+    // and the answers follow VS Code's order — whole name, then the
+    // longest extension, then the language.
+    {
+        let pack_dir = directory.join("pack");
+        let _ = std::fs::create_dir_all(pack_dir.join("icons"));
+        for name in ["rust.svg", "docker.svg", "default.svg"] {
+            let _ = std::fs::write(
+                pack_dir.join("icons").join(name),
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
+                   <rect width="16" height="16" fill="#4488CC"/></svg>"##,
+            );
+        }
+        let _ = std::fs::write(
+            pack_dir.join("icons.json"),
+            r##"{
+              "iconDefinitions": {
+                "_rust": {"iconPath": "./icons/rust.svg"},
+                "_docker": {"iconPath": "./icons/docker.svg"},
+                "_default": {"iconPath": "./icons/default.svg"}
+              },
+              "fileExtensions": {"rs": "_rust"},
+              "fileNames": {"dockerfile": "_docker"},
+              "languageIds": {"rust": "_rust"},
+              "file": "_default"
+            }"##,
+        );
+        use textchum_core::icons;
+        if let Err(error) = icons::set_active_from(&pack_dir.join("icons.json")) {
+            eprintln!("FAIL: icon pack did not load: {error}");
+            return 1;
+        }
+        let named = |name: &str| {
+            icons::icon_for(name, None, false)
+                .and_then(|path| path.file_name().map(|n| n.to_string_lossy().into_owned()))
+        };
+        if named("main.rs").as_deref() != Some("rust.svg")
+            || named("Dockerfile").as_deref() != Some("docker.svg")
+            || named("notes.xyz").as_deref() != Some("default.svg")
+        {
+            eprintln!("FAIL: icon pack lookups");
+            return 1;
+        }
+        icons::clear_active();
+        if icons::is_active() || icons::icon_for("main.rs", None, false).is_some() {
+            eprintln!("FAIL: clearing the pack must return the tree to system icons");
+            return 1;
+        }
+        println!("icon pack ok (loaded, looked up by name and extension, cleared)");
+    }
+
     let fire = |name: &str| {
         gtk::prelude::WidgetExt::activate_action(&workbench.window, name, None).is_ok()
     };

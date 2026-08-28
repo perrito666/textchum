@@ -9,7 +9,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{theme_import, workspace, Appearance};
+use textchum_core::{icons, theme_import, workspace, Appearance};
 
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
@@ -932,6 +932,35 @@ pub fn refresh_subtitle(handles: &PageHandles) {
 
 /// A lazily-populated tree over the project directory: directories
 /// expand on demand, activating a file opens it as a tab.
+/// Redraws every window's file tree, so a pack put on or taken off
+/// shows without reopening anything. The rows read the pack as they
+/// draw, so forgetting the remembered root is enough to make them.
+fn refresh_file_trees() {
+    WORKBENCHES.with(|list| {
+        for workbench in list.borrow().iter() {
+            *workbench.sidebar_root.borrow_mut() = None;
+            workbench.rebuild_tree();
+        }
+    });
+}
+
+/// The icon pack's image for a file, if a pack is loaded and has one.
+///
+/// The language is the one the file's name implies rather than whatever
+/// an open tab decided: a tree row is a file on disk, and most of them
+/// are not open.
+fn packed_icon(path: &Path) -> Option<std::path::PathBuf> {
+    if !icons::is_active() {
+        return None;
+    }
+    let name = path.file_name()?.to_string_lossy();
+    let language = textchum_core::syntax::languages::by_path(path).map(|found| found.spec.name);
+    // The appearance in force, not the one configured: "system"
+    // resolves through libadwaita, which is what the widgets follow.
+    let light = !adw::StyleManager::default().is_dark();
+    icons::icon_for(&name, language, light)
+}
+
 fn build_file_tree(root: &Path) -> gtk::ListView {
     // The configuration decides what the tree hides: dotfiles by
     // default, plus whatever globs the workspace section adds.
@@ -1022,15 +1051,24 @@ fn build_file_tree(root: &Path) -> gtk::ListView {
             if path.is_dir() {
                 icon.set_icon_name(Some("folder-symbolic"));
             } else {
-                // The desktop's own icon for the file's content type,
+                // An icon pack first, when one is loaded: it knows
+                // hundreds of types and knows `Dockerfile` by name,
+                // where the desktop's table runs out early. Failing
+                // that, the desktop's own icon for the content type,
                 // guessed from the name — the system icons the Mac
                 // shell gets from NSWorkspace.
-                let (content_type, _) = gtk::gio::content_type_guess(
-                    Some(std::path::Path::new(&path)),
-                    &[],
-                );
-                let themed = gtk::gio::content_type_get_symbolic_icon(&content_type);
-                icon.set_from_gicon(&themed);
+                let packed = packed_icon(&path);
+                if let Some(file) = packed {
+                    icon.set_from_file(Some(&file));
+                    icon.set_pixel_size(16);
+                } else {
+                    let (content_type, _) = gtk::gio::content_type_guess(
+                        Some(std::path::Path::new(&path)),
+                        &[],
+                    );
+                    let themed = gtk::gio::content_type_get_symbolic_icon(&content_type);
+                    icon.set_from_gicon(&themed);
+                }
             }
         }
         if let Some(label) = label {
@@ -3702,6 +3740,93 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
     }
     appearance_group.add(&theme_row);
+
+    // A pack is a folder of images somewhere on disk, not a name from a
+    // list, so it gets a chooser rather than a combo — and a way back
+    // to the desktop's icons.
+    let icons_row = adw::ActionRow::new();
+    icons_row.set_title("File icons");
+    let icons_subtitle = |shell: &Rc<crate::shell::Shell>| match shell.config.borrow().icon_pack() {
+        Some(path) => path,
+        None => "System icons".to_owned(),
+    };
+    icons_row.set_subtitle(&icons_subtitle(&shell));
+    let choose = gtk::Button::with_label("Choose…");
+    choose.set_valign(gtk::Align::Center);
+    let clear = gtk::Button::with_label("Clear");
+    clear.set_valign(gtk::Align::Center);
+    clear.set_visible(shell.config.borrow().icon_pack().is_some());
+    {
+        let shell = Rc::clone(&shell);
+        let row = icons_row.clone();
+        let clear_button = clear.clone();
+        let parent = window.clone();
+        choose.connect_clicked(move |_| {
+            // Both a file and a folder are offered because packs are
+            // distributed both ways, and asking someone which is inside
+            // is asking them to read a manifest.
+            let ask = gtk::AlertDialog::builder()
+                .message("Choose an icon pack")
+                .detail("The icon theme's JSON file, or the extension folder holding it.")
+                .buttons(["Cancel", "Choose Folder…", "Choose File…"])
+                .default_button(2)
+                .cancel_button(0)
+                .build();
+            let shell = Rc::clone(&shell);
+            let row = row.clone();
+            let clear_button = clear_button.clone();
+            let parent = parent.clone();
+            ask.choose(Some(&parent.clone()), gtk::gio::Cancellable::NONE, move |answer| {
+                let Ok(answer) = answer else { return };
+                if answer == 0 {
+                    return;
+                }
+                let dialog = gtk::FileDialog::new();
+                dialog.set_title("Choose an icon pack");
+                let shell = Rc::clone(&shell);
+                let row = row.clone();
+                let clear_button = clear_button.clone();
+                let done = move |result: Result<gtk::gio::File, glib::Error>| {
+                    let Ok(file) = result else { return };
+                    let Some(path) = file.path() else { return };
+                    let path = path.to_string_lossy().into_owned();
+                    shell.config.borrow_mut().set_icon_pack(Some(&path));
+                    shell.apply_icon_pack();
+                    shell.save_config();
+                    let kept = textchum_core::icons::is_active();
+                    row.set_subtitle(if kept { &path } else { "System icons" });
+                    clear_button.set_visible(kept);
+                    if !kept {
+                        // apply_icon_pack said why on the terminal; the
+                        // row must not claim a pack that was refused.
+                        shell.config.borrow_mut().set_icon_pack(None);
+                        shell.save_config();
+                    }
+                    refresh_file_trees();
+                };
+                if answer == 1 {
+                    dialog.select_folder(Some(&parent), gtk::gio::Cancellable::NONE, done);
+                } else {
+                    dialog.open(Some(&parent), gtk::gio::Cancellable::NONE, done);
+                }
+            });
+        });
+    }
+    {
+        let shell = Rc::clone(&shell);
+        let row = icons_row.clone();
+        clear.connect_clicked(move |button| {
+            shell.config.borrow_mut().set_icon_pack(None);
+            shell.apply_icon_pack();
+            shell.save_config();
+            row.set_subtitle("System icons");
+            button.set_visible(false);
+            refresh_file_trees();
+        });
+    }
+    icons_row.add_suffix(&choose);
+    icons_row.add_suffix(&clear);
+    appearance_group.add(&icons_row);
     general.add(&appearance_group);
 
     let editor_group = adw::PreferencesGroup::new();

@@ -13,6 +13,8 @@ aplicación.
 - **Apariencia** — seguir al sistema (cambiando en vivo cuando macOS lo
   hace) o forzar claro u oscuro.
 - **Tema** — la paleta de sintaxis; véase [Temas](#temas) más abajo.
+- **Iconos de archivo** — un paquete de iconos de VS Code para el
+  árbol de archivos; ver [Iconos de archivo](#iconos-de-archivo).
 - **Abrir archivos en** — pestañas de la ventana actual (el valor por
   defecto) o ventanas separadas. Con ventanas separadas, el navegador de
   cada ventana lista solo los documentos de su propio grupo de pestañas.
@@ -156,6 +158,48 @@ Dos cosas conviene saber antes de que los colores parezcan mal:
 
 Lo que sale es un archivo de tema corriente en la carpeta de temas,
 editable como cualquier otro.
+
+## Iconos de archivo
+
+El árbol de archivos dibuja un icono por fila. Sin un paquete es el que
+ofrezca el escritorio para el tipo del archivo, que distingue Python de
+Markdown y no llega mucho más lejos — y nunca ha oído hablar de un
+archivo llamado `Dockerfile`.
+
+**Ajustes → General → Iconos de archivo** acepta un **paquete de
+iconos de VS Code**: elige el archivo JSON del tema de iconos, o la
+carpeta de extensión que lo contiene (su `package.json` dice cuál es).
+**Borrar** devuelve el árbol a los iconos del sistema. La elección es
+una ruta en `config.json`:
+
+```json
+{"icon_pack": "~/packs/material-icon-theme/dist/material-icons.json"}
+```
+
+El paquete se lee donde está —no se copia nada—, así que mover o borrar
+la carpeta se lleva los iconos. Un paquete que no se puede leer se
+avisa una vez y el árbol conserva los iconos del sistema.
+
+La búsqueda sigue la de VS Code, de lo más específico a lo menos:
+
+1. El nombre entero del archivo (`Dockerfile`, `cargo.toml`), en
+   minúsculas.
+2. La extensión más larga que coincida: `component.test.ts` prueba
+   `test.ts` antes que `ts`.
+3. El lenguaje que Textchum decidió que es el archivo — que es también
+   como llega al icono un lenguaje fijado a mano en **Propiedades del
+   archivo**.
+4. El valor por omisión del propio paquete.
+
+La sección `light` de un paquete sustituye cualquiera de esos sobre
+fondo claro, una búsqueda a la vez, así que un paquete que solo redibuja
+unos pocos conserva el resto.
+
+Quedan fuera dos cosas. **Los iconos de carpeta**: el árbol dibuja los
+suyos. **Los iconos por tipografía** —las definiciones `fontCharacter`
+que usan Seti y sus descendientes— necesitan la tipografía instalada y
+un texto donde va una imagen; un paquete que no tenga otra cosa se
+rechaza dando esa razón, en vez de cargarse para no dibujar nada.
 
 ## Proyectos
 

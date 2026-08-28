@@ -147,6 +147,31 @@ public final class CoreConfig {
     }
 
     /// The chosen theme name (the default theme's name when unset).
+    /// The file-icon pack: a path to a VS Code icon theme JSON, or the
+    /// extension folder holding one. Nil means the system's own icons.
+    public var iconPack: String? {
+        get {
+            guard let cString = tc_config_icon_pack(handle) else { return nil }
+            defer { tc_string_free(cString) }
+            return String(cString: cString)
+        }
+        set {
+            guard var path = newValue else {
+                tc_config_set_icon_pack(handle, nil, 0)
+                return
+            }
+            path.withUTF8 { bytes in
+                tc_config_set_icon_pack(
+                    handle,
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count)
+                )
+            }
+        }
+    }
+
     public var theme: String {
         get {
             guard let cString = tc_config_theme(handle) else { return "Textchum" }
