@@ -704,7 +704,7 @@ fn appearance_of_background(color: &str) -> Appearance {
 
 /// Removes comments and trailing commas from JSON-with-comments, which
 /// is what VS Code writes and `serde_json` will not read.
-fn strip_jsonc(text: &str) -> String {
+pub(crate) fn strip_jsonc(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     let mut in_string = false;

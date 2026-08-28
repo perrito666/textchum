@@ -929,6 +929,26 @@ char *tc_config_theme(const struct TcConfig *config);
 void tc_config_set_theme(struct TcConfig *config, const char *name, uintptr_t len);
 
 /**
+ * The configured file-icon pack, as a path to a VS Code icon theme
+ * JSON or the extension folder holding one. Null means the desktop's
+ * own icons; release a non-null result with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_icon_pack(const struct TcConfig *config);
+
+/**
+ * Sets the file-icon pack (`len` bytes of UTF-8; an empty path, or a
+ * null one, removes the key).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `path`, if not null,
+ * must point to `len` readable bytes.
+ */
+void tc_config_set_icon_pack(struct TcConfig *config, const char *path, uintptr_t len);
+
+/**
  * The project root for a file or directory path (`len` bytes of UTF-8),
  * resolved under the workspace settings passed as JSON (`settings_len`
  * bytes; may be empty for defaults — the configuration's `workspace`
@@ -1115,6 +1135,50 @@ bool tc_theme_set_json(const char *json, uintptr_t len, char **error_out);
  * [`tc_string_free`].
  */
 char *tc_theme_template_json(void);
+
+/**
+ * Loads the file-icon pack at `path` — a VS Code icon theme JSON, or
+ * the extension folder holding one — and makes it the one
+ * [`tc_icons_for_file`] answers from. On success returns a
+ * nul-terminated line describing what was loaded; on failure returns
+ * null and fills the optional `error_out`. Release either with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `path` must point to `len` readable bytes; `error_out`, if given,
+ * must point to a writable slot.
+ */
+char *tc_icons_load(const char *path, uintptr_t len, char **error_out);
+
+/**
+ * Forgets the icon pack, returning the file tree to the desktop's own
+ * icons.
+ */
+void tc_icons_clear(void);
+
+/**
+ * Whether an icon pack is loaded, so a shell can skip asking about
+ * every row when none is.
+ */
+bool tc_icons_active(void);
+
+/**
+ * The icon for `filename` from the loaded pack, as a nul-terminated
+ * path to an image; null when no pack is loaded or it has nothing for
+ * this file. `language` may be null, and is what the editor decided
+ * the file is — which catches files a pack lists by language, and the
+ * ones a reader named through File Properties. `light` picks the
+ * pack's light overrides. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `filename` must point to `filename_len` readable bytes; `language`,
+ * if not null, to `language_len`.
+ */
+char *tc_icons_for_file(const char *filename,
+                        uintptr_t filename_len,
+                        const char *language,
+                        uintptr_t language_len,
+                        bool light);
 
 /**
  * Imports every theme at `path` into `themes_dir`, one JSON file per

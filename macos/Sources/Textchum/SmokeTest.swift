@@ -669,6 +669,61 @@ func runSmokeTest() -> Int32 {
     try? FileManager.default.removeItem(at: importDir)
     print("theme import ok (VS Code JSON with comments, inherited captures, wearable)")
 
+    // A file-icon pack: the tree asks the core for an image per file,
+    // and the answers follow VS Code's order — whole name, then the
+    // longest extension, then the language.
+    let packDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-pack-\(ProcessInfo.processInfo.processIdentifier)")
+    try? FileManager.default.createDirectory(
+        at: packDir.appendingPathComponent("icons"), withIntermediateDirectories: true)
+    let square = """
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">\
+        <rect width="16" height="16" fill="#4488CC"/></svg>
+        """
+    for name in ["rust.svg", "docker.svg", "default.svg"] {
+        try? square.write(
+            to: packDir.appendingPathComponent("icons/\(name)"),
+            atomically: true, encoding: .utf8)
+    }
+    try? """
+        {
+          "iconDefinitions": {
+            "_rust": {"iconPath": "./icons/rust.svg"},
+            "_docker": {"iconPath": "./icons/docker.svg"},
+            "_default": {"iconPath": "./icons/default.svg"}
+          },
+          "fileExtensions": {"rs": "_rust"},
+          "fileNames": {"dockerfile": "_docker"},
+          "languageIds": {"rust": "_rust"},
+          "file": "_default"
+        }
+        """.write(
+        to: packDir.appendingPathComponent("icons.json"), atomically: true, encoding: .utf8)
+
+    do {
+        _ = try CoreIcons.load(at: packDir.appendingPathComponent("icons.json").path)
+    } catch {
+        print("FAIL: icon pack did not load: \(error)")
+        return 1
+    }
+    guard CoreIcons.isActive,
+        CoreIcons.icon(forFilename: "main.rs", language: nil, light: false) != nil,
+        CoreIcons.icon(forFilename: "Dockerfile", language: nil, light: false) != nil,
+        CoreIcons.icon(forFilename: "notes.xyz", language: nil, light: false) != nil
+    else {
+        print("FAIL: icon pack lookups")
+        return 1
+    }
+    CoreIcons.clear()
+    guard !CoreIcons.isActive,
+        CoreIcons.icon(forFilename: "main.rs", language: nil, light: false) == nil
+    else {
+        print("FAIL: clearing the pack must return the tree to system icons")
+        return 1
+    }
+    try? FileManager.default.removeItem(at: packDir)
+    print("icon pack ok (loaded, looked up by name and extension, cleared)")
+
     print("smoke test passed")
     return 0
 }

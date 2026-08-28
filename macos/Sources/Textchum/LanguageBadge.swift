@@ -1,17 +1,32 @@
 import SwiftUI
+import TextchumKit
 import UniformTypeIdentifiers
 
-/// The icon for a file row: the type's own Finder icon when macOS
-/// actually differentiates it (LaunchServices knows Python, Markdown,
-/// HTML, and whatever installed apps registered), falling back to the
-/// colored language badge where the system would serve the same
-/// generic document for everything — which is the genericness the
-/// icons exist to avoid.
+/// The icon for a file row, in the order of who knows most about the
+/// file: an icon pack if one is loaded (it knows hundreds of types, and
+/// knows `Dockerfile` by name), then the type's own Finder icon where
+/// macOS actually differentiates it (LaunchServices knows Python,
+/// Markdown, HTML, and whatever installed apps registered), then the
+/// colored language badge where the system would serve the same generic
+/// document for everything — which is the genericness the icons exist
+/// to avoid.
 struct FileTypeIcon: View {
     let filename: String
+    /// What the editor decided the file is, when it knows: a pack lists
+    /// some types by language rather than by name, and a file whose
+    /// language was set by hand should get the icon it was told about.
+    var language: String? = nil
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        if let icon = SystemFileIcon.icon(forFilename: filename) {
+        if let packed = CoreIcons.icon(
+            forFilename: filename, language: language, light: colorScheme == .light)
+        {
+            Image(nsImage: packed)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 16, height: 16)
+        } else if let icon = SystemFileIcon.icon(forFilename: filename) {
             Image(nsImage: icon)
                 .frame(width: 17)
         } else {

@@ -13,6 +13,8 @@ uniquement à l'intérieur de l'application.
 - **Apparence** — suivre le système (en changeant en direct quand macOS le
   fait) ou forcer le clair ou le sombre.
 - **Thème** — la palette de syntaxe ; voir [Thèmes](#thèmes) plus bas.
+- **Icônes de fichier** — un pack d'icônes VS Code pour
+  l'arborescence ; voir [Icônes de fichier](#icônes-de-fichier).
 - **Ouvrir les fichiers dans** — des onglets de la fenêtre courante (le
   défaut) ou des fenêtres séparées. Avec des fenêtres séparées, le
   navigateur de chaque fenêtre ne liste que les documents de son propre
@@ -162,6 +164,49 @@ Deux choses à savoir avant de trouver les couleurs fausses :
 
 Le résultat est un fichier de thème ordinaire dans le dossier des
 thèmes, modifiable comme un autre.
+
+## Icônes de fichier
+
+L'arborescence dessine une icône par ligne. Sans pack, c'est celle que
+le bureau propose pour le type du fichier, qui distingue Python de
+Markdown et ne va guère plus loin — et n'a jamais entendu parler d'un
+fichier nommé `Dockerfile`.
+
+**Réglages → Général → Icônes de fichier** accepte un **pack d'icônes
+VS Code** : choisissez le fichier JSON du thème d'icônes, ou le dossier
+d'extension qui le contient (son `package.json` dit lequel).
+**Effacer** rend l'arborescence aux icônes du système. Le choix est un
+chemin dans `config.json` :
+
+```json
+{"icon_pack": "~/packs/material-icon-theme/dist/material-icons.json"}
+```
+
+Le pack est lu là où il est — rien n'est copié — donc déplacer ou
+supprimer le dossier emporte les icônes. Un pack illisible est signalé
+une fois et l'arborescence garde les icônes du système.
+
+La recherche suit celle de VS Code, du plus précis au moins précis :
+
+1. Le nom entier du fichier (`Dockerfile`, `cargo.toml`), en
+   minuscules.
+2. L'extension la plus longue qui corresponde : `component.test.ts`
+   essaie `test.ts` avant `ts`.
+3. Le langage que Textchum a retenu pour le fichier — c'est aussi par
+   là qu'un langage fixé à la main dans **Propriétés du fichier**
+   atteint l'icône.
+4. La valeur par défaut du pack lui-même.
+
+La section `light` d'un pack remplace n'importe laquelle de ces
+réponses sur fond clair, une recherche à la fois : un pack qui n'en
+redessine qu'une poignée garde le reste.
+
+Deux choses restent dehors. **Les icônes de dossier** : l'arborescence
+dessine les siennes. **Les icônes tracées avec une police** — les
+définitions `fontCharacter` qu'utilisent Seti et ses descendants —
+demandent la police installée et un texte là où va une image ; un pack
+qui n'a que cela est refusé avec cette raison, plutôt que chargé pour
+ne rien dessiner.
 
 ## Projets
 
