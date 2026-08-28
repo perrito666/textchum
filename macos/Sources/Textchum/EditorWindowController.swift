@@ -80,6 +80,9 @@ final class EditorWindowController: NSWindowController {
     let coreDocument: CoreDocument
     /// This window's sidebar state (buffer list scoped to its tab group).
     let sidebarModel = SidebarModel()
+    /// The one floating list: references, the outline, the diagnostics.
+    /// One at a time, so one panel.
+    private let listPanel = ListPanel()
     /// This document's project root (nearest root marker), cached and
     /// refreshed when the path changes.
     private(set) var projectRoot: String?
@@ -508,16 +511,8 @@ final class EditorWindowController: NSWindowController {
     /// what it says. The severity is in the gutter as a colour and has
     /// to be in the words too, or a warning reads like an error.
     static func diagnosticText(_ diagnostic: CoreDiagnostic) -> NSAttributedString {
-        let kind: String
-        switch diagnostic.severity {
-        case 1: kind = "Error"
-        case 2: kind = "Warning"
-        case 3: kind = "Information"
-        case 4: kind = "Hint"
-        default: kind = "Diagnostic"
-        }
         let text = NSMutableAttributedString(
-            string: kind + "\n",
+            string: severityName(diagnostic.severity) + "\n",
             attributes: [
                 .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
                 .foregroundColor: NSColor.secondaryLabelColor,
@@ -681,16 +676,133 @@ final class EditorWindowController: NSWindowController {
                 NSSound.beep()
                 return
             }
-            ReferencesPanel.shared.show(locations: locations, over: self.window) {
-                [weak self] location in
-                self?.openLocation?(location.path, location.line, location.character)
+            self.showReferences(locations)
+        }
+    }
+
+    /// Every finding in the document, in the order they appear — which
+    /// is the order they are fixed in, and the order the gutter shows
+    /// them. Severity is in each row, so a file whose errors matter
+    /// more than its warnings is still readable at a glance.
+    @objc func showDiagnosticList(_ sender: Any?) {
+        guard let textView else { return }
+        guard !diagnostics.isEmpty else {
+            presentInfo("Nothing reported", details: "No diagnostics for this document.")
+            return
+        }
+        let text = textView.string as NSString
+        let ordered = diagnostics.sorted {
+            ($0.line, $0.character) < ($1.line, $1.character)
+        }
+        let rows: [ListPanel.Row] = ordered.map { diagnostic in
+            let kind = Self.severityName(diagnostic.severity)
+            let message = diagnostic.message
+                .split(separator: "\n", maxSplits: 1)
+                .first
+                .map(String.init) ?? diagnostic.message
+            return .item("\(diagnostic.line + 1)  \(kind)  \(message)")
+        }
+        listPanel.show(
+            rows: rows, over: window,
+            title: "Diagnostics (\(ordered.count))", placeholder: "message…"
+        ) { [weak self] index in
+            guard let self, ordered.indices.contains(index) else { return }
+            let diagnostic = ordered[index]
+            guard let range = self.nsRange(of: diagnostic, in: text) else { return }
+            (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
+            self.selectionChangeIsFromEditing = false
+            textView.setSelectedRange(NSRange(location: range.location, length: 0))
+            textView.scrollRangeToVisible(range)
+            self.window?.makeFirstResponder(textView)
+        }
+    }
+
+    /// What kind of finding a severity is, in words.
+    static func severityName(_ severity: Int) -> String {
+        switch severity {
+        case 1: return "Error"
+        case 2: return "Warning"
+        case 3: return "Information"
+        case 4: return "Hint"
+        default: return "Diagnostic"
+        }
+    }
+
+    /// A plain statement, for when the answer is "there is nothing".
+    private func presentInfo(_ message: String, details: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = message
+        alert.informativeText = details
+        alert.runModal()
+    }
+
+    /// The document outline: the file's symbols, nesting shown by
+    /// indentation, filterable because a large file's outline is longer
+    /// than a screen.
+    private func showOutline(_ symbols: [OutlineSymbol]) {
+        let rows: [ListPanel.Row] = symbols.map { symbol in
+            .item(String(repeating: "  ", count: symbol.depth) + symbol.name)
+        }
+        listPanel.show(
+            rows: rows, over: window, title: "Document Outline", placeholder: "symbol…"
+        ) { [weak self] index in
+            guard let self, let path = self.coreDocument.path,
+                symbols.indices.contains(index)
+            else { return }
+            let symbol = symbols[index]
+            self.openLocation?(path, symbol.line, symbol.character)
+        }
+    }
+
+    /// The references list: code first, tests after, each under a
+    /// heading with a count. What calls this is the question; what
+    /// checks it is the follow-up. All of one or the other gets no
+    /// headings — a heading over every row there is says nothing.
+    private func showReferences(_ locations: [ReferenceLocation]) {
+        var lineCache: [String: [Substring]] = [:]
+        func lineText(_ location: ReferenceLocation) -> String {
+            if lineCache[location.path] == nil {
+                let contents = (try? String(contentsOfFile: location.path, encoding: .utf8)) ?? ""
+                lineCache[location.path] = contents.split(
+                    separator: "\n", omittingEmptySubsequences: false)
             }
+            let lines = lineCache[location.path] ?? []
+            guard lines.indices.contains(location.line) else { return "" }
+            return lines[location.line].trimmingCharacters(in: .whitespaces)
+        }
+        func described(_ location: ReferenceLocation) -> String {
+            let name = (location.path as NSString).lastPathComponent
+            return "\(name):\(location.line + 1): \(lineText(location))"
+        }
+
+        let code = locations.filter { !CoreReferences.isTest(path: $0.path) }
+        let tests = locations.filter { CoreReferences.isTest(path: $0.path) }
+        var rows: [ListPanel.Row] = []
+        var ordered: [ReferenceLocation] = []
+        if code.isEmpty || tests.isEmpty {
+            rows = locations.map { .item(described($0)) }
+            ordered = locations
+        } else {
+            rows.append(.heading("Code (\(code.count))"))
+            rows.append(contentsOf: code.map { .item(described($0)) })
+            rows.append(.heading("Tests (\(tests.count))"))
+            rows.append(contentsOf: tests.map { .item(described($0)) })
+            ordered = code + tests
+        }
+        listPanel.show(
+            rows: rows, over: window, title: "References (\(locations.count))",
+            monospaced: true
+        ) { [weak self] index in
+            guard ordered.indices.contains(index) else { return }
+            let location = ordered[index]
+            self?.openLocation?(location.path, location.line, location.character)
         }
     }
 
     private static func referenceLocations(
         fromResultJSON json: String
-    ) -> [ReferencesPanel.Location] {
+    ) -> [ReferenceLocation] {
         guard let data = json.data(using: .utf8),
             let array = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
         else { return [] }
@@ -703,7 +815,7 @@ final class EditorWindowController: NSWindowController {
                 let line = start["line"] as? Int,
                 let character = start["character"] as? Int
             else { return nil }
-            return ReferencesPanel.Location(path: path, line: line, character: character)
+            return ReferenceLocation(path: path, line: line, character: character)
         }
         .sorted { ($0.path, $0.line) < ($1.path, $1.line) }
     }
@@ -789,7 +901,7 @@ final class EditorWindowController: NSWindowController {
         let headings = CoreWorkspace.markdownHeadings(in: textView.string)
         guard !headings.isEmpty else { return false }
         let symbols = headings.map { heading in
-            OutlinePanel.Symbol(
+            OutlineSymbol(
                 name: heading.text,
                 kind: "h\(heading.level)",
                 line: heading.line,
@@ -799,10 +911,7 @@ final class EditorWindowController: NSWindowController {
                 depth: heading.level - 1
             )
         }
-        OutlinePanel.shared.show(symbols: symbols, over: window) { [weak self] symbol in
-            guard let self, let path = self.coreDocument.path else { return }
-            self.openLocation?(path, symbol.line, symbol.character)
-        }
+        self.showOutline(symbols)
         return true
     }
 
@@ -828,16 +937,12 @@ final class EditorWindowController: NSWindowController {
         }
         lspApp.lspDocumentSymbols(path: path) { [weak self] json in
             guard let self else { return }
-            let symbols = OutlinePanel.symbols(fromResultJSON: json)
+            let symbols = OutlineSymbol.parse(resultJSON: json)
             guard !symbols.isEmpty else {
                 if !self.showMarkdownOutline() { NSSound.beep() }
                 return
             }
-            OutlinePanel.shared.show(symbols: symbols, over: self.window) {
-                [weak self] symbol in
-                guard let self, let path = self.coreDocument.path else { return }
-                self.openLocation?(path, symbol.line, symbol.character)
-            }
+            self.showOutline(symbols)
         }
     }
 

@@ -64,6 +64,10 @@ quelqu'un d'autre.
   gravité : un soulignement dit seulement que quelque chose ne va pas,
   et un avertissement ne doit pas se lire comme une erreur. Sans
   aller-retour : le diagnostic est déjà là.
+- **Diagnostics…** (⇧⌘E, Ctrl+Shift+E sous Linux) liste tous les
+  diagnostics du document dans l'ordre où ils apparaissent — celui dans
+  lequel on les corrige et celui de la gouttière — avec la gravité sur
+  chaque ligne. ⏎ y saute, et le saut entre dans la pile de retour.
 - **Renommer le symbole…** (⌃⌘R) renomme dans tout l'espace de
   travail : les fenêtres ouvertes sont éditées sur place (l'annulation
   fonctionne par fenêtre) et les fichiers que personne n'a ouverts sont

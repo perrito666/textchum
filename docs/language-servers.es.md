@@ -65,6 +65,10 @@ nadie.
   nombra su gravedad, porque un subrayado solo dice que algo va mal y
   un aviso no debería leerse como un error. Sin ida y vuelta: el
   hallazgo ya está a mano.
+- **Diagnósticos…** (⇧⌘E, Ctrl+Shift+E en Linux) lista todos los
+  hallazgos del documento en el orden en que aparecen —el orden en que
+  se arreglan y el que muestra el margen—, con la gravedad en cada
+  fila. ⏎ salta, y el salto entra en la pila de vuelta atrás.
 - **Renombrar símbolo…** (⌃⌘R) renombra en todo el espacio de trabajo:
   las ventanas abiertas se editan en el sitio (el deshacer funciona por
   ventana) y los archivos que nadie tiene abiertos se reescriben en
