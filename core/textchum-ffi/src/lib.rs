@@ -1878,6 +1878,57 @@ pub extern "C" fn tc_theme_template_json() -> *mut c_char {
     owned_c_string(textchum_core::theme::Theme::template_json())
 }
 
+/// Imports every theme at `path` into `themes_dir`, one JSON file per
+/// theme, named after the theme itself. `source` is 0 for VS Code and 1
+/// for TextMate.
+///
+/// `path` is a theme file or a folder to look inside — a VS Code
+/// extension directory, or a `.tmbundle`. Returns the outcome as a
+/// nul-terminated JSON object, released with [`tc_string_free`]:
+///
+/// ```json
+/// {"written": ["Night"], "appearances": ["dark"],
+///  "unmapped": ["meta.brace.round"], "errors": []}
+/// ```
+///
+/// `written` names the themes now available to choose, `appearances`
+/// says which side of the palette each one filled (the other keeps the
+/// default palette's colours), `unmapped` lists scopes no capture
+/// answers to, and `errors` carries one line per file that could not be
+/// read. A null return means the arguments were unreadable.
+///
+/// # Safety
+/// `path` must point to `path_len` readable bytes and `themes_dir` to
+/// `dir_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_theme_import(
+    path: *const c_char,
+    path_len: usize,
+    source: u32,
+    themes_dir: *const c_char,
+    dir_len: usize,
+) -> *mut c_char {
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(themes_dir) = (unsafe { str_from_raw(themes_dir, dir_len) }) else {
+        return std::ptr::null_mut();
+    };
+    use textchum_core::theme_import::{import_into, Source};
+    let source = if source == 1 { Source::TextMate } else { Source::VsCode };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(
+            import_into(
+                std::path::Path::new(path),
+                source,
+                std::path::Path::new(themes_dir),
+            )
+            .to_json(),
+        )
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// The selectable language names with a representative file extension,
 /// one per line as `name \x1f extension` (extension may be empty).
 /// Release with [`tc_string_free`]. For "new file with format" pickers.

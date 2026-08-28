@@ -618,6 +618,57 @@ func runSmokeTest() -> Int32 {
     }
     print("snippet keys ok (tab, shift-tab, escape; everything else falls through)")
 
+    // Importing a theme from another editor: the file goes in, a theme
+    // of ours comes out in the themes directory, and it is one the core
+    // can then wear.
+    let importDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-import-\(ProcessInfo.processInfo.processIdentifier)")
+    let importSource = importDir.appendingPathComponent("source")
+    let importThemes = importDir.appendingPathComponent("themes")
+    try? FileManager.default.createDirectory(
+        at: importSource, withIntermediateDirectories: true)
+    let vscodeTheme = """
+        {
+          // A theme as VS Code writes them, comments and all.
+          "name": "Smoke Night",
+          "type": "dark",
+          "tokenColors": [
+            {"scope": "comment", "settings": {"foreground": "#5A6472", "fontStyle": "italic"}},
+            {"scope": "keyword", "settings": {"foreground": "#C678DD"}},
+            {"scope": "string", "settings": {"foreground": "#98C379"}},
+          ]
+        }
+        """
+    try? vscodeTheme.write(
+        to: importSource.appendingPathComponent("night.json"), atomically: true, encoding: .utf8)
+    let imported = CoreTheme.importThemes(
+        at: importSource.path, from: .vsCode, into: importThemes.path)
+    guard imported.errors.isEmpty, imported.written == ["Smoke Night"],
+        imported.appearances == ["dark"]
+    else {
+        print("FAIL: theme import: \(imported.written) \(imported.errors)")
+        return 1
+    }
+    guard
+        let importedJSON = try? String(
+            contentsOf: importThemes.appendingPathComponent("Smoke Night.json"), encoding: .utf8),
+        CoreTheme.setJSON(importedJSON) == nil
+    else {
+        print("FAIL: an imported theme must be one the core can wear")
+        return 1
+    }
+    // A keyword's colour reaches the kinds of keyword the source never
+    // named separately.
+    guard let conditional = CoreTheme.styleID(for: "conditional"),
+        CoreTheme.styles[Int(conditional)].darkRGBA == 0xC678_DDFF
+    else {
+        print("FAIL: imported colours did not reach every capture")
+        return 1
+    }
+    CoreTheme.setBuiltin(named: "Textchum")
+    try? FileManager.default.removeItem(at: importDir)
+    print("theme import ok (VS Code JSON with comments, inherited captures, wearable)")
+
     print("smoke test passed")
     return 0
 }

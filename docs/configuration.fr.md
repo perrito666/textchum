@@ -129,6 +129,40 @@ avertissement et n'est jamais écrasé, et les clés inconnues survivent.
 Les fichiers de thème sont lus au lancement et au changement de
 sélection.
 
+### En importer un depuis un autre éditeur
+
+**Textchum → Importer un thème** récupère les couleurs de VS Code ou de
+TextMate. Choisissez un fichier de thème, ou un dossier qui en contient
+plusieurs — un répertoire d'extension VS Code (son `package.json` dit
+ce qu'il apporte) ou un bundle TextMate (ses thèmes sont dans
+`Themes/`). Tout ce qui s'y trouve est importé, et le premier est mis.
+
+Les deux éditeurs décrivent la couleur par **portée TextMate** ;
+importer revient donc à traduire les portées vers les noms de capture
+de Textchum : `entity.name.function` devient `function`,
+`keyword.control.loop` devient `repeat`. Les portées s'arrêtent là où
+les captures continuent — aucun thème ne colore `if` autrement que
+`while` — alors une capture que la source n'a jamais nommée prend la
+couleur de celle dont elle est un cas particulier, dans les deux sens :
+un thème qui dit `keyword` colore toutes les sortes de mot-clé, et un
+qui ne dit que `constant.numeric` colore toute la famille des
+constantes.
+
+Deux choses à savoir avant de trouver les couleurs fausses :
+
+- **Un thème remplit une apparence.** Les deux éditeurs écrivent un
+  thème pour un fond clair ou pour un fond sombre ; ceux de Textchum
+  portent les deux. L'import remplit le côté que la source déclare et
+  laisse l'autre à la palette par défaut, en disant lequel il a rempli.
+  Importer un thème sombre alors que l'éditeur est en apparence claire
+  ne change rien de visible.
+- **Les portées sans destination sont nommées.** Tout ce que la source
+  a coloré et à quoi aucune capture ne répond est listé à la fin. Ces
+  couleurs restent inutilisées.
+
+Le résultat est un fichier de thème ordinaire dans le dossier des
+thèmes, modifiable comme un autre.
+
 ## Projets
 
 L'onglet Projects décide où un projet commence et finit — la frontière

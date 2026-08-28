@@ -1075,6 +1075,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The theme name currently applied, to skip redundant recolors.
     private var appliedTheme: String?
 
+    /// Chooses `name` as the theme and puts it on, the way the
+    /// Settings picker does. The configuration watcher ignores this
+    /// process's own writes, so the applying is done here rather than
+    /// waited for.
+    func selectTheme(named name: String) {
+        guard let config else { return }
+        config.theme = name
+        do {
+            try config.save()
+        } catch {
+            NSLog("could not save the theme choice: \(error)")
+        }
+        applyThemeChoice()
+    }
+
     /// Applies the configured theme: a user file of that name (which
     /// overrides a same-named built-in), else the built-in, else the
     /// default — with one warning when the choice cannot be honored,
@@ -1734,6 +1749,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             action: #selector(openThemesFolder(_:)),
             keyEquivalent: ""
         )
+        let importThemeItem = NSMenuItem(title: "Import Theme", action: nil, keyEquivalent: "")
+        let importThemeMenu = NSMenu(title: "Import Theme")
+        importThemeMenu.addItem(
+            withTitle: "From VS Code…",
+            action: #selector(importVSCodeTheme(_:)),
+            keyEquivalent: ""
+        )
+        importThemeMenu.addItem(
+            withTitle: "From TextMate…",
+            action: #selector(importTextMateTheme(_:)),
+            keyEquivalent: ""
+        )
+        importThemeItem.submenu = importThemeMenu
+        appMenu.addItem(importThemeItem)
         appMenu.addItem(.separator())
         appMenu.addItem(
             withTitle: "Quit Textchum",
