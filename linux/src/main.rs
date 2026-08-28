@@ -702,6 +702,23 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         println!("blame ok (buffer-aware, uncommitted lines, past the end, outside a repo)");
     }
 
+    // This run is a build from the checkout, which must not be able to
+    // write the session an installed Textchum owns. Asserted here
+    // because the smoke test is exactly such a run: if the guard is
+    // ever removed, this fails rather than someone's open files
+    // vanishing.
+    if !session::session_path()
+        .to_string_lossy()
+        .ends_with("session-development.json")
+    {
+        eprintln!(
+            "FAIL: a development build must not use the real session file: {}",
+            session::session_path().display()
+        );
+        return 1;
+    }
+    println!("session guard ok (a checkout build keeps its own session)");
+
     let fire = |name: &str| {
         gtk::prelude::WidgetExt::activate_action(&workbench.window, name, None).is_ok()
     };

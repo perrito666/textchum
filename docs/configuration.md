@@ -364,6 +364,27 @@ and runs the selection. Go to Block Start/End (⌃⌥↑/⌃⌥↓ by default) j
 innermost multi-line syntax block around the caret, courtesy of the
 same tree that powers highlighting.
 
+### The session keeps a backup
+
+`session.json` is rewritten whenever the open documents change, and
+nothing else on the system remembers what was open. Every replacement
+copies the previous contents to `session.json.bak` first, so a bad
+write is recoverable — copy the backup over it before launching again.
+A write of an empty list never replaces the backup: that is the one
+worth surviving.
+
+### Development builds keep their own session
+
+A Textchum built from a checkout — `make run`, a test launch, a
+screenshot session — writes `session-development.json` beside the real
+`session.json` rather than into it. Opening one scratch file with a
+development build used to be enough to replace the list of documents
+the installed app had open, and there is no backup of that list to
+recover from.
+
+A run given `--config` keeps the plain name: that directory is already
+its own profile, and nothing there belongs to the installed app.
+
 ## Live reload
 
 The file is watched while Textchum runs: edit `config.json` in another

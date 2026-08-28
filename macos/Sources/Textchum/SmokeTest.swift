@@ -257,7 +257,6 @@ func runSmokeTest() -> Int32 {
 
         // The session belongs to the configuration's profile, so a
         // scratch run cannot overwrite the real app's session.
-        let realDirectory = SessionStore.directory
         SessionStore.useProfile(ofConfigAt: configPath)
         guard SessionStore.path == configDir.appendingPathComponent("session.json").path
         else {
@@ -271,7 +270,9 @@ func runSmokeTest() -> Int32 {
             print("FAIL: session round trip")
             return 1
         }
-        SessionStore.directory = realDirectory
+        // Give the store back as it was found, flag and all: a later
+        // check asks what the default profile does.
+        SessionStore.useDefaultProfile()
         print("session profile ok (scoped to the configuration's directory)")
         try? FileManager.default.removeItem(at: configDir)
     } catch {
@@ -917,6 +918,62 @@ func runSmokeTest() -> Int32 {
     try? FileManager.default.removeItem(at: loose)
     try? FileManager.default.removeItem(at: blameRepo)
     print("blame ok (buffer-aware, uncommitted lines, past the end, outside a repo)")
+
+    // This run is a build from the checkout, which must not be able to
+    // write the session the installed app owns. Asserted here because
+    // the smoke test is exactly such a run: if the guard is ever
+    // removed, this fails rather than someone's open files vanishing.
+    guard !SessionStore.isInstalledApplication,
+        !SessionStore.hasExplicitProfile,
+        SessionStore.path.hasSuffix("session-development.json")
+    else {
+        print("FAIL: a development build must not use the real session file")
+        return 1
+    }
+    // A session file that gets replaced keeps its previous contents
+    // beside it. The list of open documents is written eagerly and
+    // often, nothing else on the system remembers what was open, and
+    // until now one bad write ended it.
+    do {
+        let backupDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-session-\(ProcessInfo.processInfo.processIdentifier)")
+        try? FileManager.default.removeItem(at: backupDir)
+        try? FileManager.default.createDirectory(
+            at: backupDir, withIntermediateDirectories: true)
+        SessionStore.useProfile(
+            ofConfigAt: backupDir.appendingPathComponent("config.json").path)
+        var first = SessionState()
+        first.windows = [
+            .init(path: "/tmp/one.txt", caret: 0, scroll: 0),
+            .init(path: "/tmp/two.txt", caret: 0, scroll: 0),
+        ]
+        SessionStore.save(first)
+        var replaced = SessionState()
+        replaced.windows = [.init(path: "/tmp/three.txt", caret: 0, scroll: 0)]
+        SessionStore.save(replaced)
+        let backup = FileManager.default.contents(atPath: SessionStore.backupPath)
+            .flatMap { try? JSONDecoder().decode(SessionState.self, from: $0) }
+        guard backup?.windows.map(\.path) == ["/tmp/one.txt", "/tmp/two.txt"],
+            SessionStore.load()?.windows.map(\.path) == ["/tmp/three.txt"]
+        else {
+            print("FAIL: the session's previous contents were not kept")
+            return 1
+        }
+        // An empty list must not flatten the backup — that is the write
+        // worth surviving.
+        SessionStore.save(SessionState())
+        let after = FileManager.default.contents(atPath: SessionStore.backupPath)
+            .flatMap { try? JSONDecoder().decode(SessionState.self, from: $0) }
+        guard after?.windows.map(\.path) == ["/tmp/three.txt"] else {
+            print("FAIL: an empty session overwrote the backup")
+            return 1
+        }
+        SessionStore.useDefaultProfile()
+        try? FileManager.default.removeItem(at: backupDir)
+    }
+    print("session backup ok (previous list kept, empty writes do not flatten it)")
+
+    print("session guard ok (a checkout build keeps its own session)")
 
     print("smoke test passed")
     return 0

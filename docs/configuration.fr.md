@@ -390,6 +390,29 @@ alimente déjà la coloration. Et quand un raccourci échappe tout à fait
 à la mémoire, la **palette de commandes** (⇧⌘P) cherche floue n'importe
 quelle action de menu par son nom et exécute la sélection.
 
+### La session garde une sauvegarde
+
+`session.json` est réécrit dès que les documents ouverts changent, et
+rien d'autre sur le système ne se souvient de ce qui était ouvert.
+Chaque remplacement copie d'abord le contenu précédent dans
+`session.json.bak` : une mauvaise écriture est donc récupérable —
+recopiez la sauvegarde par-dessus avant de relancer. Une écriture d'une
+liste vide ne remplace jamais la sauvegarde, qui est précisément celle
+qu'il faut conserver.
+
+### Les compilations de développement gardent leur propre session
+
+Un Textchum compilé depuis le dépôt — `make run`, un lancement de test,
+une séance de captures — écrit `session-development.json` à côté du
+vrai `session.json` plutôt que dedans. Ouvrir un seul fichier de test
+avec une compilation de développement suffisait à remplacer la liste
+des documents ouverts dans l'application installée, et de cette liste
+il n'existe aucune sauvegarde à récupérer.
+
+Une exécution avec `--config` garde le nom simple : ce répertoire est
+déjà son propre profil, et rien n'y appartient à l'application
+installée.
+
 ## Rechargement à chaud
 
 Le fichier est surveillé pendant que Textchum tourne : éditez

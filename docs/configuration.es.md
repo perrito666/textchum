@@ -380,6 +380,27 @@ mismo árbol que alimenta el coloreado. Y cuando un atajo se escapa de
 la memoria por completo, la **paleta de comandos** (⇧⌘P) busca de forma
 difusa cualquier acción de menú por su nombre y ejecuta la selección.
 
+### La sesión guarda una copia
+
+`session.json` se reescribe cada vez que cambian los documentos
+abiertos, y nada más en el sistema recuerda qué había abierto. Cada
+reemplazo copia antes el contenido anterior a `session.json.bak`, así
+que una escritura mala se puede recuperar: copia la copia encima antes
+de volver a arrancar. Una escritura con la lista vacía nunca reemplaza
+la copia, que es justo la que conviene conservar.
+
+### Las compilaciones de desarrollo llevan su propia sesión
+
+Un Textchum compilado desde el repositorio —`make run`, una prueba, una
+sesión de capturas— escribe `session-development.json` junto a
+`session.json` en vez de dentro. Abrir un solo archivo de prueba con
+una compilación de desarrollo bastaba para reemplazar la lista de
+documentos que la aplicación instalada tenía abiertos, y de esa lista
+no hay copia de seguridad que recuperar.
+
+Una ejecución con `--config` conserva el nombre simple: ese directorio
+ya es su propio perfil y nada allí pertenece a la aplicación instalada.
+
 ## Recarga en vivo
 
 El archivo se vigila mientras Textchum corre: edita `config.json` en

@@ -17,8 +17,31 @@ use crate::workbench::Workbench;
 
 /// `$XDG_STATE_HOME/textchum/session.json` (`~/.local/state` by
 /// default).
+///
+/// A build run from the checkout keeps its own file beside it. It has
+/// no business in the one an installed Textchum owns: it is a test
+/// run, a `cargo run`, a screenshot session or a measurement, and
+/// opening one scratch file with it is enough to replace a day's worth
+/// of open documents.
 pub fn session_path() -> PathBuf {
-    state_dir().join("textchum/session.json")
+    let name = if is_development_build() {
+        "textchum/session-development.json"
+    } else {
+        "textchum/session.json"
+    };
+    state_dir().join(name)
+}
+
+/// Whether this binary came out of a checkout rather than a package.
+/// Cargo puts its builds under `target/`; every way of installing the
+/// shell puts it somewhere else.
+fn is_development_build() -> bool {
+    std::env::current_exe()
+        .map(|path| {
+            path.components()
+                .any(|component| component.as_os_str() == "target")
+        })
+        .unwrap_or(false)
 }
 
 /// The XDG state directory: not config (this is not configuration) and
