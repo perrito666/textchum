@@ -145,14 +145,11 @@ seconds; four failures in a row and it stays down until a restart or a
 configuration change), and an instance **no open document has needed
 for five minutes** is shut down — the next open starts a fresh one.
 
-- Snippet completions land as plain text with the first
-  placeholder selected, so typing replaces it — one honest stop
-  rather than a tabstop mode.
+- Snippet completions expand and walk. The first placeholder comes
+  back selected, so typing replaces it; ⇥ moves to the next stop and
+  ⇧⇥ back to the previous one; a placeholder written more than once
+  mirrors the one being typed. Reaching the end, pressing ⎋, or
+  clicking outside gives the keys back.
 - **View ▸ Language Server Status** lists the running instances and
   the session's recent status transitions, refreshed live, with a
   pointer to the full log.
-
-## Not there yet
-
-- Full snippet tabstop cycling (the first placeholder is selected;
-  later ones are plain text).

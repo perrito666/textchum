@@ -19,6 +19,7 @@ mod history;
 pub mod hugo;
 pub mod markdown;
 pub mod search;
+pub mod snippet;
 pub mod syntax;
 pub mod workspace;
 

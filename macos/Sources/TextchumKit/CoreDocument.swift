@@ -200,6 +200,70 @@ public final class CoreDocument {
         popHistory(tc_document_redo)
     }
 
+    // MARK: Snippets
+
+    /// Expands an LSP snippet body (`frob(${1:x}, ${2:y})$0`) for an
+    /// insertion at `offset`, returning the text to insert. Nothing is
+    /// inserted here: put the text in the way anything typed goes in, so
+    /// the display cache and the core stay in step, then call
+    /// ``beginSnippet(at:)`` with where it landed.
+    public func expandSnippet(_ body: String, at offset: Int) -> String {
+        let expanded = Self.withUTF8Pointer(body) { pointer, length in
+            tc_document_snippet_expand(handle, UInt(offset), pointer, length)
+        }
+        return Self.takeString(expanded) ?? ""
+    }
+
+    /// Starts a tabstop session over the text ``expandSnippet(_:at:)``
+    /// returned, now sitting at `origin`. Returns the range to select:
+    /// the first placeholder, or where the caret goes when there is
+    /// nothing to walk — ``isSnippetActive`` tells those apart. Nil when
+    /// no expansion is pending.
+    public func beginSnippet(at origin: Int) -> NSRange? {
+        var region = TcRegion(start: 0, end: 0)
+        guard tc_document_snippet_begin(handle, UInt(origin), &region) else { return nil }
+        return Self.range(region)
+    }
+
+    /// Whether a snippet is being filled in, and Tab therefore belongs
+    /// to it rather than to the text view.
+    public var isSnippetActive: Bool {
+        tc_document_snippet_active(handle)
+    }
+
+    /// Moves to the next tabstop, or back to the previous one, returning
+    /// the range to select. Reaching `$0` or running off the end ends the
+    /// session: the range still comes back, and ``isSnippetActive`` is
+    /// false afterwards.
+    public func advanceSnippet(forward: Bool) -> NSRange? {
+        var region = TcRegion(start: 0, end: 0)
+        guard tc_document_snippet_advance(handle, forward, &region) else { return nil }
+        return Self.range(region)
+    }
+
+    /// Tells the session where the caret went; a caret outside the
+    /// snippet ends it, so clicking elsewhere gives Tab back.
+    public func snippetCaretMoved(to position: Int) {
+        tc_document_snippet_caret_moved(handle, UInt(position))
+    }
+
+    /// Ends the session, wherever it had got to.
+    public func cancelSnippet() {
+        tc_document_snippet_cancel(handle)
+    }
+
+    /// Copies the tabstop just typed in to the other places carrying the
+    /// same number, returning the changes to replay on the display cache
+    /// **in order**. Empty when there was nothing to mirror, which is the
+    /// common case — call it after every edit made during a session.
+    public func syncSnippet() -> [AppliedEdit] {
+        popHistory(tc_document_snippet_sync)
+    }
+
+    private static func range(_ region: TcRegion) -> NSRange {
+        NSRange(location: Int(region.start), length: Int(region.end - region.start))
+    }
+
     /// Re-reads the document from its file. Returns the single replacement
     /// to replay on the display cache, or nil if the buffer already matched
     /// the disk. The reload is one undo step; the document counts as clean

@@ -74,7 +74,10 @@ curseur, ce qui marche même souris désactivée.
 
 La complétion apparaît à la frappe après les caractères d'identifiant
 et `.` ; ↑/↓ choisissent, ⏎ ou ⇥ acceptent, ⎋ ferme. Un snippet arrive
-avec son premier marqueur sélectionné, donc taper le remplace.
+avec son premier marqueur sélectionné, donc taper le remplace ; ⇥ passe
+au marqueur suivant et ⇧⇥ au précédent, et un marqueur écrit deux fois
+se recopie à la frappe. Le dernier ⇥ laisse le curseur là où le snippet
+l'a demandé et rend les touches.
 
 <div class="shots" markdown>
 <figure markdown>

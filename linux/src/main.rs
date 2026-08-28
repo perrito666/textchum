@@ -115,7 +115,11 @@ fn main() -> gtk::glib::ExitCode {
     let fresh = fresh || wait;
 
     let mut flags = gio::ApplicationFlags::HANDLES_OPEN;
-    if wait {
+    // The smoke test is non-unique for the same reason --wait is, and
+    // for one more: handed to an instance that is already running, it
+    // would exit 0 having checked nothing — a green that means the
+    // opposite of what it says.
+    if wait || smoke_test {
         flags |= gio::ApplicationFlags::NON_UNIQUE;
     }
     let app = adw::Application::builder()
@@ -436,6 +440,92 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         return 1;
     }
 
+    // Snippets: the core expands the body, the buffer inserts what comes
+    // back through the ordinary typing path, and the session it starts
+    // walks its stops and mirrors the linked ones.
+    let Some(snippet_page) = workbench.selected() else {
+        eprintln!("FAIL: no selected page for the snippet check");
+        return 1;
+    };
+    let origin = buffer
+        .text(&buffer.start_iter(), &buffer.end_iter(), true)
+        .encode_utf16()
+        .count();
+    let origin_chars = buffer.end_iter().offset();
+    let expanded = snippet_page
+        .state
+        .borrow_mut()
+        .document
+        .expand_snippet(origin, "let ${1:name} = ${1:name}.frob(${2:arg});$0");
+    if expanded != "let name = name.frob(arg);" {
+        eprintln!("FAIL: snippet expansion: {expanded}");
+        return 1;
+    }
+    let mut end = buffer.end_iter();
+    buffer.insert(&mut end, &expanded);
+    let first = snippet_page.state.borrow_mut().document.begin_snippet(origin);
+    match first {
+        Some(region) if (region.start, region.end) == (origin + 4, origin + 8) => {}
+        other => {
+            eprintln!("FAIL: snippet did not start on its first placeholder: {other:?}");
+            return 1;
+        }
+    }
+
+    // Type over the first stop; its twin follows.
+    let placeholder_start = buffer.iter_at_offset(
+        page::char_offset(
+            &buffer.text(&buffer.start_iter(), &buffer.end_iter(), true),
+            origin + 4,
+        ),
+    );
+    let mut from = placeholder_start;
+    let mut to = buffer.iter_at_offset(from.offset() + 4);
+    buffer.delete(&mut from, &mut to);
+    let mut at = from;
+    buffer.insert(&mut at, "value");
+    // Mirroring waits for an idle turn, so let the loop reach it.
+    let context = glib::MainContext::default();
+    while context.pending() {
+        context.iteration(false);
+    }
+    let after = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+    if !after.ends_with("let value = value.frob(arg);") {
+        eprintln!("FAIL: linked stop did not mirror: {after}");
+        return 1;
+    }
+
+    // Tab to the last stop, then off the end, which gives the keys back.
+    if !page::move_through_snippet(&snippet_page, true) {
+        eprintln!("FAIL: tab did not move to the next stop");
+        return 1;
+    }
+    let (selection_start, selection_end) = buffer
+        .selection_bounds()
+        .map(|(from, to)| (from.offset(), to.offset()))
+        .unwrap_or((-1, -1));
+    if selection_end - selection_start != 3 {
+        eprintln!("FAIL: the second stop's placeholder is not selected");
+        return 1;
+    }
+    if !page::move_through_snippet(&snippet_page, true)
+        || snippet_page.state.borrow().document.snippet_active()
+    {
+        eprintln!("FAIL: the exit stop did not end the session");
+        return 1;
+    }
+    println!("snippets ok (expansion, tabstops, linked stops, exit)");
+
+    // Leave the file as the rest of the checks expect it, through the
+    // buffer so the core follows.
+    let mut from = buffer.iter_at_offset(origin_chars);
+    let mut to = buffer.end_iter();
+    buffer.delete(&mut from, &mut to);
+    if buffer.text(&buffer.start_iter(), &buffer.end_iter(), true) != expected {
+        eprintln!("FAIL: the snippet did not come back out cleanly");
+        return 1;
+    }
+
 
     // Diagnostics from the scripted server, delivered through the pump.
     if have_fake_server {
@@ -477,7 +567,13 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 *sink.borrow_mut() = Some(
                     page::parse_completion_items(json)
                         .into_iter()
-                        .map(|(label, _)| label)
+                        .map(|(label, _, is_snippet)| {
+                            if is_snippet {
+                                format!("{label} (snippet)")
+                            } else {
+                                label
+                            }
+                        })
                         .collect(),
                 );
             });
@@ -505,6 +601,12 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         let labels = completion_labels.borrow().clone().unwrap_or_default();
         if !labels.iter().any(|label| label == "fake_function") {
             eprintln!("FAIL: completion items missing: {labels:?}");
+            return 1;
+        }
+        // The server's snippet item must arrive marked as one, or it
+        // gets inserted with its placeholders showing.
+        if !labels.iter().any(|label| label == "fake_snippet (snippet)") {
+            eprintln!("FAIL: the snippet item was not recognized: {labels:?}");
             return 1;
         }
         if !hover.borrow().as_deref().unwrap_or("").contains("fake hover") {

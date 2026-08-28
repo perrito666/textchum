@@ -109,6 +109,12 @@ def main():
                          "insertText": "fake_function()", "sortText": "0001"},
                         {"label": "fake_variable", "kind": 6,
                          "detail": "let fake_variable", "sortText": "0002"},
+                        # A snippet, so the shells' tabstop path has a
+                        # real server response to accept.
+                        {"label": "fake_snippet", "kind": 3,
+                         "detail": "fn fake_snippet(a, b)",
+                         "insertText": "fake_snippet(${1:a}, ${2:b})$0",
+                         "insertTextFormat": 2, "sortText": "0003"},
                     ],
                 },
             })

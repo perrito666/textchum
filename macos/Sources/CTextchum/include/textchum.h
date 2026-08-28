@@ -152,6 +152,14 @@ typedef struct TcAppliedEdit {
 } TcAppliedEdit;
 
 /**
+ * A span of a document in UTF-16 code units, as a selection to make.
+ */
+typedef struct TcRegion {
+  uintptr_t start;
+  uintptr_t end;
+} TcRegion;
+
+/**
  * One style of the theme. Colors are 0xRRGGBBAA for the light and dark
  * appearances; `flags` uses [`TC_STYLE_BOLD`]/[`TC_STYLE_ITALIC`].
  */
@@ -576,6 +584,98 @@ bool tc_document_redo(struct TcDocument *document,
  * call, not previously freed.
  */
 void tc_applied_edits_free(struct TcAppliedEdit *edits, uintptr_t count);
+
+/**
+ * Expands an LSP snippet body (`frob(${1:x}, ${2:y})$0`) for an
+ * insertion at UTF-16 offset `at`, returning the text to insert as a
+ * nul-terminated UTF-8 string; release it with [`tc_string_free`].
+ * Nothing is inserted: the shell puts the text in through the same path
+ * as anything typed, so its display copy and the core stay in step, and
+ * then calls [`tc_document_snippet_begin`] with where it landed.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `body` must point to
+ * `len` readable bytes.
+ */
+char *tc_document_snippet_expand(struct TcDocument *document,
+                                 uintptr_t at,
+                                 const char *body,
+                                 uintptr_t len);
+
+/**
+ * Starts a tabstop session over the text
+ * [`tc_document_snippet_expand`] returned, now sitting at `origin`.
+ * Writes the range to select into `region_out`: the first placeholder,
+ * or where the caret goes when there is nothing to walk — check
+ * [`tc_document_snippet_active`] to tell those apart. Returns false when
+ * no expansion is pending.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `region_out` must point
+ * to a writable slot.
+ */
+bool tc_document_snippet_begin(struct TcDocument *document,
+                               uintptr_t origin,
+                               struct TcRegion *region_out);
+
+/**
+ * Whether a snippet is being filled in, and Tab therefore belongs to it
+ * rather than to the text view.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+bool tc_document_snippet_active(const struct TcDocument *document);
+
+/**
+ * Moves to the next tabstop, or back to the previous one when
+ * `forward` is false, and writes the range to select into
+ * `region_out`. Returns false when no session is running.
+ *
+ * Reaching `$0` or running off the end ends the session: the call still
+ * returns the caret position, and [`tc_document_snippet_active`] is
+ * false afterwards.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `region_out` must point
+ * to a writable slot.
+ */
+bool tc_document_snippet_advance(struct TcDocument *document,
+                                 bool forward,
+                                 struct TcRegion *region_out);
+
+/**
+ * Tells the session where the caret went; a caret outside the snippet
+ * ends it, so a click elsewhere gives Tab back.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+void tc_document_snippet_caret_moved(struct TcDocument *document, uintptr_t position);
+
+/**
+ * Ends the session, wherever it had got to.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+void tc_document_snippet_cancel(struct TcDocument *document);
+
+/**
+ * Copies the tabstop just typed in to the other places carrying the
+ * same number. Same contract as [`tc_document_undo`]: on success an
+ * array of edits to replay on the display cache **in array order**,
+ * released with [`tc_applied_edits_free`]. Returns false when there was
+ * nothing to mirror, which is the common case — call it after every
+ * edit made while a session is running.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `edits_out` and
+ * `count_out` must point to writable slots.
+ */
+bool tc_document_snippet_sync(struct TcDocument *document,
+                              struct TcAppliedEdit **edits_out,
+                              uintptr_t *count_out);
 
 /**
  * Re-reads the document from its file. On success fills `edit_out` with
