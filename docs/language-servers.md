@@ -44,6 +44,14 @@ never join someone else's workspace either.
   is not a test. A Rust `#[cfg(test)] mod tests` inside an ordinary
   file is listed as code, which is what its path says. A result that
   is all one or all the other gets no headings.
+- **A marked line can be read.** Resting the pointer on an underlined
+  stretch shows what the server said, and **Show Diagnostic for Line**
+  (⌃⌘E, Ctrl+Alt+E on Linux) says the same for the caret's line — the
+  caret is usually at the end of the line being fixed rather than
+  inside the mark, so the line is what it answers about. The message
+  names its severity, because an underline says only that something is
+  wrong and a warning should not read like an error. No round trip:
+  the finding is already in hand.
 - **Rename Symbol…** (⌃⌘R) renames across the whole workspace: open
   windows edit in place (undo works per window), files nobody has open
   are rewritten on disk.

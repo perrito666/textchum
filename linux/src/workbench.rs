@@ -189,6 +189,7 @@ impl Workbench {
         go_section.append(Some("Show Documentation for Symbol"), Some("win.hover"));
         go_section.append(Some("Go to Line…"), Some("win.goto-line"));
         go_section.append(Some("Blame Line…"), Some("win.blame"));
+        go_section.append(Some("Show Diagnostic for Line"), Some("win.diagnostic"));
         go_section.append(Some("Go to Block Start"), Some("win.block-start"));
         go_section.append(Some("Go to Block End"), Some("win.block-end"));
         go_section.append(Some("Command Palette…"), Some("win.palette"));
@@ -570,6 +571,7 @@ impl Workbench {
                 ),
                 problems: RefCell::new(String::new()),
                 detail: RefCell::new(String::new()),
+                diagnostics: RefCell::new(Vec::new()),
             });
             Shell::instance().pages.borrow_mut().insert(path, handles);
         }
@@ -1374,6 +1376,34 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         };
         show_blame(workbench, &blame, &path);
     });
+    add("diagnostic", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        let Some(path) = page.path.borrow().clone() else {
+            workbench.toast("No diagnostics for an unsaved document.");
+            return;
+        };
+        let (line, character) = page::lsp_caret(&page.buffer);
+        let shell = Shell::instance();
+        let found = {
+            let pages = shell.pages.borrow();
+            pages
+                .get(&path)
+                .and_then(|handles| {
+                    page::diagnostic_at(handles, line as i32, character as usize)
+                })
+        };
+        let Some(found) = found else {
+            workbench.toast("Nothing reported on this line.");
+            return;
+        };
+        // The same words the balloon uses, in a dialog: the caret is
+        // not a place a balloon can point at reliably.
+        let dialog = adw::AlertDialog::new(Some(found.kind()), Some(&found.message));
+        dialog.add_response("close", "Close");
+        dialog.set_default_response(Some("close"));
+        dialog.set_close_response("close");
+        dialog.present(Some(&workbench.window.clone()));
+    });
     add("preferences", workbench, |workbench, _| {
         show_preferences(&workbench.window);
     });
@@ -2002,6 +2032,7 @@ fn move_page_to(
             language: RefCell::new(old.language.borrow().clone()),
             problems: RefCell::new(old.problems.borrow().clone()),
             detail: RefCell::new(old.detail.borrow().clone()),
+            diagnostics: RefCell::new(old.diagnostics.borrow().clone()),
         });
         shell.pages.borrow_mut().insert(path.to_owned(), handles);
     }
@@ -2059,6 +2090,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Show Documentation for Symbol", "win.hover"),
     ("Go to Line…", "win.goto-line"),
     ("Blame Line…", "win.blame"),
+    ("Show Diagnostic for Line", "win.diagnostic"),
     ("Go to Block Start", "win.block-start"),
     ("Go to Block End", "win.block-end"),
     ("Language Server Status", "win.server-status"),
@@ -2811,6 +2843,7 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
         ),
         problems: RefCell::new(String::new()),
         detail: RefCell::new(String::new()),
+        diagnostics: RefCell::new(Vec::new()),
     });
     shell.pages.borrow_mut().insert(key.clone(), handles);
     // Always re-arm: a page saved under a new path must watch the new

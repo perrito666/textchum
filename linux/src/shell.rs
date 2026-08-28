@@ -30,6 +30,37 @@ pub struct PageHandles {
     pub problems: RefCell<String>,
     /// "encoding · size" half, refreshed with the chrome.
     pub detail: RefCell<String>,
+    /// What the server last said, kept so it can be read rather than
+    /// only underlined. An underline nobody can read is a notification
+    /// with the message taken out.
+    pub diagnostics: RefCell<Vec<Diagnostic>>,
+}
+
+/// One finding, as a balloon needs it.
+#[derive(Debug, Clone)]
+pub struct Diagnostic {
+    pub line: i32,
+    pub character: usize,
+    pub end_line: i32,
+    pub end_character: usize,
+    /// 1 = error, 2 = warning, 3 = information, 4 = hint.
+    pub severity: u64,
+    pub message: String,
+}
+
+impl Diagnostic {
+    /// What kind of finding it is, in words. The gutter says it in
+    /// colour; a balloon has to say it too, or a warning reads like an
+    /// error.
+    pub fn kind(&self) -> &'static str {
+        match self.severity {
+            1 => "Error",
+            2 => "Warning",
+            3 => "Information",
+            4 => "Hint",
+            _ => "Diagnostic",
+        }
+    }
 }
 
 pub struct Shell {
