@@ -28,6 +28,14 @@ pub struct LanguageSpec {
     pub filenames: &'static [&'static str],
     language: fn() -> Language,
     highlights: &'static str,
+    /// Patterns appended to `highlights` when the grammar's own query
+    /// is wrong for us. A grammar ships one query, written against
+    /// whichever highlighter its author uses, and nvim-treesitter
+    /// evaluates `#match?` with Lua patterns where tree-sitter proper
+    /// uses a regular expression — so a predicate can be silently false
+    /// here and true there. Appended rather than replacing, because a
+    /// later pattern wins and the rest of a 400-line query is fine.
+    highlights_extra: Option<&'static str>,
     injections: Option<&'static str>,
 }
 
@@ -52,7 +60,13 @@ impl RegisteredLanguage {
     pub fn compiled(&'static self) -> &'static CompiledLanguage {
         self.compiled.get_or_init(|| {
             let language = (self.spec.language)();
-            let highlights = Query::new(&language, self.spec.highlights)
+            let source = match self.spec.highlights_extra {
+                Some(extra) => {
+                    std::borrow::Cow::Owned(format!("{}\n{extra}", self.spec.highlights))
+                }
+                None => std::borrow::Cow::Borrowed(self.spec.highlights),
+            };
+            let highlights = Query::new(&language, &source)
                 .unwrap_or_else(|e| panic!("bad highlights query for {}: {e}", self.spec.name));
             let capture_styles = highlights
                 .capture_names()
@@ -79,6 +93,12 @@ macro_rules! lang {
         lang!($name, $aliases, $exts, &[], $lang, $hl, $inj)
     };
     ($name:literal, $aliases:expr, $exts:expr, $files:expr, $lang:expr, $hl:expr, $inj:expr) => {
+        lang!($name, $aliases, $exts, $files, $lang, $hl, None, $inj)
+    };
+    (
+        $name:literal, $aliases:expr, $exts:expr, $files:expr,
+        $lang:expr, $hl:expr, $extra:expr, $inj:expr
+    ) => {
         LanguageSpec {
             name: $name,
             aliases: $aliases,
@@ -86,10 +106,25 @@ macro_rules! lang {
             filenames: $files,
             language: || $lang.into(),
             highlights: $hl,
+            highlights_extra: $extra,
             injections: $inj,
         }
     };
 }
+
+/// The SQL grammar captures every literal as `@string` first, then
+/// narrows numbers and decimals back out with two `#match?` predicates
+/// written in Lua pattern syntax (`%d`). Read as the regular expression
+/// tree-sitter actually applies, `%d` is a literal per cent followed by
+/// a d, so neither predicate ever holds and `42` is painted like
+/// `'harbor'`. The same rules, in regex.
+// The dot is a character class, not an escape: tree-sitter unescapes
+// `\.` while parsing the query string, leaving the regex with a bare
+// dot that matches any character — so `42` came back as a float.
+const SQL_NUMBER_LITERALS: &str = r#"
+((literal) @number (#match? @number "^[-+]?[0-9]+$"))
+((literal) @float (#match? @float "^[-+]?[0-9]*[.][0-9]+$"))
+"#;
 
 static SPECS: &[LanguageSpec] = &[
     lang!(
@@ -192,6 +227,19 @@ static SPECS: &[LanguageSpec] = &[
         &["css"],
         tree_sitter_css::LANGUAGE,
         tree_sitter_css::HIGHLIGHTS_QUERY,
+        None
+    ),
+    // DerekStride's grammar, published as tree-sitter-sequel: it
+    // covers the dialects' common core rather than one vendor's, which
+    // is what a file called .sql usually is.
+    lang!(
+        "sql",
+        &[],
+        &["sql"],
+        &[],
+        tree_sitter_sequel::LANGUAGE,
+        tree_sitter_sequel::HIGHLIGHTS_QUERY,
+        Some(SQL_NUMBER_LITERALS),
         None
     ),
     lang!(
