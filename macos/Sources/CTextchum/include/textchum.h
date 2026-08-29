@@ -1055,6 +1055,61 @@ void tc_config_set_workspace_flag(struct TcConfig *config,
                                   bool value);
 
 /**
+ * The icon packs on offer: the ones imported into `dir`, then the
+ * ones opened from elsewhere that are still there.
+ *
+ * Returns a nul-terminated JSON array of `{"name", "path",
+ * "imported"}`, released with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `dir` must point to
+ * `dir_len` readable bytes.
+ */
+char *tc_config_icon_packs(const struct TcConfig *config, const char *dir, uintptr_t dir_len);
+
+/**
+ * Copies an icon pack into `dir` and points the configuration at the
+ * copy.
+ *
+ * A theme is a JSON file plus the images beside it, so what is copied
+ * is the folder holding it. Returns the pack's new path, or null with
+ * `error_out` filled in — release both with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes; `error_out`, when given, must be
+ * a writable pointer.
+ */
+char *tc_config_import_icon_pack(struct TcConfig *config,
+                                 const char *source,
+                                 uintptr_t source_len,
+                                 const char *dir,
+                                 uintptr_t dir_len,
+                                 char **error_out);
+
+/**
+ * Deletes an imported pack. Only a pack inside `dir` can be removed.
+ *
+ * # Safety
+ * Each pointer/length pair must describe readable bytes.
+ */
+bool tc_config_remove_icon_pack(struct TcConfig *config,
+                                const char *path,
+                                uintptr_t path_len,
+                                const char *dir,
+                                uintptr_t dir_len);
+
+/**
+ * Remembers an icon pack opened from outside Textchum's folder, so it
+ * stays on the list.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `path` must point to
+ * `path_len` readable bytes.
+ */
+void tc_config_remember_icon_pack(struct TcConfig *config, const char *path, uintptr_t path_len);
+
+/**
  * The chosen keyboard profile (`keys_profile`), or an empty string
  * for the editor's own bindings. Release with [`tc_string_free`].
  *

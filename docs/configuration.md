@@ -165,18 +165,34 @@ the desktop offers for the file's type, which knows Python from
 Markdown and stops not much further along — and has never heard of a
 file called `Dockerfile`.
 
-**Settings → General → File icons** takes a **VS Code icon pack**:
-choose the icon theme's JSON file, or the extension folder holding it
-(its `package.json` says which file). **Clear** returns the tree to the
-system's icons. The choice is a path in `config.json`:
+**Settings → General → File icons** takes a **VS Code icon pack**. The
+packs already seen are on the list, split between the ones imported
+here and the ones opened where they lie; *System icons* is the way
+back.
+
+**Import…** copies the pack into Textchum's own folder —
+`~/Library/Application Support/Textchum/icons/` on macOS,
+`~/.local/share/textchum/icons/` on Linux — so moving or deleting the
+original cannot take the icons away. **Open…** points at a pack where
+it sits and remembers it, which is right for one you maintain
+yourself. Either takes the icon theme's JSON file or the extension
+folder holding it (its `package.json` says which file). **Delete**
+removes an imported pack; a pack opened from elsewhere belongs to
+whoever put it there, so it can only be dropped from the list.
+
+The choice is a path in `config.json`, and the packs opened from
+elsewhere are remembered beside it:
 
 ```json
-{"icon_pack": "~/packs/material-icon-theme/dist/material-icons.json"}
+{
+  "icon_pack": "~/packs/material-icon-theme/dist/material-icons.json",
+  "icon_packs": ["~/packs/material-icon-theme/dist/material-icons.json"]
+}
 ```
 
-A pack is read where it sits — nothing is copied — so moving or
-deleting the folder takes the icons with it. A pack that cannot be read
-is reported once and the tree keeps the system's icons.
+A pack whose folder is gone drops off the list rather than sitting
+there to fail when chosen. A pack that cannot be read is reported once
+and the tree keeps the system's icons.
 
 Lookup follows VS Code's, most specific first:
 

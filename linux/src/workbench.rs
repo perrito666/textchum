@@ -4075,91 +4075,184 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     appearance_group.add(&theme_row);
 
-    // A pack is a folder of images somewhere on disk, not a name from a
-    // list, so it gets a chooser rather than a combo — and a way back
-    // to the desktop's icons.
-    let icons_row = adw::ActionRow::new();
+    // Packs already seen are a list; a new one is a folder somewhere on
+    // disk, so both a picker and a chooser. Importing copies the pack
+    // into Textchum's own folder, where moving or deleting the original
+    // cannot take it away.
+    let icons_row = adw::ComboRow::new();
     icons_row.set_title("File icons");
-    let icons_subtitle = |shell: &Rc<crate::shell::Shell>| match shell.config.borrow().icon_pack() {
-        Some(path) => path,
-        None => "System icons".to_owned(),
-    };
-    icons_row.set_subtitle(&icons_subtitle(&shell));
-    let choose = gtk::Button::with_label("Choose…");
-    choose.set_valign(gtk::Align::Center);
-    let clear = gtk::Button::with_label("Clear");
-    clear.set_valign(gtk::Align::Center);
-    clear.set_visible(shell.config.borrow().icon_pack().is_some());
-    {
+    let import = gtk::Button::with_label("Import…");
+    import.set_valign(gtk::Align::Center);
+    let open = gtk::Button::with_label("Open…");
+    open.set_valign(gtk::Align::Center);
+    let delete = gtk::Button::with_label("Delete");
+    delete.set_valign(gtk::Align::Center);
+
+    // Set while the list is being rebuilt, so the selection handler
+    // does not answer its own writes.
+    let refilling = Rc::new(std::cell::Cell::new(false));
+    // The paths the rows stand for, in the same order.
+    let listed: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+
+    let rebuild = {
         let shell = Rc::clone(&shell);
         let row = icons_row.clone();
-        let clear_button = clear.clone();
-        let parent = window.clone();
-        choose.connect_clicked(move |_| {
-            // Both a file and a folder are offered because packs are
-            // distributed both ways, and asking someone which is inside
-            // is asking them to read a manifest.
-            let ask = gtk::AlertDialog::builder()
-                .message("Choose an icon pack")
-                .detail("The icon theme's JSON file, or the extension folder holding it.")
-                .buttons(["Cancel", "Choose Folder…", "Choose File…"])
-                .default_button(2)
-                .cancel_button(0)
-                .build();
-            let shell = Rc::clone(&shell);
-            let row = row.clone();
-            let clear_button = clear_button.clone();
-            let parent = parent.clone();
-            ask.choose(Some(&parent.clone()), gtk::gio::Cancellable::NONE, move |answer| {
-                let Ok(answer) = answer else { return };
-                if answer == 0 {
-                    return;
-                }
-                let dialog = gtk::FileDialog::new();
-                dialog.set_title("Choose an icon pack");
-                let shell = Rc::clone(&shell);
-                let row = row.clone();
-                let clear_button = clear_button.clone();
-                let done = move |result: Result<gtk::gio::File, glib::Error>| {
-                    let Ok(file) = result else { return };
-                    let Some(path) = file.path() else { return };
-                    let path = path.to_string_lossy().into_owned();
-                    shell.config.borrow_mut().set_icon_pack(Some(&path));
-                    shell.apply_icon_pack();
-                    shell.save_config();
-                    let kept = textchum_core::icons::is_active();
-                    row.set_subtitle(if kept { &path } else { "System icons" });
-                    clear_button.set_visible(kept);
-                    if !kept {
-                        // apply_icon_pack said why on the terminal; the
-                        // row must not claim a pack that was refused.
-                        shell.config.borrow_mut().set_icon_pack(None);
-                        shell.save_config();
-                    }
-                    refresh_file_trees();
-                };
-                if answer == 1 {
-                    dialog.select_folder(Some(&parent), gtk::gio::Cancellable::NONE, done);
+        let delete = delete.clone();
+        let refilling = Rc::clone(&refilling);
+        let listed = Rc::clone(&listed);
+        Rc::new(move || {
+            let packs = {
+                let config = shell.config.borrow();
+                textchum_core::icons::available(
+                    &icon_packs_dir(),
+                    &config.known_icon_packs(),
+                    config.icon_pack().as_deref(),
+                )
+            };
+            let current = shell.config.borrow().icon_pack();
+            let mut labels: Vec<String> = vec!["System icons".to_string()];
+            let mut paths: Vec<String> = vec![String::new()];
+            for pack in &packs {
+                // A combo row has no sections, so where a pack lives is
+                // said in its label rather than by a heading.
+                labels.push(if pack.imported {
+                    pack.name.clone()
                 } else {
-                    dialog.open(Some(&parent), gtk::gio::Cancellable::NONE, done);
+                    format!("{} (elsewhere)", pack.name)
+                });
+                paths.push(pack.path.clone());
+            }
+            let selected = current
+                .as_deref()
+                .and_then(|path| paths.iter().position(|had| had == path))
+                .unwrap_or(0);
+            let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
+            refilling.set(true);
+            row.set_model(Some(&gtk::StringList::new(&label_refs)));
+            row.set_selected(selected as u32);
+            refilling.set(false);
+            delete.set_visible(packs.get(selected.wrapping_sub(1)).is_some_and(|pack| {
+                pack.imported && Some(pack.path.as_str()) == current.as_deref()
+            }));
+            *listed.borrow_mut() = paths;
+        })
+    };
+    rebuild();
+
+    {
+        let shell = Rc::clone(&shell);
+        let refilling = Rc::clone(&refilling);
+        let listed = Rc::clone(&listed);
+        let rebuild = Rc::clone(&rebuild);
+        icons_row.connect_selected_notify(move |row| {
+            if refilling.get() {
+                return;
+            }
+            let paths = listed.borrow();
+            let Some(path) = paths.get(row.selected() as usize).cloned() else {
+                return;
+            };
+            drop(paths);
+            shell
+                .config
+                .borrow_mut()
+                .set_icon_pack((!path.is_empty()).then_some(path.as_str()));
+            shell.apply_icon_pack();
+            if !path.is_empty() && !textchum_core::icons::is_active() {
+                // apply_icon_pack said why on the terminal; the row must
+                // not claim a pack that was refused.
+                shell.config.borrow_mut().set_icon_pack(None);
+            }
+            shell.save_config();
+            refresh_file_trees();
+            rebuild();
+        });
+    }
+
+    {
+        let shell = Rc::clone(&shell);
+        let parent = window.clone();
+        let rebuild = Rc::clone(&rebuild);
+        import.connect_clicked(move |_| {
+            let shell = Rc::clone(&shell);
+            let rebuild = Rc::clone(&rebuild);
+            choose_icon_pack(&parent, move |path| {
+                let outcome = {
+                    let mut config = shell.config.borrow_mut();
+                    match textchum_core::icons::import(Path::new(&path), &icon_packs_dir()) {
+                        Ok(copied) => {
+                            config.forget_icon_pack(&path);
+                            config.set_icon_pack(Some(&copied));
+                            Ok(())
+                        }
+                        Err(message) => Err(message),
+                    }
+                };
+                match outcome {
+                    Ok(()) => {
+                        shell.apply_icon_pack();
+                        shell.save_config();
+                        refresh_file_trees();
+                        rebuild();
+                    }
+                    Err(message) => eprintln!("textchum: {message}"),
                 }
             });
         });
     }
+
     {
         let shell = Rc::clone(&shell);
-        let row = icons_row.clone();
-        clear.connect_clicked(move |button| {
-            shell.config.borrow_mut().set_icon_pack(None);
-            shell.apply_icon_pack();
-            shell.save_config();
-            row.set_subtitle("System icons");
-            button.set_visible(false);
-            refresh_file_trees();
+        let parent = window.clone();
+        let rebuild = Rc::clone(&rebuild);
+        open.connect_clicked(move |_| {
+            let shell = Rc::clone(&shell);
+            let rebuild = Rc::clone(&rebuild);
+            choose_icon_pack(&parent, move |path| {
+                {
+                    let mut config = shell.config.borrow_mut();
+                    config.remember_icon_pack(&path);
+                    config.set_icon_pack(Some(&path));
+                }
+                shell.apply_icon_pack();
+                if !textchum_core::icons::is_active() {
+                    let mut config = shell.config.borrow_mut();
+                    config.set_icon_pack(None);
+                    config.forget_icon_pack(&path);
+                }
+                shell.save_config();
+                refresh_file_trees();
+                rebuild();
+            });
         });
     }
-    icons_row.add_suffix(&choose);
-    icons_row.add_suffix(&clear);
+
+    {
+        let shell = Rc::clone(&shell);
+        let rebuild = Rc::clone(&rebuild);
+        delete.connect_clicked(move |_| {
+            let Some(path) = shell.config.borrow().icon_pack() else {
+                return;
+            };
+            if textchum_core::icons::remove_imported(Path::new(&path), &icon_packs_dir()).is_err()
+            {
+                return;
+            }
+            {
+                let mut config = shell.config.borrow_mut();
+                config.forget_icon_pack(&path);
+                config.set_icon_pack(None);
+            }
+            shell.apply_icon_pack();
+            shell.save_config();
+            refresh_file_trees();
+            rebuild();
+        });
+    }
+
+    icons_row.add_suffix(&import);
+    icons_row.add_suffix(&open);
+    icons_row.add_suffix(&delete);
     appearance_group.add(&icons_row);
     general.add(&appearance_group);
 
@@ -5072,6 +5165,53 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     window.add(&keyboard_page(&shell));
 
     window.present();
+}
+
+/// Where imported icon packs live: `~/.local/share/textchum/icons`.
+fn icon_packs_dir() -> PathBuf {
+    glib::user_data_dir().join("textchum/icons")
+}
+
+/// Asks for an icon pack — the theme's JSON file, or the extension
+/// folder holding it — and hands the path over.
+///
+/// Both are offered because packs are distributed both ways, and asking
+/// someone which one they have is asking them to read a manifest.
+fn choose_icon_pack<F>(parent: &adw::PreferencesWindow, done: F)
+where
+    F: Fn(String) + Clone + 'static,
+{
+    let ask = gtk::AlertDialog::builder()
+        .message("Choose an icon pack")
+        .detail("The icon theme's JSON file, or the extension folder holding it.")
+        .buttons(["Cancel", "Choose Folder…", "Choose File…"])
+        .default_button(2)
+        .cancel_button(0)
+        .build();
+    let parent = parent.clone();
+    ask.choose(
+        Some(&parent.clone()),
+        gtk::gio::Cancellable::NONE,
+        move |answer| {
+            let Ok(answer) = answer else { return };
+            if answer == 0 {
+                return;
+            }
+            let dialog = gtk::FileDialog::new();
+            dialog.set_title("Choose an icon pack");
+            let done = done.clone();
+            let chosen = move |result: Result<gtk::gio::File, glib::Error>| {
+                let Ok(file) = result else { return };
+                let Some(path) = file.path() else { return };
+                done(path.to_string_lossy().into_owned());
+            };
+            if answer == 1 {
+                dialog.select_folder(Some(&parent), gtk::gio::Cancellable::NONE, chosen);
+            } else {
+                dialog.open(Some(&parent), gtk::gio::Cancellable::NONE, chosen);
+            }
+        },
+    );
 }
 
 /// Re-installs the shortcuts after a change to the profile or an

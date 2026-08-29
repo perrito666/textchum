@@ -965,6 +965,50 @@ func runSmokeTest() -> Int32 {
     }
     print("keyboard profiles ok (bundled, overridden, reset, function keys)")
 
+    // Icon packs: importing copies the pack into Textchum's folder, and
+    // the list says which ones are ours.
+    let packScratch = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-smoke-icons-\(getpid())")
+    let packSource = packScratch.appendingPathComponent("source/icons")
+    try? FileManager.default.createDirectory(
+        at: packSource, withIntermediateDirectories: true)
+    try? "<svg/>".write(
+        to: packSource.appendingPathComponent("rust.svg"), atomically: true, encoding: .utf8)
+    let packTheme = packScratch.appendingPathComponent("source/icons.json")
+    try? """
+        {"iconDefinitions": {"_rust": {"iconPath": "./icons/rust.svg"}},
+         "fileExtensions": {"rs": "_rust"}}
+        """.write(to: packTheme, atomically: true, encoding: .utf8)
+    let packLibrary = packScratch.appendingPathComponent("library").path
+    let packConfig = CoreConfig(
+        path: packScratch.appendingPathComponent("config.json").path)
+    let importedPack = packConfig.importIconPack(from: packTheme.path, into: packLibrary)
+    guard let importedPath = importedPack.path else {
+        print("FAIL: importing an icon pack said \(importedPack.error ?? "nothing")")
+        return 1
+    }
+    guard FileManager.default.fileExists(atPath: importedPath) else {
+        print("FAIL: the imported pack is not where it says")
+        return 1
+    }
+    let packs = packConfig.iconPacks(in: packLibrary)
+    guard packs.count == 1, packs[0].imported else {
+        print("FAIL: the imported pack is not on the list as ours")
+        return 1
+    }
+    // A second import of the same pack is refused rather than merged.
+    guard packConfig.importIconPack(from: packTheme.path, into: packLibrary).path == nil else {
+        print("FAIL: importing the same pack twice was allowed")
+        return 1
+    }
+    packConfig.removeIconPack(path: importedPath, from: packLibrary)
+    guard packConfig.iconPacks(in: packLibrary).isEmpty else {
+        print("FAIL: the deleted pack is still listed")
+        return 1
+    }
+    try? FileManager.default.removeItem(at: packScratch)
+    print("icon packs ok (imported, listed as ours, refused twice, deleted)")
+
     // Repainting the syntax colours on every scroll turn was the
     // stutter; the margin around the viewport is there so that most
     // turns need no repaint at all. The wiring needs a window server,

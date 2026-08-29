@@ -831,6 +831,63 @@ impl Config {
         }
     }
 
+    /// Icon packs opened from outside Textchum's own folder
+    /// (`icon_packs`), so they stay on the list once seen.
+    pub fn known_icon_packs(&self) -> Vec<String> {
+        self.root
+            .get("icon_packs")
+            .and_then(Value::as_array)
+            .map(|paths| {
+                paths
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Remembers a pack opened from elsewhere. Already-known paths are
+    /// left where they are rather than moved to the end.
+    pub fn remember_icon_pack(&mut self, path: &str) {
+        let path = path.trim();
+        if path.is_empty() {
+            return;
+        }
+        let mut known = self.known_icon_packs();
+        if known.iter().any(|had| had == path) {
+            return;
+        }
+        known.push(path.to_owned());
+        self.write_icon_packs(known);
+    }
+
+    /// Forgets one — a pack that has been imported, or one whose folder
+    /// is gone.
+    pub fn forget_icon_pack(&mut self, path: &str) {
+        let known: Vec<String> = self
+            .known_icon_packs()
+            .into_iter()
+            .filter(|had| had != path)
+            .collect();
+        self.write_icon_packs(known);
+    }
+
+    fn write_icon_packs(&mut self, paths: Vec<String>) {
+        let root = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        if paths.is_empty() {
+            root.remove("icon_packs");
+            return;
+        }
+        root.insert(
+            "icon_packs".into(),
+            Value::Array(paths.into_iter().map(Value::String).collect()),
+        );
+    }
+
     /// Whether hover documentation pops up on mouse rest
     /// (`editor.hover`, default true).
     pub fn hover_docs(&self) -> bool {

@@ -210,6 +210,169 @@ impl IconPack {
 
 /// The JSON to read for a pack at `path`: the file itself, or the one a
 /// VS Code extension directory says it contributes.
+/// One icon pack that can be chosen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pack {
+    /// What to call it on screen.
+    pub name: String,
+    /// The path the configuration holds.
+    pub path: String,
+    /// Whether it lives in Textchum's own folder.
+    pub imported: bool,
+}
+
+/// The packs on offer: the ones imported into `dir`, then the ones
+/// opened from elsewhere.
+///
+/// A pack whose folder is gone is dropped rather than listed: the list
+/// is what can be chosen, and a row that fails when chosen is a trap.
+/// `elsewhere` is the paths opened from outside `dir`, newest last;
+/// `current` is added to them so what is in use is always on the list.
+pub fn available(dir: &Path, elsewhere: &[String], current: Option<&str>) -> Vec<Pack> {
+    let mut packs: Vec<Pack> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        let mut imported: Vec<Pack> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let theme = imported_theme(&entry.path())?;
+                Some(Pack {
+                    name: entry.file_name().to_string_lossy().into_owned(),
+                    path: theme.to_string_lossy().into_owned(),
+                    imported: true,
+                })
+            })
+            .collect();
+        imported.sort_by(|a, b| a.name.cmp(&b.name));
+        packs.extend(imported);
+    }
+
+    let mut outside: Vec<&str> = elsewhere.iter().map(String::as_str).collect();
+    if let Some(current) = current.filter(|path| !path.is_empty()) {
+        outside.push(current);
+    }
+    for path in outside {
+        if packs.iter().any(|pack| pack.path == path) {
+            continue;
+        }
+        if Path::new(path).starts_with(dir) {
+            continue;
+        }
+        if resolve_pack_path(Path::new(path)).is_err() {
+            continue;
+        }
+        packs.push(Pack {
+            name: pack_name(Path::new(path)),
+            path: path.to_string(),
+            imported: false,
+        });
+    }
+    packs
+}
+
+/// Copies a pack into `dir` and returns the path it has there.
+///
+/// A theme is a JSON file plus the images beside it, so what is copied
+/// is the directory holding it — the extension folder, or the file's
+/// own parent. Copying the file alone would leave a manifest pointing
+/// at images that are not there.
+pub fn import(source: &Path, dir: &Path) -> Result<String, String> {
+    // Fails early on something that is not a pack at all, so a bad
+    // choice costs nothing.
+    let theme = resolve_pack_path(source)?;
+    let folder = if source.is_dir() {
+        source.to_owned()
+    } else {
+        theme
+            .parent()
+            .ok_or_else(|| format!("{} has nowhere to copy from", theme.display()))?
+            .to_owned()
+    };
+    let name = pack_name(&folder);
+    let target = dir.join(&name);
+    if target.exists() {
+        return Err(format!("{name} is already imported"));
+    }
+    std::fs::create_dir_all(dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+    copy_tree(&folder, &target)?;
+
+    // The chosen path, moved to where the copy went: a theme named
+    // inside an extension folder keeps its place in it.
+    let relative = theme
+        .strip_prefix(&folder)
+        .map_err(|_| format!("{} is not inside {}", theme.display(), folder.display()))?;
+    // Which file in there is the theme, recorded rather than worked out
+    // again later: a pack copied from a bare JSON file has no manifest
+    // saying so, and looking for one would find nothing.
+    let _ = std::fs::write(target.join(MARKER), relative.to_string_lossy().as_bytes());
+    Ok(target.join(relative).to_string_lossy().into_owned())
+}
+
+/// The file that says which JSON in an imported folder is the theme.
+const MARKER: &str = ".textchum-pack";
+
+/// The theme inside an imported folder: what the marker says, or what
+/// the folder contributes.
+fn imported_theme(folder: &Path) -> Option<PathBuf> {
+    if !folder.is_dir() {
+        return None;
+    }
+    if let Ok(relative) = std::fs::read_to_string(folder.join(MARKER)) {
+        let theme = folder.join(relative.trim());
+        if theme.is_file() {
+            return Some(theme);
+        }
+    }
+    resolve_pack_path(folder).ok()
+}
+
+/// Deletes an imported pack. Only a pack inside `dir` can be removed —
+/// a pack opened from elsewhere belongs to whoever put it there.
+pub fn remove_imported(path: &Path, dir: &Path) -> Result<(), String> {
+    let folder = imported_folder(path, dir)
+        .ok_or_else(|| format!("{} is not an imported pack", path.display()))?;
+    std::fs::remove_dir_all(&folder).map_err(|error| format!("{}: {error}", folder.display()))
+}
+
+/// The folder inside `dir` a pack path belongs to.
+fn imported_folder(path: &Path, dir: &Path) -> Option<PathBuf> {
+    let relative = path.strip_prefix(dir).ok()?;
+    let first = relative.components().next()?;
+    Some(dir.join(first.as_os_str()))
+}
+
+/// What to call a pack: the folder's name, or the file's without its
+/// extension.
+fn pack_name(path: &Path) -> String {
+    if path.is_dir() {
+        return path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+    }
+    path.file_stem()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|error| format!("{}: {error}", to.display()))?;
+    let entries = std::fs::read_dir(from).map_err(|error| format!("{}: {error}", from.display()))?;
+    for entry in entries.flatten() {
+        let source = entry.path();
+        let target = to.join(entry.file_name());
+        let Ok(kind) = entry.file_type() else { continue };
+        if kind.is_dir() {
+            copy_tree(&source, &target)?;
+        } else if kind.is_file() {
+            std::fs::copy(&source, &target)
+                .map_err(|error| format!("{}: {error}", source.display()))?;
+        }
+        // Symlinks are skipped: a pack that points outside itself is
+        // not a pack that can be copied.
+    }
+    Ok(())
+}
+
 fn resolve_pack_path(path: &Path) -> Result<PathBuf, String> {
     if path.is_file() {
         return Ok(path.to_owned());
@@ -487,5 +650,56 @@ mod tests {
         // A dotfile's name is the whole thing, not an extension.
         assert_eq!(extensions_of(".gitignore"), Vec::<&str>::new());
         assert_eq!(extensions_of(".eslintrc.json"), vec!["json"]);
+    }
+
+    #[test]
+    fn a_pack_is_imported_with_the_images_beside_it() {
+        let file = temp_pack("import", PACK, &["rust.svg"]);
+        let library = std::env::temp_dir()
+            .join(format!("textchum-icons-library-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&library);
+
+        let imported = import(&file, &library).unwrap();
+        assert!(Path::new(&imported).is_file());
+        // The images came too, or the manifest points at nothing.
+        assert!(Path::new(&imported)
+            .parent()
+            .unwrap()
+            .join("icons/rust.svg")
+            .is_file());
+        // And it loads from where it landed.
+        assert!(IconPack::load(Path::new(&imported)).is_ok());
+
+        // Twice is refused rather than silently merged.
+        assert!(import(&file, &library).is_err());
+
+        // It is on the list, marked as one of ours.
+        let packs = available(&library, &[], None);
+        assert_eq!(packs.len(), 1);
+        assert!(packs[0].imported);
+
+        remove_imported(Path::new(&imported), &library).unwrap();
+        assert!(available(&library, &[], None).is_empty());
+    }
+
+    #[test]
+    fn packs_from_elsewhere_are_listed_apart_and_only_while_they_exist() {
+        let file = temp_pack("elsewhere", PACK, &["rust.svg"]);
+        let library = std::env::temp_dir()
+            .join(format!("textchum-icons-empty-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&library);
+
+        let outside = file.to_string_lossy().into_owned();
+        let packs = available(&library, &[outside.clone()], None);
+        assert_eq!(packs.len(), 1);
+        assert!(!packs[0].imported);
+
+        // What is in use is on the list even when nothing remembered it.
+        let packs = available(&library, &[], Some(&outside));
+        assert_eq!(packs.len(), 1);
+
+        // A pack that is gone is dropped, not listed as a trap.
+        std::fs::remove_dir_all(file.parent().unwrap()).unwrap();
+        assert!(available(&library, &[outside], None).is_empty());
     }
 }

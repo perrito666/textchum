@@ -146,6 +146,77 @@ public final class CoreConfig {
         set { tc_config_set_hover_docs(handle, newValue) }
     }
 
+    /// One icon pack on offer.
+    public struct IconPackEntry {
+        public let name: String
+        public let path: String
+        /// Whether it lives in Textchum's own folder.
+        public let imported: Bool
+    }
+
+    /// The packs on offer: the ones imported into `directory`, then the
+    /// ones opened from elsewhere that are still there.
+    public func iconPacks(in directory: String) -> [IconPackEntry] {
+        let raw = directory.withCString { pointer in
+            tc_config_icon_packs(handle, pointer, UInt(strlen(pointer)))
+        }
+        guard let raw else { return [] }
+        defer { tc_string_free(raw) }
+        let data = Data(String(cString: raw).utf8)
+        let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+        return parsed.compactMap { item in
+            guard let name = item["name"] as? String, let path = item["path"] as? String
+            else { return nil }
+            return IconPackEntry(
+                name: name, path: path, imported: item["imported"] as? Bool ?? false)
+        }
+    }
+
+    /// Copies a pack into `directory`. Returns its new path, or nil
+    /// with the reason it could not be copied.
+    public func importIconPack(
+        from source: String, into directory: String
+    ) -> (path: String?, error: String?) {
+        var error: UnsafeMutablePointer<CChar>?
+        let raw = source.withCString { sourcePointer in
+            directory.withCString { directoryPointer in
+                tc_config_import_icon_pack(
+                    handle,
+                    sourcePointer, UInt(strlen(sourcePointer)),
+                    directoryPointer, UInt(strlen(directoryPointer)),
+                    &error)
+            }
+        }
+        if let raw {
+            defer { tc_string_free(raw) }
+            return (String(cString: raw), nil)
+        }
+        guard let error else { return (nil, "the pack could not be imported") }
+        defer { tc_string_free(error) }
+        return (nil, String(cString: error))
+    }
+
+    /// Deletes an imported pack. Only a pack inside `directory` can be
+    /// removed.
+    @discardableResult
+    public func removeIconPack(path: String, from directory: String) -> Bool {
+        path.withCString { pathPointer in
+            directory.withCString { directoryPointer in
+                tc_config_remove_icon_pack(
+                    handle,
+                    pathPointer, UInt(strlen(pathPointer)),
+                    directoryPointer, UInt(strlen(directoryPointer)))
+            }
+        }
+    }
+
+    /// Remembers a pack opened from outside Textchum's folder.
+    public func rememberIconPack(path: String) {
+        path.withCString { pointer in
+            tc_config_remember_icon_pack(handle, pointer, UInt(strlen(pointer)))
+        }
+    }
+
     /// The chosen keyboard profile; empty means the editor's own
     /// bindings.
     public var keysProfile: String {
