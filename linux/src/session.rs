@@ -26,9 +26,9 @@ pub fn save() {
     let mut windows = Vec::new();
     let mut frontmost: Option<String> = None;
     Workbench::for_each(|workbench| {
-        let selected = workbench.selected().and_then(|page| page.path.borrow().clone());
+        let selected = workbench.selected().and_then(|page| page.path().borrow().clone());
         for page in workbench.all_pages() {
-            let Some(path) = page.path.borrow().clone() else { continue };
+            let Some(path) = page.path().borrow().clone() else { continue };
             let buffer = &page.buffer;
             let insert = buffer.iter_at_mark(&buffer.get_insert());
             let caret = crate::page::utf16_offset(buffer, insert.offset());
