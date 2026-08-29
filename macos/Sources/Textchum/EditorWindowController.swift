@@ -992,6 +992,82 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    // MARK: Code actions
+
+    /// What the server offers for the place the caret is: the quick fix
+    /// for the diagnostic there, or the refactorings it has for the
+    /// range.
+    ///
+    /// The findings under the caret go with the request, as the server
+    /// itself published them — the core keeps those, since a
+    /// reconstructed diagnostic is not one a server recognizes as its
+    /// own. Without them a server answers with what it can do to that
+    /// range in general, which is not the question a marked line asks.
+    @objc func showCodeActions(_ sender: Any?) {
+        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        let text = textView.string as NSString
+        let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
+        lspApp.lspCodeAction(path: path, line: line, character: character) {
+            [weak self] json in
+            guard let self else { return }
+            let actions = CoreCodeActions.actions(inResultJSON: json)
+            guard !actions.isEmpty else {
+                self.presentInfo(
+                    "Nothing on offer",
+                    details: "The language server has no action for this place.")
+                return
+            }
+            let rows: [ListPanel.Row] = actions.map { action in
+                .item(action.preferred ? "\(action.title)  ·  suggested" : action.title)
+            }
+            self.listPanel.show(
+                rows: rows, over: self.window, title: "Code Actions (\(actions.count))",
+                placeholder: "action…"
+            ) { [weak self] index in
+                guard let self, actions.indices.contains(index) else { return }
+                self.run(CoreCodeActions.outcome(inResultJSON: json, at: index), path: path)
+            }
+        }
+    }
+
+    /// Carries out a chosen action: apply the edit, run the command, or
+    /// ask the server to fill the edit in first — servers are allowed
+    /// to answer cheaply and compute only the one that was chosen.
+    private func run(_ outcome: CoreCodeActions.Outcome, path: String) {
+        let delegate = NSApp.delegate as? AppDelegate
+        switch outcome {
+        case .edit(let edit):
+            _ = delegate?.applyWorkspaceEdit(resultJSON: edit)
+        case .command(let name, let argumentsJSON):
+            lspApp?.lspExecuteCommand(path: path, command: name, argumentsJSON: argumentsJSON) {
+                // A command's own answer is the server saying it is
+                // done; the edits it made arrive as a workspace/applyEdit
+                // request, which the pool handles.
+                _ = $0
+            }
+        case .resolve(let actionJSON):
+            lspApp?.lspResolveCodeAction(path: path, actionJSON: actionJSON) {
+                [weak self] json in
+                guard let self else { return }
+                // The resolved action carries the edit; anything else
+                // means the server had nothing after all.
+                switch CoreCodeActions.outcome(inResultJSON: "[\(json)]", at: 0) {
+                case .edit(let edit):
+                    _ = (NSApp.delegate as? AppDelegate)?.applyWorkspaceEdit(resultJSON: edit)
+                case .command(let name, let argumentsJSON):
+                    self.lspApp?.lspExecuteCommand(
+                        path: path, command: name, argumentsJSON: argumentsJSON) { _ in }
+                default:
+                    self.presentInfo(
+                        "Nothing came back",
+                        details: "The language server had no edit for that action.")
+                }
+            }
+        case .nothing:
+            NSSound.beep()
+        }
+    }
+
     // MARK: Text transformations
 
     /// Sorts, cases, trims or converts the selection — or the whole
@@ -3179,6 +3255,7 @@ extension EditorWindowController: NSTextViewDelegate {
         }
         if hasServer {
             commands.append(("Find References", #selector(findReferences(_:))))
+            commands.append(("Code Actions…", #selector(showCodeActions(_:))))
             commands.append(("Rename Symbol…", #selector(renameSymbol(_:))))
         }
         if !diagnostics.isEmpty {
@@ -3560,7 +3637,8 @@ extension EditorWindowController: NSMenuItemValidation {
         case #selector(jumpToDefinition(_:)):
             return lspOpenPath != nil || ctagsFallbackEnabled
         case #selector(findReferences(_:)), #selector(renameSymbol(_:)),
-            #selector(formatDocument(_:)), #selector(showDocumentOutline(_:)):
+            #selector(formatDocument(_:)), #selector(showDocumentOutline(_:)),
+            #selector(showCodeActions(_:)):
             return lspOpenPath != nil
         case #selector(goToBlockStart(_:)), #selector(goToBlockEnd(_:)):
             return coreDocument.languageName != nil

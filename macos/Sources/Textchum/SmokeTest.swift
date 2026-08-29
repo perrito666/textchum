@@ -1054,6 +1054,42 @@ func runSmokeTest() -> Int32 {
     }
     print("transformations ok (case, lines, endings kept, unknown refused)")
 
+    // Code actions. The protocol's loosest answer — an array mixing two
+    // shapes, one of which may arrive without the edit it is about — so
+    // what is checked is that each shape says what choosing it means.
+    let actionsResult = """
+        [{"title": "Import `HashMap`", "kind": "quickfix", "isPreferred": true, \
+        "edit": {"changes": {}}}, \
+        {"title": "Extract into function", "kind": "refactor.extract"}, \
+        {"title": "Organize imports", "command": "rust-analyzer.organizeImports", \
+        "arguments": ["file:///p/a.rs"]}]
+        """
+    let offered = CoreCodeActions.actions(inResultJSON: actionsResult)
+    guard offered.count == 3, offered[0].preferred, offered[0].kind == "quickfix" else {
+        print("FAIL: the code actions did not survive the bridge")
+        return 1
+    }
+    guard case .edit = CoreCodeActions.outcome(inResultJSON: actionsResult, at: 0) else {
+        print("FAIL: an action carrying an edit did not say so")
+        return 1
+    }
+    guard case .resolve = CoreCodeActions.outcome(inResultJSON: actionsResult, at: 1) else {
+        print("FAIL: an action with no edit did not ask to be resolved")
+        return 1
+    }
+    guard case .command(let commandName, _) = CoreCodeActions.outcome(
+        inResultJSON: actionsResult, at: 2),
+        commandName == "rust-analyzer.organizeImports"
+    else {
+        print("FAIL: an action carrying a command did not say so")
+        return 1
+    }
+    guard case .nothing = CoreCodeActions.outcome(inResultJSON: actionsResult, at: 99) else {
+        print("FAIL: a stale choice did something")
+        return 1
+    }
+    print("code actions ok (edit, resolve, command, stale choice)")
+
     // Repainting the syntax colours on every scroll turn was the
     // stutter; the margin around the viewport is there so that most
     // turns need no repaint at all. The wiring needs a window server,

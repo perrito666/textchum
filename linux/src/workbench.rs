@@ -202,6 +202,7 @@ impl Workbench {
         go_section.append(Some("Go Back"), Some("win.back"));
         go_section.append(Some("Go Forward"), Some("win.forward"));
         go_section.append(Some("Find References"), Some("win.references"));
+        go_section.append(Some("Code Actions…"), Some("win.code-actions"));
         go_section.append(Some("Rename Symbol…"), Some("win.rename"));
         go_section.append(Some("Format Document"), Some("win.format"));
         go_section.append(Some("Document Outline…"), Some("win.outline"));
@@ -1811,6 +1812,33 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             }
         });
     });
+    add("code-actions", workbench, |workbench, _| {
+        let Some((page, path)) = workbench
+            .selected()
+            .and_then(|page| {
+                let path = page.path.borrow().clone();
+                path.map(|path| (page, path))
+            })
+        else {
+            workbench.toast("Save the file first — untitled documents have no server.");
+            return;
+        };
+        let (line, character) = page::lsp_anchor(&page);
+        let shell = Shell::instance();
+        let id = shell
+            .pool
+            .borrow_mut()
+            .code_action(Path::new(&path), line, character);
+        if id == 0 {
+            workbench.toast("No language server is running for this document.");
+            return;
+        }
+        let weak = Rc::downgrade(workbench);
+        shell.expect_response(id, move |json| {
+            let Some(workbench) = weak.upgrade() else { return };
+            show_code_actions(&workbench, &path, json);
+        });
+    });
     add("rename", workbench, |workbench, _| {
         let Some((page, path)) = workbench
             .selected()
@@ -3166,6 +3194,98 @@ fn show_locations(workbench: &Rc<Workbench>, title: &str, json: &str) {
         return;
     }
     show_places(workbench, title, rows);
+}
+
+/// What the server offers for the place the caret is: the quick fix
+/// for the diagnostic there, or the refactorings it has for the range.
+fn show_code_actions(workbench: &Rc<Workbench>, path: &str, json: &str) {
+    use textchum_core::code_action;
+    let actions = code_action::actions(json);
+    if actions.is_empty() {
+        workbench.toast("The language server has no action for this place.");
+        return;
+    }
+    let labels: Vec<String> = actions
+        .iter()
+        .map(|action| {
+            if action.preferred {
+                format!("{}  ·  suggested", action.title)
+            } else {
+                action.title.clone()
+            }
+        })
+        .collect();
+    let path = path.to_owned();
+    let json = json.to_owned();
+    present_picker(
+        workbench,
+        "Code Actions",
+        picker_items(labels),
+        move |workbench, index| {
+            let Some(action) = code_action::actions(&json).into_iter().nth(index) else {
+                return;
+            };
+            run_code_action(workbench, &path, action.outcome());
+        },
+    );
+}
+
+/// Carries out a chosen action: apply the edit, run the command, or ask
+/// the server to fill the edit in first — servers are allowed to answer
+/// cheaply and compute only the one that was chosen.
+fn run_code_action(
+    workbench: &Rc<Workbench>,
+    path: &str,
+    outcome: textchum_core::code_action::Outcome,
+) {
+    use textchum_core::code_action::Outcome;
+    let shell = Shell::instance();
+    match outcome {
+        Outcome::Edit(edit) => apply_workspace_edit(workbench, &edit.to_string()),
+        Outcome::Command { name, arguments } => {
+            // The command's own answer is the server saying it is done;
+            // the edits it makes arrive as a workspace/applyEdit
+            // request of its own.
+            let id = shell
+                .pool
+                .borrow_mut()
+                .execute_command(Path::new(path), &name, arguments);
+            if id == 0 {
+                workbench.toast("The language server would not run that action.");
+            }
+        }
+        Outcome::Resolve(action) => {
+            let id = shell
+                .pool
+                .borrow_mut()
+                .resolve_code_action(Path::new(path), action);
+            if id == 0 {
+                workbench.toast("The language server would not finish that action.");
+                return;
+            }
+            let weak = Rc::downgrade(workbench);
+            let path = path.to_owned();
+            shell.expect_response(id, move |json| {
+                let Some(workbench) = weak.upgrade() else { return };
+                // The resolved action carries the edit; anything else
+                // means the server had nothing after all.
+                let resolved = textchum_core::code_action::actions(&format!("[{json}]"));
+                match resolved.first().map(|action| action.outcome()) {
+                    Some(Outcome::Edit(edit)) => {
+                        apply_workspace_edit(&workbench, &edit.to_string())
+                    }
+                    Some(Outcome::Command { name, arguments }) => {
+                        Shell::instance().pool.borrow_mut().execute_command(
+                            Path::new(&path),
+                            &name,
+                            arguments,
+                        );
+                    }
+                    _ => workbench.toast("The language server had no edit for that action."),
+                }
+            });
+        }
+    }
 }
 
 /// The same panel over places already parsed.

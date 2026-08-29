@@ -434,7 +434,7 @@ deux côtés. Touches : un caractère, de `f1` à `f20`, ou
 Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
-`jumpToDefinition`, `findReferences`, `renameSymbol`, `formatDocument`,
+`jumpToDefinition`, `findReferences`, `codeActions`, `renameSymbol`, `formatDocument`,
 `runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,
 `blameLine`, `goToLine`,

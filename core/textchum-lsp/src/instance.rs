@@ -7,6 +7,7 @@
 //! starts, so document notifications can never precede it. All events
 //! reach the shell through the app's single delivery channel.
 
+use std::collections::HashMap;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command as ProcessCommand, Stdio};
@@ -62,6 +63,7 @@ impl Instance {
         config: &ServerConfig,
         root: &Path,
         events: EventSender,
+        published: PublishedDiagnostics,
     ) -> std::io::Result<Self> {
         let mut child = ProcessCommand::new(&config.command)
             .args(&config.args)
@@ -99,7 +101,7 @@ impl Instance {
             std::thread::Builder::new()
                 .name(format!("lsp-{server_id}"))
                 .spawn(move || {
-                    run_manager(child, server_id, root, commands_rx, events);
+                    run_manager(child, server_id, root, commands_rx, events, published);
                     let _ = finished_tx.send(());
                 })
                 .expect("failed to spawn LSP manager thread")
@@ -156,6 +158,7 @@ fn run_manager(
     root: PathBuf,
     commands: mpsc::Receiver<Command>,
     events: EventSender,
+    published: PublishedDiagnostics,
 ) {
     status(&events, &server_id, &root, "starting", "");
     let (stdin, stdout) = {
@@ -233,6 +236,7 @@ fn run_manager(
         let server_id = server_id.clone();
         let root = root.clone();
         let orderly = Arc::clone(&orderly);
+        let published = Arc::clone(&published);
         std::thread::Builder::new()
             .name(format!("lsp-{server_id}-reader"))
             .spawn(move || loop {
@@ -241,7 +245,7 @@ fn run_manager(
                         if message.get("method").and_then(Value::as_str)
                             == Some("textDocument/publishDiagnostics")
                         {
-                            publish_diagnostics(&events, &message);
+                            publish_diagnostics(&events, &published, &message);
                         } else if message.get("method").is_none() {
                             // A response to one of our requests. Ids 1–2
                             // (initialize/shutdown) are lifecycle traffic;
@@ -350,12 +354,29 @@ fn answer_if_request(stdin: &Arc<Mutex<std::process::ChildStdin>>, message: &Val
     }
 }
 
-/// Converts a publishDiagnostics notification into a compact core event.
-fn publish_diagnostics(events: &EventSender, message: &Value) {
+/// What the servers last said about each file, as they said it.
+///
+/// The event the shells get is a compact shape — a range, a severity
+/// and a message — which is all a squiggle needs. A code action request
+/// needs the diagnostic the server actually published: `code`, `data`
+/// and `source` are how a server recognizes its own finding and offers
+/// the fix for it, and a reconstructed one gets a shrug.
+pub type PublishedDiagnostics = Arc<Mutex<HashMap<PathBuf, Value>>>;
+
+/// Converts a publishDiagnostics notification into a compact core
+/// event, and keeps the original for the requests that need it.
+fn publish_diagnostics(
+    events: &EventSender,
+    published: &PublishedDiagnostics,
+    message: &Value,
+) {
     let params = &message["params"];
     let Some(path) = params["uri"].as_str().and_then(uri_to_path) else {
         return;
     };
+    if let Ok(mut published) = published.lock() {
+        published.insert(path.clone(), params["diagnostics"].clone());
+    }
     let diagnostics: Vec<Value> = params["diagnostics"]
         .as_array()
         .map(|items| {

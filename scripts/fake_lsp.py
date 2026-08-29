@@ -47,7 +47,10 @@ def main():
             send({
                 "jsonrpc": "2.0",
                 "id": message["id"],
-                "result": {"capabilities": {"textDocumentSync": 1}},
+                "result": {"capabilities": {
+                    "textDocumentSync": 1,
+                    "codeActionProvider": {"resolveProvider": True},
+                }},
             })
         elif method in ("textDocument/didOpen", "textDocument/didChange"):
             seen += 1
@@ -68,6 +71,12 @@ def main():
                         },
                         "severity": 1,
                         "message": "fake finding #%d" % seen,
+                        # A server recognizes its own finding by these,
+                        # which is why the client has to hand back what
+                        # was published rather than a reconstruction.
+                        "code": "fake-rule",
+                        "source": "fake",
+                        "data": {"fix": "quote"},
                     }],
                 },
             })
@@ -158,6 +167,32 @@ def main():
                                "end": {"line": 1, "character": 4}}}
                 ],
             })
+        elif method == "textDocument/codeAction":
+            uri = message["params"]["textDocument"]["uri"]
+            handed_back = message["params"].get("context", {}).get("diagnostics", [])
+            actions = []
+            # Only offer the fix when the client handed back the
+            # diagnostic as published, `data` and all.
+            if any(d.get("data", {}).get("fix") == "quote" for d in handed_back):
+                actions.append({
+                    "title": "Quote the first word",
+                    "kind": "quickfix",
+                    "isPreferred": True,
+                    "edit": {"changes": {uri: [{
+                        "range": {
+                            "start": {"line": 0, "character": 0},
+                            "end": {"line": 0, "character": 0},
+                        },
+                        "newText": '"',
+                    }]}},
+                })
+            # And one with no edit, for the resolve path.
+            actions.append({"title": "Think about it", "kind": "refactor"})
+            send({"jsonrpc": "2.0", "id": message["id"], "result": actions})
+        elif method == "codeAction/resolve":
+            resolved = dict(message["params"])
+            resolved["edit"] = {"changes": {}}
+            send({"jsonrpc": "2.0", "id": message["id"], "result": resolved})
         elif method == "textDocument/rename":
             uri = message["params"]["textDocument"]["uri"]
             new_name = message["params"]["newName"]

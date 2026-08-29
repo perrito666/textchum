@@ -1817,6 +1817,7 @@ pub fn context_menu(
     }
     if path.is_some_and(server_running_for) {
         commands.push(("Find References", "references"));
+        commands.push(("Code Actions…", "code-actions"));
         commands.push(("Rename Symbol…", "rename"));
     }
     if path.is_some_and(has_diagnostics) {

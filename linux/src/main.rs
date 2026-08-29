@@ -266,6 +266,7 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.back", "<Alt>Left"),
     ("win.forward", "<Alt>Right"),
     ("win.references", "<Shift>F12"),
+    ("win.code-actions", "<Ctrl>period"),
     ("win.rename", "F2"),
     ("win.format", "<Ctrl><Shift>i"),
     ("win.outline", "<Ctrl><Shift>o"),
@@ -983,6 +984,46 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         }
         if !hover.borrow().as_deref().unwrap_or("").contains("fake hover") {
             eprintln!("FAIL: hover text missing");
+            return 1;
+        }
+
+        // Code actions: the scripted server offers its quick fix only
+        // when the client hands back the diagnostic as published, `data`
+        // and all — which is the whole reason the pool keeps them.
+        let actions: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+        {
+            let shell = shell::Shell::instance();
+            let id = shell.pool.borrow_mut().code_action(&path, 0, 2);
+            let sink = Rc::clone(&actions);
+            shell.expect_response(id, move |json| {
+                *sink.borrow_mut() = Some(json.to_owned());
+            });
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        loop {
+            context.iteration(true);
+            if actions.borrow().is_some() {
+                break;
+            }
+            if std::time::Instant::now() > deadline {
+                eprintln!("FAIL: the code action response did not arrive");
+                return 1;
+            }
+        }
+        let offered = textchum_core::code_action::actions(
+            actions.borrow().as_deref().unwrap_or("[]"),
+        );
+        if !offered.iter().any(|action| action.title == "Quote the first word") {
+            let titles: Vec<&str> =
+                offered.iter().map(|action| action.title.as_str()).collect();
+            eprintln!("FAIL: the quick fix was not offered: {titles:?}");
+            return 1;
+        }
+        if !offered
+            .iter()
+            .any(|action| matches!(action.outcome(), textchum_core::code_action::Outcome::Resolve(_)))
+        {
+            eprintln!("FAIL: the action with no edit did not ask to be resolved");
             return 1;
         }
 

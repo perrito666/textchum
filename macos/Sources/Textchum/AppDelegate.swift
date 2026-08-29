@@ -964,6 +964,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(goBack(_:)): "goBack",
             #selector(goForward(_:)): "goForward",
             #selector(EditorWindowController.findReferences(_:)): "findReferences",
+            #selector(EditorWindowController.showCodeActions(_:)): "codeActions",
             #selector(EditorWindowController.renameSymbol(_:)): "renameSymbol",
             #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
             #selector(EditorWindowController.runPreprocessors(_:)): "runPreprocessors",
@@ -2085,6 +2086,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         references.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(references)
+        let codeActionsItem = NSMenuItem(
+            title: "Code Actions…",
+            action: #selector(EditorWindowController.showCodeActions(_:)),
+            keyEquivalent: "."
+        )
+        codeActionsItem.keyEquivalentModifierMask = [.command]
+        editMenu.addItem(codeActionsItem)
+
         let rename = NSMenuItem(
             title: "Rename Symbol…",
             action: #selector(EditorWindowController.renameSymbol(_:)),

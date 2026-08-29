@@ -64,6 +64,9 @@ pub struct Pool {
     workspace_settings: WorkspaceSettings,
     /// When each instance last did anything, for the idle sweep.
     last_activity: HashMap<InstanceKey, std::time::Instant>,
+    /// What the servers last published about each file, as they
+    /// published it — see [`crate::instance::PublishedDiagnostics`].
+    published: crate::instance::PublishedDiagnostics,
     /// Next client→server request id. Starts above the lifecycle ids
     /// (1 = initialize, 2 = shutdown).
     next_request_id: u64,
@@ -81,6 +84,7 @@ impl Pool {
             configured: serde_json::Value::Null,
             workspace_settings: WorkspaceSettings::default(),
             last_activity: HashMap::new(),
+            published: Default::default(),
             next_request_id: 100,
         }
     }
@@ -424,7 +428,12 @@ impl Pool {
             return;
         }
         if !self.instances.contains_key(&key) {
-            match Instance::spawn(&config, &root, self.events.clone()) {
+            match Instance::spawn(
+                &config,
+                &root,
+                self.events.clone(),
+                std::sync::Arc::clone(&self.published),
+            ) {
                 Ok(instance) => {
                     self.instances.insert(key.clone(), instance);
                 }
@@ -566,6 +575,63 @@ impl Pool {
                 "position": {"line": line, "character": character},
                 "newName": new_name,
             }),
+        )
+    }
+
+    /// Requests the code actions offered at an LSP position — the
+    /// quick fixes and refactorings a server has for it.
+    ///
+    /// The findings under the caret go with the request, as the server
+    /// itself published them. That is what turns the answer into quick
+    /// fixes: a server given no diagnostics offers the refactorings it
+    /// has for the range and nothing about the problem there, and one
+    /// given a reconstructed diagnostic does not recognize it.
+    ///
+    /// Same contract as [`Self::hover`]. The response's `result` is an
+    /// array of `Command` and `CodeAction`.
+    pub fn code_action(&mut self, path: &Path, line: u32, character: u32) -> u64 {
+        let diagnostics = self
+            .published
+            .lock()
+            .ok()
+            .and_then(|published| published.get(path).cloned())
+            .map(|found| {
+                textchum_core::code_action::diagnostics_at(&found.to_string(), line, character)
+            })
+            .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
+        let position = serde_json::json!({"line": line, "character": character});
+        self.request(
+            path,
+            "textDocument/codeAction",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "range": {"start": position, "end": position},
+                "context": {"diagnostics": diagnostics},
+            }),
+        )
+    }
+
+    /// Fills in a code action a server sent without its edit.
+    ///
+    /// Servers are allowed to answer cheaply and compute the edit only
+    /// for the action actually chosen, so this sends the action back
+    /// and gets the same one with `edit` filled in.
+    pub fn resolve_code_action(&mut self, path: &Path, action: serde_json::Value) -> u64 {
+        self.request(path, "codeAction/resolve", action)
+    }
+
+    /// Runs a command a code action carried instead of an edit — the
+    /// server does the work and sends back whatever edits it makes.
+    pub fn execute_command(
+        &mut self,
+        path: &Path,
+        command: &str,
+        arguments: serde_json::Value,
+    ) -> u64 {
+        self.request(
+            path,
+            "workspace/executeCommand",
+            serde_json::json!({"command": command, "arguments": arguments}),
         )
     }
 

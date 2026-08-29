@@ -14,6 +14,7 @@ mod app;
 pub mod blame;
 mod buffer;
 pub mod changes;
+pub mod code_action;
 pub mod definition;
 mod config;
 mod document;

@@ -26,6 +26,7 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("findInProject", "Find in Project", "win.find-in-project"),
     ("jumpToDefinition", "Jump to Definition", "win.definition"),
     ("findReferences", "Find References", "win.references"),
+    ("codeActions", "Code Actions", "win.code-actions"),
     ("renameSymbol", "Rename Symbol", "win.rename"),
     ("formatDocument", "Format Document", "win.format"),
     ("runPreprocessors", "Run Save Preprocessors", "win.preprocess"),
