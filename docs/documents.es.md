@@ -52,6 +52,30 @@ Las operaciones compuestas se registran como grupos explícitos: Reemplazar
 todo reescribe cada coincidencia pero se deshace como un solo paso, y una
 recarga desde disco (más abajo) también es un solo paso.
 
+## Plegado
+
+**Fold** (Ctrl+[) pliega el bloque que abre la línea del cursor; la
+línea que dice qué es el bloque se queda, y se esconde todo lo que
+sigue hasta el final. **Fold All** (Ctrl+Alt+[) lo hace con todos los
+bloques, de fuera adentro, y **Unfold All** (Ctrl+]) los devuelve. Los
+bloques salen del mismo árbol que usa el coloreado.
+
+Un pliegue por línea de apertura, y el más ancho cuando varios bloques
+empiezan ahí: `impl Item {` abre tanto el impl como su cuerpo, y plegar
+el impl es lo que se quería. Un bloque que escondería una sola línea no
+se ofrece: en un lenguaje de llaves esa línea es la de cierre, y en el
+resto ahorra una línea a cambio de un adorno en todas las demás.
+
+Plegar cambia lo que se ve y nada más. El texto no se toca, así que lo
+que se guarda es lo que había.
+
+**En macOS todavía no está.** TextKit 2 dispone una línea por elemento
+de texto y no tiene ningún atributo que diga que se salte uno: un
+elemento devuelto vacío sigue ocupando una línea, y un elemento
+retirado de la enumeración lo dispone bien un layout manager pelado
+pero no se dibuja nada a través del controlador de viewport de la
+vista. Ambas cosas se midieron, no se supusieron.
+
 ## Transformaciones
 
 **Edit ▸ Transform** actúa sobre la selección, o sobre el documento

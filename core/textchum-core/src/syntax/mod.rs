@@ -102,6 +102,43 @@ impl SyntaxState {
         }
     }
 
+    /// Every stretch that can be folded: a line that opens a block,
+    /// and the last line of it.
+    ///
+    /// One fold per opening line, and the widest one when several
+    /// nodes start there — `impl Item {` opens both the impl and its
+    /// body, and folding the impl is what was meant.
+    ///
+    /// A block that would hide a single line is not offered: in a brace
+    /// language that line is the closing brace, and everywhere else it
+    /// saves one line of screen in exchange for an arrow in the gutter
+    /// on every other line.
+    pub fn fold_ranges(&self, rope: &Rope) -> Vec<(usize, usize)> {
+        let mut widest: std::collections::BTreeMap<usize, usize> = Default::default();
+        let mut cursor = self.tree.walk();
+        let mut stack = vec![self.tree.root_node()];
+        while let Some(node) = stack.pop() {
+            for child in node.children(&mut cursor) {
+                stack.push(child);
+            }
+            let start = node.start_position().row;
+            let mut end = node.end_position().row;
+            // A node that ends at the first column of a line stops
+            // before that line — Python's blocks end where the dedent
+            // is, which is the start of the line after them.
+            if node.end_position().column == 0 {
+                end = end.saturating_sub(1);
+            }
+            if end <= start + 1 || node == self.tree.root_node() {
+                continue;
+            }
+            let entry = widest.entry(start).or_insert(end);
+            *entry = (*entry).max(end);
+        }
+        let _ = rope;
+        widest.into_iter().collect()
+    }
+
     /// Styled spans of `byte_range`, host language plus one level of
     /// injections, in application order (later wins).
     pub fn highlights(&self, rope: &Rope, byte_range: Range<usize>) -> Vec<HighlightSpan> {

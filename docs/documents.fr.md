@@ -52,6 +52,31 @@ Les opérations composées s'enregistrent comme des groupes explicites :
 Tout remplacer réécrit chaque occurrence mais s'annule en un seul pas, et
 un rechargement depuis le disque (ci-dessous) est lui aussi un seul pas.
 
+## Repliement
+
+**Fold** (Ctrl+[) replie le bloc qu'ouvre la ligne du curseur ; la
+ligne qui dit ce qu'est le bloc reste, et tout ce qui suit jusqu'à sa
+fin est caché. **Fold All** (Ctrl+Alt+[) le fait pour tous les blocs,
+du plus extérieur au plus intérieur, et **Unfold All** (Ctrl+]) les
+rend. Les blocs viennent de l'arbre qui sert déjà à la coloration.
+
+Un repli par ligne d'ouverture, et le plus large quand plusieurs blocs
+y commencent : `impl Item {` ouvre l'impl et son corps, et replier
+l'impl est ce qu'on voulait. Un bloc qui cacherait une seule ligne
+n'est pas proposé : dans un langage à accolades cette ligne est
+l'accolade fermante, et ailleurs cela gagne une ligne contre un
+ornement sur toutes les autres.
+
+Replier change ce qu'on voit et rien d'autre. Le texte n'est pas
+touché : ce qui est enregistré est ce qui était là.
+
+**Sous macOS ce n'est pas encore disponible.** TextKit 2 dispose une
+ligne par élément de texte et n'a aucun attribut disant d'en sauter
+un : un élément rendu vide occupe toujours une ligne, et un élément
+retiré de l'énumération est bien disposé par un layout manager nu mais
+ne se dessine pas à travers le contrôleur de viewport de la vue. Les
+deux ont été mesurés, non supposés.
+
 ## Transformations
 
 **Edit ▸ Transform** agit sur la sélection, ou sur le document entier

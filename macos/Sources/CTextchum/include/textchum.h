@@ -1535,6 +1535,19 @@ uintptr_t tc_document_len_lines(const struct TcDocument *document);
 bool tc_path_is_test(const char *path, uintptr_t len);
 
 /**
+ * Every stretch of the document that can be folded, as a
+ * nul-terminated JSON array of `{"start": 4, "end": 9}` — lines
+ * zero-based, and folding hides everything after `start` up to and
+ * including `end`. Release with [`tc_string_free`].
+ *
+ * Empty for plain text, which has no structure to fold.
+ *
+ * # Safety
+ * `doc` must be a live document handle.
+ */
+char *tc_document_folds(const struct TcDocument *doc);
+
+/**
  * The code actions in a `textDocument/codeAction` result, as a
  * nul-terminated JSON array of `{"title", "kind", "preferred"}`.
  * Release with [`tc_string_free`].

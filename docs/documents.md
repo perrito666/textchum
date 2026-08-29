@@ -47,6 +47,31 @@ Compound operations record as explicit groups: Replace All rewrites every
 match but undoes as a single step, and a reload from disk (below) is one
 step too.
 
+## Folding
+
+**Fold** (Ctrl+[) collapses the block the caret's line opens; the line
+that says what the block is stays, and everything after it up to the
+end of the block is hidden. **Fold All** (Ctrl+Alt+[) does every block,
+outermost first, and **Unfold All** (Ctrl+]) gives them all back. The
+blocks come from the same tree the colouring uses.
+
+One fold per opening line, and the widest when several blocks start
+there — `impl Item {` opens both the impl and its body, and folding the
+impl is what was meant. A block that would hide a single line is not
+offered: in a brace language that line is the closing brace, and
+elsewhere it saves one line in exchange for an affordance on every
+other one.
+
+Folding changes what you see and nothing else. The text is untouched,
+so what gets saved is what was there.
+
+**On macOS this is not available yet.** TextKit 2 lays out one line per
+text element and has no attribute that says to skip one: an element
+handed back empty still takes a line, and an element withheld from the
+enumeration is laid out correctly by a bare layout manager but renders
+as nothing through the view's viewport controller. Both were measured
+rather than assumed.
+
 ## Transformations
 
 **Edit ▸ Transform** acts on the selection, or on the whole document

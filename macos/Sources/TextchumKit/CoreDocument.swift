@@ -60,6 +60,21 @@ public final class CoreDocument {
     }
 
     /// Length in UTF-16 code units.
+    /// Every stretch that can be folded, as first and last line, both
+    /// zero-based: folding hides everything after the first, up to and
+    /// including the last. Empty for plain text.
+    public var foldRanges: [(start: Int, end: Int)] {
+        guard let raw = tc_document_folds(handle) else { return [] }
+        defer { tc_string_free(raw) }
+        let data = Data(String(cString: raw).utf8)
+        let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+        return parsed.compactMap { item in
+            guard let start = item["start"] as? Int, let end = item["end"] as? Int
+            else { return nil }
+            return (start, end)
+        }
+    }
+
     public var lengthInUTF16: Int {
         Int(tc_document_len_utf16(handle))
     }
