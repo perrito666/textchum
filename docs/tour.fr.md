@@ -45,6 +45,21 @@ le document n'a pas l'usage n'y est pas : sans serveur pas de
 recherche des références, sans signalements pas de lignes de
 diagnostics.
 
+## Divisions
+
+**Split Editor** (⌘\\, Ctrl+\\ sous Linux) montre le document deux
+fois, côte à côte ; **Close Split** (⇧⌘\\) retire la seconde vue.
+Chaque côté défile de son côté, et c'est bien le but : lire le haut
+d'un fichier en modifiant le bas.
+
+Les deux côtés sont un seul document. Il y a une histoire et un
+enregistrement : une modification d'un côté est la même modification,
+et aucune vue ne peut être une copie périmée de l'autre. Les deux
+toolkits sont faits pour cela — un tampon de texte que plusieurs vues
+partagent — et ce qui n'est pas gratuit est la coloration, qui sous
+macOS vit dans la mise en page et non dans le texte ; chaque vue est
+peinte.
+
 ## Serveurs de langage
 
 Les diagnostics arrivent en marques teintées dans le texte et en
