@@ -24,6 +24,7 @@ pub mod hugo;
 pub mod icons;
 pub mod indent;
 pub mod markdown;
+pub mod occurrences;
 pub mod references;
 pub mod search;
 pub mod snippet;

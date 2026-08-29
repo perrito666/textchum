@@ -1338,8 +1338,92 @@ pub unsafe extern "C" fn tc_config_set_appearance(config: *mut TcConfig, appeara
     }
 }
 
-/// The configured theme name (the default theme's name when unset).
-/// Release with [`tc_string_free`].
+/// Whether selecting a word marks its other occurrences on screen
+/// (`editor.mark_occurrences`, default true).
+///
+/// # Safety
+/// `config` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_mark_occurrences(config: *const TcConfig) -> bool {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return true;
+    };
+    catch_unwind(AssertUnwindSafe(|| config.inner.mark_occurrences())).unwrap_or(true)
+}
+
+/// # Safety
+/// `config` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_mark_occurrences(config: *mut TcConfig, enabled: bool) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config.inner.set_mark_occurrences(enabled)
+    }));
+}
+
+/// Whether occurrence marking tells `Item` from `item`
+/// (`editor.occurrences_case_sensitive`, default true).
+///
+/// # Safety
+/// `config` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_occurrences_case_sensitive(config: *const TcConfig) -> bool {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return true;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        config.inner.occurrence_options().case_sensitive
+    }))
+    .unwrap_or(true)
+}
+
+/// # Safety
+/// `config` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_occurrences_case_sensitive(
+    config: *mut TcConfig,
+    enabled: bool,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config.inner.set_occurrences_case_sensitive(enabled)
+    }));
+}
+
+/// Whether `item` inside `items` counts as an occurrence
+/// (`editor.occurrences_whole_word`, default true — so it does not).
+///
+/// # Safety
+/// `config` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_occurrences_whole_word(config: *const TcConfig) -> bool {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return true;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        config.inner.occurrence_options().whole_word
+    }))
+    .unwrap_or(true)
+}
+
+/// # Safety
+/// `config` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_occurrences_whole_word(config: *mut TcConfig, enabled: bool) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config.inner.set_occurrences_whole_word(enabled)
+    }));
+}
+
+/// Whether hover documentation pops up on mouse rest
+/// (`editor.hover`, default true).
 ///
 /// # Safety
 /// `config` must be a live configuration pointer.
@@ -2131,6 +2215,51 @@ pub unsafe extern "C" fn tc_path_is_test(path: *const c_char, len: usize) -> boo
         textchum_core::references::is_test_path(path)
     }))
     .unwrap_or(false)
+}
+
+/// The other places the selected word appears, for marking them.
+///
+/// `text` is the stretch to search — the visible one, so a long file
+/// costs what a short one does — and `base` is its UTF-16 offset in the
+/// document. `selection_start` and `selection_end` are the selection,
+/// also in UTF-16 units and also relative to `text`.
+///
+/// A selection that is not exactly one word answers with an empty
+/// array: a partial word and a stretch spanning several were selected
+/// for some other reason.
+///
+/// Returns a nul-terminated JSON array — `[{"start": 12, "end": 16},
+/// …]`, in the document's UTF-16 offsets — released with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `text` must point to `text_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_occurrences_of_selection(
+    text: *const c_char,
+    text_len: usize,
+    selection_start: usize,
+    selection_end: usize,
+    base: usize,
+    case_sensitive: bool,
+    whole_word: bool,
+) -> *mut c_char {
+    let Some(text) = (unsafe { str_from_raw(text, text_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        use textchum_core::occurrences;
+        let Some(word) = occurrences::selected_word(text, selection_start, selection_end) else {
+            return owned_c_string("[]".to_string());
+        };
+        let options = occurrences::Options {
+            case_sensitive,
+            whole_word,
+        };
+        let spans = occurrences::occurrences(text, &word, base, options);
+        owned_c_string(occurrences::to_json(&spans))
+    }))
+    .unwrap_or(std::ptr::null_mut())
 }
 
 /// What to do with a `textDocument/definition` answer, given where the

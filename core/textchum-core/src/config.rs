@@ -845,6 +845,49 @@ impl Config {
             .insert("hover".into(), Value::Bool(enabled));
     }
 
+    /// Whether selecting a word marks its other occurrences on screen
+    /// (`editor.mark_occurrences`, default true).
+    pub fn mark_occurrences(&self) -> bool {
+        self.editor()
+            .get("mark_occurrences")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
+
+    pub fn set_mark_occurrences(&mut self, enabled: bool) {
+        self.editor_mut()
+            .insert("mark_occurrences".into(), Value::Bool(enabled));
+    }
+
+    /// How those occurrences are matched
+    /// (`editor.occurrences_case_sensitive` and
+    /// `editor.occurrences_whole_word`, both default true).
+    pub fn occurrence_options(&self) -> crate::occurrences::Options {
+        let defaults = crate::occurrences::Options::default();
+        crate::occurrences::Options {
+            case_sensitive: self
+                .editor()
+                .get("occurrences_case_sensitive")
+                .and_then(Value::as_bool)
+                .unwrap_or(defaults.case_sensitive),
+            whole_word: self
+                .editor()
+                .get("occurrences_whole_word")
+                .and_then(Value::as_bool)
+                .unwrap_or(defaults.whole_word),
+        }
+    }
+
+    pub fn set_occurrences_case_sensitive(&mut self, enabled: bool) {
+        self.editor_mut()
+            .insert("occurrences_case_sensitive".into(), Value::Bool(enabled));
+    }
+
+    pub fn set_occurrences_whole_word(&mut self, enabled: bool) {
+        self.editor_mut()
+            .insert("occurrences_whole_word".into(), Value::Bool(enabled));
+    }
+
     pub fn line_numbers(&self) -> bool {
         self.editor()
             .get("line_numbers")

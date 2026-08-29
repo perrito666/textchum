@@ -60,6 +60,24 @@ name, is the query `foo` plus `line contains bar` plus
 `file excludes test`. File excludes prune whole files before they are
 even opened, so filtered searches stay as fast as plain ones.
 
+## The selected word
+
+Selecting a whole word marks the other places it appears in the
+visible text — a grey tint, distinct from the selection and from the
+find bar's matches, so the three stay apart. Selecting part of a word,
+or a stretch spanning several, marks nothing: those selections were
+made for some other reason.
+
+⎋ puts the marks away and leaves the selection, so the word is still
+there to act on. Editing or selecting elsewhere asks the question
+again. The search covers what is on screen, which is what a mark can
+be seen on, so a long file costs what a short one does.
+
+Two settings in Settings ▸ Editor decide what counts: whether `Item`
+is `item`, and whether `item` inside `items` is one. Both are off by
+default — a name that differs in case is a different name, and the
+word was selected as a word.
+
 ## The jump stack
 
 Every jump — a search result, Jump to Definition, a reference, an

@@ -4213,6 +4213,58 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
     }
     editor_group.add(&hover_row);
+
+    let occurrences_row = adw::SwitchRow::new();
+    occurrences_row.set_title("Mark the selected word elsewhere");
+    occurrences_row.set_subtitle("Selecting a whole word marks its other occurrences on screen");
+    occurrences_row.set_active(shell.config.borrow().mark_occurrences());
+    let occurrences_case = adw::SwitchRow::new();
+    occurrences_case.set_title("Match case");
+    occurrences_case.set_active(shell.config.borrow().occurrence_options().case_sensitive);
+    occurrences_case.set_sensitive(occurrences_row.is_active());
+    let occurrences_word = adw::SwitchRow::new();
+    occurrences_word.set_title("Whole words only");
+    occurrences_word.set_subtitle("Off marks `item` inside `items` too");
+    occurrences_word.set_active(shell.config.borrow().occurrence_options().whole_word);
+    occurrences_word.set_sensitive(occurrences_row.is_active());
+    {
+        let shell = Rc::clone(&shell);
+        let case = occurrences_case.clone();
+        let word = occurrences_word.clone();
+        occurrences_row.connect_active_notify(move |row| {
+            shell.config.borrow_mut().set_mark_occurrences(row.is_active());
+            shell.save_config();
+            case.set_sensitive(row.is_active());
+            word.set_sensitive(row.is_active());
+            refresh_every_page_occurrences();
+        });
+    }
+    {
+        let shell = Rc::clone(&shell);
+        occurrences_case.connect_active_notify(move |row| {
+            shell
+                .config
+                .borrow_mut()
+                .set_occurrences_case_sensitive(row.is_active());
+            shell.save_config();
+            refresh_every_page_occurrences();
+        });
+    }
+    {
+        let shell = Rc::clone(&shell);
+        occurrences_word.connect_active_notify(move |row| {
+            shell
+                .config
+                .borrow_mut()
+                .set_occurrences_whole_word(row.is_active());
+            shell.save_config();
+            refresh_every_page_occurrences();
+        });
+    }
+    editor_group.add(&occurrences_row);
+    editor_group.add(&occurrences_case);
+    editor_group.add(&occurrences_word);
+
     let spell_row = adw::EntryRow::new();
     spell_row.set_title("Spell check prose (off, auto, or dictionaries like en_US, es_ES)");
     spell_row.set_text(
@@ -4942,6 +4994,16 @@ fn describe_server(language: &str, command: &str, overridden: bool) -> String {
 /// Re-runs the spell checker over every open document, in every
 /// window: the dictionary and the personal word list are application
 /// settings, so accepting one word changes what every page shows.
+/// Redraws the occurrence marks everywhere: the settings that decide
+/// them just changed.
+fn refresh_every_page_occurrences() {
+    Workbench::for_each(|workbench| {
+        for page in workbench.all_pages() {
+            crate::page::refresh_occurrences(&page);
+        }
+    });
+}
+
 fn recheck_every_page() {
     Workbench::for_each(|workbench| {
         for page in workbench.all_pages() {

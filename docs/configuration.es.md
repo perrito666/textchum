@@ -56,7 +56,11 @@ valor por defecto), se sigue al sistema. `editor.hover` apaga el globo
 de documentación al reposar el ratón (`true`, el valor por defecto, lo
 mantiene encendido). `editor.new_files_in` coloca los documentos
 nuevos en una `"tab"` del grupo de la ventana frontal (el valor por
-defecto) o en una `"window"` propia.
+defecto) o en una `"window"` propia. `editor.mark_occurrences` (`true`
+por defecto) marca los demás lugares donde aparece la palabra
+seleccionada; `editor.occurrences_case_sensitive` y
+`editor.occurrences_whole_word` deciden qué cuenta como uno, ambos
+`true` por defecto.
 
 Todo es opcional: un archivo, una sección o una clave ausentes significan
 simplemente el valor por defecto. Las escrituras son atómicas (archivo

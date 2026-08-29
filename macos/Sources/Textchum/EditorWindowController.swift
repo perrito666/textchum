@@ -426,7 +426,7 @@ final class EditorWindowController: NSWindowController {
     /// Called by the app when a server publishes findings for this path.
     func apply(diagnostics: [CoreDiagnostic]) {
         self.diagnostics = diagnostics
-        renderDiagnostics()
+        renderMarks()
         updateChrome()
     }
 
@@ -1507,7 +1507,7 @@ final class EditorWindowController: NSWindowController {
     /// switches recolor every window from the app delegate.
     func refreshDecorations() {
         applyHighlights(force: true)
-        renderDiagnostics()
+        renderMarks()
         scheduleSpellCheck()
     }
 
@@ -1541,7 +1541,7 @@ final class EditorWindowController: NSWindowController {
             spellTimer?.invalidate()
             if !spellingRanges.isEmpty {
                 spellingRanges = []
-                renderDiagnostics()
+                renderMarks()
             }
         } else {
             scheduleSpellCheck()
@@ -1632,7 +1632,7 @@ final class EditorWindowController: NSWindowController {
             .sorted { $0.location < $1.location }
         if ranges != spellingRanges {
             spellingRanges = ranges
-            renderDiagnostics()
+            renderMarks()
         }
     }
 
@@ -1733,10 +1733,58 @@ final class EditorWindowController: NSWindowController {
         ignoreWordForSession(fix.word)
     }
 
+    /// Where the selected word appears in the visible text.
+    private var occurrenceRanges: [NSRange] = []
+
+    /// Recomputes the occurrence marks for the current selection.
+    ///
+    /// Only a selection that is exactly one word marks anything; the
+    /// core decides that, and answers with nothing otherwise. The
+    /// search covers the painted stretch, so a long document costs
+    /// what a short one does.
+    private func refreshOccurrences() {
+        let previous = occurrenceRanges
+        occurrenceRanges = []
+        defer {
+            if previous != occurrenceRanges { renderMarks() }
+        }
+        guard appliedMarkOccurrences, let textView else { return }
+        let selection = textView.selectedRange()
+        guard selection.length > 0 else { return }
+        let text = textView.string as NSString
+        guard let painted = highlightRange()?.painted,
+            selection.location >= painted.location,
+            NSMaxRange(selection) <= NSMaxRange(painted),
+            NSMaxRange(painted) <= text.length
+        else { return }
+        let visible = text.substring(with: painted)
+        let relative = (selection.location - painted.location)..<(
+            NSMaxRange(selection) - painted.location)
+        occurrenceRanges = CoreOccurrences.marks(
+            in: visible, selection: relative, base: painted.location,
+            caseSensitive: appliedOccurrencesCaseSensitive,
+            wholeWord: appliedOccurrencesWholeWord
+        )
+        .map { NSRange(location: $0.start, length: $0.end - $0.start) }
+        // The selection itself is already marked, by being selected.
+        .filter { $0 != selection }
+    }
+
+    /// Clears the occurrence marks. Escape says "I am done looking".
+    func clearOccurrences() {
+        guard !occurrenceRanges.isEmpty else { return }
+        occurrenceRanges = []
+        renderMarks()
+    }
+
     /// Marks each finding with a tinted background: red for errors,
-    /// orange for warnings, blue otherwise — and each misspelling from
-    /// the prose spell pass in purple, so the two never read as one.
-    private func renderDiagnostics() {
+    /// orange for warnings, blue otherwise — each misspelling from the
+    /// prose spell pass in purple, and the other places the selected
+    /// word appears in grey, so the three never read as one. They share
+    /// one pass because they share one attribute: the background tint
+    /// is what TextKit 2 renders from this layer, and a second pass
+    /// would clear the first one's marks.
+    private func renderMarks() {
         guard let textView, let layoutManager = textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager
         else { return }
@@ -1746,6 +1794,17 @@ final class EditorWindowController: NSWindowController {
         layoutManager.removeRenderingAttribute(.backgroundColor, for: documentRange)
 
         let text = textView.string as NSString
+        for occurrence in occurrenceRanges {
+            guard NSMaxRange(occurrence) <= text.length,
+                let start = contentManager.location(
+                    documentRange.location, offsetBy: occurrence.location),
+                let end = contentManager.location(start, offsetBy: occurrence.length),
+                let textRange = NSTextRange(location: start, end: end)
+            else { continue }
+            layoutManager.addRenderingAttribute(
+                .backgroundColor,
+                value: NSColor.systemGray.withAlphaComponent(0.30), for: textRange)
+        }
         for spelling in spellingRanges {
             guard NSMaxRange(spelling) <= text.length,
                 let start = contentManager.location(
@@ -1757,8 +1816,6 @@ final class EditorWindowController: NSWindowController {
                 .backgroundColor,
                 value: NSColor.systemPurple.withAlphaComponent(0.18), for: textRange)
         }
-        guard !diagnostics.isEmpty else { return }
-
         for diagnostic in diagnostics {
             guard let range = nsRange(of: diagnostic, in: text) else { continue }
             guard
@@ -1824,7 +1881,10 @@ final class EditorWindowController: NSWindowController {
                 guard let self else { return }
                 self.highlightRefreshPending = false
                 guard self.applyHighlights(force: false) else { return }
-                self.renderDiagnostics()
+                // Scrolling brings fresh text into the painted stretch,
+                // where the selected word may also appear.
+                self.refreshOccurrences()
+                self.renderMarks()
             }
         }
     }
@@ -2223,12 +2283,25 @@ final class EditorWindowController: NSWindowController {
     /// show-at-caret command ignores this.
     private var appliedHoverDocs = true
 
+    /// Whether selecting a word marks its other occurrences, and how
+    /// those are matched.
+    private var appliedMarkOccurrences = true
+    private var appliedOccurrencesCaseSensitive = true
+    private var appliedOccurrencesWholeWord = true
+
     /// Applies configuration-derived settings to the view: the font, and
     /// tab stops sized to the configured width in that font.
     func apply(settings: EditorSettings) {
         appliedFont = settings.font
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
+        appliedMarkOccurrences = settings.markOccurrences
+        appliedOccurrencesCaseSensitive = settings.occurrencesCaseSensitive
+        appliedOccurrencesWholeWord = settings.occurrencesWholeWord
+        if !settings.markOccurrences, !occurrenceRanges.isEmpty {
+            occurrenceRanges = []
+            renderMarks()
+        }
         applySpellSettings(languages: settings.spellLanguages, words: settings.spellWords)
         applyAutosave(seconds: settings.autosaveSeconds)
         if !settings.hoverDocs {
@@ -3263,6 +3336,14 @@ extension EditorWindowController: NSTextViewDelegate {
             if commandSelector == #selector(NSResponder.insertTab(_:)) {
                 return indentToBlockAbove(in: textView)
             }
+            if commandSelector == #selector(NSResponder.cancelOperation(_:)),
+                !occurrenceRanges.isEmpty
+            {
+                // Escape puts the marks away, and only the marks: the
+                // selection stays, so the word is still there to act on.
+                clearOccurrences()
+                return true
+            }
             return false
         }
         switch commandSelector {
@@ -3432,6 +3513,9 @@ extension EditorWindowController: NSTextViewDelegate {
                 coreDocument.snippetCaretMoved(to: textView.selectedRange().location)
             }
         }
+        // A new selection asks a new question, and an edit answers the
+        // old one differently; both go through here.
+        refreshOccurrences()
     }
 }
 
