@@ -43,6 +43,18 @@ leaves where it was. What the document has no use for is not there —
 no server running means no Find References, no findings means no
 diagnostics rows.
 
+## Splits
+
+**Split Editor** (⌘\\, Ctrl+\\ on Linux) puts another open document
+beside this one in the same window; **Close Split** (⇧⌘\\) puts it
+back. On Linux the two sides are editor groups with tab bars of their
+own, so tabs can be dragged between them, and **Other Side** (Ctrl+K)
+moves the focus across.
+
+A split holds two documents, never two views of one. Two views would be
+two carets over two histories of the same file, and the first save
+would decide which of them the file kept.
+
 ## Language servers
 
 Diagnostics arrive as tinted marks in the text and a count in the
