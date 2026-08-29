@@ -1000,12 +1000,16 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             let shell = shell::Shell::instance();
             let opened = shell.document_count();
             let page = workbench.selected().expect("a selected page");
-            let again = shell.open_document(&page.buffer, page.path.borrow().as_deref());
+            let again = shell.open_document(
+                &page.buffer,
+                &page.state,
+                page.path().borrow().as_deref(),
+            );
             if shell.document_count() != opened {
                 eprintln!("FAIL: opening the same path twice made a second document");
                 return 1;
             }
-            let Some(path) = page.path.borrow().clone() else {
+            let Some(path) = page.path().borrow().clone() else {
                 eprintln!("FAIL: the page has no path to look up");
                 return 1;
             };
@@ -1030,6 +1034,20 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 }
             }
             shell.rename_document(again.id, Some("/tmp/renamed-by-the-smoke-test"), &path);
+            // A view reads its file through the document, so what one
+            // view learns, every view of that file knows.
+            let folded_before = page.document.folded.borrow().len();
+            crate::page::fold_all(&page);
+            if page.document.folded.borrow().len() <= folded_before {
+                eprintln!("FAIL: folding did not reach the document");
+                return 1;
+            }
+            crate::page::unfold_all(&page);
+            let path_now = page.document.path.borrow().clone();
+            if path_now != page.path().borrow().clone() {
+                eprintln!("FAIL: the view and its document disagree about the path");
+                return 1;
+            }
             println!("documents ok (one per path, renamed without a second)");
         }
 
@@ -1167,7 +1185,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         let md_page = workbench
             .all_pages()
             .into_iter()
-            .find(|candidate| candidate.path.borrow().as_deref() == Some(second_key.as_str()));
+            .find(|candidate| candidate.path().borrow().as_deref() == Some(second_key.as_str()));
         if let Some(md_page) = md_page {
             shell::Shell::instance()
                 .config
@@ -1228,7 +1246,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
     {
         workbench.open(None, None);
         let untitled = workbench.selected().expect("untitled page selected");
-        if untitled.path.borrow().is_some() {
+        if untitled.path().borrow().is_some() {
             eprintln!("FAIL: fresh tab unexpectedly has a path");
             return 1;
         }

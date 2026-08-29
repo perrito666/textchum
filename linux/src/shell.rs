@@ -32,8 +32,17 @@ pub struct OpenDocument {
     pub id: DocumentId,
     /// The text every view of this document shares.
     pub buffer: sourceview5::Buffer,
-    /// What the server last said about it, kept so it can be read
-    /// rather than only underlined. An underline nobody can read is a
+    /// The core's document: text, history, syntax.
+    pub state: Rc<RefCell<crate::page::State>>,
+    /// Where it lives on disk, once it lives anywhere.
+    pub path: RefCell<Option<String>>,
+    /// Watches that file for changes made elsewhere.
+    pub monitor: RefCell<Option<gtk::gio::FileMonitor>>,
+    /// The line ranges folded away, by the line each one opens. Folding
+    /// a function folds it in every view of the file.
+    pub folded: RefCell<Vec<(i32, i32)>>,
+    /// What the server last said about it, kept so it can be read as
+    /// well as underlined. An underline nobody can read is a
     /// notification with the message taken out.
     pub diagnostics: RefCell<Vec<Diagnostic>>,
 }
@@ -213,6 +222,7 @@ impl Shell {
     pub fn open_document(
         &self,
         buffer: &sourceview5::Buffer,
+        state: &Rc<RefCell<crate::page::State>>,
         path: Option<&str>,
     ) -> Rc<OpenDocument> {
         if let Some(existing) = path.and_then(|path| self.document_for_path(path)) {
@@ -223,6 +233,10 @@ impl Shell {
         let document = Rc::new(OpenDocument {
             id,
             buffer: buffer.clone(),
+            state: Rc::clone(state),
+            path: RefCell::new(path.map(str::to_owned)),
+            monitor: RefCell::new(None),
+            folded: RefCell::new(Vec::new()),
             diagnostics: RefCell::new(Vec::new()),
         });
         self.documents.borrow_mut().insert(id, Rc::clone(&document));
@@ -247,11 +261,16 @@ impl Shell {
     /// Follows a document that has just been given a path, or a new
     /// one — the index is by path, and the path moved.
     pub fn rename_document(&self, id: DocumentId, from: Option<&str>, to: &str) {
-        let mut index = self.documents_by_path.borrow_mut();
-        if let Some(from) = from {
-            index.remove(from);
+        {
+            let mut index = self.documents_by_path.borrow_mut();
+            if let Some(from) = from {
+                index.remove(from);
+            }
+            index.insert(to.to_owned(), id);
         }
-        index.insert(to.to_owned(), id);
+        if let Some(document) = self.document(id) {
+            *document.path.borrow_mut() = Some(to.to_owned());
+        }
     }
 
     /// Forgets a document. Its views are gone by the time this is

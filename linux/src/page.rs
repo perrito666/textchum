@@ -37,14 +37,16 @@ pub struct Page {
     pub view: sourceview5::View,
     pub search_settings: sourceview5::SearchSettings,
     pub search_context: sourceview5::SearchContext,
-    pub path: RefCell<Option<String>>,
+    /// The document this is a view of. The text, the path, the folds
+    /// and the file monitor live there, so two views of one file agree
+    /// about all of them.
+    pub document: Rc<crate::shell::OpenDocument>,
     /// The whole tab child: the scrolled view alone, or a paned with
     /// the Markdown preview beside it.
     pub root: gtk::Widget,
     /// Present for Markdown documents: the live preview.
     pub preview: Option<webkit6::WebView>,
-    /// Watches the file on disk; kept alive for the page's lifetime.
-    pub monitor: RefCell<Option<gtk::gio::FileMonitor>>,
+
     /// The hover balloon and its content label.
     hover_popover: gtk::Popover,
     hover_label: gtk::Label,
@@ -57,8 +59,7 @@ pub struct Page {
     /// A right-click does not move the caret, and the menu is about
     /// what was clicked.
     pub context_offset: Cell<Option<i32>>,
-    /// The line ranges folded away, by the line each one opens.
-    folded: RefCell<Vec<(i32, i32)>>,
+
     /// Where a second view of this document goes, and the one that is
     /// there while the document is split.
     split_paned: gtk::Paned,
@@ -229,16 +230,22 @@ impl Page {
         hover_label.set_margin_end(8);
         hover_popover.set_child(Some(&hover_label));
 
+        // The document is registered before any view of it exists, and
+        // holds everything the file knows about itself.
+        let document = Shell::instance().open_document(
+            &buffer,
+            &state,
+            document_path.as_deref(),
+        );
         let page = Rc::new(Page {
             state,
             buffer: buffer.clone(),
             view: view.clone(),
             search_settings,
             search_context,
-            path: RefCell::new(document_path),
+            document,
             root,
             preview,
-            monitor: RefCell::new(None),
             hover_popover,
             hover_label,
             completion: CompletionState {
@@ -250,7 +257,6 @@ impl Page {
             change_bar: change_bar.clone(),
             change_marks: RefCell::new(Vec::new()),
             context_offset: Cell::new(None),
-            folded: RefCell::new(Vec::new()),
             split_paned: split_paned.clone(),
             split_view: RefCell::new(None),
         });
@@ -298,7 +304,7 @@ impl Page {
                 }
                 // Once the burst settles: announce to the server pool
                 // and refresh the Markdown preview.
-                let document_path = page.path.borrow().clone();
+                let document_path = page.path().borrow().clone();
                 if document_path.is_some() || page.preview.is_some() {
                     if let Some(previous) = lsp_timer.take() {
                         previous.remove();
@@ -309,7 +315,7 @@ impl Page {
                         std::time::Duration::from_millis(300),
                         move || {
                             timer.set(None);
-                            if let Some(path) = page.path.borrow().clone() {
+                            if let Some(path) = page.path().borrow().clone() {
                                 let text = page.state.borrow().document.text();
                                 Shell::instance()
                                     .pool
@@ -369,7 +375,7 @@ impl Page {
 
         // The pool learns about the document.
         if let (Some(path), Some(language)) = (
-            page.path.borrow().clone(),
+            page.path().borrow().clone(),
             page.state.borrow().document.language_name(),
         ) {
             let text = page.state.borrow().document.text();
@@ -420,7 +426,7 @@ impl Page {
         // so the marks are recomputed whether or not the text moved.
         refresh_change_marks(self);
         // The pool sees the fresh text like any other change.
-        if let Some(path) = self.path.borrow().clone() {
+        if let Some(path) = self.path().borrow().clone() {
             let text = self.state.borrow().document.text();
             Shell::instance()
                 .pool
@@ -474,6 +480,25 @@ pub fn apply_whole_document(page: &Rc<Page>, new: &str) {
     buffer.delete(&mut start, &mut end);
     let mut at = start;
     buffer.insert(&mut at, &replacement);
+}
+
+/// What a view reads through to its document for.
+impl Page {
+    /// Where the file lives, once it lives anywhere.
+    pub fn path(&self) -> &RefCell<Option<String>> {
+        &self.document.path
+    }
+
+    /// The watch on that file.
+    pub fn monitor(&self) -> &RefCell<Option<gtk::gio::FileMonitor>> {
+        &self.document.monitor
+    }
+
+    /// The line ranges folded away. Folding a function folds it in
+    /// every view of the file.
+    fn folded(&self) -> &RefCell<Vec<(i32, i32)>> {
+        &self.document.folded
+    }
 }
 
 // MARK: Splitting
@@ -576,19 +601,19 @@ fn fold(page: &Rc<Page>, start: i32, end: i32) -> bool {
         return false;
     }
     buffer.apply_tag_by_name(FOLD_TAG, &from, &to);
-    page.folded.borrow_mut().push((start, end));
+    page.folded().borrow_mut().push((start, end));
     true
 }
 
 /// Unfolds the range opening on `line`, if one is folded there.
 fn unfold_line(page: &Rc<Page>, line: i32) -> bool {
     let found = page
-        .folded
+        .folded()
         .borrow()
         .iter()
         .position(|(start, _)| *start == line);
     let Some(at) = found else { return false };
-    let (start, end) = page.folded.borrow_mut().remove(at);
+    let (start, end) = page.folded().borrow_mut().remove(at);
     let buffer = &page.buffer;
     let (Some(from), Some(mut to)) = (buffer.iter_at_line(start), buffer.iter_at_line(end))
     else {
@@ -609,7 +634,7 @@ pub fn fold_all(page: &Rc<Page>) -> bool {
         let (start, end) = (start as i32, end as i32);
         // A block inside one already folded is hidden either way.
         let inside = page
-            .folded
+            .folded()
             .borrow()
             .iter()
             .any(|(from, to)| start > *from && start <= *to);
@@ -623,18 +648,18 @@ pub fn fold_all(page: &Rc<Page>) -> bool {
 
 /// Unfolds everything.
 pub fn unfold_all(page: &Rc<Page>) -> bool {
-    if page.folded.borrow().is_empty() {
+    if page.folded().borrow().is_empty() {
         return false;
     }
     let buffer = &page.buffer;
     buffer.remove_tag_by_name(FOLD_TAG, &buffer.start_iter(), &buffer.end_iter());
-    page.folded.borrow_mut().clear();
+    page.folded().borrow_mut().clear();
     true
 }
 
 /// Whether anything is folded.
 pub fn has_folds(page: &Rc<Page>) -> bool {
-    !page.folded.borrow().is_empty()
+    !page.folded().borrow().is_empty()
 }
 
 // MARK: Transformations
@@ -1222,7 +1247,7 @@ fn word_before_caret(buffer: &sourceview5::Buffer) -> (i32, String) {
 }
 
 fn request_completion(page: &Rc<Page>) {
-    let Some(path) = page.path.borrow().clone() else { return };
+    let Some(path) = page.path().borrow().clone() else { return };
     let (line, character) = lsp_caret(&page.buffer);
     let shell = Shell::instance();
     let id = shell
@@ -1712,7 +1737,7 @@ fn install_change_bar(page: &Rc<Page>) {
 /// diff is about a tenth of a millisecond for a file with a handful of
 /// edits, and the git call is a process spawn. Callers debounce.
 pub fn refresh_change_marks(page: &Rc<Page>) {
-    let Some(path) = page.path.borrow().clone() else {
+    let Some(path) = page.path().borrow().clone() else {
         page.change_marks.borrow_mut().clear();
         page.change_bar.queue_draw();
         return;
@@ -1781,7 +1806,7 @@ fn install_completion_keys(page: &Rc<Page>) {
 /// Reload button) when local edits would be lost. The app's own saves
 /// are recognized and ignored.
 pub fn install_file_monitor(page: &Rc<Page>) {
-    let Some(path) = page.path.borrow().clone() else { return };
+    let Some(path) = page.path().borrow().clone() else { return };
     let file = gtk::gio::File::for_path(&path);
     let Ok(monitor) =
         file.monitor_file(gtk::gio::FileMonitorFlags::NONE, gtk::gio::Cancellable::NONE)
@@ -1798,7 +1823,7 @@ pub fn install_file_monitor(page: &Rc<Page>) {
             return;
         }
         let Some(page) = weak.upgrade() else { return };
-        let Some(path) = page.path.borrow().clone() else { return };
+        let Some(path) = page.path().borrow().clone() else { return };
         if Shell::instance().is_own_save(&path) {
             return;
         }
@@ -1820,7 +1845,7 @@ pub fn install_file_monitor(page: &Rc<Page>) {
             page.reload_from_disk();
         }
     });
-    *page.monitor.borrow_mut() = Some(monitor);
+    *page.monitor().borrow_mut() = Some(monitor);
 }
 
 /// Ctrl+click jumps to the definition under the pointer — the caret
@@ -1860,7 +1885,7 @@ fn install_control_click(page: &Rc<Page>) {
 /// than the problem autosave solves. A failure is not quiet — that is
 /// the case where the user's work is not where they think it is.
 fn autosave(page: &Rc<Page>) {
-    let Some(path) = page.path.borrow().clone() else { return };
+    let Some(path) = page.path().borrow().clone() else { return };
     let saved = {
         let mut state = page.state.borrow_mut();
         if !state.document.is_dirty() {
@@ -1920,7 +1945,7 @@ fn install_spelling_menu(page: &Rc<Page>) {
             .iter_at_location(bx, by)
             .map(|iter| iter.offset())
             .unwrap_or_else(|| page.buffer.iter_at_mark(&page.buffer.get_insert()).offset());
-        let path = page.path.borrow().clone();
+        let path = page.path().borrow().clone();
         let menu = context_menu(
             misspelling.as_ref().map(|(word, _, _)| word.as_str()),
             page.buffer.has_selection(),
@@ -2052,7 +2077,7 @@ fn server_running_for(path: &str) -> bool {
 /// deprecated upstream but remains the one per-view hook.)
 #[allow(deprecated)]
 pub fn apply_project_editor_overrides(page: &Rc<Page>) {
-    let Some(path) = page.path.borrow().clone() else { return };
+    let Some(path) = page.path().borrow().clone() else { return };
     let Some(root) = textchum_core::workspace::project_root_for(Path::new(&path)) else {
         return;
     };
@@ -2088,7 +2113,7 @@ pub fn apply_project_editor_overrides(page: &Rc<Page>) {
 
 /// The diagnostic under a point in the view, if there is one.
 fn diagnostic_under(page: &Rc<Page>, x: f64, y: f64) -> Option<crate::shell::Diagnostic> {
-    let path = page.path.borrow().clone()?;
+    let path = page.path().borrow().clone()?;
     let shell = Shell::instance();
     let pages = shell.pages.borrow();
     let handles = pages.get(&path)?;
@@ -2189,7 +2214,7 @@ pub fn hover_at_caret(page: &Rc<Page>) {
 /// and comments have no documentation, and an empty answer still
 /// costs a round trip and a popover flicker.
 fn request_hover(page: &Rc<Page>, iter: gtk::TextIter, deliberate: bool) {
-    let Some(path) = page.path.borrow().clone() else { return };
+    let Some(path) = page.path().borrow().clone() else { return };
     let line = iter.line();
     let line_start = page
         .buffer

@@ -473,7 +473,7 @@ impl Workbench {
         self.pages
             .borrow()
             .iter()
-            .find(|page| page.path.borrow().as_deref() == Some(path))
+            .find(|page| page.path().borrow().as_deref() == Some(path))
             .cloned()
     }
 
@@ -491,7 +491,7 @@ impl Workbench {
     /// The selected page's position, for the jump stack.
     fn current_position(&self) -> Option<(String, i32, usize)> {
         let page = self.selected()?;
-        let path = page.path.borrow().clone()?;
+        let path = page.path().borrow().clone()?;
         let (line, character) = page::lsp_caret(&page.buffer);
         Some((path, line as i32, character as usize))
     }
@@ -578,13 +578,12 @@ impl Workbench {
         let tab_page = self.tab_view.append(&page.root);
         tab_page.set_title(&page.display_name());
         self.pages.borrow_mut().push(Rc::clone(&page));
-        if let Some(path) = page.path.borrow().clone() {
-            let document = Shell::instance().open_document(&page.buffer, Some(&path));
+        if let Some(path) = page.path().borrow().clone() {
             let handles = Rc::new(PageHandles {
                 window: self.window.clone(),
                 tab_view: self.tab_view.clone(),
                 tab_page: tab_page.clone(),
-                document,
+                document: Rc::clone(&page.document),
                 view: page.view.clone(),
                 toasts: self.toasts.clone(),
                 title: self.title.clone(),
@@ -603,7 +602,7 @@ impl Workbench {
         }
         self.tab_view.set_selected_page(&tab_page);
         if let Some((line, character)) = at {
-            if let Some(path) = page.path.borrow().clone() {
+            if let Some(path) = page.path().borrow().clone() {
                 if let Some(handles) = Shell::instance().pages.borrow().get(&path).cloned() {
                     page::reveal(&handles, line, character);
                 }
@@ -611,7 +610,7 @@ impl Workbench {
         }
         // A document told what it is stays told: reopening a .txt that
         // holds SQL should not find it plain text again.
-        if let Some(path) = page.path.borrow().clone() {
+        if let Some(path) = page.path().borrow().clone() {
             let stored = Shell::instance().config.borrow().file_override(&path);
             if !stored.is_empty() {
                 apply_file_properties(
@@ -625,7 +624,7 @@ impl Workbench {
         self.refresh_chrome();
         self.refresh_sidebar();
         // The desktop's shared recent-files list learns about it too.
-        if let Some(path) = self.selected().and_then(|page| page.path.borrow().clone()) {
+        if let Some(path) = self.selected().and_then(|page| page.path().borrow().clone()) {
             let uri = gtk::gio::File::for_path(&path).uri();
             let _ = gtk::RecentManager::default().add_item(&uri);
         }
@@ -639,7 +638,7 @@ impl Workbench {
             .position(|page| self.tab_view.page(&page.root).as_ptr() == tab_page.as_ptr())
         {
             let page = pages.remove(index);
-            let path = page.path.borrow().clone();
+            let path = page.path().borrow().clone();
             if let Some(path) = path {
                 // Remember it before the handles go: reopening should
                 // land the caret where it was, not at the top.
@@ -668,7 +667,7 @@ impl Workbench {
     /// apart when another open file shares its bare name.
     pub fn disambiguated_name(&self, page: &Rc<Page>) -> String {
         if self.show_full_paths.get() {
-            if let Some(path) = page.path.borrow().clone() {
+            if let Some(path) = page.path().borrow().clone() {
                 let root = workspace::project_root_for(Path::new(&path))
                     .map(|root| root.to_string_lossy().into_owned());
                 return crate::path_actions::relative_path(&path, root.as_deref());
@@ -681,7 +680,7 @@ impl Workbench {
         if !collides {
             return name;
         }
-        let Some(path) = page.path.borrow().clone() else { return name };
+        let Some(path) = page.path().borrow().clone() else { return name };
         Path::new(&path)
             .parent()
             .and_then(Path::file_name)
@@ -710,7 +709,7 @@ impl Workbench {
             state.document.len_bytes()
         );
         drop(state);
-        if let Some(path) = page.path.borrow().clone() {
+        if let Some(path) = page.path().borrow().clone() {
             if let Some(handles) = Shell::instance().pages.borrow().get(&path) {
                 *handles.detail.borrow_mut() = detail;
                 refresh_subtitle(handles);
@@ -766,7 +765,7 @@ impl Workbench {
         let mut groups: Vec<(String, Vec<Rc<Page>>)> = Vec::new();
         for page in self.pages.borrow().iter() {
             let root = page
-                .path
+                .path()
                 .borrow()
                 .as_deref()
                 .map(Path::new)
@@ -867,7 +866,7 @@ impl Workbench {
                     .get(row.index() as usize)
                     .cloned()
                     .flatten();
-                let Some(path) = page.and_then(|page| page.path.borrow().clone()) else {
+                let Some(path) = page.and_then(|page| page.path().borrow().clone()) else {
                     return;
                 };
                 let menu = copy_menu(&workbench, &path);
@@ -888,7 +887,7 @@ impl Workbench {
     /// The file-tree half, rebuilt when the project root changes.
     fn rebuild_tree(&self) {
         let root = self.selected().and_then(|page| {
-            page.path
+            page.path()
                 .borrow()
                 .as_deref()
                 .map(Path::new)
@@ -1194,7 +1193,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         preprocess_gate(&workbench.clone(), &page, move |workbench, page| {
             let saved = page.state.borrow_mut().document.save().is_ok();
             if saved {
-                if let Some(path) = page.path.borrow().as_deref() {
+                if let Some(path) = page.path().borrow().as_deref() {
                     Shell::instance().note_own_save(path);
                 }
                 workbench.refresh_chrome();
@@ -1217,14 +1216,14 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         // ones, from any open file — the user is probably adding a
         // file to that project.
         let seed = page
-            .path
+            .path()
             .borrow()
             .clone()
             .or_else(|| {
                 workbench
                     .all_pages()
                     .iter()
-                    .find_map(|other| other.path.borrow().clone())
+                    .find_map(|other| other.path().borrow().clone())
             })
             .and_then(|path| Path::new(&path).parent().map(Path::to_owned));
         if let Some(folder) = seed {
@@ -1301,7 +1300,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("definition", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
-        let Some(path) = page.path.borrow().clone() else {
+        let Some(path) = page.path().borrow().clone() else {
             workbench.toast("Save the file first — untitled documents have no server.");
             return;
         };
@@ -1351,7 +1350,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let root = workbench
             .selected()
             .and_then(|page| {
-                page.path.borrow().as_deref().map(Path::new).and_then(|path| {
+                page.path().borrow().as_deref().map(Path::new).and_then(|path| {
                     workspace::project_root_for(path)
                         .or_else(|| path.parent().map(Path::to_owned))
                 })
@@ -1363,7 +1362,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let root = workbench
             .selected()
             .and_then(|page| {
-                page.path.borrow().as_deref().map(Path::new).and_then(|path| {
+                page.path().borrow().as_deref().map(Path::new).and_then(|path| {
                     workspace::project_root_for(path)
                         .or_else(|| path.parent().map(Path::to_owned))
                 })
@@ -1428,7 +1427,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("blame", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
-        let Some(path) = page.path.borrow().clone() else {
+        let Some(path) = page.path().borrow().clone() else {
             workbench.toast("Save the file first — git has nothing to blame yet.");
             return;
         };
@@ -1448,7 +1447,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("diagnostic", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
-        let Some(path) = page.path.borrow().clone() else {
+        let Some(path) = page.path().borrow().clone() else {
             workbench.toast("No diagnostics for an unsaved document.");
             return;
         };
@@ -1476,7 +1475,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("diagnostic-list", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
-        let Some(path) = page.path.borrow().clone() else {
+        let Some(path) = page.path().borrow().clone() else {
             workbench.toast("No diagnostics for an unsaved document.");
             return;
         };
@@ -1775,7 +1774,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("revert", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
-        if page.path.borrow().is_none() {
+        if page.path().borrow().is_none() {
             workbench.toast("Untitled documents have no file to revert to.");
             return;
         }
@@ -1823,7 +1822,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let Some((page, path)) = workbench
             .selected()
             .and_then(|page| {
-                let path = page.path.borrow().clone();
+                let path = page.path().borrow().clone();
                 path.map(|path| (page, path))
             })
         else {
@@ -1851,7 +1850,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let Some((page, path)) = workbench
             .selected()
             .and_then(|page| {
-                let path = page.path.borrow().clone();
+                let path = page.path().borrow().clone();
                 path.map(|path| (page, path))
             })
         else {
@@ -1878,7 +1877,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let Some((page, path)) = workbench
             .selected()
             .and_then(|page| {
-                let path = page.path.borrow().clone();
+                let path = page.path().borrow().clone();
                 path.map(|path| (page, path))
             })
         else {
@@ -1931,7 +1930,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("format", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
-        let path = page.path.borrow().clone();
+        let path = page.path().borrow().clone();
         // Untitled documents have no server to ask (servers speak in
         // files) — but a configured preprocessor chain formats fine.
         let Some(path) = path else {
@@ -1974,7 +1973,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("outline", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
-        let Some(path) = page.path.borrow().clone() else {
+        let Some(path) = page.path().borrow().clone() else {
             // Markdown outlines itself; anything else needs a server,
             // and a server needs a file.
             if !show_markdown_outline(workbench, &page) {
@@ -2313,7 +2312,7 @@ const PALETTE: &[(&str, &str)] = &[
 /// button to forget.
 fn show_file_properties(workbench: &Rc<Workbench>) {
     let Some(page) = workbench.selected() else { return };
-    let Some(path) = page.path.borrow().clone() else {
+    let Some(path) = page.path().borrow().clone() else {
         // Nothing to remember a choice against; New with Format is
         // where an untitled document's language is set.
         workbench.toast("Save the file first — an untitled document has no path.");
@@ -2465,7 +2464,7 @@ pub fn apply_file_properties(
     tab_width: Option<u32>,
 ) {
     let resolved = language.map(str::to_owned).or_else(|| {
-        page.path.borrow().as_deref().and_then(|path| {
+        page.path().borrow().as_deref().and_then(|path| {
             textchum_core::syntax::languages::by_path(Path::new(path))
                 .map(|entry| entry.spec.name.to_owned())
         })
@@ -2483,7 +2482,7 @@ pub fn apply_file_properties(
     // The title bar reads a cached language, set when the page was
     // built. Changing what a document is has to update it, or the
     // subtitle keeps naming what the filename implied.
-    if let Some(path) = page.path.borrow().clone() {
+    if let Some(path) = page.path().borrow().clone() {
         if let Some(handles) = Shell::instance().pages.borrow().get(&path) {
             *handles.language.borrow_mut() =
                 page.state.borrow().document.language_name().unwrap_or("").to_owned();
@@ -3004,7 +3003,7 @@ fn show_server_status(workbench: &Rc<Workbench>) {
 /// overrides, a pool announcement, and a spell pass — everything a
 /// pathed open would have had. Returns whether the save landed.
 pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> bool {
-    let previous = page.path.borrow().clone();
+    let previous = page.path().borrow().clone();
     if page.state.borrow_mut().document.save_as(path).is_err() {
         workbench.toast("Could not save the document.");
         return false;
@@ -3012,7 +3011,7 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
     let key = path.to_string_lossy().into_owned();
     let shell = Shell::instance();
     shell.note_own_save(&key);
-    *page.path.borrow_mut() = Some(key.clone());
+    *page.path().borrow_mut() = Some(key.clone());
     if let Some(gone) = previous.clone().filter(|previous| *previous != key) {
         shell.pages.borrow_mut().remove(&gone);
         shell.pool.borrow_mut().did_close(Path::new(&gone));
@@ -3023,7 +3022,7 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
     let tab_page = workbench.tab_view.page(&page.root);
     // The same document under a new name: the index follows the path,
     // and everything the document knows stays with it.
-    let document = shell.open_document(&page.buffer, previous.as_deref());
+    let document = Rc::clone(&page.document);
     shell.rename_document(document.id, previous.as_deref(), &key);
     let handles = Rc::new(crate::shell::PageHandles {
         window: workbench.window.clone(),
@@ -3139,7 +3138,7 @@ fn format_via_preprocessors(
 /// the Mac.
 fn preprocessor_chain(page: &Rc<Page>) -> Option<(Vec<String>, Option<PathBuf>, String)> {
     let language = page.state.borrow().document.language_name()?;
-    let path = page.path.borrow().clone();
+    let path = page.path().borrow().clone();
     let root = path
         .as_deref()
         .and_then(|path| workspace::project_root_for(Path::new(path)));
@@ -3425,7 +3424,7 @@ fn show_markdown_outline(workbench: &Rc<Workbench>, page: &Rc<Page>) -> bool {
         .iter()
         .map(|heading| format!("{}{}", "  ".repeat(heading.level - 1), heading.text))
         .collect();
-    let path = page.path.borrow().clone();
+    let path = page.path().borrow().clone();
     present_picker(workbench, "Document Outline", picker_items(labels), move |workbench, index| {
         let (line, character) = rows[index];
         match &path {
@@ -5599,7 +5598,7 @@ fn open_project_roots() -> Vec<String> {
     let mut roots: Vec<String> = Vec::new();
     Workbench::for_each(|workbench| {
         for page in workbench.all_pages() {
-            let Some(path) = page.path.borrow().clone() else {
+            let Some(path) = page.path().borrow().clone() else {
                 continue;
             };
             let Some(root) = workspace::project_root_for(Path::new(&path)) else {
