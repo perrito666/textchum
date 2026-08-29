@@ -823,6 +823,23 @@ bool tc_config_line_numbers(const struct TcConfig *config);
 void tc_config_set_line_numbers(struct TcConfig *config, bool shown);
 
 /**
+ * Whether a file stays open when the window showing it closes
+ * (default false).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_keep_buffers(const struct TcConfig *config);
+
+/**
+ * Sets whether a file stays open when its window closes.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_keep_buffers(struct TcConfig *config, bool keep);
+
+/**
  * The keyboard-shortcut overrides (`keys` section), serialized as an
  * object of `{action: "modifiers+key"}` entries; `{}` when unset.
  * Release with [`tc_string_free`].

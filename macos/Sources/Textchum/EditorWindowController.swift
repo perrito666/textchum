@@ -2561,6 +2561,8 @@ final class EditorWindowController: NSWindowController {
     /// Whether mouse-rest hover documentation is on. The deliberate
     /// show-at-caret command ignores this.
     private var appliedHoverDocs = true
+    /// Whether a file stays open when the window showing it closes.
+    private var appliedKeepBuffers = false
 
     /// Whether selecting a word marks its other occurrences, and how
     /// those are matched.
@@ -2574,6 +2576,7 @@ final class EditorWindowController: NSWindowController {
         appliedFont = settings.font
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
+        appliedKeepBuffers = settings.keepBuffers
         appliedMarkOccurrences = settings.markOccurrences
         appliedOccurrencesCaseSensitive = settings.occurrencesCaseSensitive
         appliedOccurrencesWholeWord = settings.occurrencesWholeWord
@@ -3361,6 +3364,9 @@ extension EditorWindowController: NSWindowDelegate {
 
     /// Standard dirty-document close flow: Save / Cancel / Don't Save.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // Files set to outlive their windows go aside as they are, and
+        // are settled when the editor itself closes.
+        if appliedKeepBuffers { return true }
         guard coreDocument.isDirty else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning

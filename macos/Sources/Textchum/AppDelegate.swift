@@ -474,8 +474,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// history — the session file is already the history.
     private static let closedDocumentMemory = 20
 
-    /// Remembers a closing window so ⇧⌘T can bring it back.
+    /// Remembers a closing window so ⇧⌘T can bring it back, and hands
+    /// the document to the store's cache: what comes back is the file
+    /// as it was, unsaved text and all, rather than what is on disk.
     private func noteClosedEditor(_ editor: EditorWindowController) {
+        DocumentStore.shared.close(editor.openDocument.id)
         guard let path = editor.coreDocument.path else { return }
         let position = editor.sessionPosition
         closedDocuments.removeAll { $0.path == path }
@@ -536,7 +539,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return .terminateCancel
             }
         }
+        // Files that outlive their windows are settled here, which is
+        // the last place they can be.
+        if !settleFilesPutAside() {
+            isTerminating = false
+            return .terminateCancel
+        }
         return .terminateNow
+    }
+
+    /// Asks about the files with changes that were never saved and
+    /// no window left to ask through — the ones set to outlive their
+    /// windows. Answers whether quitting may go ahead.
+    private func settleFilesPutAside() -> Bool {
+        let unsaved = DocumentStore.shared.unsaved
+        if unsaved.isEmpty { return true }
+        let names = unsaved.map { document in
+            (document.path ?? document.core.path)
+                .map { ($0 as NSString).lastPathComponent } ?? "Untitled"
+        }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText =
+            names.count == 1
+            ? "Do you want to save the changes made to “\(names[0])”?"
+            : "Do you want to save the changes made to \(names.count) files?"
+        alert.informativeText = names.joined(separator: ", ")
+        alert.addButton(withTitle: "Save All")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Don’t Save")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            var homeless = 0
+            for document in unsaved {
+                // Nowhere to write it: quitting now would be the
+                // discard nobody asked for.
+                guard document.core.path != nil else {
+                    homeless += 1
+                    continue
+                }
+                try? document.core.save()
+            }
+            return homeless == 0
+        case .alertThirdButtonReturn:
+            return true
+        default:
+            return false
+        }
     }
 
     // MARK: Core events
@@ -1748,7 +1797,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         do {
-            let document = try CoreDocument(contentsOf: path)
+            // A file closed a moment ago is still in the store, whole:
+            // opening it again is taking the closing back, so what was
+            // typed and never saved comes back with it.
+            let document = try DocumentStore.shared.reclaim(path: path)?.core
+                ?? CoreDocument(contentsOf: path)
             closeUntouchedUntitledWindows()
             noteRecent(path: path)
             let editor = EditorWindowController(

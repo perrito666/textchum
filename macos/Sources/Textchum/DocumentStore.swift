@@ -12,6 +12,10 @@ final class OpenDocument {
     let id: Int
     /// The text, history and syntax, owned by the core.
     let core: CoreDocument
+    /// The path the store knows this document by, which is what the
+    /// index and the recently closed cache go on. A document saved
+    /// under a new name keeps its identity and changes this.
+    var path: String?
     /// What the server last said about it. A finding is about the
     /// file, not about the window it happens to be visible in.
     var diagnostics: [CoreDiagnostic] = []
@@ -42,6 +46,7 @@ final class DocumentStore {
             return existing
         }
         let document = OpenDocument(id: nextID, core: core)
+        document.path = path
         nextID += 1
         documents[document.id] = document
         if let path {
@@ -55,6 +60,15 @@ final class DocumentStore {
     }
 
     /// The document a path names, while it is open.
+    /// Documents whose last view closed, newest last. A closed file
+    /// is kept whole for a while so that reopening it is taking the
+    /// closing back rather than reading the file again.
+    private var closed: [OpenDocument] = []
+
+    /// Deep enough to undo a run of mistaken closes, shallow enough
+    /// that the list stays a list of recent mistakes.
+    private static let closedMemory = 20
+
     func document(forPath path: String) -> OpenDocument? {
         byPath[path].flatMap { documents[$0] }
     }
@@ -64,15 +78,48 @@ final class DocumentStore {
     func rename(_ id: Int, from: String?, to: String) {
         if let from { byPath.removeValue(forKey: from) }
         byPath[to] = id
+        documents[id]?.path = to
     }
 
-    /// Forgets a document. Its views are gone by the time this is
-    /// called; what happens to one with unsaved changes is the
-    /// caller's business.
+    /// Closes a document — its last view has gone — and keeps it in
+    /// the recently closed cache. Reopening the file within the next
+    /// twenty closings gets the same document back, with anything
+    /// typed since the last save.
+    ///
+    /// Whether unsaved changes were saved or given up is settled
+    /// before this is called.
     func close(_ id: Int) {
+        let closing = documents[id]
         documents.removeValue(forKey: id)
         byPath = byPath.filter { $0.value != id }
+        guard let closing else { return }
+        closed.removeAll { $0.id == id }
+        closed.append(closing)
+        if closed.count > Self.closedMemory {
+            closed.removeFirst(closed.count - Self.closedMemory)
+        }
     }
+
+    /// Takes a closed document back out of the cache and opens it
+    /// again, or answers nil when the file was not closed recently.
+    func reclaim(path: String) -> OpenDocument? {
+        guard let at = closed.firstIndex(where: { $0.path == path }) else {
+            return nil
+        }
+        let document = closed.remove(at: at)
+        documents[document.id] = document
+        byPath[path] = document.id
+        return document
+    }
+
+    /// Every document with changes that were never saved, open or put
+    /// aside — what the editor has to settle before it closes.
+    var unsaved: [OpenDocument] {
+        (Array(documents.values) + closed).filter { $0.core.isDirty }
+    }
+
+    /// How many are in the recently closed cache, for the tests.
+    var closedCount: Int { closed.count }
 
     /// How many are open, for the tests.
     var count: Int { documents.count }

@@ -140,6 +140,13 @@ public final class CoreConfig {
         set { tc_config_set_line_numbers(handle, newValue) }
     }
 
+    /// Whether a file stays open when the window showing it closes,
+    /// with anything unsaved, to be settled when the editor closes.
+    public var keepBuffers: Bool {
+        get { tc_config_keep_buffers(handle) }
+        set { tc_config_set_keep_buffers(handle, newValue) }
+    }
+
     /// Whether hover documentation pops up on mouse rest.
     public var hoverDocs: Bool {
         get { tc_config_hover_docs(handle) }
