@@ -77,7 +77,13 @@ final class WindowSidebarContext: ObservableObject {
 
 final class EditorWindowController: NSWindowController {
     // Named to avoid NSWindowController's own `document` property.
-    let coreDocument: CoreDocument
+    /// The document this is a view of. The core handle and the
+    /// findings live there rather than here, so a second view of the
+    /// same file shares them rather than keeping its own idea.
+    /// `NSWindowController` has a `document` of its own, so this one
+    /// says what it is.
+    let openDocument: OpenDocument
+    var coreDocument: CoreDocument { openDocument.core }
     /// This window's sidebar state (buffer list scoped to its tab group).
     let sidebarModel = SidebarModel()
     /// The one floating list: references, the outline, the diagnostics.
@@ -113,8 +119,12 @@ final class EditorWindowController: NSWindowController {
     /// Which request the gutter is waiting on: an answer from an
     /// older one is about text that has since been typed over.
     private var changeMarkGeneration: UInt64 = 0
-    /// The latest language-server findings for this document.
-    private var diagnostics: [CoreDiagnostic] = []
+    /// The latest language-server findings for this document, which
+    /// belong to the document rather than to this view of it.
+    private var diagnostics: [CoreDiagnostic] {
+        get { openDocument.diagnostics }
+        set { openDocument.diagnostics = newValue }
+    }
     /// The gutter and text view together, and the view they sit in —
     /// a split swaps what is inside the host.
     private var editorArea: NSView?
@@ -195,7 +205,7 @@ final class EditorWindowController: NSWindowController {
         lspApp: CoreApp? = nil,
         openLocation: ((String, Int, Int) -> Void)? = nil
     ) {
-        self.coreDocument = document
+        self.openDocument = DocumentStore.shared.open(document, path: document.path)
         self.lspApp = lspApp
         self.openLocation = openLocation
         self.resolveProjectRoot =

@@ -17,11 +17,36 @@ use textchum_core::{theme, Config, Event};
 use textchum_lsp::Pool;
 
 /// Everything the pump needs to reach one open document's page.
+/// A document's identity: stable, and independent of where it is shown
+/// or whether it has a path yet.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct DocumentId(u64);
+
+/// One open document — what the file is, not where it is shown.
+///
+/// Views come and go; this is what they are views of. Everything here
+/// belongs to the document, so two views of one file cannot disagree
+/// about it: they share the buffer, so they share the text, the
+/// history and every edit.
+pub struct OpenDocument {
+    pub id: DocumentId,
+    /// The text every view of this document shares.
+    pub buffer: sourceview5::Buffer,
+    /// What the server last said about it, kept so it can be read
+    /// rather than only underlined. An underline nobody can read is a
+    /// notification with the message taken out.
+    pub diagnostics: RefCell<Vec<Diagnostic>>,
+}
+
+/// Where a document is shown: the widgets around one view of it.
+///
+/// The document half is [`OpenDocument`], reached through `document`.
+/// What is left here is the window, the tab and the chrome — the
+/// things that are about this showing of it rather than about the file.
 pub struct PageHandles {
     pub window: adw::ApplicationWindow,
     pub tab_view: adw::TabView,
     pub tab_page: adw::TabPage,
-    pub buffer: sourceview5::Buffer,
     pub view: sourceview5::View,
     pub toasts: adw::ToastOverlay,
     pub title: adw::WindowTitle,
@@ -30,10 +55,8 @@ pub struct PageHandles {
     pub problems: RefCell<String>,
     /// "encoding · size" half, refreshed with the chrome.
     pub detail: RefCell<String>,
-    /// What the server last said, kept so it can be read rather than
-    /// only underlined. An underline nobody can read is a notification
-    /// with the message taken out.
-    pub diagnostics: RefCell<Vec<Diagnostic>>,
+    /// The document this is a view of.
+    pub document: Rc<OpenDocument>,
 }
 
 /// One finding, as a balloon needs it.
@@ -79,6 +102,11 @@ pub struct Shell {
     pub status_log: RefCell<Vec<(std::time::SystemTime, String, String, String)>>,
     /// Keeps the config-file monitor alive.
     config_monitor: RefCell<Option<gtk::gio::FileMonitor>>,
+    /// Every open document, by id, and the paths that name them. A
+    /// document is here once however many views show it.
+    documents: RefCell<HashMap<DocumentId, Rc<OpenDocument>>>,
+    documents_by_path: RefCell<HashMap<String, DocumentId>>,
+    next_document_id: std::cell::Cell<u64>,
 }
 
 thread_local! {
@@ -158,6 +186,9 @@ impl Shell {
                 own_config_save: std::cell::Cell::new(None),
                 status_log: RefCell::new(Vec::new()),
                 config_monitor: RefCell::new(None),
+                documents: RefCell::new(HashMap::new()),
+                documents_by_path: RefCell::new(HashMap::new()),
+                next_document_id: std::cell::Cell::new(1),
             });
             shell.apply_appearance();
             shell.apply_theme();
@@ -175,6 +206,69 @@ impl Shell {
 
     /// Pushes the configuration's `lsp` + `workspace` sections into the
     /// pool, exactly as the macOS shell does.
+    /// Registers a document and hands back its entry.
+    ///
+    /// A document is opened once however many views end up showing it,
+    /// so a path already open gives back the entry it already has.
+    pub fn open_document(
+        &self,
+        buffer: &sourceview5::Buffer,
+        path: Option<&str>,
+    ) -> Rc<OpenDocument> {
+        if let Some(existing) = path.and_then(|path| self.document_for_path(path)) {
+            return existing;
+        }
+        let id = DocumentId(self.next_document_id.get());
+        self.next_document_id.set(id.0 + 1);
+        let document = Rc::new(OpenDocument {
+            id,
+            buffer: buffer.clone(),
+            diagnostics: RefCell::new(Vec::new()),
+        });
+        self.documents.borrow_mut().insert(id, Rc::clone(&document));
+        if let Some(path) = path {
+            self.documents_by_path
+                .borrow_mut()
+                .insert(path.to_owned(), id);
+        }
+        document
+    }
+
+    pub fn document(&self, id: DocumentId) -> Option<Rc<OpenDocument>> {
+        self.documents.borrow().get(&id).cloned()
+    }
+
+    /// The document a path names, while it is open.
+    pub fn document_for_path(&self, path: &str) -> Option<Rc<OpenDocument>> {
+        let id = *self.documents_by_path.borrow().get(path)?;
+        self.document(id)
+    }
+
+    /// Follows a document that has just been given a path, or a new
+    /// one — the index is by path, and the path moved.
+    pub fn rename_document(&self, id: DocumentId, from: Option<&str>, to: &str) {
+        let mut index = self.documents_by_path.borrow_mut();
+        if let Some(from) = from {
+            index.remove(from);
+        }
+        index.insert(to.to_owned(), id);
+    }
+
+    /// Forgets a document. Its views are gone by the time this is
+    /// called; what happens to the ones with unsaved changes is the
+    /// caller's business.
+    pub fn close_document(&self, id: DocumentId) {
+        self.documents.borrow_mut().remove(&id);
+        self.documents_by_path
+            .borrow_mut()
+            .retain(|_, known| *known != id);
+    }
+
+    /// How many documents are open, for the tests.
+    pub fn document_count(&self) -> usize {
+        self.documents.borrow().len()
+    }
+
     pub fn reconfigure_pool(&self) {
         let config = self.config.borrow();
         let combined = format!(
@@ -220,8 +314,8 @@ impl Shell {
             theme::set_active(chosen);
         }
         for handles in self.pages.borrow().values() {
-            crate::page::refresh_style_tags(&handles.buffer);
-            crate::page::recolor(&handles.buffer);
+            crate::page::refresh_style_tags(&handles.document.buffer);
+            crate::page::recolor(&handles.document.buffer);
         }
     }
 

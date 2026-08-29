@@ -868,7 +868,7 @@ pub fn iter_at_lsp(
 
 /// Puts the caret at an LSP position and scrolls it into view.
 pub fn reveal(handles: &PageHandles, line: i32, character_utf16: usize) {
-    let buffer = &handles.buffer;
+    let buffer = &handles.document.buffer;
     let clamped = line.min(buffer.line_count() - 1).max(0);
     let Some(target) = iter_at_lsp(buffer, clamped, character_utf16) else {
         return;
@@ -1023,7 +1023,7 @@ fn map_utf16_to_chars(
 /// Applies a diagnostics event to its page: squiggles per finding and a
 /// problem count for the subtitle. Called by the shell's event pump.
 pub fn apply_diagnostics(handles: &PageHandles, json: &str) {
-    let buffer = &handles.buffer;
+    let buffer = &handles.document.buffer;
     let start = buffer.start_iter();
     let end = buffer.end_iter();
     for name in ["diag-error", "diag-warning"] {
@@ -1085,7 +1085,7 @@ pub fn apply_diagnostics(handles: &PageHandles, json: &str) {
         ));
     }
     *handles.problems.borrow_mut() = parts.join(", ");
-    *handles.diagnostics.borrow_mut() = kept;
+    *handles.document.diagnostics.borrow_mut() = kept;
     crate::workbench::refresh_subtitle(handles);
 }
 
@@ -1100,7 +1100,7 @@ pub fn diagnostic_at(
     line: i32,
     character: usize,
 ) -> Option<crate::shell::Diagnostic> {
-    let found = handles.diagnostics.borrow();
+    let found = handles.document.diagnostics.borrow();
     let covering = found.iter().find(|d| {
         let after_start = (d.line, d.character) <= (line, character);
         // A zero-length finding still marks a spot; give it one
@@ -2032,7 +2032,7 @@ fn has_diagnostics(path: &str) -> bool {
         .pages
         .borrow()
         .get(path)
-        .is_some_and(|handles| !handles.diagnostics.borrow().is_empty())
+        .is_some_and(|handles| !handles.document.diagnostics.borrow().is_empty())
 }
 
 /// Whether a language server is up for this document.
