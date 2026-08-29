@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // The change was ours; the config watcher must not treat the
             // save's echo as an external edit.
             self.lastOwnConfigSave = Date()
+            self.applyKeyOverrides()
             self.applyAppearanceChoice()
             self.applyThemeChoice()
             self.applyIconPack()
@@ -947,6 +948,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Menu items by their stable action name, for `keys` overrides.
     private var menuActions: [String: NSMenuItem] = [:]
 
+    /// What each of those items came with. A profile names the
+    /// shortcuts it moves and nothing else, so leaving one — or
+    /// dropping an override — has to give the original back, and the
+    /// only place it exists is here.
+    private var defaultShortcuts: [String: (String, NSEvent.ModifierFlags)] = [:]
+
     /// Indexes every overridable menu item by a stable name.
     private func registerMenuActions(in menu: NSMenu) {
         let bySelector: [Selector: String] = [
@@ -1009,17 +1016,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } else if let name = bySelector[action] {
                 menuActions[name] = item
             }
+            if let name = menuActions.first(where: { $0.value === item })?.key,
+                defaultShortcuts[name] == nil
+            {
+                defaultShortcuts[name] = (item.keyEquivalent, item.keyEquivalentModifierMask)
+            }
         }
     }
 
-    /// Applies the configuration's `keys` overrides (`{action:
-    /// "modifiers+key"}`) to the indexed menu items. Unknown actions and
-    /// unparseable shortcuts are logged, never fatal.
+    /// Applies the shortcuts that are in force: the chosen profile's,
+    /// with the `keys` overrides on top.
+    ///
+    /// Every registered item goes back to what it came with first —
+    /// otherwise leaving a profile, or removing one override, would
+    /// leave its shortcut behind with nothing naming it. Unknown
+    /// actions and unparseable shortcuts are logged, never fatal.
     private func applyKeyOverrides() {
-        guard let config,
-            let data = config.keysJSON.data(using: .utf8),
-            let overrides = try? JSONSerialization.jsonObject(with: data) as? [String: String]
-        else { return }
+        guard let config else { return }
+        for (action, item) in menuActions {
+            guard let (key, modifiers) = defaultShortcuts[action] else { continue }
+            item.keyEquivalent = key
+            item.keyEquivalentModifierMask = modifiers
+        }
+        let overrides = config.effectiveKeys
         for (action, spec) in overrides {
             guard let item = menuActions[action] else {
                 NSLog("keys: unknown action \(action) (known: \(menuActions.keys.sorted()))")
@@ -1056,12 +1075,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case "tab": key = "\t"
             case "delete", "backspace": key = "\u{8}"
             default:
+                // Function keys: profiles from other editors lean on
+                // them (F12 for a definition, F2 for a rename).
+                if token.hasPrefix("f"), let number = Int(token.dropFirst()),
+                    (1...20).contains(number),
+                    let scalar = UnicodeScalar(NSF1FunctionKey + number - 1)
+                {
+                    key = String(scalar)
+                    continue
+                }
                 guard token.count == 1 else { return nil }
                 key = token
             }
         }
         guard let key else { return nil }
         return (key, modifiers)
+    }
+
+    /// A menu item's shortcut as a spec the configuration can hold —
+    /// the inverse of `parseShortcut`. Empty when the item has none.
+    static func shortcutSpec(key: String, modifiers: NSEvent.ModifierFlags) -> String {
+        guard !key.isEmpty else { return "" }
+        var parts: [String] = []
+        if modifiers.contains(.command) { parts.append("cmd") }
+        if modifiers.contains(.control) { parts.append("ctrl") }
+        if modifiers.contains(.option) { parts.append("alt") }
+        if modifiers.contains(.shift) { parts.append("shift") }
+        let named: [String: String] = [
+            String(UnicodeScalar(NSUpArrowFunctionKey)!): "up",
+            String(UnicodeScalar(NSDownArrowFunctionKey)!): "down",
+            String(UnicodeScalar(NSLeftArrowFunctionKey)!): "left",
+            String(UnicodeScalar(NSRightArrowFunctionKey)!): "right",
+            "\r": "return",
+            "\u{1b}": "escape",
+            " ": "space",
+            "\t": "tab",
+            "\u{8}": "delete",
+        ]
+        if let scalar = key.unicodeScalars.first,
+            (NSF1FunctionKey...NSF1FunctionKey + 19).contains(Int(scalar.value))
+        {
+            parts.append("f\(Int(scalar.value) - NSF1FunctionKey + 1)")
+        } else {
+            parts.append(named[key] ?? key.lowercased())
+        }
+        return parts.joined(separator: "+")
     }
 
     // MARK: Appearance & sidebar
@@ -1571,6 +1629,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsModel.openProjectRoots = Array(
             Set(editors.compactMap(\.projectRoot))
         ).sorted()
+        // Only the app knows which actions exist and what they are
+        // called on screen.
+        settingsModel.shortcutCatalog = menuActions
+            .map { action, item in
+                SettingsModel.Shortcut(
+                    action: action,
+                    title: item.title,
+                    spec: Self.shortcutSpec(
+                        key: item.keyEquivalent,
+                        modifiers: item.keyEquivalentModifierMask))
+            }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(model: settingsModel)
             settingsWindowController?.window?.center()

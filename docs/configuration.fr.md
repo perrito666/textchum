@@ -359,9 +359,27 @@ l'affaire des enregistrements explicites.
 
 ## Raccourcis clavier
 
-Les raccourcis des menus se réassignent via une section `keys` éditée à
-la main (pas d'interface pour l'instant) : un objet de noms d'action
-vers des spécifications `modificateurs+touche`, appliqué au lancement.
+Réglages ▸ Clavier les tient : un profil, et chaque commande avec le
+raccourci auquel elle répond, modifiable sur place.
+
+**Profils.** On arrive d'un autre éditeur avec ses raccourcis dans les
+doigts : les trois pour lesquels ces éditeurs sont connus sont donc
+fournis avec la compilation — Visual Studio Code, Sublime Text et
+IntelliJ IDEA. Un profil nomme les commandes qu'il déplace et laisse le
+reste tranquille : en choisir un change ce pour quoi cet éditeur est
+connu, et rien d'autre. `keys_profile` garde le choix ; vide, ce sont
+les raccourcis propres à Textchum.
+
+Changer un raccourci par-dessus un profil garde le profil : le
+changement est un remplacement, et **Reset changes** les abandonne
+tous. **Save as profile** transforme ce qui est en vigueur en un profil
+à vous — la façon de modifier un préréglage, puisque ceux-là sont
+fournis avec la compilation. Les profils enregistrés vivent dans
+`key_profiles`, et un profil qui reprend un nom fourni le remplace.
+
+Le fichier écrit les remplacements dans une section `keys` : un objet
+de noms d'action vers des spécifications `modificateurs+touche`,
+appliqué par-dessus le profil.
 
 ```json
 {
@@ -373,8 +391,10 @@ vers des spécifications `modificateurs+touche`, appliqué au lancement.
 }
 ```
 
-Modificateurs : `cmd`, `shift`, `alt`, `ctrl`. Touches : un caractère,
-ou `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
+Modificateurs : `cmd`, `shift`, `alt`, `ctrl` — `cmd` est Command sur
+macOS et Ctrl sur Linux, un profil veut donc dire la même chose des
+deux côtés. Touches : un caractère, de `f1` à `f20`, ou
+`up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
 Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,

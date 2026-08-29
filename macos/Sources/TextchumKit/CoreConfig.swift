@@ -146,6 +146,87 @@ public final class CoreConfig {
         set { tc_config_set_hover_docs(handle, newValue) }
     }
 
+    /// The chosen keyboard profile; empty means the editor's own
+    /// bindings.
+    public var keysProfile: String {
+        get {
+            guard let raw = tc_config_keys_profile(handle) else { return "" }
+            defer { tc_string_free(raw) }
+            return String(cString: raw)
+        }
+        set {
+            newValue.withCString { pointer in
+                tc_config_set_keys_profile(handle, pointer, UInt(strlen(pointer)))
+            }
+        }
+    }
+
+    /// The profiles saved in the configuration, as name to
+    /// action-to-shortcut map.
+    public var keyProfilesJSON: String {
+        guard let raw = tc_config_key_profiles(handle) else { return "{}" }
+        defer { tc_string_free(raw) }
+        return String(cString: raw)
+    }
+
+    /// The profiles that can be chosen: the bundled ones and the saved
+    /// ones.
+    public var keyProfileChoices: [(id: String, name: String)] {
+        guard let raw = tc_config_key_profile_choices(handle) else { return [] }
+        defer { tc_string_free(raw) }
+        let data = Data(String(cString: raw).utf8)
+        let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+        return parsed.compactMap { item in
+            guard let id = item["id"] as? String, let name = item["name"] as? String
+            else { return nil }
+            return (id, name)
+        }
+    }
+
+    /// The bindings that actually apply: the profile's, with the
+    /// overrides on top.
+    public var effectiveKeys: [String: String] {
+        guard let raw = tc_config_effective_keys(handle) else { return [:] }
+        defer { tc_string_free(raw) }
+        let data = Data(String(cString: raw).utf8)
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: String] ?? [:]
+    }
+
+    /// Saves a profile, or removes it with a nil binding set.
+    public func setKeyProfile(name: String, bindingsJSON: String?) {
+        name.withCString { namePointer in
+            guard let bindingsJSON else {
+                tc_config_set_key_profile(handle, namePointer, UInt(strlen(namePointer)), nil, 0)
+                return
+            }
+            bindingsJSON.withCString { bindingsPointer in
+                tc_config_set_key_profile(
+                    handle, namePointer, UInt(strlen(namePointer)),
+                    bindingsPointer, UInt(strlen(bindingsPointer)))
+            }
+        }
+    }
+
+    /// Sets one shortcut override, or removes it with a nil spec.
+    public func setKeyBinding(action: String, spec: String?) {
+        action.withCString { actionPointer in
+            guard let spec, !spec.isEmpty else {
+                tc_config_set_key_binding(handle, actionPointer, UInt(strlen(actionPointer)), nil, 0)
+                return
+            }
+            spec.withCString { specPointer in
+                tc_config_set_key_binding(
+                    handle, actionPointer, UInt(strlen(actionPointer)),
+                    specPointer, UInt(strlen(specPointer)))
+            }
+        }
+    }
+
+    /// Forgets every shortcut override.
+    public func clearKeyBindings() {
+        tc_config_clear_key_bindings(handle)
+    }
+
     /// Every project root the configuration mentions, in any section.
     public var configuredProjects: [String] {
         guard let raw = tc_config_configured_projects(handle) else { return [] }

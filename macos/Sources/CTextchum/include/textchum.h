@@ -1055,6 +1055,93 @@ void tc_config_set_workspace_flag(struct TcConfig *config,
                                   bool value);
 
 /**
+ * The chosen keyboard profile (`keys_profile`), or an empty string
+ * for the editor's own bindings. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_keys_profile(const struct TcConfig *config);
+
+/**
+ * Chooses a keyboard profile; an empty name returns to the editor's
+ * own bindings.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `name` must point to
+ * `name_len` readable bytes.
+ */
+void tc_config_set_keys_profile(struct TcConfig *config, const char *name, uintptr_t name_len);
+
+/**
+ * The profiles saved in the configuration (`key_profiles`), as a
+ * nul-terminated JSON object of name to action-to-shortcut map.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_key_profiles(const struct TcConfig *config);
+
+/**
+ * Saves (with `bindings_len > 0`) or removes a keyboard profile.
+ * `bindings` is a JSON object of action to shortcut spec; anything
+ * else is ignored, so a malformed write cannot replace a working
+ * profile.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_key_profile(struct TcConfig *config,
+                               const char *name,
+                               uintptr_t name_len,
+                               const char *bindings,
+                               uintptr_t bindings_len);
+
+/**
+ * Sets (with `spec_len > 0`) or removes one shortcut override.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+void tc_config_set_key_binding(struct TcConfig *config,
+                               const char *action,
+                               uintptr_t action_len,
+                               const char *spec,
+                               uintptr_t spec_len);
+
+/**
+ * Forgets every shortcut override, returning to the profile's
+ * bindings — or, with no profile, to the editor's own.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_clear_key_bindings(struct TcConfig *config);
+
+/**
+ * The bindings that actually apply: the chosen profile's, with the
+ * `keys` overrides on top. A nul-terminated JSON object of action to
+ * shortcut spec, released with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_effective_keys(const struct TcConfig *config);
+
+/**
+ * The keyboard profiles that can be chosen — the bundled ones and the
+ * saved ones — as a nul-terminated JSON array of `{"id", "name"}`.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_key_profile_choices(const struct TcConfig *config);
+
+/**
  * Every project root the configuration mentions, in any section, as a
  * nul-terminated JSON array of strings. Release with
  * [`tc_string_free`].

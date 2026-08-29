@@ -1708,6 +1708,174 @@ pub unsafe extern "C" fn tc_config_set_workspace_flag(
     );
 }
 
+/// The chosen keyboard profile (`keys_profile`), or an empty string
+/// for the editor's own bindings. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_keys_profile(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(config.inner.keys_profile())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Chooses a keyboard profile; an empty name returns to the editor's
+/// own bindings.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `name` must point to
+/// `name_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_keys_profile(
+    config: *mut TcConfig,
+    name: *const c_char,
+    name_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(name) = (unsafe { str_from_raw(name, name_len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config.inner.set_keys_profile((!name.is_empty()).then_some(name))
+    }));
+}
+
+/// The profiles saved in the configuration (`key_profiles`), as a
+/// nul-terminated JSON object of name to action-to-shortcut map.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_key_profiles(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(config.inner.key_profiles_json())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Saves (with `bindings_len > 0`) or removes a keyboard profile.
+/// `bindings` is a JSON object of action to shortcut spec; anything
+/// else is ignored, so a malformed write cannot replace a working
+/// profile.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_key_profile(
+    config: *mut TcConfig,
+    name: *const c_char,
+    name_len: usize,
+    bindings: *const c_char,
+    bindings_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(name) = (unsafe { str_from_raw(name, name_len) }) else {
+        return;
+    };
+    let bindings = (bindings_len > 0)
+        .then(|| unsafe { str_from_raw(bindings, bindings_len) })
+        .flatten();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config.inner.set_key_profile(name, bindings)
+    }));
+}
+
+/// Sets (with `spec_len > 0`) or removes one shortcut override.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_key_binding(
+    config: *mut TcConfig,
+    action: *const c_char,
+    action_len: usize,
+    spec: *const c_char,
+    spec_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(action) = (unsafe { str_from_raw(action, action_len) }) else {
+        return;
+    };
+    let spec = (spec_len > 0)
+        .then(|| unsafe { str_from_raw(spec, spec_len) })
+        .flatten();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config.inner.set_key_binding(action, spec)
+    }));
+}
+
+/// Forgets every shortcut override, returning to the profile's
+/// bindings — or, with no profile, to the editor's own.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_clear_key_bindings(config: *mut TcConfig) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.clear_key_bindings()));
+}
+
+/// The bindings that actually apply: the chosen profile's, with the
+/// `keys` overrides on top. A nul-terminated JSON object of action to
+/// shortcut spec, released with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_effective_keys(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let bindings = textchum_core::keys::effective(
+            &config.inner.keys_profile(),
+            &config.inner.key_profiles_json(),
+            &config.inner.keys_json(),
+        );
+        owned_c_string(textchum_core::keys::to_json(&bindings))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// The keyboard profiles that can be chosen — the bundled ones and the
+/// saved ones — as a nul-terminated JSON array of `{"id", "name"}`.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_key_profile_choices(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let choices: Vec<serde_json::Value> =
+            textchum_core::keys::choices(&config.inner.key_profiles_json())
+                .into_iter()
+                .map(|(id, name)| serde_json::json!({"id": id, "name": name}))
+                .collect();
+        owned_c_string(serde_json::Value::Array(choices).to_string())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Every project root the configuration mentions, in any section, as a
 /// nul-terminated JSON array of strings. Release with
 /// [`tc_string_free`].

@@ -910,6 +910,99 @@ impl Config {
             .unwrap_or_else(|| "{}".into())
     }
 
+    /// The chosen keyboard profile (`keys_profile`); empty means the
+    /// editor's own bindings.
+    pub fn keys_profile(&self) -> String {
+        self.root
+            .get("keys_profile")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    }
+
+    pub fn set_keys_profile(&mut self, name: Option<&str>) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        match name.filter(|name| !name.is_empty()) {
+            Some(name) => {
+                top.insert("keys_profile".into(), Value::String(name.to_owned()));
+            }
+            None => {
+                top.remove("keys_profile");
+            }
+        }
+    }
+
+    /// The profiles saved here (`key_profiles`), serialized: an object
+    /// of name to action-to-shortcut map. `{}` when unset.
+    pub fn key_profiles_json(&self) -> String {
+        self.root
+            .get("key_profiles")
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "{}".into())
+    }
+
+    /// Saves (or, with `None`, removes) a profile. `bindings_json` is
+    /// an action-to-shortcut object; anything else is ignored, so a
+    /// malformed write cannot replace a working profile with rubbish.
+    pub fn set_key_profile(&mut self, name: &str, bindings_json: Option<&str>) {
+        if name.is_empty() {
+            return;
+        }
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        match bindings_json {
+            Some(json) => {
+                let Ok(Value::Object(bindings)) = serde_json::from_str::<Value>(json) else {
+                    return;
+                };
+                ensure_object(top, "key_profiles")
+                    .insert(name.into(), Value::Object(bindings));
+            }
+            None => {
+                if let Some(profiles) = top.get_mut("key_profiles").and_then(Value::as_object_mut)
+                {
+                    profiles.remove(name);
+                }
+            }
+        }
+        prune_empty(top, "key_profiles");
+    }
+
+    /// Sets (or, with `None`, removes) one shortcut override (`keys`).
+    pub fn set_key_binding(&mut self, action: &str, spec: Option<&str>) {
+        if action.is_empty() {
+            return;
+        }
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let keys = ensure_object(top, "keys");
+        match spec.filter(|spec| !spec.is_empty()) {
+            Some(spec) => {
+                keys.insert(action.into(), Value::String(spec.to_owned()));
+            }
+            None => {
+                keys.remove(action);
+            }
+        }
+        prune_empty(top, "keys");
+    }
+
+    /// Forgets every shortcut override, returning to the profile's
+    /// bindings — or, with no profile, to the editor's own.
+    pub fn clear_key_bindings(&mut self) {
+        self.root
+            .as_object_mut()
+            .expect("config root is always an object")
+            .remove("keys");
+    }
+
     /// The workspace-behavior section (`workspace`), serialized:
     /// `{"manifest_projects": bool, "recursive_config": bool,
     /// "projects": {root: {same flags}}}`. Top-level flags are the
@@ -1199,6 +1292,44 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("textchum-config-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join(name)
+    }
+
+    #[test]
+    fn a_keyboard_profile_is_chosen_saved_and_overridden() {
+        let (mut config, _) = Config::load(&temp_path("keys.json"));
+        assert_eq!(config.keys_profile(), "");
+
+        config.set_keys_profile(Some("vscode"));
+        assert_eq!(config.keys_profile(), "vscode");
+
+        config.set_key_binding("goToLine", Some("cmd+g"));
+        let bindings = crate::keys::effective(
+            &config.keys_profile(),
+            &config.key_profiles_json(),
+            &config.keys_json(),
+        );
+        assert_eq!(bindings.get("goToLine").map(String::as_str), Some("cmd+g"));
+        assert_eq!(bindings.get("renameSymbol").map(String::as_str), Some("f2"));
+
+        // Saving the result as a profile of its own, then leaving the
+        // overrides behind.
+        config.set_key_profile("mine", Some(&crate::keys::to_json(&bindings)));
+        config.set_keys_profile(Some("mine"));
+        config.clear_key_bindings();
+        assert_eq!(config.keys_json(), "{}");
+        let bindings = crate::keys::effective(
+            &config.keys_profile(),
+            &config.key_profiles_json(),
+            &config.keys_json(),
+        );
+        assert_eq!(bindings.get("goToLine").map(String::as_str), Some("cmd+g"));
+
+        // Rubbish never replaces a working profile.
+        config.set_key_profile("mine", Some("not json"));
+        assert!(config.key_profiles_json().contains("goToLine"));
+
+        config.set_key_profile("mine", None);
+        assert_eq!(config.key_profiles_json(), "{}");
     }
 
     #[test]

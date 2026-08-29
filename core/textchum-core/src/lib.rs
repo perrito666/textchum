@@ -23,6 +23,7 @@ mod history;
 pub mod hugo;
 pub mod icons;
 pub mod indent;
+pub mod keys;
 pub mod markdown;
 pub mod occurrences;
 pub mod references;
