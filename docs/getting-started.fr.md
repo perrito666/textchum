@@ -34,6 +34,7 @@ Autres cibles utiles :
 | `make smoke` | Compile tout puis exécute le test de fumée sans interface. |
 | `make check` | Tout ce que lance la CI : tests, test de fumée, contrôle de dérive de l'en-tête. |
 | `make app` | Construit un `Textchum.app` double-cliquable (avec icône) dans `dist/`. |
+| `make playground` | Crée un projet et un profil jetables, et ouvre la copie de travail dessus. |
 | `make docs` | Construit ce site de documentation dans `site/`. |
 | `make clean` | Supprime tous les produits de compilation. |
 
@@ -43,6 +44,43 @@ un zip de `Textchum.app` prêt à l'emploi et des tarballs Linux de
 `textchum-gtk` (x86_64 et arm64), chacun avec son SHA-256.
 L'application n'est pas signée : au premier lancement, faites un clic
 droit dessus et choisissez Ouvrir.
+
+## Le terrain d'essai
+
+Compiler vous dit que l'éditeur compile. Cela ne vous dit pas de quoi a
+l'air un changement face à un dépôt git avec un distant, un fichier aux
+modifications non validées, un projet imbriqué, une faute
+d'orthographe et quatre cents lignes à parcourir — `make playground` en
+fabrique donc un et ouvre dessus la copie de travail de l'éditeur.
+
+```
+make playground              le fabrique et ouvre l'éditeur dessus
+make playground KEEP=1       réutilise celui déjà fabriqué
+make playground OPEN=0       le fabrique et dit où il est, sans éditeur
+```
+
+Tout atterrit dans `build/playground` : le projet d'un côté, le profil
+entier de l'éditeur de l'autre. Ce que contient le projet :
+
+- **Python et Rust**, le crate Rust imbriqué dans le projet Python,
+  pour que les projets par manifeste et les réglages par projet aient
+  deux racines à distinguer.
+- **Une histoire** — quatre commits, deux auteurs, quatre mois
+  différents — pour que le blame de ligne ait quelque chose à dire.
+- **Une copie de travail dans l'état où elle est d'ordinaire** :
+  lignes modifiées, lignes ajoutées, lignes disparues, quelque chose
+  d'indexé et quelque chose de non suivi. La marge des changements
+  marque tout cela.
+- **Un distant qui ne mène nulle part**
+  (`github.com/textchum-playground/playground`), pour que copier l'URL
+  de la forge produise une URL.
+- **Un fichier avec une erreur de syntaxe** pour le serveur de langage
+  installé, **de la prose avec une faute** pour le correcteur, et
+  **quatre cents lignes** à parcourir.
+
+Le profil est remis avec `--data-dir` : la configuration, les thèmes,
+les packs d'icônes, la session et le journal du serveur de cette
+exécution sont donc tous dedans, et les vrais ne sont jamais ouverts.
 
 ## Structure du dépôt
 

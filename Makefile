@@ -13,7 +13,7 @@ DOCS_VENV     := .docs-venv
 
 # `linux` MUST stay in this list: a directory of that name exists, and
 # without .PHONY make declares it up to date and builds nothing.
-.PHONY: all build core run test smoke header-check check app docs docs-serve clean install-cli linux install-linux deb rpm
+.PHONY: all build core run test smoke header-check check app playground docs docs-serve clean install-cli linux install-linux deb rpm
 
 all: build
 
@@ -71,6 +71,13 @@ app: core
 	iconutil -c icns dist/Textchum.iconset -o $(APP_BUNDLE)/Contents/Resources/Textchum.icns
 	rm -rf dist/Textchum.iconset
 	@echo "Built $(APP_BUNDLE) — open it, or copy to /Applications"
+
+## A throwaway project and profile to develop against: a git repository
+## with Python and Rust, a remote that goes nowhere, uncommitted edits,
+## and a scratch profile so the real one is never opened. KEEP=1 reuses
+## the one already made.
+playground:
+	scripts/playground.sh
 
 ## The GTK shell (Linux only; needs gtk4/libadwaita/gtksourceview dev
 ## packages — see docs/getting-started.md).

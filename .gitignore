@@ -6,6 +6,9 @@ linux/target/
 macos/.build/
 macos/.swiftpm/
 
+# Packaging and playground output
+build/
+
 # Docs build output
 site/
 .docs-venv/

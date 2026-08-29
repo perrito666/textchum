@@ -34,6 +34,7 @@ Otros objetivos útiles:
 | `make smoke` | Compila todo y ejecuta la prueba de humo sin interfaz. |
 | `make check` | Todo lo que ejecuta la CI: pruebas, prueba de humo y verificación de la cabecera. |
 | `make app` | Construye un `Textchum.app` de doble clic (con icono) en `dist/`. |
+| `make playground` | Crea un proyecto y un perfil desechables y abre sobre ellos la copia de trabajo. |
 | `make docs` | Genera este sitio de documentación en `site/`. |
 | `make clean` | Elimina todos los productos de compilación. |
 
@@ -43,6 +44,42 @@ un zip de `Textchum.app` listo para usar y tarballs Linux de
 `textchum-gtk` (x86_64 y arm64), cada uno con su SHA-256. La aplicación
 no está firmada, así que en el primer arranque haga clic derecho sobre
 ella y elija Abrir.
+
+## El campo de pruebas
+
+Compilar te dice que el editor compila. No te dice qué aspecto tiene un
+cambio contra un repositorio git con remoto, un archivo con ediciones
+sin confirmar, un proyecto anidado, una falta de ortografía y
+cuatrocientas líneas que recorrer — así que `make playground` crea uno
+y abre encima la copia de trabajo del editor.
+
+```
+make playground              lo crea y abre el editor encima
+make playground KEEP=1       reutiliza el que ya está hecho
+make playground OPEN=0       lo crea y dice dónde está, sin editor
+```
+
+Todo aterriza en `build/playground`: el proyecto por un lado, el perfil
+entero del editor por otro. Lo que hay en el proyecto:
+
+- **Python y Rust**, con el crate de Rust anidado dentro del proyecto
+  de Python, para que los proyectos por manifiesto y los ajustes por
+  proyecto tengan dos raíces que distinguir.
+- **Historia** —cuatro commits, dos autores, cuatro meses distintos—
+  para que el blame de línea tenga algo que decir.
+- **Una copia de trabajo en el estado en que suelen estar**: líneas
+  cambiadas, líneas añadidas, líneas borradas, algo en el índice y algo
+  sin seguimiento. El margen de cambios lo marca todo.
+- **Un remoto que no lleva a ninguna parte**
+  (`github.com/textchum-playground/playground`), para que copiar la URL
+  de la forja produzca una URL.
+- **Un archivo con un error de sintaxis** para el servidor de lenguaje
+  que esté instalado, **prosa con una falta** para el corrector, y
+  **cuatrocientas líneas** que recorrer.
+
+El perfil se entrega con `--data-dir`, así que la configuración, los
+temas, los paquetes de iconos, la sesión y el registro del servidor de
+esa ejecución están todos dentro y los de verdad no se abren nunca.
 
 ## Estructura del repositorio
 

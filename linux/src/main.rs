@@ -8,6 +8,7 @@ mod ctags;
 mod lsp_edits;
 mod keyboard;
 mod page;
+mod paths;
 mod path_actions;
 mod preprocessors;
 mod spell;
@@ -114,13 +115,17 @@ fn main() -> gtk::glib::ExitCode {
     // implies not restoring the whole session into git's editor.
     let wait = std::env::args().any(|argument| argument == "--wait");
     let fresh = fresh || wait;
+    // A run with a profile of its own has to be its own process:
+    // handing the files to an instance already running would open them
+    // in that instance's profile, and the flag would have done nothing.
+    let own_profile = paths::has_data_dir();
 
     let mut flags = gio::ApplicationFlags::HANDLES_OPEN;
     // The smoke test is non-unique for the same reason --wait is, and
     // for one more: handed to an instance that is already running, it
     // would exit 0 having checked nothing — a green that means the
     // opposite of what it says.
-    if wait || smoke_test {
+    if wait || smoke_test || own_profile {
         flags |= gio::ApplicationFlags::NON_UNIQUE;
     }
     let app = adw::Application::builder()
@@ -212,11 +217,19 @@ fn main() -> gtk::glib::ExitCode {
 
     // GApplication consumes argv; strip our own flags so it does not
     // try to open files named after them.
-    let arguments: Vec<String> = std::env::args()
-        .filter(|argument| {
-            argument != "--smoke-test" && argument != "--fresh" && argument != "--wait"
-        })
-        .collect();
+    let mut arguments: Vec<String> = Vec::new();
+    let mut rest = std::env::args();
+    while let Some(argument) = rest.next() {
+        match argument.as_str() {
+            "--smoke-test" | "--fresh" | "--wait" => {}
+            // Its value goes with it, or GApplication tries to open a
+            // file named after the directory.
+            "--data-dir" => {
+                let _ = rest.next();
+            }
+            _ => arguments.push(argument),
+        }
+    }
     app.run_with_args(&arguments)
 }
 

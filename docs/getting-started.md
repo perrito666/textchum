@@ -32,6 +32,7 @@ Other useful targets:
 | `make smoke` | Builds everything, then runs the headless smoke test. |
 | `make check` | Everything CI runs: tests, smoke test, header drift check. |
 | `make app` | Builds a double-clickable `Textchum.app` (with icon) into `dist/`. |
+| `make playground` | Makes a throwaway project and profile, and opens the working copy on it. |
 | `make docs` | Builds this documentation site into `site/`. |
 | `make clean` | Removes all build products. |
 
@@ -40,6 +41,42 @@ Prefer not to build? Every `v*` tag publishes a
 ready-made `Textchum.app` zip and `textchum-gtk` Linux tarballs
 (x86_64 and arm64), each with its SHA-256. The app is not
 code-signed, so on first launch right-click it and choose Open.
+
+## The playground
+
+Building tells you the editor compiles. It does not tell you what a
+change looks like against a git repository with a remote, a file with
+uncommitted edits, a nested project, a misspelling and four hundred
+lines to scroll — so `make playground` makes one and opens the working
+copy of the editor on it.
+
+```
+make playground              build it and open the editor on it
+make playground KEEP=1       reuse the one already made
+make playground OPEN=0       make it and say where it is, no editor
+```
+
+Everything lands under `build/playground`: the project on one side, the
+editor's whole profile on the other. What is in the project:
+
+- **Python and Rust**, the Rust crate nested inside the Python project,
+  so manifest projects and per-project settings have two roots to tell
+  apart.
+- **History** — four commits, two authors, four different months — so
+  Blame Line has something to say.
+- **A working copy in the state one is usually in**: lines changed,
+  lines added, lines gone, something staged, something untracked. The
+  change gutter marks all of it.
+- **A remote that goes nowhere**
+  (`github.com/textchum-playground/playground`), so Copy Forge URL
+  produces a URL.
+- **A file with a syntax error** for whichever language server is
+  installed, **prose with a misspelling** for the spell pass, and
+  **four hundred lines** to scroll.
+
+The profile is handed over with `--data-dir`, so the configuration,
+themes, icon packs, session and server log of that run are all inside
+it and the real ones are never opened.
 
 ## Repository layout
 
