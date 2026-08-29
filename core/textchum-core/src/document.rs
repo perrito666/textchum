@@ -212,6 +212,29 @@ impl Document {
         ))
     }
 
+    /// Every stretch that can be folded, as `(first line, last line)`
+    /// with the lines zero-based: folding hides everything after the
+    /// first line, up to and including the last.
+    ///
+    /// Empty for plain text, which has no structure to fold.
+    pub fn fold_ranges(&self) -> Vec<(usize, usize)> {
+        let Some(syntax) = self.syntax.as_ref() else {
+            return Vec::new();
+        };
+        syntax.fold_ranges(self.buffer.rope())
+    }
+
+    /// The folds as JSON — `[{"start": 4, "end": 9}, …]` — for shells
+    /// that reach the core through the C ABI.
+    pub fn fold_ranges_json(&self) -> String {
+        let items: Vec<serde_json::Value> = self
+            .fold_ranges()
+            .into_iter()
+            .map(|(start, end)| serde_json::json!({"start": start, "end": end}))
+            .collect();
+        serde_json::Value::Array(items).to_string()
+    }
+
     /// Styled spans over the UTF-16 code unit range `start..end`, in
     /// application order (later spans win where they overlap). Empty for
     /// plain-text documents.

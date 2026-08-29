@@ -260,6 +260,9 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.redo", "<Ctrl><Shift>z"),
     ("win.preferences", "<Ctrl>comma"),
     ("win.close-tab", "<Ctrl>w"),
+    ("win.fold", "<Ctrl>bracketleft"),
+    ("win.fold-all", "<Ctrl><Alt>bracketleft"),
+    ("win.unfold-all", "<Ctrl>bracketright"),
     ("win.split", "<Ctrl>backslash"),
     ("win.unsplit", "<Ctrl><Shift>backslash"),
     ("win.focus-other-group", "<Ctrl>k"),
@@ -988,6 +991,33 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         if !hover.borrow().as_deref().unwrap_or("").contains("fake hover") {
             eprintln!("FAIL: hover text missing");
             return 1;
+        }
+
+        // Folding hides the lines after the one that opens a block.
+        // What is asserted here is the fold state; that GtkTextView
+        // honours an invisible tag is a rendering fact, checked by
+        // looking at it.
+        {
+            buffer.set_text("fn folded() {\n    let a = 1;\n    let b = 2;\n}\n");
+            context.iteration(false);
+            let page = workbench.selected().expect("a selected page");
+            if crate::page::has_folds(&page) {
+                eprintln!("FAIL: a fresh document is already folded");
+                return 1;
+            }
+            if !crate::page::fold_all(&page) {
+                eprintln!("FAIL: nothing folded in a document with a block");
+                return 1;
+            }
+            if !crate::page::has_folds(&page) {
+                eprintln!("FAIL: folding left no folds behind");
+                return 1;
+            }
+            if !crate::page::unfold_all(&page) || crate::page::has_folds(&page) {
+                eprintln!("FAIL: unfolding did not clear the folds");
+                return 1;
+            }
+            println!("folding ok (folds taken and given back)");
         }
 
         // Splitting moves the current document into a group of its

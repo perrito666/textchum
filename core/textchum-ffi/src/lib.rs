@@ -2721,6 +2721,24 @@ pub unsafe extern "C" fn tc_path_is_test(path: *const c_char, len: usize) -> boo
     .unwrap_or(false)
 }
 
+/// Every stretch of the document that can be folded, as a
+/// nul-terminated JSON array of `{"start": 4, "end": 9}` — lines
+/// zero-based, and folding hides everything after `start` up to and
+/// including `end`. Release with [`tc_string_free`].
+///
+/// Empty for plain text, which has no structure to fold.
+///
+/// # Safety
+/// `doc` must be a live document handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_folds(doc: *const TcDocument) -> *mut c_char {
+    let Some(doc) = (unsafe { doc.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(doc.inner.fold_ranges_json())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
 /// The code actions in a `textDocument/codeAction` result, as a
 /// nul-terminated JSON array of `{"title", "kind", "preferred"}`.
 /// Release with [`tc_string_free`].

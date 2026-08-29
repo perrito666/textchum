@@ -188,6 +188,9 @@ impl Workbench {
         edit_section.append(Some("Find in Project…"), Some("win.find-in-project"));
         edit_section.append(Some("Run Save Preprocessors"), Some("win.preprocess"));
         edit_section.append(Some("Redraw"), Some("win.redraw"));
+        edit_section.append(Some("Fold"), Some("win.fold"));
+        edit_section.append(Some("Fold All"), Some("win.fold-all"));
+        edit_section.append(Some("Unfold All"), Some("win.unfold-all"));
         edit_section.append(Some("Split Editor"), Some("win.split"));
         edit_section.append(Some("Close Split"), Some("win.unsplit"));
         edit_section.append(Some("Other Side"), Some("win.focus-other-group"));
@@ -1443,6 +1446,24 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         workbench
             .split
             .set_show_sidebar(!workbench.split.shows_sidebar());
+    });
+    add("fold", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        if !crate::page::toggle_fold(&page) {
+            workbench.toast("No block opens on this line.");
+        }
+    });
+    add("fold-all", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        if !crate::page::fold_all(&page) {
+            workbench.toast("Nothing here folds.");
+        }
+    });
+    add("unfold-all", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        if !crate::page::unfold_all(&page) {
+            workbench.toast("Nothing is folded.");
+        }
     });
     add("split", workbench, |workbench, _| {
         workbench.split();

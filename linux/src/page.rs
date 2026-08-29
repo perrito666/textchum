@@ -57,6 +57,8 @@ pub struct Page {
     /// A right-click does not move the caret, and the menu is about
     /// what was clicked.
     pub context_offset: Cell<Option<i32>>,
+    /// The line ranges folded away, by the line each one opens.
+    folded: RefCell<Vec<(i32, i32)>>,
 }
 
 /// The completion popup: a popover under the caret, filtered by the
@@ -95,6 +97,7 @@ impl Page {
         install_diagnostic_tags(&buffer);
         crate::spell::install_tag(&buffer);
         install_occurrence_tag(&buffer);
+        install_fold_tag(&buffer);
 
         let view = sourceview5::View::with_buffer(&buffer);
         view.set_monospace(true);
@@ -233,6 +236,7 @@ impl Page {
             change_bar: change_bar.clone(),
             change_marks: RefCell::new(Vec::new()),
             context_offset: Cell::new(None),
+            folded: RefCell::new(Vec::new()),
         });
         install_completion_keys(&page);
         install_snippet_keys(&page);
@@ -454,6 +458,116 @@ pub fn apply_whole_document(page: &Rc<Page>, new: &str) {
     buffer.delete(&mut start, &mut end);
     let mut at = start;
     buffer.insert(&mut at, &replacement);
+}
+
+// MARK: Folding
+
+/// The tag folded lines wear.
+const FOLD_TAG: &str = "folded";
+
+/// Installs that tag on a fresh buffer.
+fn install_fold_tag(buffer: &sourceview5::Buffer) {
+    let tag = gtk::TextTag::new(Some(FOLD_TAG));
+    tag.set_invisible(true);
+    buffer.tag_table().add(&tag);
+}
+
+/// Folds the block the caret's line opens, or unfolds it when it is
+/// already folded.
+///
+/// What is hidden is everything after the opening line, so the line
+/// that says what the block is stays where it was.
+pub fn toggle_fold(page: &Rc<Page>) -> bool {
+    let buffer = &page.buffer;
+    let line = buffer.iter_at_mark(&buffer.get_insert()).line();
+    if unfold_line(page, line) {
+        return true;
+    }
+    let folds = page.state.borrow().document.fold_ranges();
+    let Some((start, end)) = folds.into_iter().find(|(start, _)| *start as i32 == line) else {
+        return false;
+    };
+    fold(page, start as i32, end as i32)
+}
+
+/// Folds one range, by the lines it covers.
+fn fold(page: &Rc<Page>, start: i32, end: i32) -> bool {
+    let buffer = &page.buffer;
+    let Some(mut from) = buffer.iter_at_line(start) else {
+        return false;
+    };
+    if !from.ends_line() {
+        from.forward_to_line_end();
+    }
+    let Some(mut to) = buffer.iter_at_line(end) else {
+        return false;
+    };
+    if !to.ends_line() {
+        to.forward_to_line_end();
+    }
+    if from >= to {
+        return false;
+    }
+    buffer.apply_tag_by_name(FOLD_TAG, &from, &to);
+    page.folded.borrow_mut().push((start, end));
+    true
+}
+
+/// Unfolds the range opening on `line`, if one is folded there.
+fn unfold_line(page: &Rc<Page>, line: i32) -> bool {
+    let found = page
+        .folded
+        .borrow()
+        .iter()
+        .position(|(start, _)| *start == line);
+    let Some(at) = found else { return false };
+    let (start, end) = page.folded.borrow_mut().remove(at);
+    let buffer = &page.buffer;
+    let (Some(from), Some(mut to)) = (buffer.iter_at_line(start), buffer.iter_at_line(end))
+    else {
+        return false;
+    };
+    if !to.ends_line() {
+        to.forward_to_line_end();
+    }
+    buffer.remove_tag_by_name(FOLD_TAG, &from, &to);
+    true
+}
+
+/// Folds every block in the document.
+pub fn fold_all(page: &Rc<Page>) -> bool {
+    let folds = page.state.borrow().document.fold_ranges();
+    let mut any = false;
+    for (start, end) in folds {
+        let (start, end) = (start as i32, end as i32);
+        // A block inside one already folded is hidden either way.
+        let inside = page
+            .folded
+            .borrow()
+            .iter()
+            .any(|(from, to)| start > *from && start <= *to);
+        if inside {
+            continue;
+        }
+        any |= fold(page, start, end);
+    }
+    any
+}
+
+/// Unfolds everything.
+pub fn unfold_all(page: &Rc<Page>) -> bool {
+    if page.folded.borrow().is_empty() {
+        return false;
+    }
+    let buffer = &page.buffer;
+    buffer.remove_tag_by_name(FOLD_TAG, &buffer.start_iter(), &buffer.end_iter());
+    page.folded.borrow_mut().clear();
+    true
+}
+
+/// Whether anything is folded.
+pub fn has_folds(page: &Rc<Page>) -> bool {
+    !page.folded.borrow().is_empty()
 }
 
 // MARK: Transformations
