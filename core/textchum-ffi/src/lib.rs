@@ -2133,6 +2133,86 @@ pub unsafe extern "C" fn tc_path_is_test(path: *const c_char, len: usize) -> boo
     .unwrap_or(false)
 }
 
+/// What to do with a `textDocument/definition` answer, given where the
+/// caret is.
+///
+/// Jump to Definition has nowhere to go when the caret is already on
+/// the definition, so the same key asks who uses the symbol instead.
+/// The answer in hand decides it — no second request.
+///
+/// `result` is the response's `result` member as JSON. `line` and
+/// `character` are the caret in LSP terms (zero-based, UTF-16 units).
+///
+/// Returns a nul-terminated JSON object, released with
+/// [`tc_string_free`]:
+///
+/// ```json
+/// {"action": "jump", "targets": [{"path": "/p/lib.rs", "line": 40,
+///                                 "character": 3}]}
+/// ```
+///
+/// `action` is `nothing`, `jump`, `references` (the caret is on the
+/// definition) or `choose` (several, and the reader picks).
+///
+/// # Safety
+/// `result` must point to `result_len` readable bytes and `path` to
+/// `path_len`.
+#[no_mangle]
+pub unsafe extern "C" fn tc_definition_decide(
+    result: *const c_char,
+    result_len: usize,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> *mut c_char {
+    let Some(result) = (unsafe { str_from_raw(result, result_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let decision = textchum_core::definition::decide(result, path, line, character);
+        owned_c_string(textchum_core::definition::to_json(&decision))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// The reference locations that are not the one the caret is in.
+///
+/// `textDocument/references` includes the declaration, so a definition
+/// nobody calls answers with the line the caret is on. What is left
+/// after dropping it is the uses.
+///
+/// Returns a nul-terminated JSON array of `{"path", "line",
+/// "character"}`, released with [`tc_string_free`].
+///
+/// # Safety
+/// `result` must point to `result_len` readable bytes and `path` to
+/// `path_len`.
+#[no_mangle]
+pub unsafe extern "C" fn tc_references_elsewhere(
+    result: *const c_char,
+    result_len: usize,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> *mut c_char {
+    let Some(result) = (unsafe { str_from_raw(result, result_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let targets = textchum_core::definition::elsewhere(result, path, line, character);
+        owned_c_string(textchum_core::definition::targets_to_json(&targets))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// The gutter marks for a file: which lines differ from the same file
 /// at `HEAD`. `text` is the buffer's current contents, so the marks
 /// follow what is being edited rather than what is on disk.

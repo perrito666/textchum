@@ -41,7 +41,12 @@ nadie.
   incluso con el hover del ratón apagado.
 - **Saltar a la definición** (⌃⌘J, o ⌘-clic) va al símbolo bajo el
   cursor — entre archivos, abriendo o trayendo al frente el destino
-  según haga falta.
+  según haga falta. Sobre la definición no tiene adónde ir, así que
+  responde la pregunta que queda: quién usa esto. Un uso es un salto,
+  varios abren la lista, y un símbolo al que nadie se refiere lo dice.
+  Un servidor que contesta con varias definiciones —una declaración y
+  su implementación— las ofrece igual. El atajo de buscar referencias
+  sigue como estaba.
 - **Buscar referencias** (⇧⌘R) lista cada uso del símbolo bajo el
   cursor en un panel flotante — ↑/↓ para moverse, ⏎ para saltar.
   Primero el código y después las pruebas, cada parte bajo un

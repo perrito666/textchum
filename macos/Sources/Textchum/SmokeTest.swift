@@ -774,6 +774,51 @@ func runSmokeTest() -> Int32 {
     }
     print("reference split ok (conventions matched, near-misses left alone)")
 
+    // Jump to Definition with the caret already on the definition has
+    // nowhere to go, and asks who uses the symbol instead. The decision
+    // is the core's; what is checked here is that it survives the
+    // bridge with its answer intact.
+    let definitionResult = """
+        [{"uri": "file:///p/lib.rs", "range": {"start": {"line": 40, "character": 3}, \
+        "end": {"line": 40, "character": 9}}}]
+        """
+    guard
+        case .references = CoreDefinition.decide(
+            result: definitionResult, path: "/p/lib.rs", line: 40, character: 5)
+    else {
+        print("FAIL: the caret on the definition did not ask for references")
+        return 1
+    }
+    guard
+        case .jump(let definitionTarget) = CoreDefinition.decide(
+            result: definitionResult, path: "/p/main.rs", line: 2, character: 5),
+        definitionTarget.path == "/p/lib.rs", definitionTarget.line == 40
+    else {
+        print("FAIL: a definition elsewhere was not a jump")
+        return 1
+    }
+    guard case .nothing = CoreDefinition.decide(
+        result: "null", path: "/p/lib.rs", line: 1, character: 1)
+    else {
+        print("FAIL: an empty definition answer was not nothing")
+        return 1
+    }
+    // The declaration comes back among the references; the uses are
+    // what is left after dropping it.
+    let uses = CoreDefinition.elsewhere(
+        result: """
+            [{"uri": "file:///p/lib.rs", "range": {"start": {"line": 40, "character": 3}, \
+            "end": {"line": 40, "character": 9}}}, \
+            {"uri": "file:///p/main.rs", "range": {"start": {"line": 7, "character": 8}, \
+            "end": {"line": 7, "character": 14}}}]
+            """,
+        path: "/p/lib.rs", line: 40, character: 5)
+    guard uses.count == 1, uses[0].path == "/p/main.rs", uses[0].line == 7 else {
+        print("FAIL: the caret's own line survived the reference filter")
+        return 1
+    }
+    print("definition key ok (jump, on-the-definition, uses without the declaration)")
+
     // Repainting the syntax colours on every scroll turn was the
     // stutter; the margin around the viewport is there so that most
     // turns need no repaint at all. The wiring needs a window server,

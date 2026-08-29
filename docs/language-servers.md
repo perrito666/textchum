@@ -34,6 +34,12 @@ never join someone else's workspace either.
   the caret on demand — even with mouse hover off.
 - **Jump to Definition** (⌃⌘J, or ⌘-click) goes to the symbol under
   the caret — across files, opening or fronting the target as needed.
+  On the definition it has nowhere to go, so it answers the question
+  that is left: who uses this. One use is a jump, several open the
+  list, and a symbol nothing refers to says so. A server that answers
+  with several definitions — a declaration and an implementation —
+  offers them the same way. The explicit Find References shortcut is
+  unchanged.
 - **Find References** (⇧⌘R) lists every use of the symbol under the
   caret in a floating panel — ↑/↓ to move, ⏎ to jump. Code comes
   first, tests after, each under a heading with a count: what calls

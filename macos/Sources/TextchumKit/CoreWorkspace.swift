@@ -158,6 +158,99 @@ public enum CoreReferences {
     }
 }
 
+/// What to do with a definition answer.
+///
+/// Jump to Definition has nowhere to go when the caret is already on
+/// the definition, so the same key asks who uses the symbol instead.
+/// The answer already in hand decides it.
+public enum CoreDefinition {
+    /// A place a server pointed at, in LSP terms.
+    public struct Target {
+        public let path: String
+        public let line: Int
+        public let character: Int
+    }
+
+    public enum Decision {
+        /// The server pointed nowhere.
+        case nothing
+        /// One place, elsewhere.
+        case jump(Target)
+        /// The caret is on the definition: ask who uses it.
+        case references
+        /// Several places; the reader picks.
+        case choose([Target])
+    }
+
+    /// Reads a `textDocument/definition` result. `line` and `character`
+    /// are the caret, zero-based and in UTF-16 units.
+    public static func decide(
+        result: String, path: String, line: Int, character: Int
+    ) -> Decision {
+        let json = call(
+            tc_definition_decide, result: result, path: path,
+            line: line, character: character)
+        guard let json,
+            let parsed = try? JSONSerialization.jsonObject(with: Data(json.utf8))
+                as? [String: Any],
+            let action = parsed["action"] as? String
+        else { return .nothing }
+        let targets = targets(from: parsed["targets"])
+        switch action {
+        case "jump": return targets.first.map(Decision.jump) ?? .nothing
+        case "references": return .references
+        case "choose": return targets.isEmpty ? .nothing : .choose(targets)
+        default: return .nothing
+        }
+    }
+
+    /// The reference locations that are not the one the caret is in.
+    /// Find References includes the declaration, and a definition
+    /// nobody calls answers with the line the caret is on.
+    public static func elsewhere(
+        result: String, path: String, line: Int, character: Int
+    ) -> [Target] {
+        let json = call(
+            tc_references_elsewhere, result: result, path: path,
+            line: line, character: character)
+        guard let json else { return [] }
+        return targets(from: try? JSONSerialization.jsonObject(with: Data(json.utf8)))
+    }
+
+    private static func call(
+        _ function: (UnsafePointer<CChar>?, UInt, UnsafePointer<CChar>?, UInt, UInt32, UInt32)
+            -> UnsafeMutablePointer<CChar>?,
+        result: String, path: String, line: Int, character: Int
+    ) -> String? {
+        var result = result
+        let raw = result.withUTF8 { bytes -> UnsafeMutablePointer<CChar>? in
+            path.withCString { pathPointer in
+                function(
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count),
+                    pathPointer, UInt(strlen(pathPointer)),
+                    UInt32(max(0, line)), UInt32(max(0, character)))
+            }
+        }
+        guard let raw else { return nil }
+        defer { tc_string_free(raw) }
+        return String(cString: raw)
+    }
+
+    private static func targets(from parsed: Any?) -> [Target] {
+        guard let items = parsed as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let path = item["path"] as? String,
+                let line = item["line"] as? Int,
+                let character = item["character"] as? Int
+            else { return nil }
+            return Target(path: path, line: line, character: character)
+        }
+    }
+}
+
 /// Which lines of a file differ from the same file at `HEAD` — what the
 /// gutter draws beside the line numbers.
 public enum CoreChanges {

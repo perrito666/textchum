@@ -652,6 +652,9 @@ final class EditorWindowController: NSWindowController {
     /// language server's answer, or the ctags index for projects that
     /// opted into the fallback (also consulted when the server has no
     /// answer).
+    ///
+    /// With the caret already on the definition the key has nowhere to
+    /// go, so it asks the question that is left — who uses this.
     @objc func jumpToDefinition(_ sender: Any?) {
         guard let textView else { return }
         guard let lspApp, let path = lspOpenPath else {
@@ -663,10 +666,49 @@ final class EditorWindowController: NSWindowController {
         let (line, character) = Self.lspPosition(ofIndex: index, in: text)
         lspApp.lspDefinition(path: path, line: line, character: character) { [weak self] json in
             guard let self else { return }
-            if let location = Self.firstLocation(fromResultJSON: json) {
-                self.openLocation?(location.path, location.line, location.character)
-            } else if !self.ctagsJump() {
-                NSSound.beep()
+            switch CoreDefinition.decide(
+                result: json, path: path, line: line, character: character)
+            {
+            case .jump(let target):
+                self.openLocation?(target.path, target.line, target.character)
+            case .references:
+                self.usesOfDefinition(path: path, line: line, character: character)
+            case .choose(let targets):
+                self.showReferences(
+                    targets.map {
+                        ReferenceLocation(path: $0.path, line: $0.line, character: $0.character)
+                    },
+                    title: "Definitions (\(targets.count))")
+            case .nothing:
+                if !self.ctagsJump() { NSSound.beep() }
+            }
+        }
+    }
+
+    /// The caret is on the definition, so the jump key asks who uses
+    /// the symbol. One use is a jump — opening a panel to offer a
+    /// single row asks for a keystroke that decides nothing. Several
+    /// open the panel. None says so: a beep here reads as a failure,
+    /// and the answer is that nothing refers to it.
+    private func usesOfDefinition(path: String, line: Int, character: Int) {
+        guard let lspApp else { return }
+        lspApp.lspReferences(path: path, line: line, character: character) { [weak self] json in
+            guard let self else { return }
+            let uses = CoreDefinition.elsewhere(
+                result: json, path: path, line: line, character: character)
+            switch uses.count {
+            case 0:
+                self.presentInfo(
+                    "On the definition",
+                    details: "Nothing else in the workspace refers to this symbol.")
+            case 1:
+                self.openLocation?(uses[0].path, uses[0].line, uses[0].character)
+            default:
+                self.showReferences(
+                    uses.map {
+                        ReferenceLocation(path: $0.path, line: $0.line, character: $0.character)
+                    },
+                    title: "Uses (\(uses.count))")
             }
         }
     }
@@ -769,7 +811,7 @@ final class EditorWindowController: NSWindowController {
     /// heading with a count. What calls this is the question; what
     /// checks it is the follow-up. All of one or the other gets no
     /// headings — a heading over every row there is says nothing.
-    private func showReferences(_ locations: [ReferenceLocation]) {
+    private func showReferences(_ locations: [ReferenceLocation], title: String? = nil) {
         var lineCache: [String: [Substring]] = [:]
         func lineText(_ location: ReferenceLocation) -> String {
             if lineCache[location.path] == nil {
@@ -801,7 +843,8 @@ final class EditorWindowController: NSWindowController {
             ordered = code + tests
         }
         listPanel.show(
-            rows: rows, over: window, title: "References (\(locations.count))",
+            rows: rows, over: window,
+            title: title ?? "References (\(locations.count))",
             monospaced: true
         ) { [weak self] index in
             guard ordered.indices.contains(index) else { return }
@@ -994,36 +1037,6 @@ final class EditorWindowController: NSWindowController {
         while isWord(start - 1) { start -= 1 }
         while isWord(end) { end += 1 }
         return text.substring(with: NSRange(location: start, length: end - start))
-    }
-
-    /// Extracts the first target from an LSP definition result: a
-    /// `Location`, `Location[]`, or `LocationLink[]`.
-    private static func firstLocation(
-        fromResultJSON json: String
-    ) -> (path: String, line: Int, character: Int)? {
-        guard let data = json.data(using: .utf8),
-            let parsed = try? JSONSerialization.jsonObject(with: data)
-        else { return nil }
-        let candidate: [String: Any]?
-        if let array = parsed as? [[String: Any]] {
-            candidate = array.first
-        } else {
-            candidate = parsed as? [String: Any]
-        }
-        guard let candidate else { return nil }
-        // Location uses uri/range; LocationLink uses targetUri and
-        // targetSelectionRange (preferred) or targetRange.
-        let uri = (candidate["uri"] ?? candidate["targetUri"]) as? String
-        let range =
-            (candidate["range"] ?? candidate["targetSelectionRange"]
-                ?? candidate["targetRange"]) as? [String: Any]
-        guard let uri, uri.hasPrefix("file://"),
-            let start = range?["start"] as? [String: Any],
-            let line = start["line"] as? Int,
-            let character = start["character"] as? Int,
-            let url = URL(string: uri)
-        else { return nil }
-        return (url.path, line, character)
     }
 
     // MARK: Session position
