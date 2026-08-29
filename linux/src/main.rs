@@ -265,6 +265,7 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.unfold-all", "<Ctrl>bracketright"),
     ("win.split", "<Ctrl>backslash"),
     ("win.unsplit", "<Ctrl><Shift>backslash"),
+    ("win.focus-other-group", "<Ctrl>grave"),
     ("win.reopen-tab", "<Ctrl><Shift>t"),
     ("window.close", "<Ctrl><Shift>w"),
     ("app.quit", "<Ctrl>q"),
@@ -1034,21 +1035,49 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 }
             }
             shell.rename_document(again.id, Some("/tmp/renamed-by-the-smoke-test"), &path);
-            // A view reads its file through the document, so what one
-            // view learns, every view of that file knows.
-            let folded_before = page.document.folded.borrow().len();
-            crate::page::fold_all(&page);
-            if page.document.folded.borrow().len() <= folded_before {
-                eprintln!("FAIL: folding did not reach the document");
-                return 1;
-            }
-            crate::page::unfold_all(&page);
             let path_now = page.document.path.borrow().clone();
             if path_now != page.path().borrow().clone() {
                 eprintln!("FAIL: the view and its document disagree about the path");
                 return 1;
             }
             println!("documents ok (one per path, renamed without a second)");
+
+            // Splitting: a second view of the same document, in the
+            // group beside it. One buffer, so a change in either is
+            // the same change, and closing one half leaves the file
+            // open in the other.
+            workbench.split();
+            if page.document.views().len() != 2 {
+                eprintln!("FAIL: splitting did not make a second view");
+                return 1;
+            }
+            if !workbench.is_split() {
+                eprintln!("FAIL: the window did not split");
+                return 1;
+            }
+            let views = page.document.views();
+            if views[0].buffer != views[1].buffer {
+                eprintln!("FAIL: the two views are not of one buffer");
+                return 1;
+            }
+            if shell.document_count() != opened {
+                eprintln!("FAIL: a split opened a second document");
+                return 1;
+            }
+            workbench.unsplit();
+            if workbench.is_split() {
+                eprintln!("FAIL: the window stayed split");
+                return 1;
+            }
+            if page.document.views().len() != 1 {
+                eprintln!("FAIL: the second view outlived the split");
+                return 1;
+            }
+            if shell.document(page.document.id).is_none() {
+                eprintln!("FAIL: closing a view closed the file");
+                return 1;
+            }
+            println!("splitting ok (two views of one document, closed back to one)");
         }
 
         // Folding hides the lines after the one that opens a block.
@@ -1069,6 +1098,12 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
             if !crate::page::has_folds(&page) {
                 eprintln!("FAIL: folding left no folds behind");
+                return 1;
+            }
+            // The fold is the document's, so a second view of the file
+            // opens on a folded block rather than an unfolded one.
+            if page.document.folded.borrow().is_empty() {
+                eprintln!("FAIL: the fold did not reach the document");
                 return 1;
             }
             if !crate::page::unfold_all(&page) || crate::page::has_folds(&page) {

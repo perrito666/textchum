@@ -23,6 +23,7 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("unfoldAll", "Unfold All", "win.unfold-all"),
     ("splitEditor", "Split Editor", "win.split"),
     ("closeSplit", "Close Split", "win.unsplit"),
+    ("otherSide", "Other Side", "win.focus-other-group"),
     ("reopenClosed", "Reopen Closed Tab", "win.reopen-tab"),
     ("fileProperties", "File Properties", "win.file-properties"),
     ("undo", "Undo", "win.undo"),
