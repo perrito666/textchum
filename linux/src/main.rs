@@ -103,6 +103,80 @@ fn announce_sandbox_note(workbench: &std::rc::Rc<Workbench>) {
     });
 }
 
+/// Asks about the files with changes that were never saved, and
+/// answers whether it asked. Quitting waits for the answer.
+fn asks_before_quitting(app: &adw::Application) -> bool {
+    let shell = shell::Shell::instance();
+    let unsaved = shell.unsaved_documents();
+    if unsaved.is_empty() {
+        return false;
+    }
+    let Some(workbench) = Workbench::active() else { return false };
+    let names: Vec<String> = unsaved
+        .iter()
+        .map(|document| {
+            document
+                .path
+                .borrow()
+                .as_deref()
+                .and_then(|path| {
+                    std::path::Path::new(path)
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                })
+                .unwrap_or_else(|| "Untitled".to_string())
+        })
+        .collect();
+    let title = if names.len() == 1 {
+        format!("Save changes to {}?", names[0])
+    } else {
+        format!("Save changes to {} files?", names.len())
+    };
+    let dialog = adw::AlertDialog::new(Some(&title), Some(&names.join(", ")));
+    dialog.add_response("cancel", "Cancel");
+    dialog.add_response("discard", "Quit Without Saving");
+    dialog.add_response("save", "Save All");
+    dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
+    dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+    dialog.set_default_response(Some("save"));
+    dialog.set_close_response("cancel");
+    let app = app.clone();
+    let window = workbench.window.clone();
+    dialog.connect_response(None, move |_, response| {
+        match response {
+            "save" => {
+                let mut homeless = 0;
+                for document in &unsaved {
+                    if document.path.borrow().is_none() {
+                        homeless += 1;
+                        continue;
+                    }
+                    let saved = document.state.borrow_mut().document.save().is_ok();
+                    if let (true, Some(path)) = (saved, document.path.borrow().as_deref()) {
+                        shell::Shell::instance().note_own_save(path);
+                    }
+                }
+                if homeless > 0 {
+                    // Nowhere to write them: quitting now would be the
+                    // discard the user did not ask for.
+                    if let Some(workbench) = Workbench::active() {
+                        workbench.toast(
+                            "Untitled files have nowhere to be saved. Save them first, \
+                             or quit without saving.",
+                        );
+                    }
+                    return;
+                }
+            }
+            "discard" => {}
+            _ => return,
+        }
+        app.quit();
+    });
+    dialog.present(Some(&window));
+    true
+}
+
 fn main() -> gtk::glib::ExitCode {
     // Before anything creates a web view, and before GTK starts: this
     // works by setting an environment variable WebKit reads once.
@@ -192,7 +266,15 @@ fn main() -> gtk::glib::ExitCode {
         let quit = gio::SimpleAction::new("quit", None);
         {
             let app = app.clone();
-            quit.connect_activate(move |_, _| app.quit());
+            quit.connect_activate(move |_, _| {
+                // Files can be set to outlive their windows, so the
+                // ones with unsaved changes are settled here, where
+                // the editor itself closes.
+                if asks_before_quitting(&app) {
+                    return;
+                }
+                app.quit();
+            });
         }
         app.add_action(&quit);
         apply_key_overrides(app);
@@ -1078,6 +1160,52 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 return 1;
             }
             println!("splitting ok (two views of one document, closed back to one)");
+
+            // Closing the last view keeps the document in the cache, so
+            // opening the file again is taking the closing back rather
+            // than reading the file: what was typed and never saved is
+            // still there.
+            let path = page.path().borrow().clone().expect("a path");
+            let id = page.document.id;
+            let cached_before = shell.closed_document_count();
+            page.buffer.insert(&mut page.buffer.end_iter(), "// unsaved\n");
+            context.iteration(false);
+            let tab = workbench
+                .active_view()
+                .selected_page()
+                .expect("a selected tab");
+            workbench.forget(&tab);
+            workbench.active_view().close_page_finish(&tab, true);
+            context.iteration(false);
+            if shell.document(id).is_some() {
+                eprintln!("FAIL: the document stayed open after its last view closed");
+                return 1;
+            }
+            if shell.closed_document_count() != cached_before + 1 {
+                eprintln!("FAIL: the closed document was not kept");
+                return 1;
+            }
+            let Some(back) = shell.reclaim_document(&path) else {
+                eprintln!("FAIL: the closed document did not come back");
+                return 1;
+            };
+            if back.id != id {
+                eprintln!("FAIL: reopening made a second document");
+                return 1;
+            }
+            if !back
+                .state
+                .borrow()
+                .document
+                .text()
+                .contains("// unsaved")
+            {
+                eprintln!("FAIL: the unsaved text did not survive the closing");
+                return 1;
+            }
+            workbench.show(&back, None);
+            context.iteration(false);
+            println!("closed documents ok (kept whole, taken back with what was typed)");
         }
 
         // Folding hides the lines after the one that opens a block.

@@ -1288,6 +1288,27 @@ pub unsafe extern "C" fn tc_config_set_line_numbers(config: *mut TcConfig, shown
     }
 }
 
+/// Whether a file stays open when the window showing it closes
+/// (default false).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_keep_buffers(config: *const TcConfig) -> bool {
+    unsafe { config.as_ref() }.is_some_and(|c| c.inner.keep_buffers())
+}
+
+/// Sets whether a file stays open when its window closes.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_keep_buffers(config: *mut TcConfig, keep: bool) {
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_keep_buffers(keep);
+    }
+}
+
 /// The keyboard-shortcut overrides (`keys` section), serialized as an
 /// object of `{action: "modifiers+key"}` entries; `{}` when unset.
 /// Release with [`tc_string_free`].

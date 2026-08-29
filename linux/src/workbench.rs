@@ -27,6 +27,10 @@ pub struct Workbench {
     secondary: RefCell<Option<adw::TabView>>,
     /// Whether the second group is the one commands act on.
     secondary_focused: Cell<bool>,
+    /// Set while a window closes that has already asked about its
+    /// unsaved files, so the close it starts again goes straight
+    /// through.
+    closing_settled: Cell<bool>,
     title: adw::WindowTitle,
     toasts: adw::ToastOverlay,
     split: adw::OverlaySplitView,
@@ -361,6 +365,7 @@ impl Workbench {
             editor_paned: editor_paned.clone(),
             secondary: RefCell::new(None),
             secondary_focused: Cell::new(false),
+            closing_settled: Cell::new(false),
             title,
             toasts,
             split,
@@ -385,6 +390,28 @@ impl Workbench {
         WORKBENCHES.with(|list| list.borrow_mut().push(Rc::clone(&workbench)));
 
         workbench.install_group(&tab_view);
+        {
+            // Closing a window is closing what it shows, unless the
+            // files are set to outlive their windows.
+            let weak = Rc::downgrade(&workbench);
+            window.connect_close_request(move |_| {
+                let Some(workbench) = weak.upgrade() else {
+                    return glib::Propagation::Proceed;
+                };
+                if workbench.closing_settled.replace(false) {
+                    return glib::Propagation::Proceed;
+                }
+                if Shell::instance().config.borrow().keep_buffers() {
+                    workbench.stash_documents();
+                    return glib::Propagation::Proceed;
+                }
+                if workbench.asks_about_closing() {
+                    return glib::Propagation::Stop;
+                }
+                workbench.stash_documents();
+                glib::Propagation::Proceed
+            });
+        }
         // Search acts on the selected page's context.
         {
             let workbench = Rc::downgrade(&workbench);
@@ -564,6 +591,13 @@ impl Workbench {
             let workbench = Rc::downgrade(self);
             view.connect_close_page(move |view, tab_page| {
                 if let Some(workbench) = workbench.upgrade() {
+                    // The last view of a document with unsaved changes
+                    // asks before it takes them with it. The close
+                    // waits for the answer: adw::TabView expects the
+                    // handler to finish it whenever it can.
+                    if workbench.asks_about_unsaved(view, tab_page) {
+                        return glib::Propagation::Stop;
+                    }
                     workbench.forget(tab_page);
                     // A group emptied by its last tab closing is a
                     // divider with nothing on one side of it.
@@ -814,7 +848,250 @@ impl Workbench {
         crate::session::save();
     }
 
-    fn forget(&self, tab_page: &adw::TabPage) {
+    /// Puts a view of a document that is already open in the group
+    /// with the focus, and selects it.
+    pub fn show(self: &Rc<Self>, document: &Rc<crate::shell::OpenDocument>, at: Option<(i32, usize)>) {
+        let page = Page::view_of(document);
+        let view = self.active_view();
+        let tab_page = view.append(&page.root);
+        tab_page.set_title(&page.display_name());
+        self.pages.borrow_mut().push(Rc::clone(&page));
+        if let Some(path) = document.path.borrow().clone() {
+            let handles = Rc::new(PageHandles {
+                window: self.window.clone(),
+                tab_view: view.clone(),
+                tab_page: tab_page.clone(),
+                document: Rc::clone(document),
+                view: page.view.clone(),
+                toasts: self.toasts.clone(),
+                title: self.title.clone(),
+                language: RefCell::new(
+                    page.state
+                        .borrow()
+                        .document
+                        .language_name()
+                        .unwrap_or("")
+                        .to_string(),
+                ),
+                problems: RefCell::new(String::new()),
+                detail: RefCell::new(String::new()),
+            });
+            Shell::instance().pages.borrow_mut().insert(path.clone(), Rc::clone(&handles));
+            if let Some((line, character)) = at {
+                page::reveal(&handles, line, character);
+            }
+            // The server hears about it again: it was told the file
+            // closed when the last view went.
+            if let Some(language) = page.state.borrow().document.language_name() {
+                let text = page.state.borrow().document.text();
+                Shell::instance()
+                    .pool
+                    .borrow_mut()
+                    .did_open(Path::new(&path), language, &text);
+            }
+        }
+        view.set_selected_page(&tab_page);
+        self.refresh_chrome();
+        self.refresh_sidebar();
+    }
+
+    /// The documents this window is the last place to see, with
+    /// changes that were never saved.
+    pub fn unsaved_documents(&self) -> Vec<Rc<crate::shell::OpenDocument>> {
+        let mut found: Vec<Rc<crate::shell::OpenDocument>> = Vec::new();
+        for page in self.pages.borrow().iter() {
+            let document = &page.document;
+            if !document.state.borrow().document.is_dirty() {
+                continue;
+            }
+            if found.iter().any(|other| other.id == document.id) {
+                continue;
+            }
+            // A view in another window keeps the file open there.
+            let elsewhere = document.views().iter().any(|view| {
+                !self.pages.borrow().iter().any(|mine| Rc::ptr_eq(mine, view))
+            });
+            if elsewhere {
+                continue;
+            }
+            found.push(Rc::clone(document));
+        }
+        found
+    }
+
+    /// Hands this window's documents to the shell's cache on the way
+    /// out, so that reopening one of them within the next twenty
+    /// closings gets the buffer back rather than the file.
+    fn stash_documents(&self) {
+        let pages: Vec<Rc<Page>> = self.pages.borrow().clone();
+        for page in pages {
+            let document = Rc::clone(&page.document);
+            document.drop_view(&page);
+            if !document.views().is_empty() {
+                continue;
+            }
+            if let Some(path) = document.path.borrow().clone() {
+                Shell::instance().pages.borrow_mut().remove(&path);
+                Shell::instance()
+                    .pool
+                    .borrow_mut()
+                    .did_close(Path::new(&path));
+            }
+            Shell::instance().close_document(document.id);
+        }
+        self.pages.borrow_mut().clear();
+    }
+
+    /// Asks about the files this window would take unsaved changes
+    /// from, and answers whether it asked.
+    fn asks_about_closing(self: &Rc<Self>) -> bool {
+        let unsaved = self.unsaved_documents();
+        if unsaved.is_empty() {
+            return false;
+        }
+        let names: Vec<String> = unsaved
+            .iter()
+            .map(|document| {
+                document
+                    .path
+                    .borrow()
+                    .as_deref()
+                    .and_then(|path| {
+                        Path::new(path)
+                            .file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                    })
+                    .unwrap_or_else(|| "Untitled".to_string())
+            })
+            .collect();
+        let title = if names.len() == 1 {
+            format!("Save changes to {}?", names[0])
+        } else {
+            format!("Save changes to {} files?", names.len())
+        };
+        let dialog = adw::AlertDialog::new(Some(&title), Some(&names.join(", ")));
+        dialog.add_response("cancel", "Cancel");
+        dialog.add_response("discard", "Close Without Saving");
+        dialog.add_response("save", "Save All");
+        dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
+        dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+        dialog.set_default_response(Some("save"));
+        dialog.set_close_response("cancel");
+        let workbench = Rc::clone(self);
+        dialog.connect_response(None, move |_, response| {
+            match response {
+                "save" => {
+                    for document in &unsaved {
+                        // An untitled file has nowhere to be written,
+                        // so it is kept rather than lost: it goes to
+                        // the cache with the rest.
+                        if document.path.borrow().is_none() {
+                            continue;
+                        }
+                        let saved = document.state.borrow_mut().document.save().is_ok();
+                        if let (true, Some(path)) = (saved, document.path.borrow().as_deref())
+                        {
+                            Shell::instance().note_own_save(path);
+                        }
+                    }
+                }
+                "discard" => {}
+                _ => return,
+            }
+            workbench.closing_settled.set(true);
+            workbench.stash_documents();
+            workbench.window.close();
+        });
+        dialog.present(Some(&self.window));
+        true
+    }
+
+    /// The page a tab holds, if this window holds it.
+    fn page_of(&self, tab_page: &adw::TabPage) -> Option<Rc<Page>> {
+        self.pages
+            .borrow()
+            .iter()
+            .find(|page| page.root == tab_page.child())
+            .map(Rc::clone)
+    }
+
+    /// Asks about a document about to lose its last view with changes
+    /// that were never saved, and answers whether it asked.
+    ///
+    /// Save writes the file and closes; Discard closes and gives the
+    /// text up; Cancel leaves the tab where it is. Any of the three
+    /// finishes the close the tab view is waiting on.
+    fn asks_about_unsaved(
+        self: &Rc<Self>,
+        view: &adw::TabView,
+        tab_page: &adw::TabPage,
+    ) -> bool {
+        let Some(page) = self.page_of(tab_page) else { return false };
+        // Another view keeps the text; this one is free to go.
+        if page.document.views().len() > 1 {
+            return false;
+        }
+        if !page.state.borrow().document.is_dirty() {
+            return false;
+        }
+        let name = self.disambiguated_name(&page);
+        let dialog = adw::AlertDialog::new(
+            Some(&format!("Save changes to {name}?")),
+            Some("Changes that are not saved are lost when the file closes."),
+        );
+        dialog.add_response("cancel", "Cancel");
+        dialog.add_response("discard", "Discard");
+        dialog.add_response("save", "Save");
+        dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
+        dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+        dialog.set_default_response(Some("save"));
+        dialog.set_close_response("cancel");
+        let workbench = Rc::clone(self);
+        let view = view.clone();
+        let tab_page = tab_page.clone();
+        dialog.connect_response(None, move |_, response| {
+            match response {
+                "save" => {
+                    // An untitled document has nowhere to be written
+                    // yet, so Save asks where before it closes.
+                    let has_path = page.path().borrow().is_some();
+                    if has_path {
+                        let saved = page.state.borrow_mut().document.save().is_ok();
+                        if let (true, Some(path)) = (saved, page.path().borrow().as_deref()) {
+                            Shell::instance().note_own_save(path);
+                        }
+                        if !saved {
+                            workbench.toast("The file could not be saved.");
+                            view.close_page_finish(&tab_page, false);
+                            return;
+                        }
+                    } else {
+                        // Nowhere to write it yet: Save As asks where,
+                        // and the tab stays open behind the question.
+                        view.set_selected_page(&tab_page);
+                        let _ = gtk::prelude::WidgetExt::activate_action(
+                            &workbench.window,
+                            "win.save-as",
+                            None,
+                        );
+                        view.close_page_finish(&tab_page, false);
+                        return;
+                    }
+                }
+                "discard" => {}
+                _ => {
+                    view.close_page_finish(&tab_page, false);
+                    return;
+                }
+            }
+            workbench.forget(&tab_page);
+            view.close_page_finish(&tab_page, true);
+        });
+        dialog.present(Some(&self.window));
+        true
+    }
+
+    pub fn forget(&self, tab_page: &adw::TabPage) {
         let mut pages = self.pages.borrow_mut();
         let Some(index) = pages
             .iter()
@@ -1378,6 +1655,15 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.toast("No recently closed tab to reopen.");
             return;
         };
+        // A file closed a moment ago is still in the shell's cache,
+        // whole: reopening it is taking the closing back, so the text
+        // that was never saved and the blocks that were folded come
+        // back with it.
+        let key = path.to_string_lossy().into_owned();
+        if let Some(document) = Shell::instance().reclaim_document(&key) {
+            workbench.show(&document, Some((line, character)));
+            return;
+        }
         if !path.is_file() {
             workbench.toast(&format!("{} is no longer there.", path.display()));
             return;
@@ -4699,6 +4985,21 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
     }
     editor_group.add(&lines_row);
+    let keep_row = adw::SwitchRow::new();
+    keep_row.set_title("Keep files open when their window closes");
+    keep_row.set_subtitle(
+        "Closing a window puts its files aside with anything unsaved, to \
+         reopen or settle when the editor closes",
+    );
+    keep_row.set_active(shell.config.borrow().keep_buffers());
+    {
+        let shell = Rc::clone(&shell);
+        keep_row.connect_active_notify(move |row| {
+            shell.config.borrow_mut().set_keep_buffers(row.is_active());
+            shell.save_config();
+        });
+    }
+    editor_group.add(&keep_row);
     let hover_row = adw::SwitchRow::new();
     hover_row.set_title("Hover documentation");
     hover_row.set_subtitle("Show server documentation when the mouse rests on a symbol");

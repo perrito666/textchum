@@ -117,6 +117,10 @@ impl Diagnostic {
     }
 }
 
+/// How many closed documents are kept whole: enough to take back a
+/// closing, not so much that a day's editing sits in memory.
+pub const CLOSED_DOCUMENT_MEMORY: usize = 20;
+
 pub struct Shell {
     pub config: RefCell<Config>,
     pub pool: RefCell<Pool>,
@@ -138,6 +142,10 @@ pub struct Shell {
     documents: RefCell<HashMap<DocumentId, Rc<OpenDocument>>>,
     documents_by_path: RefCell<HashMap<String, DocumentId>>,
     next_document_id: std::cell::Cell<u64>,
+    /// Documents whose last view closed, newest last. A closed file is
+    /// kept whole for a while so that reopening it is taking back the
+    /// closing rather than reading the file again.
+    closed_documents: RefCell<Vec<Rc<OpenDocument>>>,
 }
 
 thread_local! {
@@ -219,6 +227,7 @@ impl Shell {
                 config_monitor: RefCell::new(None),
                 documents: RefCell::new(HashMap::new()),
                 documents_by_path: RefCell::new(HashMap::new()),
+                closed_documents: RefCell::new(Vec::new()),
                 next_document_id: std::cell::Cell::new(1),
             });
             shell.apply_appearance();
@@ -296,14 +305,61 @@ impl Shell {
         }
     }
 
-    /// Forgets a document. Its views are gone by the time this is
-    /// called; what happens to the ones with unsaved changes is the
-    /// caller's business.
+    /// Closes a document — its last view has gone — and keeps it in
+    /// the recently closed cache. Reopening the file within the next
+    /// twenty closings gets the same buffer back, with its folds and
+    /// anything typed since the last save.
+    ///
+    /// Whether unsaved changes were saved or given up is settled before
+    /// this is called.
     pub fn close_document(&self, id: DocumentId) {
-        self.documents.borrow_mut().remove(&id);
+        let closed = self.documents.borrow_mut().remove(&id);
         self.documents_by_path
             .borrow_mut()
             .retain(|_, known| *known != id);
+        let Some(closed) = closed else { return };
+        let mut cache = self.closed_documents.borrow_mut();
+        cache.retain(|other| other.id != id);
+        cache.push(closed);
+        let overflow = cache.len().saturating_sub(CLOSED_DOCUMENT_MEMORY);
+        cache.drain(..overflow);
+    }
+
+    /// Takes a closed document back out of the cache and opens it
+    /// again, or answers None when the file was not closed recently.
+    pub fn reclaim_document(&self, path: &str) -> Option<Rc<OpenDocument>> {
+        let found = {
+            let cache = self.closed_documents.borrow();
+            cache
+                .iter()
+                .position(|document| document.path.borrow().as_deref() == Some(path))?
+        };
+        let document = self.closed_documents.borrow_mut().remove(found);
+        self.documents
+            .borrow_mut()
+            .insert(document.id, Rc::clone(&document));
+        self.documents_by_path
+            .borrow_mut()
+            .insert(path.to_string(), document.id);
+        Some(document)
+    }
+
+    /// Every document with changes that were never saved, open or put
+    /// aside — what the editor has to settle before it closes.
+    pub fn unsaved_documents(&self) -> Vec<Rc<OpenDocument>> {
+        self.documents
+            .borrow()
+            .values()
+            .chain(self.closed_documents.borrow().iter())
+            .filter(|document| document.state.borrow().document.is_dirty())
+            .cloned()
+            .collect()
+    }
+
+    /// How many documents are in the recently closed cache, for the
+    /// tests.
+    pub fn closed_document_count(&self) -> usize {
+        self.closed_documents.borrow().len()
     }
 
     /// How many documents are open, for the tests.

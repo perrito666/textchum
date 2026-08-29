@@ -945,6 +945,21 @@ impl Config {
             .insert("occurrences_whole_word".into(), Value::Bool(enabled));
     }
 
+    /// Whether a file stays open, whole, when the window showing it
+    /// closes — the text that was never saved with it. What becomes of
+    /// those files is settled when the editor itself closes.
+    pub fn keep_buffers(&self) -> bool {
+        self.editor()
+            .get("keep_buffers")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    pub fn set_keep_buffers(&mut self, keep: bool) {
+        self.editor_mut()
+            .insert("keep_buffers".into(), Value::Bool(keep));
+    }
+
     pub fn line_numbers(&self) -> bool {
         self.editor()
             .get("line_numbers")
