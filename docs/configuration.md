@@ -335,9 +335,25 @@ saves remain the place for that.
 
 ## Key shortcuts
 
-Menu shortcuts are rebindable through a hand-edited `keys` section (no
-UI yet): an object of action names to `modifiers+key` specs, applied at
-launch.
+Settings ▸ Keyboard has them: a profile, and every command with the
+shortcut it answers to, editable in place.
+
+**Profiles.** People arrive from another editor with its shortcuts in
+their fingers, so the three those editors are known for ship with the
+build — Visual Studio Code, Sublime Text and IntelliJ IDEA. A profile
+names the commands it moves and leaves the rest alone, so picking one
+changes what that editor is known for and nothing else. `keys_profile`
+holds the choice; empty is Textchum's own bindings.
+
+Changing one shortcut on top of a profile keeps the profile: the change
+is an override, and **Reset changes** drops all of them. **Save as
+profile** turns what is in force into a profile of your own — the way
+to modify a bundled preset, since those ship with the build. Saved
+profiles live in `key_profiles`, and one that reuses a bundled name
+replaces it.
+
+The file spells the overrides as a `keys` section: an object of action
+names to `modifiers+key` specs, applied over the profile.
 
 ```json
 {
@@ -349,7 +365,9 @@ launch.
 }
 ```
 
-Modifiers: `cmd`, `shift`, `alt`, `ctrl`. Keys: a character, or
+Modifiers: `cmd`, `shift`, `alt`, `ctrl` — `cmd` is Command on macOS
+and Ctrl on Linux, so one profile means the same thing on both. Keys: a
+character, `f1` to `f20`, or
 `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
 Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `undo`, `redo`, `find`, `findAndReplace`, `findNext`, `findPrevious`,

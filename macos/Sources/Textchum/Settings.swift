@@ -276,6 +276,7 @@ final class SettingsModel: ObservableObject {
         tabWidth = config.tabWidth
         lineNumbers = config.lineNumbers
         hoverDocs = config.hoverDocs
+        keysProfile = config.keysProfile
         markOccurrences = config.markOccurrences
         occurrencesCaseSensitive = config.occurrencesCaseSensitive
         occurrencesWholeWord = config.occurrencesWholeWord
@@ -306,6 +307,7 @@ final class SettingsModel: ObservableObject {
         self.spellLanguage = config.spellLanguage ?? ""
         self.spellWords = config.spellWords.joined(separator: "\n")
         self.autosaveSeconds = Int(config.autosaveSeconds)
+        self.keysProfile = config.keysProfile
         self.markOccurrences = config.markOccurrences
         self.occurrencesCaseSensitive = config.occurrencesCaseSensitive
         self.occurrencesWholeWord = config.occurrencesWholeWord
@@ -352,6 +354,80 @@ final class SettingsModel: ObservableObject {
             }
         }
         workspaceEntries = entries.sorted { $0.scope < $1.scope }
+    }
+
+    /// One overridable command, with the menu title it wears and the
+    /// shortcut it has now.
+    struct Shortcut: Identifiable, Equatable {
+        let action: String
+        let title: String
+        let spec: String
+
+        var id: String { action }
+    }
+
+    /// Every overridable command. The app fills this in; Settings has
+    /// no idea what the menus hold on its own.
+    @Published var shortcutCatalog: [Shortcut] = []
+
+    /// The chosen keyboard profile; empty is the editor's own bindings.
+    @Published var keysProfile: String {
+        didSet { persist { $0.keysProfile = keysProfile } }
+    }
+
+    /// The profiles that can be chosen: the bundled ones and any saved
+    /// here.
+    var keyProfileChoices: [(id: String, name: String)] {
+        config.keyProfileChoices
+    }
+
+    /// The shortcut overrides in force, by action.
+    var keyOverrides: [String: String] {
+        guard let data = config.keysJSON.data(using: .utf8),
+            let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: String]
+        else { return [:] }
+        return parsed
+    }
+
+    /// Rebinds one command, or with an empty spec gives it back its
+    /// profile's shortcut — or the editor's own.
+    func setKeyBinding(action: String, spec: String) {
+        config.setKeyBinding(action: action, spec: spec.isEmpty ? nil : spec)
+        persistNow()
+    }
+
+    /// Forgets every override, keeping the profile.
+    func clearKeyBindings() {
+        config.clearKeyBindings()
+        persistNow()
+    }
+
+    /// Saves what is in force now as a profile of its own, and switches
+    /// to it — which is what "modify a preset" means when the presets
+    /// themselves ship with the build.
+    func saveKeyProfile(named name: String) {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        let bindings = config.effectiveKeys
+        guard let data = try? JSONSerialization.data(withJSONObject: bindings),
+            let json = String(data: data, encoding: .utf8)
+        else { return }
+        config.setKeyProfile(name: name, bindingsJSON: json)
+        // The overrides are in the profile now; leaving them behind
+        // would apply them twice and hide what the profile says.
+        config.clearKeyBindings()
+        keysProfile = name
+    }
+
+    /// Forgets a saved profile. A bundled one cannot be removed, only
+    /// shadowed by a saved profile of the same name.
+    func removeKeyProfile(named name: String) {
+        config.setKeyProfile(name: name, bindingsJSON: nil)
+        if keysProfile == name {
+            keysProfile = ""
+        } else {
+            persistNow()
+        }
     }
 
     /// The project roots of the documents that are open, for adding one
@@ -609,11 +685,18 @@ final class SettingsModel: ObservableObject {
     private func persist(_ apply: (CoreConfig) -> Void) {
         guard !isLoading else { return }
         apply(config)
+        persistNow()
+    }
+
+    /// Saves and republishes a change already made to the
+    /// configuration.
+    private func persistNow() {
         do {
             try config.save()
         } catch {
             NSLog("could not save configuration: \(error)")
         }
+        objectWillChange.send()
         onChange?()
     }
 }
@@ -627,6 +710,9 @@ struct SettingsView: View {
             GeneralSettingsTab(model: model)
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag("general")
+            KeyboardTab(model: model)
+                .tabItem { Label("Keyboard", systemImage: "keyboard") }
+                .tag("keyboard")
             ProjectsTab(model: model)
                 .tabItem { Label("Projects", systemImage: "folder.badge.gearshape") }
                 .tag("projects")
@@ -1075,6 +1161,143 @@ private struct OverrideField: View {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard trimmed != initial else { return }
         commit(trimmed)
+    }
+}
+
+/// The keyboard shortcuts, and the profiles that set them.
+///
+/// People arrive from another editor with its shortcuts in their
+/// fingers, so the three those editors are known for are offered
+/// whole. A profile names the commands it moves and nothing else, and
+/// a single shortcut can still be changed on top of one — that change
+/// is an override, and **Save as profile** turns the result into a
+/// profile of its own.
+private struct KeyboardTab: View {
+    @ObservedObject var model: SettingsModel
+    @State private var newProfileName = ""
+    @State private var filter = ""
+
+    private var shown: [SettingsModel.Shortcut] {
+        guard !filter.isEmpty else { return model.shortcutCatalog }
+        return model.shortcutCatalog.filter {
+            $0.title.localizedCaseInsensitiveContains(filter)
+                || $0.action.localizedCaseInsensitiveContains(filter)
+                || $0.spec.localizedCaseInsensitiveContains(filter)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(
+                "A profile sets the shortcuts its editor is known for and leaves the "
+                    + "rest alone. Changing one on top of a profile keeps the profile; "
+                    + "\"Save as profile\" turns what is in force into one of your own. "
+                    + "Shortcuts are written as \"cmd+shift+f\" — cmd is Command here "
+                    + "and Ctrl on Linux."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Picker("Profile", selection: $model.keysProfile) {
+                    Text("Textchum").tag("")
+                    ForEach(model.keyProfileChoices, id: \.id) { choice in
+                        Text(choice.name).tag(choice.id)
+                    }
+                }
+                .frame(width: 320)
+                Button("Reset changes") { model.clearKeyBindings() }
+                    .disabled(model.keyOverrides.isEmpty)
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
+                TextField("Save as profile…", text: $newProfileName)
+                    .frame(width: 200)
+                Button("Save as profile") {
+                    model.saveKeyProfile(named: newProfileName)
+                    newProfileName = ""
+                }
+                .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
+                if !model.keysProfile.isEmpty {
+                    Button("Delete profile") {
+                        model.removeKeyProfile(named: model.keysProfile)
+                    }
+                }
+                Spacer()
+            }
+
+            TextField("Filter commands…", text: $filter)
+
+            List {
+                if model.shortcutCatalog.isEmpty {
+                    Text("Open the Settings window from the app to see the commands.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(shown) { shortcut in
+                    HStack(spacing: 12) {
+                        Text(shortcut.title)
+                            .frame(width: 220, alignment: .leading)
+                            .help(shortcut.action)
+                        ShortcutField(
+                            shortcut: shortcut,
+                            overridden: model.keyOverrides[shortcut.action] != nil
+                        ) { spec in
+                            model.setKeyBinding(action: shortcut.action, spec: spec)
+                        }
+                        Spacer()
+                    }
+                }
+            }
+            .frame(minHeight: 200)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+    }
+}
+
+/// One command's shortcut, editable in place. Commits on ⏎ or when
+/// focus leaves; emptying it gives the command back the shortcut its
+/// profile — or the editor — says it has.
+private struct ShortcutField: View {
+    let shortcut: SettingsModel.Shortcut
+    let overridden: Bool
+    let commit: (String) -> Void
+    @State private var text: String
+    @FocusState private var focused: Bool
+
+    init(
+        shortcut: SettingsModel.Shortcut, overridden: Bool,
+        commit: @escaping (String) -> Void
+    ) {
+        self.shortcut = shortcut
+        self.overridden = overridden
+        self.commit = commit
+        _text = State(initialValue: shortcut.spec)
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField("unbound", text: $text)
+                .font(.system(.body, design: .monospaced))
+                .frame(width: 180)
+                .focused($focused)
+                .onSubmit { commit(text) }
+                .onChange(of: focused) { _, isFocused in
+                    if !isFocused, text != shortcut.spec { commit(text) }
+                }
+                .onChange(of: shortcut.spec) { _, spec in
+                    if !focused { text = spec }
+                }
+            if overridden {
+                // Which rows you changed is the question this screen
+                // gets asked next.
+                Text("changed")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 

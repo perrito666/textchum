@@ -5069,7 +5069,167 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     projects_page.add(&presets_group);
     window.add(&projects_page);
 
+    window.add(&keyboard_page(&shell));
+
     window.present();
+}
+
+/// Re-installs the shortcuts after a change to the profile or an
+/// override.
+fn reapply_keys() {
+    let Some(app) = gtk::gio::Application::default() else {
+        return;
+    };
+    let Ok(app) = app.downcast::<adw::Application>() else {
+        return;
+    };
+    crate::apply_key_overrides(&app);
+}
+
+/// The keyboard shortcuts, and the profiles that set them.
+///
+/// People arrive from another editor with its shortcuts in their
+/// fingers, so the ones those editors are known for are offered whole.
+/// A profile names the commands it moves and nothing else; a single
+/// shortcut can still be changed on top of one, and saving the result
+/// makes it a profile of its own.
+fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
+    let page = adw::PreferencesPage::new();
+    page.set_title("Keyboard");
+    page.set_icon_name(Some("preferences-desktop-keyboard-symbolic"));
+
+    let profile_group = adw::PreferencesGroup::new();
+    profile_group.set_title("Profile");
+    profile_group.set_description(Some(
+        "A profile sets the shortcuts its editor is known for and leaves the rest \
+         alone. Changing one on top of a profile keeps the profile; saving turns \
+         what is in force into a profile of your own. Shortcuts are written as \
+         \"cmd+shift+f\" — cmd is Ctrl here and Command on macOS.",
+    ));
+
+    let choices = textchum_core::keys::choices(&shell.config.borrow().key_profiles_json());
+    let mut labels: Vec<String> = vec!["Textchum".to_string()];
+    labels.extend(choices.iter().map(|(_, name)| name.clone()));
+    let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
+    let chosen = shell.config.borrow().keys_profile();
+    let profile_row = adw::ComboRow::new();
+    profile_row.set_title("Profile");
+    profile_row.set_model(Some(&gtk::StringList::new(&label_refs)));
+    profile_row.set_selected(
+        choices
+            .iter()
+            .position(|(id, _)| *id == chosen)
+            .map(|index| index as u32 + 1)
+            .unwrap_or(0),
+    );
+    {
+        let shell = Rc::clone(shell);
+        let ids: Vec<String> = choices.iter().map(|(id, _)| id.clone()).collect();
+        profile_row.connect_selected_notify(move |row| {
+            let selected = row.selected() as usize;
+            let name = if selected == 0 {
+                None
+            } else {
+                ids.get(selected - 1).map(String::as_str)
+            };
+            shell.config.borrow_mut().set_keys_profile(name);
+            shell.save_config();
+            reapply_keys();
+        });
+    }
+    profile_group.add(&profile_row);
+
+    let save_row = adw::EntryRow::new();
+    save_row.set_title("save what is in force as a profile named");
+    save_row.set_show_apply_button(true);
+    {
+        let shell = Rc::clone(shell);
+        save_row.connect_apply(move |row| {
+            let name = row.text().trim().to_string();
+            if name.is_empty() {
+                return;
+            }
+            let bindings = {
+                let config = shell.config.borrow();
+                textchum_core::keys::effective(
+                    &config.keys_profile(),
+                    &config.key_profiles_json(),
+                    &config.keys_json(),
+                )
+            };
+            {
+                let mut config = shell.config.borrow_mut();
+                config.set_key_profile(&name, Some(&textchum_core::keys::to_json(&bindings)));
+                config.set_keys_profile(Some(&name));
+                // The changes are in the profile now; leaving them
+                // behind would apply them twice and hide what the
+                // profile says.
+                config.clear_key_bindings();
+            }
+            shell.save_config();
+            reapply_keys();
+            row.set_text("");
+        });
+    }
+    profile_group.add(&save_row);
+
+    let reset = adw::ActionRow::new();
+    reset.set_title("Reset changes");
+    reset.set_subtitle("Give every command back the shortcut its profile says it has");
+    let reset_button = gtk::Button::with_label("Reset");
+    reset_button.set_valign(gtk::Align::Center);
+    {
+        let shell = Rc::clone(shell);
+        reset_button.connect_clicked(move |_| {
+            shell.config.borrow_mut().clear_key_bindings();
+            shell.save_config();
+            reapply_keys();
+        });
+    }
+    reset.add_suffix(&reset_button);
+    profile_group.add(&reset);
+    page.add(&profile_group);
+
+    let commands = adw::PreferencesGroup::new();
+    commands.set_title("Commands");
+    commands.set_description(Some(
+        "An empty field gives the command back the shortcut its profile — or the \
+         editor — says it has.",
+    ));
+    let bindings = {
+        let config = shell.config.borrow();
+        textchum_core::keys::effective(
+            &config.keys_profile(),
+            &config.key_profiles_json(),
+            &config.keys_json(),
+        )
+    };
+    for (action, title) in crate::keyboard::commands() {
+        let row = adw::EntryRow::new();
+        row.set_title(title);
+        row.set_text(
+            bindings
+                .get(action)
+                .cloned()
+                .or_else(|| crate::keyboard::default_spec(action))
+                .unwrap_or_default()
+                .as_str(),
+        );
+        row.set_show_apply_button(true);
+        let shell = Rc::clone(shell);
+        row.connect_apply(move |row| {
+            let spec = row.text().trim().to_string();
+            shell
+                .config
+                .borrow_mut()
+                .set_key_binding(action, (!spec.is_empty()).then_some(spec.as_str()));
+            shell.save_config();
+            reapply_keys();
+        });
+        commands.add(&row);
+    }
+    page.add(&commands);
+    page
 }
 
 /// One line saying whether a configured server command would start,

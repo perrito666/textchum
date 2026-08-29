@@ -6,6 +6,7 @@
 
 mod ctags;
 mod lsp_edits;
+mod keyboard;
 mod page;
 mod path_actions;
 mod preprocessors;
@@ -172,46 +173,8 @@ fn main() -> gtk::glib::ExitCode {
         announce_sandbox_note(&workbench);
     });
 
-    app.set_accels_for_action("win.new-tab", &["<Ctrl>t"]);
-    app.set_accels_for_action("win.new", &["<Ctrl>n"]);
-    app.set_accels_for_action("win.find", &["<Ctrl>f"]);
-    app.set_accels_for_action("win.find-in-project", &["<Ctrl><Shift>f"]);
-    app.set_accels_for_action("win.quick-open", &["<Ctrl>p"]);
-    app.set_accels_for_action("win.definition", &["F12"]);
-    app.set_accels_for_action("win.sidebar", &["F9"]);
-    app.set_accels_for_action("win.preview", &["<Ctrl><Alt>p"]);
-    app.set_accels_for_action("win.open", &["<Ctrl>o"]);
-    app.set_accels_for_action("win.save", &["<Ctrl>s"]);
-    app.set_accels_for_action("win.save-as", &["<Ctrl><Shift>s"]);
-    app.set_accels_for_action("win.undo", &["<Ctrl>z"]);
-    app.set_accels_for_action("win.redo", &["<Ctrl><Shift>z"]);
-    app.set_accels_for_action("win.preferences", &["<Ctrl>comma"]);
-    app.set_accels_for_action("win.close-tab", &["<Ctrl>w"]);
-    app.set_accels_for_action("win.reopen-tab", &["<Ctrl><Shift>t"]);
-    app.set_accels_for_action("window.close", &["<Ctrl><Shift>w"]);
-    // Ctrl+Q is what a GNOME application quits with; without it the
-    // only way out is the window's close button.
-    app.set_accels_for_action("app.quit", &["<Ctrl>q"]);
-    app.set_accels_for_action("win.back", &["<Alt>Left"]);
-    app.set_accels_for_action("win.forward", &["<Alt>Right"]);
-    app.set_accels_for_action("win.references", &["<Shift>F12"]);
-    app.set_accels_for_action("win.rename", &["F2"]);
-    app.set_accels_for_action("win.format", &["<Ctrl><Shift>i"]);
-    app.set_accels_for_action("win.outline", &["<Ctrl><Shift>o"]);
-    app.set_accels_for_action("win.revert", &["<Ctrl><Alt>r"]);
-    app.set_accels_for_action("win.redraw", &["<Ctrl><Alt>l"]);
-    app.set_accels_for_action("win.hover", &["<Ctrl><Alt>h"]);
-    app.set_accels_for_action("win.preprocess", &["<Ctrl><Alt>f"]);
-    app.set_accels_for_action("win.palette", &["<Ctrl><Shift>p"]);
-    app.set_accels_for_action("win.new-format-picker", &["<Ctrl><Shift>n"]);
-    app.set_accels_for_action("win.paths", &["<Ctrl><Alt>t"]);
-    app.set_accels_for_action("win.file-properties", &["<Ctrl>i"]);
-    app.set_accels_for_action("win.goto-line", &["<Ctrl>l"]);
-    app.set_accels_for_action("win.blame", &["<Ctrl><Alt>b"]);
-    app.set_accels_for_action("win.diagnostic", &["<Ctrl><Alt>e"]);
-    app.set_accels_for_action("win.diagnostic-list", &["<Ctrl><Shift>e"]);
-    app.set_accels_for_action("win.block-start", &["<Ctrl><Alt>Up"]);
-    app.set_accels_for_action("win.block-end", &["<Ctrl><Alt>Down"]);
+    install_default_accels(&app);
+
     // Key overrides read the configuration, which touches GTK-backed
     // state — so they wait for startup, after GTK initializes. The
     // config watcher starts here too: external edits to config.json
@@ -261,57 +224,89 @@ fn main() -> gtk::glib::ExitCode {
 /// and `modifiers+key` specs the macOS shell understands, mapped onto
 /// this shell's actions (`cmd` means the primary modifier, so it lands
 /// on Ctrl here).
-fn apply_key_overrides(app: &adw::Application) {
-    let keys_json = shell::Shell::instance().config.borrow().keys_json();
-    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&keys_json) else {
-        return;
+/// Every action with a shortcut, and the one it comes with.
+///
+/// A keyboard profile names the shortcuts it moves and nothing else, so
+/// leaving one — or dropping an override — has to give the original
+/// back, and this is where the originals live. `app.quit` is among them:
+/// Ctrl+Q is what a GNOME application quits with, and without it the
+/// only way out is the window's close button.
+static DEFAULT_ACCELS: &[(&str, &str)] = &[
+    ("win.new-tab", "<Ctrl>t"),
+    ("win.new", "<Ctrl>n"),
+    ("win.find", "<Ctrl>f"),
+    ("win.find-in-project", "<Ctrl><Shift>f"),
+    ("win.quick-open", "<Ctrl>p"),
+    ("win.definition", "F12"),
+    ("win.sidebar", "F9"),
+    ("win.preview", "<Ctrl><Alt>p"),
+    ("win.open", "<Ctrl>o"),
+    ("win.save", "<Ctrl>s"),
+    ("win.save-as", "<Ctrl><Shift>s"),
+    ("win.undo", "<Ctrl>z"),
+    ("win.redo", "<Ctrl><Shift>z"),
+    ("win.preferences", "<Ctrl>comma"),
+    ("win.close-tab", "<Ctrl>w"),
+    ("win.reopen-tab", "<Ctrl><Shift>t"),
+    ("window.close", "<Ctrl><Shift>w"),
+    ("app.quit", "<Ctrl>q"),
+    ("win.back", "<Alt>Left"),
+    ("win.forward", "<Alt>Right"),
+    ("win.references", "<Shift>F12"),
+    ("win.rename", "F2"),
+    ("win.format", "<Ctrl><Shift>i"),
+    ("win.outline", "<Ctrl><Shift>o"),
+    ("win.revert", "<Ctrl><Alt>r"),
+    ("win.redraw", "<Ctrl><Alt>l"),
+    ("win.hover", "<Ctrl><Alt>h"),
+    ("win.preprocess", "<Ctrl><Alt>f"),
+    ("win.palette", "<Ctrl><Shift>p"),
+    ("win.new-format-picker", "<Ctrl><Shift>n"),
+    ("win.paths", "<Ctrl><Alt>t"),
+    ("win.file-properties", "<Ctrl>i"),
+    ("win.goto-line", "<Ctrl>l"),
+    ("win.blame", "<Ctrl><Alt>b"),
+    ("win.diagnostic", "<Ctrl><Alt>e"),
+    ("win.diagnostic-list", "<Ctrl><Shift>e"),
+    ("win.block-start", "<Ctrl><Alt>Up"),
+    ("win.block-end", "<Ctrl><Alt>Down"),
+];
+
+/// The shortcut an action comes with, for a screen that has to say
+/// what it would be without a profile.
+pub fn default_accel(action: &str) -> Option<&'static str> {
+    DEFAULT_ACCELS
+        .iter()
+        .find(|(name, _)| *name == action)
+        .map(|(_, accel)| *accel)
+}
+
+/// Puts every action back on the shortcut it comes with.
+fn install_default_accels(app: &adw::Application) {
+    for (action, accel) in DEFAULT_ACCELS {
+        app.set_accels_for_action(action, &[accel]);
+    }
+}
+
+pub fn apply_key_overrides(app: &adw::Application) {
+    // Back to what everything comes with first: a profile that stops
+    // naming an action, or an override that is removed, has to give the
+    // original shortcut back, and nothing else says what it was.
+    install_default_accels(app);
+    let shell = shell::Shell::instance();
+    let bindings = {
+        let config = shell.config.borrow();
+        textchum_core::keys::effective(
+            &config.keys_profile(),
+            &config.key_profiles_json(),
+            &config.keys_json(),
+        )
     };
-    let action_for = |name: &str| -> Option<&'static str> {
-        Some(match name {
-            "new" => "win.new-tab",
-            "open" => "win.open",
-            "openQuickly" => "win.quick-open",
-            "save" => "win.save",
-            "saveAs" => "win.save-as",
-            "revertToSaved" => "win.revert",
-            "close" => "win.close-tab",
-            "reopenClosed" => "win.reopen-tab",
-            "undo" => "win.undo",
-            "redo" => "win.redo",
-            "find" => "win.find",
-            "findInProject" => "win.find-in-project",
-            "jumpToDefinition" => "win.definition",
-            "goBack" => "win.back",
-            "goForward" => "win.forward",
-            "findReferences" => "win.references",
-            "renameSymbol" => "win.rename",
-            "formatDocument" => "win.format",
-            "documentOutline" => "win.outline",
-            "redraw" => "win.redraw",
-            "showHover" => "win.hover",
-            "runPreprocessors" => "win.preprocess",
-            "commandPalette" => "win.palette",
-            "newWithFormat" => "win.new-format-picker",
-            "togglePathDisplay" => "win.paths",
-            "fileProperties" => "win.file-properties",
-            "blameLine" => "win.blame",
-            "showDiagnostic" => "win.diagnostic",
-            "diagnosticList" => "win.diagnostic-list",
-            "goToLine" => "win.goto-line",
-            "goToBlockStart" => "win.block-start",
-            "goToBlockEnd" => "win.block-end",
-            "toggleNavigator" => "win.sidebar",
-            "togglePreview" => "win.preview",
-            "settings" => "win.preferences",
-            _ => return None,
-        })
-    };
-    for (name, spec) in parsed.as_object().into_iter().flatten() {
-        let Some(action) = action_for(name) else {
+    for (name, spec) in &bindings {
+        let Some(action) = crate::keyboard::gtk_action(name) else {
             eprintln!("textchum: keys: no such action on this platform: {name}");
             continue;
         };
-        let Some(spec) = spec.as_str() else { continue };
         let Some(accel) = accel_from_spec(spec) else {
             eprintln!("textchum: keys: could not parse {spec:?} for {name}");
             continue;
@@ -343,6 +338,15 @@ fn accel_from_spec(spec: &str) -> Option<String> {
             "space" => key = Some("space".into()),
             "tab" => key = Some("Tab".into()),
             "delete" => key = Some("Delete".into()),
+            // Function keys: profiles from other editors lean on them
+            // (F12 for a definition, F2 for a rename).
+            other
+                if other.starts_with('f')
+                    && other.len() > 1
+                    && other[1..].parse::<u8>().is_ok_and(|n| (1..=20).contains(&n)) =>
+            {
+                key = Some(other.to_uppercase())
+            }
             other if other.chars().count() == 1 => key = Some(other.to_owned()),
             _ => return None,
         }

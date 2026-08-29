@@ -922,6 +922,49 @@ func runSmokeTest() -> Int32 {
     }
     print("project settings ok (copied whole, listed, removed whole)")
 
+    // Keyboard profiles: the bundled ones, an override on top of one,
+    // and what the whole thing resolves to. The rules are the core's;
+    // the bridge is what is checked here.
+    let keysScratch = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-smoke-keys-\(getpid()).json").path
+    let keysConfig = CoreConfig(path: keysScratch)
+    guard keysConfig.effectiveKeys.isEmpty else {
+        print("FAIL: a fresh configuration already has bindings")
+        return 1
+    }
+    keysConfig.keysProfile = "vscode"
+    guard keysConfig.effectiveKeys["openQuickly"] == "cmd+p",
+        keysConfig.effectiveKeys["renameSymbol"] == "f2"
+    else {
+        print("FAIL: the bundled profile did not resolve")
+        return 1
+    }
+    keysConfig.setKeyBinding(action: "openQuickly", spec: "cmd+t")
+    guard keysConfig.effectiveKeys["openQuickly"] == "cmd+t",
+        keysConfig.effectiveKeys["renameSymbol"] == "f2"
+    else {
+        print("FAIL: an override did not win over the profile")
+        return 1
+    }
+    keysConfig.clearKeyBindings()
+    guard keysConfig.effectiveKeys["openQuickly"] == "cmd+p" else {
+        print("FAIL: clearing the overrides did not restore the profile")
+        return 1
+    }
+    guard keysConfig.keyProfileChoices.contains(where: { $0.id == "intellij" }) else {
+        print("FAIL: the bundled profiles are not offered")
+        return 1
+    }
+    // Function keys survive the round trip through a shortcut spec.
+    guard let (functionKey, functionModifiers) = AppDelegate.parseShortcut("shift+f12"),
+        AppDelegate.shortcutSpec(key: functionKey, modifiers: functionModifiers)
+            == "shift+f12"
+    else {
+        print("FAIL: a function-key shortcut did not round-trip")
+        return 1
+    }
+    print("keyboard profiles ok (bundled, overridden, reset, function keys)")
+
     // Repainting the syntax colours on every scroll turn was the
     // stutter; the margin around the viewport is there so that most
     // turns need no repaint at all. The wiring needs a window server,

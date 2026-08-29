@@ -350,9 +350,27 @@ eso se queda en los guardados explícitos.
 
 ## Atajos de teclado
 
-Los atajos de los menús se reasignan mediante una sección `keys` editada
-a mano (sin interfaz todavía): un objeto de nombres de acción a
-especificaciones `modificadores+tecla`, aplicado al arrancar.
+Ajustes ▸ Teclado los tiene: un perfil, y cada comando con el atajo al
+que responde, editable ahí mismo.
+
+**Perfiles.** La gente llega de otro editor con sus atajos en los
+dedos, así que los tres por los que se los conoce vienen con la
+compilación — Visual Studio Code, Sublime Text e IntelliJ IDEA. Un
+perfil nombra los comandos que mueve y deja el resto en paz, así que
+elegir uno cambia aquello por lo que ese editor es conocido y nada
+más. `keys_profile` guarda la elección; vacío son los atajos propios
+de Textchum.
+
+Cambiar un atajo sobre un perfil conserva el perfil: el cambio es una
+anulación, y **Reset changes** las descarta todas. **Save as profile**
+convierte lo que está en vigor en un perfil propio — la manera de
+modificar un preajuste, que viene con la compilación. Los perfiles
+guardados viven en `key_profiles`, y uno que reutilice un nombre
+incluido lo reemplaza.
+
+El archivo escribe las anulaciones como una sección `keys`: un objeto
+de nombres de acción a especificaciones `modificadores+tecla`, aplicado
+sobre el perfil.
 
 ```json
 {
@@ -364,7 +382,9 @@ especificaciones `modificadores+tecla`, aplicado al arrancar.
 }
 ```
 
-Modificadores: `cmd`, `shift`, `alt`, `ctrl`. Teclas: un carácter, o
+Modificadores: `cmd`, `shift`, `alt`, `ctrl` — `cmd` es Command en
+macOS y Ctrl en Linux, así que un perfil significa lo mismo en ambos.
+Teclas: un carácter, de `f1` a `f20`, o
 `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
 Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
