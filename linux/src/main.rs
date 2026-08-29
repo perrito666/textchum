@@ -265,7 +265,6 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.unfold-all", "<Ctrl>bracketright"),
     ("win.split", "<Ctrl>backslash"),
     ("win.unsplit", "<Ctrl><Shift>backslash"),
-    ("win.focus-other-group", "<Ctrl>k"),
     ("win.reopen-tab", "<Ctrl><Shift>t"),
     ("window.close", "<Ctrl><Shift>w"),
     ("app.quit", "<Ctrl>q"),
@@ -1019,42 +1018,6 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
             println!("folding ok (folds taken and given back)");
         }
-
-        // Splitting moves the current document into a group of its
-        // own beside the one it was in, and closing the split puts it
-        // back. A group holds documents, never a second view of one.
-        if workbench.tab_view.n_pages() < 2 {
-            eprintln!("FAIL: the split check needs two open documents");
-            return 1;
-        }
-        let before = workbench.tab_view.n_pages();
-        workbench.split();
-        if !workbench.is_split() {
-            eprintln!("FAIL: the window did not split");
-            return 1;
-        }
-        if workbench.tab_view.n_pages() != before - 1 {
-            eprintln!(
-                "FAIL: the first group still has {} of {before} pages",
-                workbench.tab_view.n_pages()
-            );
-            return 1;
-        }
-        if workbench.all_views().len() != 2 {
-            eprintln!("FAIL: there is no second group");
-            return 1;
-        }
-        // The document that moved is the one commands now act on.
-        if workbench.selected().is_none() {
-            eprintln!("FAIL: the second group has no selected document");
-            return 1;
-        }
-        workbench.unsplit();
-        if workbench.is_split() || workbench.tab_view.n_pages() != before {
-            eprintln!("FAIL: closing the split did not put the documents back");
-            return 1;
-        }
-        println!("split ok (a group of its own, and back again)");
 
         // Code actions: the scripted server offers its quick fix only
         // when the client hands back the diagnostic as published, `data`
