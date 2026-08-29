@@ -142,6 +142,150 @@ const PYTHON_RECEIVERS: &str = r#"
 "#;
 
 static SPECS: &[LanguageSpec] = &[
+    // TypeScript ships only what it adds to JavaScript — types,
+    // interfaces, enums — and inherits the rest, so JavaScript's query
+    // goes first and the additions after it.
+    lang!(
+        "typescript",
+        &["ts"],
+        &["ts", "mts", "cts"],
+        &[],
+        tree_sitter_typescript::LANGUAGE_TYPESCRIPT,
+        tree_sitter_javascript::HIGHLIGHT_QUERY,
+        Some(tree_sitter_typescript::HIGHLIGHTS_QUERY),
+        None
+    ),
+    lang!(
+        "tsx",
+        &[],
+        &["tsx"],
+        &[],
+        tree_sitter_typescript::LANGUAGE_TSX,
+        tree_sitter_javascript::HIGHLIGHT_QUERY,
+        Some(tree_sitter_typescript::HIGHLIGHTS_QUERY),
+        None
+    ),
+    // C++ ships only what it adds to C — templates, namespaces,
+    // `auto` — and inherits the rest, so C's query goes first and the
+    // additions after it, which is also the order that lets a later
+    // match win.
+    lang!(
+        "cpp",
+        &["c++"],
+        &["cc", "cpp", "cxx", "hpp", "hh", "hxx"],
+        &[],
+        tree_sitter_cpp::LANGUAGE,
+        tree_sitter_c::HIGHLIGHT_QUERY,
+        Some(tree_sitter_cpp::HIGHLIGHT_QUERY),
+        None
+    ),
+    lang!(
+        "java",
+        &[],
+        &["java"],
+        tree_sitter_java::LANGUAGE,
+        tree_sitter_java::HIGHLIGHTS_QUERY,
+        None
+    ),
+    lang!(
+        "ruby",
+        &["rb"],
+        &["rb", "rake", "gemspec"],
+        &["Gemfile", "Rakefile"],
+        tree_sitter_ruby::LANGUAGE,
+        tree_sitter_ruby::HIGHLIGHTS_QUERY,
+        None
+    ),
+    lang!(
+        "php",
+        &[],
+        &["php", "phtml"],
+        tree_sitter_php::LANGUAGE_PHP,
+        tree_sitter_php::HIGHLIGHTS_QUERY,
+        Some(tree_sitter_php::INJECTIONS_QUERY)
+    ),
+    lang!(
+        "csharp",
+        &["c#", "cs"],
+        &["cs"],
+        tree_sitter_c_sharp::LANGUAGE,
+        tree_sitter_c_sharp::HIGHLIGHTS_QUERY,
+        None
+    ),
+    lang!(
+        "lua",
+        &[],
+        &["lua"],
+        tree_sitter_lua::LANGUAGE,
+        tree_sitter_lua::HIGHLIGHTS_QUERY,
+        Some(tree_sitter_lua::INJECTIONS_QUERY)
+    ),
+    lang!(
+        "xml",
+        &[],
+        &["xml", "xsd", "xsl", "xslt", "svg", "plist"],
+        tree_sitter_xml::LANGUAGE_XML,
+        tree_sitter_xml::XML_HIGHLIGHT_QUERY,
+        None
+    ),
+    lang!(
+        "nix",
+        &[],
+        &["nix"],
+        tree_sitter_nix::LANGUAGE,
+        tree_sitter_nix::HIGHLIGHTS_QUERY,
+        Some(tree_sitter_nix::INJECTIONS_QUERY)
+    ),
+    lang!(
+        "elixir",
+        &["ex"],
+        &["ex", "exs"],
+        tree_sitter_elixir::LANGUAGE,
+        tree_sitter_elixir::HIGHLIGHTS_QUERY,
+        Some(tree_sitter_elixir::INJECTIONS_QUERY)
+    ),
+    lang!(
+        "haskell",
+        &["hs"],
+        &["hs"],
+        tree_sitter_haskell::LANGUAGE,
+        tree_sitter_haskell::HIGHLIGHTS_QUERY,
+        Some(tree_sitter_haskell::INJECTIONS_QUERY)
+    ),
+    lang!(
+        "ocaml",
+        &["ml"],
+        &["ml", "mli"],
+        tree_sitter_ocaml::LANGUAGE_OCAML,
+        tree_sitter_ocaml::HIGHLIGHTS_QUERY,
+        None
+    ),
+    lang!(
+        "scala",
+        &[],
+        &["scala", "sc", "sbt"],
+        tree_sitter_scala::LANGUAGE,
+        tree_sitter_scala::HIGHLIGHTS_QUERY,
+        None
+    ),
+    lang!(
+        "cmake",
+        &[],
+        &["cmake"],
+        &["CMakeLists.txt"],
+        tree_sitter_cmake::LANGUAGE,
+        tree_sitter_cmake::HIGHLIGHTS_QUERY,
+        None,
+        Some(tree_sitter_cmake::INJECTIONS_QUERY)
+    ),
+    lang!(
+        "r",
+        &[],
+        &["r"],
+        tree_sitter_r::LANGUAGE,
+        tree_sitter_r::HIGHLIGHTS_QUERY,
+        None
+    ),
     lang!(
         "rust",
         &["rs"],

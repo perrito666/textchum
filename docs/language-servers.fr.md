@@ -113,6 +113,17 @@ Textchum trouve les serveurs sur le `PATH` — il ne les installe pas :
 | Swift | sourcekit-lsp | fourni avec la chaîne d'outils Xcode |
 | Zig | zls | `brew install zls` |
 | Bash | bash-language-server | `npm install -g bash-language-server` |
+| C++ | clangd | Xcode CLT, or `brew install llvm` |
+| TypeScript | typescript-language-server | `npm install -g typescript-language-server typescript` |
+| Java | jdtls | `brew install jdtls` |
+| C# | csharp-ls | `dotnet tool install --global csharp-ls` |
+| Ruby | ruby-lsp | `gem install ruby-lsp` |
+| Lua | lua-language-server | `brew install lua-language-server` |
+| Haskell | haskell-language-server | `ghcup install hls` |
+| OCaml | ocamllsp | `opam install ocaml-lsp-server` |
+| Scala | metals | `cs install metals` |
+| Nix | nil | `nix profile install nixpkgs#nil` |
+| CMake | cmake-language-server | `uv tool install cmake-language-server` |
 | JSON | vscode-json-language-server | `npm install -g vscode-langservers-extracted` |
 | HTML | vscode-html-language-server | `npm install -g vscode-langservers-extracted` |
 | CSS | vscode-css-language-server | `npm install -g vscode-langservers-extracted` |
@@ -120,10 +131,17 @@ Textchum trouve les serveurs sur le `PATH` — il ne les installe pas :
 | TOML | taplo | `brew install taplo` |
 | Markdown | marksman | `brew install marksman` |
 
-Les modèles Go sont servis par `gopls` également. Plusieurs langages ont
+Les modèles Go sont servis par `gopls` également, le C++ par `clangd`,
+et TypeScript et TSX par les serveurs JavaScript. Plusieurs langages ont
 plus d'un serveur enregistré : Python dispose de `pyright`,
-`basedpyright`, `pylsp`, `ruff`, `jedi`, `ty` et `pyrefly` ; JavaScript
-de `typescript-language-server`, `vtsls`, `deno` et `biome`. Le tableau
+`basedpyright`, `pylsp`, `ruff`, `jedi`, `ty` et `pyrefly` ;
+JavaScript, TypeScript et TSX de `typescript-language-server`, `vtsls`,
+`deno` et `biome` ; Ruby de `ruby-lsp` et `solargraph`.
+
+PHP a une grammaire mais aucun serveur enregistré : ceux qui servent ne
+documentent pas la ligne de commande qu'ils acceptent, et une entrée
+devinée vaut moins que pas d'entrée — `lsp.servers` accepte celle que
+vous connaissez. Le tableau
 nomme celui qui sert quand la configuration ne dit rien ; les autres se
 demandent par identifiant.
 

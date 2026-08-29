@@ -13,9 +13,13 @@ los archivos cuya identidad *es* su nombre: `Makefile` (y `*.mk`) y los
 mensajes de git (`COMMIT_EDITMSG`, `MERGE_MSG`, `TAG_EDITMSG`), así que
 los mensajes de commit escritos con `chum --wait` llegan coloreados.
 Se ejecuta al abrir y en el primer guardado de un documento sin título.
-Actualmente se reconocen: Rust, Python, Go, C, JavaScript, JSON, Bash,
-Make, mensajes de commit de git, HTML, CSS, TOML, YAML, Swift, Zig y
-Markdown. El subtítulo de la ventana muestra el lenguaje activo; los
+Actualmente se reconocen: Rust, Python, Go, C, C++, TypeScript, TSX,
+JavaScript, Java, C#, Ruby, PHP, Lua, Haskell, OCaml, Scala, Elixir,
+Nix, R, CMake, XML, JSON, Bash, Make, mensajes de commit de git,
+plantillas de Go, HTML, CSS, TOML, YAML, SQL, Swift, Zig y Markdown.
+C++ y TypeScript heredan el coloreado de su lengua madre —C y
+JavaScript— y añaden el suyo encima, que es como vienen sus gramáticas:
+cada una trae solo lo que suma. El subtítulo de la ventana muestra el lenguaje activo; los
 archivos no reconocidos se quedan simplemente en texto plano. Las filas
 del navegador llevan el icono de Finder propio del tipo cuando macOS lo
 distingue de verdad — y una pequeña insignia con el color convencional

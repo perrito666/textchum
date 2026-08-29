@@ -111,6 +111,17 @@ Textchum encuentra los servidores en el `PATH` — no los instala:
 | Swift | sourcekit-lsp | viene con la cadena de herramientas de Xcode |
 | Zig | zls | `brew install zls` |
 | Bash | bash-language-server | `npm install -g bash-language-server` |
+| C++ | clangd | Xcode CLT, or `brew install llvm` |
+| TypeScript | typescript-language-server | `npm install -g typescript-language-server typescript` |
+| Java | jdtls | `brew install jdtls` |
+| C# | csharp-ls | `dotnet tool install --global csharp-ls` |
+| Ruby | ruby-lsp | `gem install ruby-lsp` |
+| Lua | lua-language-server | `brew install lua-language-server` |
+| Haskell | haskell-language-server | `ghcup install hls` |
+| OCaml | ocamllsp | `opam install ocaml-lsp-server` |
+| Scala | metals | `cs install metals` |
+| Nix | nil | `nix profile install nixpkgs#nil` |
+| CMake | cmake-language-server | `uv tool install cmake-language-server` |
 | JSON | vscode-json-language-server | `npm install -g vscode-langservers-extracted` |
 | HTML | vscode-html-language-server | `npm install -g vscode-langservers-extracted` |
 | CSS | vscode-css-language-server | `npm install -g vscode-langservers-extracted` |
@@ -118,10 +129,16 @@ Textchum encuentra los servidores en el `PATH` — no los instala:
 | TOML | taplo | `brew install taplo` |
 | Markdown | marksman | `brew install marksman` |
 
-Las plantillas de Go también las atiende `gopls`. Varios lenguajes
-tienen más de un servidor registrado: Python cuenta con `pyright`,
-`basedpyright`, `pylsp`, `ruff`, `jedi`, `ty` y `pyrefly`; JavaScript
-con `typescript-language-server`, `vtsls`, `deno` y `biome`. La tabla
+Las plantillas de Go también las atiende `gopls`, C++ lo atiende
+`clangd`, y TypeScript y TSX los servidores de JavaScript. Varios
+lenguajes tienen más de un servidor registrado: Python cuenta con
+`pyright`, `basedpyright`, `pylsp`, `ruff`, `jedi`, `ty` y `pyrefly`;
+JavaScript, TypeScript y TSX con `typescript-language-server`, `vtsls`,
+`deno` y `biome`; Ruby con `ruby-lsp` y `solargraph`.
+
+PHP tiene gramática pero ningún servidor registrado: los que se usan no
+documentan la línea de órdenes que aceptan, y una entrada adivinada es
+peor que ninguna — `lsp.servers` acepta la que tú conozcas. La tabla
 nombra el que se usa cuando la configuración no dice nada; a los demás
 se los pide por identificador.
 
