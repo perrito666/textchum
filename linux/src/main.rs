@@ -437,7 +437,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         eprintln!("FAIL: page not registered with the shell");
         return 1;
     };
-    let buffer = handles.buffer.clone();
+    let buffer = handles.document.buffer.clone();
 
     // Type through the buffer; the signals must carry it into the core.
     let mut end = buffer.end_iter();
@@ -990,6 +990,47 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         if !hover.borrow().as_deref().unwrap_or("").contains("fake hover") {
             eprintln!("FAIL: hover text missing");
             return 1;
+        }
+
+        // The shell holds documents; the UI holds views of them. What
+        // is checked here is that the table behaves like a registry: a
+        // path opens once however many times it is asked for, and a
+        // rename follows the document rather than making a second one.
+        {
+            let shell = shell::Shell::instance();
+            let opened = shell.document_count();
+            let page = workbench.selected().expect("a selected page");
+            let again = shell.open_document(&page.buffer, page.path.borrow().as_deref());
+            if shell.document_count() != opened {
+                eprintln!("FAIL: opening the same path twice made a second document");
+                return 1;
+            }
+            let Some(path) = page.path.borrow().clone() else {
+                eprintln!("FAIL: the page has no path to look up");
+                return 1;
+            };
+            match shell.document_for_path(&path) {
+                Some(found) if found.id == again.id => {}
+                _ => {
+                    eprintln!("FAIL: the path does not name its document");
+                    return 1;
+                }
+            }
+            // A rename moves the index, not the document.
+            shell.rename_document(again.id, Some(&path), "/tmp/renamed-by-the-smoke-test");
+            if shell.document_for_path(&path).is_some() {
+                eprintln!("FAIL: the old path still names the document");
+                return 1;
+            }
+            match shell.document_for_path("/tmp/renamed-by-the-smoke-test") {
+                Some(found) if found.id == again.id => {}
+                _ => {
+                    eprintln!("FAIL: the new path does not name the document");
+                    return 1;
+                }
+            }
+            shell.rename_document(again.id, Some("/tmp/renamed-by-the-smoke-test"), &path);
+            println!("documents ok (one per path, renamed without a second)");
         }
 
         // Folding hides the lines after the one that opens a block.

@@ -887,6 +887,57 @@ func runSmokeTest() -> Int32 {
     splitEditor.window?.close()
     print("split ok (one document in two views, and back again)")
 
+    // The store holds documents; controllers hold views of them. A
+    // path opens once however many views ask for it, and a rename
+    // follows the document rather than making a second one.
+    let storeScratch = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-smoke-store-\(getpid()).txt").path
+    try? "one\n".write(toFile: storeScratch, atomically: true, encoding: .utf8)
+    let firstDocument = DocumentStore.shared.open(CoreDocument(), path: storeScratch)
+    let openCount = DocumentStore.shared.count
+    let againDocument = DocumentStore.shared.open(CoreDocument(), path: storeScratch)
+    guard againDocument.id == firstDocument.id, DocumentStore.shared.count == openCount else {
+        print("FAIL: opening the same path twice made a second document")
+        return 1
+    }
+    guard DocumentStore.shared.document(forPath: storeScratch)?.id == firstDocument.id else {
+        print("FAIL: the path does not name its document")
+        return 1
+    }
+    DocumentStore.shared.rename(firstDocument.id, from: storeScratch, to: "/tmp/renamed")
+    guard DocumentStore.shared.document(forPath: storeScratch) == nil,
+        DocumentStore.shared.document(forPath: "/tmp/renamed")?.id == firstDocument.id
+    else {
+        print("FAIL: the rename did not move the index")
+        return 1
+    }
+    // Findings belong to the document, so every view of it agrees.
+    let finding = try? JSONDecoder().decode(
+        CoreDiagnostic.self,
+        from: Data(
+            """
+            {"line": 0, "character": 0, "endLine": 0, "endCharacter": 1,
+             "severity": 1, "message": "from the document"}
+            """.utf8))
+    guard let finding else {
+        print("FAIL: could not make a finding to hand to the document")
+        return 1
+    }
+    firstDocument.diagnostics = [finding]
+    guard DocumentStore.shared.document(id: firstDocument.id)?.diagnostics.count == 1 else {
+        print("FAIL: the findings did not stay with the document")
+        return 1
+    }
+    DocumentStore.shared.close(firstDocument.id)
+    guard DocumentStore.shared.document(id: firstDocument.id) == nil,
+        DocumentStore.shared.document(forPath: "/tmp/renamed") == nil
+    else {
+        print("FAIL: closing left the document behind")
+        return 1
+    }
+    try? FileManager.default.removeItem(atPath: storeScratch)
+    print("documents ok (one per path, renamed and closed without a second)")
+
     // Selecting a word marks the other places it appears. The rules
     // live in the core; what is checked here is that they survive the
     // bridge, including the offsets, which are UTF-16 units.

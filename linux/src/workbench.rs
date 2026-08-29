@@ -579,11 +579,12 @@ impl Workbench {
         tab_page.set_title(&page.display_name());
         self.pages.borrow_mut().push(Rc::clone(&page));
         if let Some(path) = page.path.borrow().clone() {
+            let document = Shell::instance().open_document(&page.buffer, Some(&path));
             let handles = Rc::new(PageHandles {
                 window: self.window.clone(),
                 tab_view: self.tab_view.clone(),
                 tab_page: tab_page.clone(),
-                buffer: page.buffer.clone(),
+                document,
                 view: page.view.clone(),
                 toasts: self.toasts.clone(),
                 title: self.title.clone(),
@@ -597,7 +598,6 @@ impl Workbench {
                 ),
                 problems: RefCell::new(String::new()),
                 detail: RefCell::new(String::new()),
-                diagnostics: RefCell::new(Vec::new()),
             });
             Shell::instance().pages.borrow_mut().insert(path, handles);
         }
@@ -1484,7 +1484,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let mut found = {
             let pages = shell.pages.borrow();
             match pages.get(&path) {
-                Some(handles) => handles.diagnostics.borrow().clone(),
+                Some(handles) => handles.document.diagnostics.borrow().clone(),
                 None => Vec::new(),
             }
         };
@@ -2218,14 +2218,16 @@ fn move_page_to(
             window: target.window.clone(),
             tab_view: target.tab_view.clone(),
             tab_page: tab_page.clone(),
-            buffer: page.buffer.clone(),
+            // The same document, shown in another window: its text and
+            // its diagnostics travel with it because they were never
+            // the view's to begin with.
+            document: Rc::clone(&old.document),
             view: page.view.clone(),
             toasts: target.toasts.clone(),
             title: target.title.clone(),
             language: RefCell::new(old.language.borrow().clone()),
             problems: RefCell::new(old.problems.borrow().clone()),
             detail: RefCell::new(old.detail.borrow().clone()),
-            diagnostics: RefCell::new(old.diagnostics.borrow().clone()),
         });
         shell.pages.borrow_mut().insert(path.to_owned(), handles);
     }
@@ -3011,19 +3013,23 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
     let shell = Shell::instance();
     shell.note_own_save(&key);
     *page.path.borrow_mut() = Some(key.clone());
-    if let Some(previous) = previous.filter(|previous| *previous != key) {
-        shell.pages.borrow_mut().remove(&previous);
-        shell.pool.borrow_mut().did_close(Path::new(&previous));
+    if let Some(gone) = previous.clone().filter(|previous| *previous != key) {
+        shell.pages.borrow_mut().remove(&gone);
+        shell.pool.borrow_mut().did_close(Path::new(&gone));
     }
     page::refresh_style_tags(&page.buffer);
     page::recolor(&page.buffer);
     page::apply_highlights(&page.buffer, &page.state.borrow().document);
     let tab_page = workbench.tab_view.page(&page.root);
+    // The same document under a new name: the index follows the path,
+    // and everything the document knows stays with it.
+    let document = shell.open_document(&page.buffer, previous.as_deref());
+    shell.rename_document(document.id, previous.as_deref(), &key);
     let handles = Rc::new(crate::shell::PageHandles {
         window: workbench.window.clone(),
         tab_view: workbench.tab_view.clone(),
         tab_page,
-        buffer: page.buffer.clone(),
+        document,
         view: page.view.clone(),
         toasts: workbench.toasts.clone(),
         title: workbench.title.clone(),
@@ -3037,7 +3043,6 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
         ),
         problems: RefCell::new(String::new()),
         detail: RefCell::new(String::new()),
-        diagnostics: RefCell::new(Vec::new()),
     });
     shell.pages.borrow_mut().insert(key.clone(), handles);
     // Always re-arm: a page saved under a new path must watch the new
