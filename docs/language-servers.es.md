@@ -115,6 +115,32 @@ edición a mano habituales del archivo:
 }
 ```
 
+### Nombrar un servidor y apuntar a uno dentro del proyecto
+
+La entrada de un lenguaje acepta el identificador de un servidor que el
+editor conoce o una línea de órdenes.
+
+Un identificador trae consigo los argumentos del servidor. Para Python
+hay varios registrados —`pyright`, `basedpyright`, `pylsp`, `ruff` y
+`jedi`— y un lenguaje con más de uno usa el primero salvo que la
+configuración nombre otro.
+
+Una línea de órdenes se ejecuta tal cual, con dos sustituciones:
+
+- `{project}` — la raíz del proyecto con la que se indexa la instancia.
+- `{home}` — el directorio personal del usuario.
+
+```json
+{"lsp": {"defaults":
+  {"python": "{project}/.venv/bin/basedpyright-langserver --stdio"}}}
+```
+
+Es lo que necesita un repositorio que lleva sus propias herramientas: un
+entorno virtual, una entrada de `node_modules/.bin`, un servidor incluido
+en el propio repositorio. La sustitución ocurre por argumento después de
+dividir la línea, así que una ruta con espacios sigue siendo un
+argumento.
+
 El comando de una entrada se edita en el sitio — corregir una errata o
 añadir un `--stdio` que faltaba se hace en la propia fila, con ⏎ o
 haciendo clic fuera, sin borrar y volver a crear. Los cambios se

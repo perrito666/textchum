@@ -115,6 +115,33 @@ habituelles du fichier :
 }
 ```
 
+### Nommer un serveur, et en désigner un dans le projet
+
+L'entrée d'un langage accepte l'identifiant d'un serveur connu de
+l'éditeur ou une ligne de commande.
+
+Un identifiant apporte avec lui les arguments du serveur. Plusieurs sont
+enregistrés pour Python — `pyright`, `basedpyright`, `pylsp`, `ruff` et
+`jedi` — et un langage qui en a plusieurs utilise le premier tant que la
+configuration n'en nomme pas un autre.
+
+Une ligne de commande est exécutée telle quelle, avec deux
+substitutions :
+
+- `{project}` — la racine du projet sur laquelle l'instance est indexée.
+- `{home}` — le répertoire personnel de l'utilisateur.
+
+```json
+{"lsp": {"defaults":
+  {"python": "{project}/.venv/bin/basedpyright-langserver --stdio"}}}
+```
+
+C'est ce qu'il faut à un dépôt qui embarque ses propres outils : un
+environnement virtuel, une entrée de `node_modules/.bin`, un serveur
+inclus dans le dépôt. La substitution se fait argument par argument après
+le découpage de la ligne : un chemin de projet contenant des espaces
+reste un seul argument.
+
 La commande d'une entrée s'édite sur place — corriger une coquille ou
 ajouter un `--stdio` manquant se fait dans la ligne elle-même, avec ⏎
 ou en cliquant ailleurs, sans supprimer puis recréer. Les changements

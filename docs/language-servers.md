@@ -102,6 +102,31 @@ hand-editing guarantees:
 }
 ```
 
+### Naming a server, and pointing at one inside the project
+
+A language's entry takes either the id of a server the editor knows or a
+command line.
+
+An id brings the server's own arguments with it. Python has several
+registered — `pyright`, `basedpyright`, `pylsp`, `ruff` and `jedi` — and
+a language with more than one uses the first unless the configuration
+names another.
+
+A command line is run as written, with two substitutions:
+
+- `{project}` — the project root the server instance is keyed on.
+- `{home}` — the user's home directory.
+
+```json
+{"lsp": {"defaults":
+  {"python": "{project}/.venv/bin/basedpyright-langserver --stdio"}}}
+```
+
+This is what a checkout carrying its own tooling needs: a virtualenv, a
+`node_modules/.bin` entry, a server vendored in the repository. The
+substitution happens per argument after the command line is split, so a
+project path containing spaces stays one argument.
+
 An entry's command is editable in place — fix a typo or add a missing
 `--stdio` right in the row, press ⏎ or click away, no delete-and-re-add.
 Changes apply to servers started afterwards; the tab's **Restart Servers
