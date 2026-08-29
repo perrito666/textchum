@@ -1016,6 +1016,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(EditorWindowController.showCodeActions(_:)): "codeActions",
             #selector(EditorWindowController.toggleSplit(_:)): "splitEditor",
             #selector(EditorWindowController.closeSplitCommand(_:)): "closeSplit",
+            #selector(EditorWindowController.focusOtherSide(_:)): "otherSide",
             #selector(EditorWindowController.renameSymbol(_:)): "renameSymbol",
             #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
             #selector(EditorWindowController.runPreprocessors(_:)): "runPreprocessors",
@@ -2241,6 +2242,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyEquivalent: "\\")
         closeSplitItem.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(closeSplitItem)
+        let otherSideItem = NSMenuItem(
+            title: "Other Side",
+            action: #selector(EditorWindowController.focusOtherSide(_:)),
+            keyEquivalent: "\\")
+        otherSideItem.keyEquivalentModifierMask = [.command, .option]
+        editMenu.addItem(otherSideItem)
         editMenu.addItem(.separator())
         editMenu.addItem(makeTransformMenuItem())
 

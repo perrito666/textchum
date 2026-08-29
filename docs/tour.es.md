@@ -48,9 +48,10 @@ buscar referencias, sin hallazgos no hay filas de diagnósticos.
 ## Divisiones
 
 **Split Editor** (⌘\\, Ctrl+\\ en Linux) muestra el documento dos
-veces, lado a lado; **Close Split** (⇧⌘\\) quita la segunda vista.
-Cada lado se desplaza por su cuenta, que es de lo que se trata: leer el
-principio de un archivo mientras se edita el final.
+veces, lado a lado; **Close Split** (⇧⌘\\) quita la segunda vista y
+**Other Side** (⌥⌘\\, Ctrl+Alt+\\ en Linux) pasa el teclado al otro lado
+de la división. Cada lado se desplaza por su cuenta, que es de lo que se
+trata: leer el principio de un archivo mientras se edita el final.
 
 Los dos lados son un solo documento. Hay una historia y un guardado,
 así que una edición en cualquiera de los dos es la misma edición y

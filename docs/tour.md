@@ -46,9 +46,10 @@ diagnostics rows.
 ## Splits
 
 **Split Editor** (⌘\\, Ctrl+\\ on Linux) shows the document twice,
-side by side; **Close Split** (⇧⌘\\) takes the second view away. Each
-side scrolls on its own, which is the point: reading the top of a file
-while editing the bottom of it.
+side by side; **Close Split** (⇧⌘\\) takes the second view away, and
+**Other Side** (⌥⌘\\, Ctrl+Alt+\\ on Linux) puts the keyboard across the
+divider. Each side scrolls on its own, which is the point: reading the
+top of a file while editing the bottom of it.
 
 Both sides are one document. There is one history and one save, so an
 edit on either side is the same edit, and neither view can be a stale

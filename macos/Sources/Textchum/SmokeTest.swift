@@ -879,13 +879,27 @@ func runSmokeTest() -> Int32 {
         print("FAIL: only \(splitEditor.paintTargetCount) view would be painted")
         return 1
     }
+    // The keyboard crosses the divider and comes back, so reading one
+    // half while writing the other does not mean reaching for the
+    // mouse every time.
+    splitEditor.window?.makeFirstResponder(splitEditor.primaryView)
+    splitEditor.focusOtherSide(nil)
+    guard splitEditor.window?.firstResponder === secondView else {
+        print("FAIL: the focus did not cross to the other side")
+        return 1
+    }
+    splitEditor.focusOtherSide(nil)
+    guard splitEditor.window?.firstResponder === splitEditor.primaryView else {
+        print("FAIL: the focus did not come back")
+        return 1
+    }
     splitEditor.closeSplit()
     guard splitEditor.secondaryView == nil, splitEditor.paintTargetCount == 1 else {
         print("FAIL: closing the split left the second view behind")
         return 1
     }
     splitEditor.window?.close()
-    print("split ok (one document in two views, and back again)")
+    print("split ok (one document in two views, the focus across and back)")
 
     // The store holds documents; controllers hold views of them. A
     // path opens once however many views ask for it, and a rename

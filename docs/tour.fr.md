@@ -48,9 +48,10 @@ diagnostics.
 ## Divisions
 
 **Split Editor** (⌘\\, Ctrl+\\ sous Linux) montre le document deux
-fois, côte à côte ; **Close Split** (⇧⌘\\) retire la seconde vue.
-Chaque côté défile de son côté, et c'est bien le but : lire le haut
-d'un fichier en modifiant le bas.
+fois, côte à côte ; **Close Split** (⇧⌘\\) retire la seconde vue et
+**Other Side** (⌥⌘\\, Ctrl+Alt+\\ sous Linux) fait passer le clavier de
+l'autre côté. Chaque côté défile de son côté, et c'est bien le but :
+lire le haut d'un fichier en modifiant le bas.
 
 Les deux côtés sont un seul document. Il y a une histoire et un
 enregistrement : une modification d'un côté est la même modification,
