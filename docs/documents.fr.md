@@ -52,6 +52,31 @@ Les opérations composées s'enregistrent comme des groupes explicites :
 Tout remplacer réécrit chaque occurrence mais s'annule en un seul pas, et
 un rechargement depuis le disque (ci-dessous) est lui aussi un seul pas.
 
+## Transformations
+
+**Edit ▸ Transform** agit sur la sélection, ou sur le document entier
+quand rien n'est sélectionné — ce dont il est question quand aucune
+partie n'a été désignée :
+
+- Majuscules, minuscules, casse de titre et casse inversée.
+- Trier les lignes, les trier à l'envers, ôter les lignes en double.
+- Joindre les lignes, ôter les espaces de fin.
+- Convertir les fins de ligne en LF ou en CRLF.
+
+Une opération sur les lignes reçoit des lignes entières : une sélection
+qui commence au milieu d'une ligne s'étend jusqu'aux limites qui
+l'entourent, car trier une demi-ligne n'a été demandé par personne. Le
+texte arrivé en CRLF repart en CRLF, sauf si la conversion est
+justement le but. L'étendue transformée reste sélectionnée, une
+deuxième opération peut donc suivre sans la resélectionner, et le tout
+ne fait qu'une étape d'annulation.
+
+La casse de titre commence chaque mot et abaisse le reste, l'apostrophe
+comptant comme partie du mot : `don't be well-known` devient `Don't Be
+Well-Known`. Ôter les doublons garde le premier de chacun et laisse
+l'ordre tranquille. Joindre abandonne l'indentation propre à chaque
+ligne, qui était là pour se placer sous la ligne du dessus.
+
 ## Rechercher et remplacer
 
 **⌘F** ouvre la barre de recherche native (**⌥⌘F** avec le champ de

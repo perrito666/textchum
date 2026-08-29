@@ -1028,6 +1028,32 @@ func runSmokeTest() -> Int32 {
     }
     print("profile paths ok (--data-dir names one, its absence names none)")
 
+    // Text transformations. The rules are the core's; what is checked
+    // here is that they survive the bridge, including the one that is
+    // not obvious — an operation over lines keeps the line endings the
+    // text came with.
+    guard CoreTransform.apply("upper", to: "hello") == "HELLO",
+        CoreTransform.apply("title", to: "don't be well-known") == "Don't Be Well-Known",
+        CoreTransform.apply("sort", to: "pear\napple\n") == "apple\npear\n",
+        CoreTransform.apply("dedupe", to: "a\nb\na") == "a\nb",
+        CoreTransform.apply("join", to: "one\n    two") == "one two",
+        CoreTransform.apply("trim", to: "one   \ntwo") == "one\ntwo",
+        CoreTransform.apply("crlf", to: "one\ntwo") == "one\r\ntwo",
+        CoreTransform.apply("sort", to: "pear\r\napple\r\n") == "apple\r\npear\r\n"
+    else {
+        print("FAIL: a transformation did not survive the bridge")
+        return 1
+    }
+    guard CoreTransform.apply("nonexistent", to: "hello") == nil else {
+        print("FAIL: an unknown transformation did something")
+        return 1
+    }
+    guard CoreTransform.isLineWise("sort"), !CoreTransform.isLineWise("upper") else {
+        print("FAIL: line-wise transformations are not saying so")
+        return 1
+    }
+    print("transformations ok (case, lines, endings kept, unknown refused)")
+
     // Repainting the syntax colours on every scroll turn was the
     // stutter; the margin around the viewport is there so that most
     // turns need no repaint at all. The wiring needs a window server,

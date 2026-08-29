@@ -47,6 +47,30 @@ Compound operations record as explicit groups: Replace All rewrites every
 match but undoes as a single step, and a reload from disk (below) is one
 step too.
 
+## Transformations
+
+**Edit ▸ Transform** acts on the selection, or on the whole document
+when nothing is selected — which is what the operation is about when no
+part of it was singled out:
+
+- Upper, lower, title and inverted case.
+- Sort lines, sort lines reversed, remove duplicate lines.
+- Join lines, trim trailing whitespace.
+- Convert line endings to LF or CRLF.
+
+An operation over lines is given whole lines: a selection that starts
+mid-line grows to the boundaries around it first, because sorting half
+a line is not something anyone asked for. Text that came in with CRLF
+goes out with CRLF, unless the conversion is the point. The transformed
+stretch stays selected, so a second one can follow without selecting it
+again, and the whole thing is one undo step.
+
+Title case starts each word and lowers the rest of it, with an
+apostrophe counting as part of the word: `don't be well-known` becomes
+`Don't Be Well-Known`. Removing duplicates keeps the first of each and
+leaves the order alone. Joining drops each line's own indentation,
+which was there to sit under the line above.
+
 ## Find and replace
 
 **⌘F** opens the native find bar (**⌥⌘F** with the replace field, **⌘G** /

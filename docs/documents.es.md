@@ -52,6 +52,30 @@ Las operaciones compuestas se registran como grupos explícitos: Reemplazar
 todo reescribe cada coincidencia pero se deshace como un solo paso, y una
 recarga desde disco (más abajo) también es un solo paso.
 
+## Transformaciones
+
+**Edit ▸ Transform** actúa sobre la selección, o sobre el documento
+entero cuando no hay nada seleccionado —que es de lo que trata la
+operación cuando no se ha señalado ninguna parte:
+
+- Mayúsculas, minúsculas, tipo título y caso invertido.
+- Ordenar líneas, ordenarlas al revés, quitar líneas duplicadas.
+- Unir líneas, quitar los espacios finales.
+- Convertir los finales de línea a LF o a CRLF.
+
+Una operación sobre líneas recibe líneas enteras: una selección que
+empieza a mitad de línea crece hasta los límites que la rodean, porque
+ordenar media línea no lo ha pedido nadie. El texto que entró con CRLF
+sale con CRLF, salvo que la conversión sea justo el objetivo. El tramo
+transformado queda seleccionado, así que otra operación puede seguirla
+sin volver a seleccionarlo, y todo junto es un solo paso de deshacer.
+
+El tipo título empieza cada palabra y baja el resto, con el apóstrofo
+contando como parte de la palabra: `don't be well-known` queda como
+`Don't Be Well-Known`. Quitar duplicados conserva el primero de cada
+uno y no toca el orden. Unir descarta la sangría propia de cada línea,
+que estaba ahí para colocarse bajo la línea de arriba.
+
 ## Buscar y reemplazar
 
 **⌘F** abre la barra de búsqueda nativa (**⌥⌘F** con el campo de
