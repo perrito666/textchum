@@ -1267,8 +1267,22 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let weak = Rc::downgrade(workbench);
         let fallback_page = Rc::clone(&page);
         shell.expect_response(id, move |json| {
-            if let Some(workbench) = weak.upgrade() {
-                if !open_definition(&workbench, json) {
+            let Some(workbench) = weak.upgrade() else { return };
+            use textchum_core::definition::Decision;
+            match textchum_core::definition::decide(json, &path, line, character) {
+                Decision::Jump(target) => {
+                    workbench.open(
+                        Some(PathBuf::from(target.path)),
+                        Some((target.line as i32, target.character as usize)),
+                    );
+                }
+                Decision::AlreadyThere => {
+                    uses_of_definition(&workbench, &path, line, character);
+                }
+                Decision::Choose(targets) => {
+                    show_places(&workbench, "Definitions", places(&targets));
+                }
+                Decision::Nothing => {
                     // The server answered but had nothing; consult the
                     // index for projects that opted in.
                     if !ctags_jump(&workbench, &fallback_page, &path) {
@@ -1897,38 +1911,49 @@ fn replay(workbench: &Rc<Workbench>, is_undo: bool) {
     page.view.grab_focus();
 }
 
-/// Parses a definition result (Location, Location[], or LocationLink[])
-/// and navigates there. Returns whether there was anywhere to go — the
-/// caller decides between the ctags fallback and an explanation.
-fn open_definition(workbench: &Rc<Workbench>, json: &str) -> bool {
-    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
-        return false;
-    };
-    let candidate = match &parsed {
-        serde_json::Value::Array(items) => items.first().cloned(),
-        serde_json::Value::Object(_) => Some(parsed.clone()),
-        _ => None,
-    };
-    let Some(candidate) = candidate else { return false };
-    let uri = candidate["uri"]
-        .as_str()
-        .or_else(|| candidate["targetUri"].as_str());
-    let range = if candidate["range"].is_object() {
-        &candidate["range"]
-    } else if candidate["targetSelectionRange"].is_object() {
-        &candidate["targetSelectionRange"]
-    } else {
-        &candidate["targetRange"]
-    };
-    let Some(path) = uri.and_then(|uri| uri.strip_prefix("file://")) else {
-        return false;
-    };
-    // Servers percent-encode paths (a space is %20); decode before use.
-    let path = percent_decode(path);
-    let line = range["start"]["line"].as_i64().unwrap_or(0) as i32;
-    let character = range["start"]["character"].as_u64().unwrap_or(0) as usize;
-    workbench.open(Some(PathBuf::from(path)), Some((line, character)));
-    true
+/// The caret is on the definition, so the jump key asks the question
+/// that is left: who uses this.
+///
+/// One use is a jump — a panel offering a single row asks for a
+/// keystroke that decides nothing. Several open the panel. None says
+/// so, since the answer is that nothing refers to the symbol.
+fn uses_of_definition(workbench: &Rc<Workbench>, path: &str, line: u32, character: u32) {
+    let shell = Shell::instance();
+    let id = shell
+        .pool
+        .borrow_mut()
+        .references(Path::new(path), line, character);
+    if id == 0 {
+        return;
+    }
+    let weak = Rc::downgrade(workbench);
+    let path = path.to_owned();
+    shell.expect_response(id, move |json| {
+        let Some(workbench) = weak.upgrade() else { return };
+        let uses = textchum_core::definition::elsewhere(json, &path, line, character);
+        match uses.len() {
+            0 => workbench.toast("Nothing else refers to this symbol."),
+            1 => workbench.open(
+                Some(PathBuf::from(uses[0].path.clone())),
+                Some((uses[0].line as i32, uses[0].character as usize)),
+            ),
+            _ => show_places(&workbench, "Uses", places(&uses)),
+        }
+    });
+}
+
+/// Core targets in the shape the picker takes.
+fn places(targets: &[textchum_core::definition::Target]) -> Vec<(String, i32, usize)> {
+    targets
+        .iter()
+        .map(|target| {
+            (
+                target.path.clone(),
+                target.line as i32,
+                target.character as usize,
+            )
+        })
+        .collect()
 }
 
 /// Jumps via the Universal Ctags index, for projects that opted into
@@ -3078,6 +3103,11 @@ fn show_locations(workbench: &Rc<Workbench>, title: &str, json: &str) {
         workbench.toast("No references found.");
         return;
     }
+    show_places(workbench, title, rows);
+}
+
+/// The same panel over places already parsed.
+fn show_places(workbench: &Rc<Workbench>, title: &str, rows: Vec<(String, i32, usize)>) {
     // Code first, tests after. Ask where a function is used and the
     // answer is usually dominated by its test file; what calls this is
     // the question, and what checks it is the follow-up. All of one or

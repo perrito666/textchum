@@ -40,7 +40,13 @@ quelqu'un d'autre.
   curseur — même souris désactivée.
 - **Aller à la définition** (⌃⌘J, ou ⌘-clic) rejoint le symbole sous
   le curseur — d'un fichier à l'autre, en ouvrant ou en ramenant la
-  cible au premier plan au besoin.
+  cible au premier plan au besoin. Sur la définition il n'a nulle part
+  où aller, alors il répond à la question qui reste : qui s'en sert.
+  Un usage est un saut, plusieurs ouvrent la liste, et un symbole
+  auquel rien ne renvoie le dit. Un serveur qui répond par plusieurs
+  définitions — une déclaration et son implémentation — les propose de
+  la même façon. Le raccourci de recherche des références ne change
+  pas.
 - **Chercher les références** (⇧⌘R) liste chaque usage du symbole sous
   le curseur dans un panneau flottant — ↑/↓ pour se déplacer, ⏎ pour
   sauter. Le code d'abord, les tests ensuite, chacun sous un titre

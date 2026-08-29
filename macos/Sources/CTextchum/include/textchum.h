@@ -1254,6 +1254,60 @@ uintptr_t tc_document_len_lines(const struct TcDocument *document);
 bool tc_path_is_test(const char *path, uintptr_t len);
 
 /**
+ * What to do with a `textDocument/definition` answer, given where the
+ * caret is.
+ *
+ * Jump to Definition has nowhere to go when the caret is already on
+ * the definition, so the same key asks who uses the symbol instead.
+ * The answer in hand decides it — no second request.
+ *
+ * `result` is the response's `result` member as JSON. `line` and
+ * `character` are the caret in LSP terms (zero-based, UTF-16 units).
+ *
+ * Returns a nul-terminated JSON object, released with
+ * [`tc_string_free`]:
+ *
+ * ```json
+ * {"action": "jump", "targets": [{"path": "/p/lib.rs", "line": 40,
+ *                                 "character": 3}]}
+ * ```
+ *
+ * `action` is `nothing`, `jump`, `references` (the caret is on the
+ * definition) or `choose` (several, and the reader picks).
+ *
+ * # Safety
+ * `result` must point to `result_len` readable bytes and `path` to
+ * `path_len`.
+ */
+char *tc_definition_decide(const char *result,
+                           uintptr_t result_len,
+                           const char *path,
+                           uintptr_t path_len,
+                           uint32_t line,
+                           uint32_t character);
+
+/**
+ * The reference locations that are not the one the caret is in.
+ *
+ * `textDocument/references` includes the declaration, so a definition
+ * nobody calls answers with the line the caret is on. What is left
+ * after dropping it is the uses.
+ *
+ * Returns a nul-terminated JSON array of `{"path", "line",
+ * "character"}`, released with [`tc_string_free`].
+ *
+ * # Safety
+ * `result` must point to `result_len` readable bytes and `path` to
+ * `path_len`.
+ */
+char *tc_references_elsewhere(const char *result,
+                              uintptr_t result_len,
+                              const char *path,
+                              uintptr_t path_len,
+                              uint32_t line,
+                              uint32_t character);
+
+/**
  * The gutter marks for a file: which lines differ from the same file
  * at `HEAD`. `text` is the buffer's current contents, so the marks
  * follow what is being edited rather than what is on disk.
