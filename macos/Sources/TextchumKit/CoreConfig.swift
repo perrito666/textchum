@@ -146,6 +146,40 @@ public final class CoreConfig {
         set { tc_config_set_hover_docs(handle, newValue) }
     }
 
+    /// Every project root the configuration mentions, in any section.
+    public var configuredProjects: [String] {
+        guard let raw = tc_config_configured_projects(handle) else { return [] }
+        defer { tc_string_free(raw) }
+        let data = Data(String(cString: raw).utf8)
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String] ?? []
+    }
+
+    /// Removes every trace of a project root: flags, editor overrides,
+    /// hidden globs, servers and save commands.
+    public func removeProject(root: String) {
+        root.withCString { pointer in
+            tc_config_remove_project(handle, pointer, UInt(strlen(pointer)))
+        }
+    }
+
+    /// Copies one project's settings onto another root, taking the
+    /// parts asked for. Returns whether anything was copied.
+    @discardableResult
+    public func copyProject(
+        from: String, to: String,
+        workspace: Bool = true, servers: Bool = true, preprocessors: Bool = true
+    ) -> Bool {
+        from.withCString { fromPointer in
+            to.withCString { toPointer in
+                tc_config_copy_project(
+                    handle,
+                    fromPointer, UInt(strlen(fromPointer)),
+                    toPointer, UInt(strlen(toPointer)),
+                    workspace, servers, preprocessors)
+            }
+        }
+    }
+
     /// Whether selecting a word marks its other occurrences on screen.
     public var markOccurrences: Bool {
         get { tc_config_mark_occurrences(handle) }

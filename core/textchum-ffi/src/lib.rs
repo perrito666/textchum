@@ -1708,6 +1708,88 @@ pub unsafe extern "C" fn tc_config_set_workspace_flag(
     );
 }
 
+/// Every project root the configuration mentions, in any section, as a
+/// nul-terminated JSON array of strings. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_configured_projects(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let roots = config.inner.configured_projects();
+        owned_c_string(serde_json::to_string(&roots).unwrap_or_else(|_| "[]".into()))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Removes every trace of a project root: flags, editor overrides,
+/// hidden globs, servers and save commands.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `root` must point to
+/// `root_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_remove_project(
+    config: *mut TcConfig,
+    root: *const c_char,
+    root_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(root) = (unsafe { str_from_raw(root, root_len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.remove_project(root)));
+}
+
+/// Copies one project's settings onto another root, taking the parts
+/// asked for: `workspace` is the flags, editor overrides and hidden
+/// globs; `servers` is the language servers; `preprocessors` is the
+/// save commands. Each part replaces the target's.
+///
+/// Returns whether anything was copied — a source with no settings of
+/// its own copies nothing, and neither does a root onto itself.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_copy_project(
+    config: *mut TcConfig,
+    from: *const c_char,
+    from_len: usize,
+    to: *const c_char,
+    to_len: usize,
+    workspace: bool,
+    servers: bool,
+    preprocessors: bool,
+) -> bool {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return false;
+    };
+    let (from, to) = unsafe { (str_from_raw(from, from_len), str_from_raw(to, to_len)) };
+    let (Some(from), Some(to)) = (from, to) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        config.inner.copy_project(
+            from,
+            to,
+            textchum_core::ProjectParts {
+                workspace,
+                servers,
+                preprocessors,
+            },
+        )
+    }))
+    .unwrap_or(false)
+}
+
 /// Open-target choice: files open as tabs of the current window group.
 pub const TC_OPEN_IN_TAB: u32 = 0;
 /// Open-target choice: files open as separate windows.

@@ -891,6 +891,37 @@ func runSmokeTest() -> Int32 {
     }
     print("occurrence marks ok (whole words, inside longer names, document offsets)")
 
+    // A project's settings can be copied onto another root, which is
+    // what a second service in the same layout needs. The rules are the
+    // core's; the bridge is what is checked here.
+    let projectScratch = FileManager.default.temporaryDirectory
+        .appendingPathComponent("textchum-smoke-projects-\(getpid()).json").path
+    let projectConfig = CoreConfig(path: projectScratch)
+    projectConfig.setWorkspaceFlag(root: "/work/a", key: "ctags_fallback", value: true)
+    projectConfig.setLSPEntry(root: "/work/a", language: "python", command: "pylsp")
+    guard projectConfig.copyProject(from: "/work/a", to: "/work/b") else {
+        print("FAIL: copying a project's settings did nothing")
+        return 1
+    }
+    guard projectConfig.lspJSON.contains("/work/b"),
+        projectConfig.workspaceJSON.contains("/work/b")
+    else {
+        print("FAIL: the copy did not land in both sections")
+        return 1
+    }
+    guard projectConfig.configuredProjects == ["/work/a", "/work/b"] else {
+        print("FAIL: configured projects are \(projectConfig.configuredProjects)")
+        return 1
+    }
+    projectConfig.removeProject(root: "/work/a")
+    guard projectConfig.configuredProjects == ["/work/b"],
+        !projectConfig.lspJSON.contains("/work/a")
+    else {
+        print("FAIL: removing a project left something behind")
+        return 1
+    }
+    print("project settings ok (copied whole, listed, removed whole)")
+
     // Repainting the syntax colours on every scroll turn was the
     // stutter; the margin around the viewport is there so that most
     // turns need no repaint at all. The wiring needs a window server,

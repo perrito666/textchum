@@ -421,6 +421,23 @@ sur l'entrée workspace :
 }
 ```
 
+## Ajouter un projet
+
+L'onglet Projets liste les racines des documents ouverts : un projet
+s'ajoute donc en le choisissant, pas en tapant son chemin. **Copier
+les réglages de** part d'un projet déjà configuré — ses serveurs, ses
+commandes d'enregistrement, ses indicateurs et ses réglages d'éditeur,
+le tout — ce dont a besoin un second service de même disposition. Le
+même choix figure sur la ligne de chaque projet, pour copier vers un
+qui existe déjà.
+
+Un champ de remplacement vide montre ce qu'il hérite : une case blanche
+dit donc ce qui s'applique au lieu de vous laisser aller voir.
+
+Une racine configurée dont le répertoire a disparu est marquée
+*missing*, et **Remove missing** les oublie toutes : plus rien ne
+correspondra jamais à ces entrées.
+
 ## Pas encore là
 
 - Rien pour le moment — notez la prochaine gêne quand elle se

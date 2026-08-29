@@ -945,6 +945,92 @@ impl Config {
         prune_empty(top, "workspace");
     }
 
+    /// Every project root the configuration mentions, in any section.
+    ///
+    /// The Settings window offers these to copy from, and checks them
+    /// against the disk: a root whose directory is gone is an entry
+    /// nothing will ever match.
+    pub fn configured_projects(&self) -> Vec<String> {
+        let mut roots: Vec<String> = Vec::new();
+        for section in ["workspace", "lsp", "preprocessors"] {
+            let Some(projects) = self
+                .root
+                .get(section)
+                .and_then(|value| value.get("projects"))
+                .and_then(Value::as_object)
+            else {
+                continue;
+            };
+            for root in projects.keys() {
+                if !roots.iter().any(|had| had == root) {
+                    roots.push(root.clone());
+                }
+            }
+        }
+        roots.sort();
+        roots
+    }
+
+    /// Removes every trace of a project root: flags, editor overrides,
+    /// hidden globs, servers and save commands.
+    pub fn remove_project(&mut self, root: &str) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        for section in ["workspace", "lsp", "preprocessors"] {
+            if let Some(projects) = top
+                .get_mut(section)
+                .and_then(Value::as_object_mut)
+                .and_then(|section| section.get_mut("projects"))
+                .and_then(Value::as_object_mut)
+            {
+                projects.remove(root);
+            }
+            prune_empty(top, section);
+        }
+    }
+
+    /// Copies one project's settings onto another root.
+    ///
+    /// A second service in the same layout wants the same settings, and
+    /// entering them again is a transcription exercise with a typo in
+    /// it. Each part asked for replaces the target's, so what ends up
+    /// there is the source's answer rather than a merge of two.
+    ///
+    /// Returns whether anything was copied — a source with no settings
+    /// of its own copies nothing.
+    pub fn copy_project(&mut self, from: &str, to: &str, parts: ProjectParts) -> bool {
+        if from == to {
+            return false;
+        }
+        let sections = [
+            ("workspace", parts.workspace),
+            ("lsp", parts.servers),
+            ("preprocessors", parts.preprocessors),
+        ];
+        let mut copied = false;
+        for (section, wanted) in sections {
+            if !wanted {
+                continue;
+            }
+            let source = self
+                .root
+                .get(section)
+                .and_then(|value| value.get("projects"))
+                .and_then(|projects| projects.get(from))
+                .cloned();
+            let Some(source) = source else { continue };
+            let top = self
+                .root
+                .as_object_mut()
+                .expect("config root is always an object");
+            ensure_object(ensure_object(top, section), "projects").insert(to.into(), source);
+            copied = true;
+        }
+        copied
+    }
+
     /// Where opened files go (`editor.open_files_in`): tabs by default.
     pub fn open_target(&self) -> OpenTarget {
         match self.editor().get("open_files_in").and_then(Value::as_str) {
@@ -1069,6 +1155,30 @@ fn ensure_object<'a>(
 
 /// Removes `key` if it (recursively) holds only empty objects, keeping
 /// the hand-edited file free of husks.
+/// What a project's settings are made of, for copying one onto
+/// another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectParts {
+    /// `workspace.projects.<root>`: the flags, the editor overrides and
+    /// the hidden globs.
+    pub workspace: bool,
+    /// `lsp.projects.<root>`: the servers.
+    pub servers: bool,
+    /// `preprocessors.projects.<root>`: the save commands.
+    pub preprocessors: bool,
+}
+
+impl Default for ProjectParts {
+    /// Everything: a project copied for its layout is wanted whole.
+    fn default() -> Self {
+        Self {
+            workspace: true,
+            servers: true,
+            preprocessors: true,
+        }
+    }
+}
+
 fn prune_empty(map: &mut Map<String, Value>, key: &str) {
     fn is_effectively_empty(value: &Value) -> bool {
         match value.as_object() {
@@ -1089,6 +1199,67 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("textchum-config-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join(name)
+    }
+
+    #[test]
+    fn a_project_can_be_copied_onto_another_root() {
+        let (mut config, _) = Config::load(&temp_path("copy.json"));
+        config.set_workspace_flag(Some("/work/a"), "ctags_fallback", Some(true));
+        config.set_editor_override("/work/a", "tab_width", Some("2"));
+        config.set_lsp_entry(Some("/work/a"), "python", Some("pylsp"));
+        config.set_preprocessor_entry(Some("/work/a"), "python", Some("black -"));
+
+        assert!(config.copy_project("/work/a", "/work/b", ProjectParts::default()));
+        let workspace = config.workspace_json();
+        assert!(workspace.contains("/work/b"));
+        assert!(config.editor_overrides_json("/work/b").contains("tab_width"));
+        assert!(config.lsp_json().contains("/work/b"));
+        assert!(config.preprocessors_json().contains("/work/b"));
+    }
+
+    #[test]
+    fn copying_takes_only_the_parts_asked_for() {
+        let (mut config, _) = Config::load(&temp_path("copy-parts.json"));
+        config.set_workspace_flag(Some("/work/a"), "ctags_fallback", Some(true));
+        config.set_lsp_entry(Some("/work/a"), "python", Some("pylsp"));
+
+        let parts = ProjectParts {
+            workspace: false,
+            servers: true,
+            preprocessors: false,
+        };
+        assert!(config.copy_project("/work/a", "/work/b", parts));
+        assert!(config.lsp_json().contains("/work/b"));
+        assert!(!config.workspace_json().contains("/work/b"));
+    }
+
+    #[test]
+    fn copying_a_project_with_no_settings_copies_nothing() {
+        let (mut config, _) = Config::load(&temp_path("copy-empty.json"));
+        assert!(!config.copy_project("/work/a", "/work/b", ProjectParts::default()));
+        // And a root cannot be copied onto itself.
+        config.set_workspace_flag(Some("/work/a"), "ctags_fallback", Some(true));
+        assert!(!config.copy_project("/work/a", "/work/a", ProjectParts::default()));
+    }
+
+    #[test]
+    fn every_configured_project_is_listed_and_removable() {
+        let (mut config, _) = Config::load(&temp_path("projects.json"));
+        config.set_workspace_flag(Some("/work/b"), "ctags_fallback", Some(true));
+        config.set_lsp_entry(Some("/work/a"), "python", Some("pylsp"));
+        config.set_preprocessor_entry(Some("/work/c"), "python", Some("black -"));
+        // Sorted, and each root once however many sections mention it.
+        assert_eq!(
+            config.configured_projects(),
+            vec!["/work/a".to_string(), "/work/b".into(), "/work/c".into()]
+        );
+
+        config.remove_project("/work/a");
+        assert_eq!(
+            config.configured_projects(),
+            vec!["/work/b".to_string(), "/work/c".into()]
+        );
+        assert!(!config.lsp_json().contains("/work/a"));
     }
 
     #[test]
