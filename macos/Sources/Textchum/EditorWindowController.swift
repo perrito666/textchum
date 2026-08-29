@@ -115,6 +115,10 @@ final class EditorWindowController: NSWindowController {
     private var changeMarkGeneration: UInt64 = 0
     /// The latest language-server findings for this document.
     private var diagnostics: [CoreDiagnostic] = []
+    /// The character a context-menu command is about, while one runs.
+    /// A right-click does not move the caret, and the menu is about
+    /// what was clicked.
+    private var contextIndex: Int?
     /// The completion popup and its trigger machinery.
     private let completionPopup = CompletionPopup()
     private var completionTimer: Timer?
@@ -542,7 +546,7 @@ final class EditorWindowController: NSWindowController {
     @objc func showDiagnosticAtCaret(_ sender: Any?) {
         guard let textView else { return }
         let text = textView.string as NSString
-        let caret = min(textView.selectedRange().location, text.length)
+        let caret = anchorIndex
         let found = diagnostic(atOffset: caret) ?? diagnosticOnLine(of: caret, in: text)
         guard let found else {
             NSSound.beep()
@@ -583,6 +587,18 @@ final class EditorWindowController: NSWindowController {
         let windowRect = window.convertFromScreen(screenRect)
         let point = textView.convert(windowRect.origin, from: nil)
         requestHover(at: point, deliberate: true)
+    }
+
+    /// Where a command that acts "under the caret" should look.
+    ///
+    /// A right-click does not move the caret, and the menu it opens is
+    /// about the character under the pointer. While one of that menu's
+    /// items runs, this is that character; the rest of the time it is
+    /// the caret.
+    var anchorIndex: Int {
+        guard let textView else { return 0 }
+        let length = (textView.string as NSString).length
+        return min(contextIndex ?? textView.selectedRange().location, length)
     }
 
     /// Character offset → LSP (line, UTF-16 column): walk line ranges
@@ -662,8 +678,7 @@ final class EditorWindowController: NSWindowController {
             return
         }
         let text = textView.string as NSString
-        let index = min(textView.selectedRange().location, text.length)
-        let (line, character) = Self.lspPosition(ofIndex: index, in: text)
+        let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
         lspApp.lspDefinition(path: path, line: line, character: character) { [weak self] json in
             guard let self else { return }
             switch CoreDefinition.decide(
@@ -719,8 +734,7 @@ final class EditorWindowController: NSWindowController {
     @objc func findReferences(_ sender: Any?) {
         guard let lspApp, let path = lspOpenPath, let textView else { return }
         let text = textView.string as NSString
-        let index = min(textView.selectedRange().location, text.length)
-        let (line, character) = Self.lspPosition(ofIndex: index, in: text)
+        let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
         lspApp.lspReferences(path: path, line: line, character: character) { [weak self] json in
             guard let self else { return }
             let locations = Self.referenceLocations(fromResultJSON: json)
@@ -893,8 +907,7 @@ final class EditorWindowController: NSWindowController {
         let newName = field.stringValue.trimmingCharacters(in: .whitespaces)
         guard !newName.isEmpty, newName != current else { return }
         let text = textView.string as NSString
-        let index = min(textView.selectedRange().location, text.length)
-        let (line, character) = Self.lspPosition(ofIndex: index, in: text)
+        let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
         lspApp.lspRename(path: path, line: line, character: character, newName: newName) {
             json in
             let applied =
@@ -1029,7 +1042,7 @@ final class EditorWindowController: NSWindowController {
             else { return false }
             return identifier.contains(scalar)
         }
-        var start = min(textView.selectedRange().location, text.length)
+        var start = anchorIndex
         // A caret just past the last character of a word still means it.
         if !isWord(start), isWord(start - 1) { start -= 1 }
         guard isWord(start) else { return nil }
@@ -1077,8 +1090,7 @@ final class EditorWindowController: NSWindowController {
             return
         }
         let text = textView.string as NSString
-        let caret = min(textView.selectedRange().location, text.length)
-        let line = Self.lspPosition(ofIndex: caret, in: text).0 + 1
+        let line = Self.lspPosition(ofIndex: anchorIndex, in: text).0 + 1
         do {
             let blame = try CoreBlame.line(line, ofPath: path, text: coreDocument.text)
             BlamePanel.shared.show(blame, file: path, over: window)
@@ -1663,6 +1675,19 @@ final class EditorWindowController: NSWindowController {
     /// context menu needs to know before it can offer replacements.
     func misspelledRange(at location: Int) -> NSRange? {
         spellingRanges.first { NSLocationInRange(location, $0) }
+    }
+
+    /// What a context-menu command is about: the character clicked and
+    /// the command to run there. Carried on the item, so the action
+    /// does not have to ask where the pointer was.
+    final class ContextCommand: NSObject {
+        let index: Int
+        let selector: Selector
+
+        init(index: Int, selector: Selector) {
+            self.index = index
+            self.selector = selector
+        }
     }
 
     /// What a spelling menu item is about, carried on the item itself so
@@ -3006,22 +3031,90 @@ extension EditorWindowController: NSWindowDelegate {
 // MARK: - Text view synchronization
 
 extension EditorWindowController: NSTextViewDelegate {
-    /// Spelling actions for the word under the pointer.
+    /// The editor's own context menu.
     ///
-    /// AppKit builds this menu from its own spell checking, which is off
-    /// here — the marks come from the prose-scoped pass instead, so the
-    /// menu has to be filled in from the same source. The word's range is
-    /// captured into the menu items rather than looked up when one is
-    /// chosen: a menu can stay open while the document moves underneath.
+    /// AppKit's is about text in general — Speech, Substitutions,
+    /// Services, autofill — and holds none of the commands that act on
+    /// the place that was clicked, which is what a right-click in code
+    /// is for. So the menu is built here instead of passed through.
+    ///
+    /// The commands act on `charIndex`, not on the caret: clicking does
+    /// not move the caret, and a menu that answered about somewhere
+    /// else would be answering the wrong question. Items that need a
+    /// language server are left out when none is running rather than
+    /// shown greyed, since a disabled row explains nothing.
+    ///
+    /// Spelling comes from the prose-scoped pass rather than AppKit's
+    /// checker, which is off here. The word's range is captured into
+    /// the items instead of looked up when one is chosen: a menu can
+    /// stay open while the document moves underneath.
     func textView(
         _ textView: NSTextView,
         menu: NSMenu,
         for event: NSEvent,
         at charIndex: Int
     ) -> NSMenu? {
-        guard let range = misspelledRange(at: charIndex) else { return menu }
+        let contextMenu = NSMenu()
+        if let range = misspelledRange(at: charIndex) {
+            addSpellingItems(to: contextMenu, range: range, textView: textView)
+            contextMenu.addItem(.separator())
+        }
+        for (title, selector) in [
+            ("Cut", #selector(NSText.cut(_:))),
+            ("Copy", #selector(NSText.copy(_:))),
+            ("Paste", #selector(NSText.paste(_:))),
+        ] {
+            // No target: the responder chain reaches the text view,
+            // which also decides whether the item is enabled.
+            contextMenu.addItem(NSMenuItem(title: title, action: selector, keyEquivalent: ""))
+        }
+
+        var commands: [(String, Selector)] = []
+        let hasServer = lspApp != nil && lspOpenPath != nil
+        if lspOpenPath != nil {
+            // Without a server the ctags index may still answer.
+            commands.append(("Jump to Definition", #selector(jumpToDefinition(_:))))
+        }
+        if hasServer {
+            commands.append(("Find References", #selector(findReferences(_:))))
+            commands.append(("Rename Symbol…", #selector(renameSymbol(_:))))
+        }
+        if !diagnostics.isEmpty {
+            commands.append(("Show Diagnostic for Line", #selector(showDiagnosticAtCaret(_:))))
+            commands.append(("Diagnostics…", #selector(showDiagnosticList(_:))))
+        }
+        if lspOpenPath != nil {
+            commands.append(("Blame Line…", #selector(blameLine(_:))))
+        }
+        // Formatting falls back to the save-preprocessor chain, so it
+        // is offered with or without a server.
+        commands.append(("Format Document", #selector(formatDocument(_:))))
+        commands.append(("File Properties…", #selector(showFileProperties(_:))))
+
+        contextMenu.addItem(.separator())
+        for (title, selector) in commands {
+            let item = NSMenuItem(
+                title: title, action: #selector(runContextCommand(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = ContextCommand(index: charIndex, selector: selector)
+            contextMenu.addItem(item)
+        }
+        return contextMenu
+    }
+
+    /// Runs a context-menu command about the character that was
+    /// clicked, rather than about the caret.
+    @objc private func runContextCommand(_ sender: NSMenuItem) {
+        guard let command = sender.representedObject as? ContextCommand else { return }
+        contextIndex = command.index
+        defer { contextIndex = nil }
+        _ = perform(command.selector, with: sender)
+    }
+
+    /// The spelling section: suggestions for `range`, and the two ways
+    /// to say the word is fine.
+    private func addSpellingItems(to spelling: NSMenu, range: NSRange, textView: NSTextView) {
         let word = (textView.string as NSString).substring(with: range)
-        let spelling = NSMenu()
         let checker = NSSpellChecker.shared
         let guesses =
             checker.guesses(
@@ -3065,12 +3158,6 @@ extension EditorWindowController: NSTextViewDelegate {
         ignore.target = self
         ignore.representedObject = SpellingFix(range: range, word: word, replacement: nil)
         spelling.addItem(ignore)
-        spelling.addItem(.separator())
-        for item in menu.items {
-            guard let copy = item.copy() as? NSMenuItem else { continue }
-            spelling.addItem(copy)
-        }
-        return spelling
     }
 
     func textView(

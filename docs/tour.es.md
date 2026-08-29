@@ -36,6 +36,15 @@ tamaño, lenguaje y el número de problemas en cuanto el servidor de
 lenguaje opina. El árbol acompaña: cambiar de pestaña despliega la
 ruta del archivo actual y lo resalta.
 
+Al hacer clic derecho en el texto aparece el menú del editor: saltar a
+la definición, buscar referencias, renombrar el símbolo, el diagnóstico
+de la línea, el blame de la línea, formatear el documento y las
+propiedades del archivo, junto a cortar, copiar, pegar y las
+sugerencias de ortografía. Esos comandos actúan sobre el carácter en
+el que se hizo clic, no sobre el cursor, que el clic deja donde
+estaba. Lo que el documento no puede usar no está: sin servidor no hay
+buscar referencias, sin hallazgos no hay filas de diagnósticos.
+
 ## Servidores de lenguaje
 
 Los diagnósticos llegan como marcas tintadas en el texto y un contador

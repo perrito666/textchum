@@ -1250,7 +1250,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.toast("Save the file first — untitled documents have no server.");
             return;
         };
-        let (line, character) = page::lsp_caret(&page.buffer);
+        let (line, character) = page::lsp_anchor(&page);
         let shell = Shell::instance();
         let id = shell
             .pool
@@ -1381,7 +1381,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         // edit above the caret cannot shift the answer onto the
         // neighbouring line.
         let text = page.state.borrow().document.text();
-        let line = page.buffer.iter_at_mark(&page.buffer.get_insert()).line().max(0) as usize + 1;
+        let line = page::lsp_anchor(&page).0 as usize + 1;
         let blame = match blame::blame_line(Path::new(&path), line, &text) {
             Ok(blame) => blame,
             Err(error) => {
@@ -1397,7 +1397,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.toast("No diagnostics for an unsaved document.");
             return;
         };
-        let (line, character) = page::lsp_caret(&page.buffer);
+        let (line, character) = page::lsp_anchor(&page);
         let shell = Shell::instance();
         let found = {
             let pages = shell.pages.borrow();
@@ -1546,6 +1546,31 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     }
     // Replacing a misspelling: the parameter is the chosen suggestion,
     // and the span it goes into is the one recorded when the menu was
+    // A context-menu command runs the ordinary action, about the
+    // character that was clicked rather than about the caret: a
+    // right-click does not move the caret, and a menu that answered
+    // about somewhere else would answer the wrong question.
+    {
+        let action = gtk::gio::SimpleAction::new(
+            "context-command",
+            Some(glib::VariantTy::new("(si)").unwrap()),
+        );
+        let weak = Rc::downgrade(workbench);
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some((name, offset)) = parameter.and_then(|p| p.get::<(String, i32)>()) else {
+                return;
+            };
+            let Some(page) = workbench.selected() else { return };
+            page.context_offset.set(Some(offset));
+            // Activation is synchronous, so the offset is in place for
+            // exactly as long as the command reads it.
+            gtk::prelude::ActionGroupExt::activate_action(&workbench.window, &name, None);
+            page.context_offset.set(None);
+        });
+        workbench.window.add_action(&action);
+    }
+
     // built.
     {
         let action =
@@ -1732,7 +1757,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.toast("Save the file first — untitled documents have no server.");
             return;
         };
-        let (line, character) = page::lsp_caret(&page.buffer);
+        let (line, character) = page::lsp_anchor(&page);
         let shell = Shell::instance();
         let id = shell
             .pool
@@ -1760,7 +1785,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.toast("Save the file first — untitled documents have no server.");
             return;
         };
-        let (line, character) = page::lsp_caret(&page.buffer);
+        let (line, character) = page::lsp_anchor(&page);
         let dialog = adw::AlertDialog::new(Some("Rename Symbol"), None);
         let entry = gtk::Entry::new();
         entry.set_placeholder_text(Some("New name"));
