@@ -1,9 +1,14 @@
 //! The server registry: which language server serves which language.
 //!
-//! Curated defaults only for now; user overrides (a `servers.json` with
-//! the same escape-hatch rules as the configuration) come later. Servers
-//! are found on `PATH` — Textchum does not install them, it tells the user
-//! what to install when one is missing.
+//! Servers are found on `PATH` — Textchum does not install them, it
+//! tells the user what to install when one is missing. Configuration
+//! can add servers this table does not know, and redefine the ones it
+//! does, under `lsp.servers`.
+//!
+//! Every command and argument list here comes from that server's own
+//! documentation, and the install hints are ours. A server started
+//! without its transport flag exits without saying why, so an entry
+//! that is a guess is worse than no entry.
 
 /// A language server Textchum knows how to talk to.
 #[derive(Debug, Clone, PartialEq, Eq)]

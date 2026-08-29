@@ -2618,6 +2618,57 @@ pub unsafe extern "C" fn tc_path_is_test(path: *const c_char, len: usize) -> boo
     .unwrap_or(false)
 }
 
+/// Transforms a stretch of text: `upper`, `lower`, `title`, `invert`,
+/// `sort`, `sort-reversed`, `dedupe`, `join`, `trim`, `lf`, `crlf`.
+///
+/// Returns the transformed text as a nul-terminated string, released
+/// with [`tc_string_free`], or null for a name that is not one of
+/// those.
+///
+/// # Safety
+/// Each pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_transform(
+    kind: *const c_char,
+    kind_len: usize,
+    text: *const c_char,
+    text_len: usize,
+) -> *mut c_char {
+    let (kind, text) = unsafe { (str_from_raw(kind, kind_len), str_from_raw(text, text_len)) };
+    let (Some(kind), Some(text)) = (kind, text) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let Some(transform) = textchum_core::transform::Transform::from_id(kind) else {
+            return std::ptr::null_mut();
+        };
+        owned_c_string(textchum_core::transform::apply(transform, text))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Whether a transformation is about lines rather than characters.
+///
+/// A line-wise one is given whole lines: the shell grows the selection
+/// to the line boundaries around it first.
+///
+/// # Safety
+/// `kind` must point to `kind_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_transform_is_line_wise(
+    kind: *const c_char,
+    kind_len: usize,
+) -> bool {
+    let Some(kind) = (unsafe { str_from_raw(kind, kind_len) }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::transform::Transform::from_id(kind)
+            .is_some_and(textchum_core::transform::Transform::is_line_wise)
+    }))
+    .unwrap_or(false)
+}
+
 /// The other places the selected word appears, for marking them.
 ///
 /// `text` is the stretch to search — the visible one, so a long file

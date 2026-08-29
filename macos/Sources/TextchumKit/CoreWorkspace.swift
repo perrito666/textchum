@@ -158,6 +158,36 @@ public enum CoreReferences {
     }
 }
 
+/// Transformations over a stretch of text: case, sorting, joining,
+/// trimming, line endings.
+public enum CoreTransform {
+    /// The transformed text, or nil for a name the core does not know.
+    public static func apply(_ kind: String, to text: String) -> String? {
+        var text = text
+        let raw = text.withUTF8 { bytes -> UnsafeMutablePointer<CChar>? in
+            kind.withCString { kindPointer in
+                tc_transform(
+                    kindPointer, UInt(strlen(kindPointer)),
+                    bytes.baseAddress.map {
+                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                    },
+                    UInt(bytes.count))
+            }
+        }
+        guard let raw else { return nil }
+        defer { tc_string_free(raw) }
+        return String(cString: raw)
+    }
+
+    /// Whether the transformation is about lines, and so wants whole
+    /// ones rather than the fragment the selection covers.
+    public static func isLineWise(_ kind: String) -> Bool {
+        kind.withCString { pointer in
+            tc_transform_is_line_wise(pointer, UInt(strlen(pointer)))
+        }
+    }
+}
+
 /// The other places the selected word appears.
 ///
 /// Selecting a word and then typing it into the find bar to see where
