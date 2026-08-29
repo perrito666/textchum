@@ -1014,64 +1014,69 @@ private struct PresetsTab: View {
     @State private var newName = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(
-                "Named glob sets the hide editors can add in one click. "
-                    + "They are yours to change: edit any preset and this list "
-                    + "replaces the built-in one, so removals stick."
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        // One scrolling column per tab: a settings screen that
+        // cannot scroll turns one more setting into a setting
+        // nobody can reach.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(
+                    "Named glob sets the hide editors can add in one click. "
+                        + "They are yours to change: edit any preset and this list "
+                        + "replaces the built-in one, so removals stick."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            List {
-                if model.hidePresets.isEmpty {
-                    Text("No presets — add one below, or restore the built-ins.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(model.hidePresets, id: \.name) { preset in
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(preset.name)
-                                .fontWeight(.semibold)
-                            PresetGlobsField(
-                                name: preset.name,
-                                initial: preset.globs.joined(separator: "\n")
-                            ) { globs in
-                                model.setHidePreset(name: preset.name, globs: globs)
+                List {
+                    if model.hidePresets.isEmpty {
+                        Text("No presets — add one below, or restore the built-ins.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.hidePresets, id: \.name) { preset in
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(preset.name)
+                                    .fontWeight(.semibold)
+                                PresetGlobsField(
+                                    name: preset.name,
+                                    initial: preset.globs.joined(separator: "\n")
+                                ) { globs in
+                                    model.setHidePreset(name: preset.name, globs: globs)
+                                }
                             }
+                            Spacer()
+                            Button {
+                                model.setHidePreset(name: preset.name, globs: nil)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
                         }
-                        Spacer()
-                        Button {
-                            model.setHidePreset(name: preset.name, globs: nil)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.borderless)
+                    }
+                }
+                .frame(height: 240)
+
+                HStack(spacing: 8) {
+                    TextField("New preset name", text: $newName)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 200)
+                    Button("Add") {
+                        // A fresh preset starts with a placeholder pattern:
+                        // an empty one would remove itself immediately.
+                        model.setHidePreset(name: newName, globs: newName.lowercased())
+                        newName = ""
+                    }
+                    .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Spacer()
+                    Button("Restore Built-ins") {
+                        model.resetHidePresets()
                     }
                 }
             }
-            .frame(minHeight: 200)
-
-            HStack(spacing: 8) {
-                TextField("New preset name", text: $newName)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 200)
-                Button("Add") {
-                    // A fresh preset starts with a placeholder pattern:
-                    // an empty one would remove itself immediately.
-                    model.setHidePreset(name: newName, globs: newName.lowercased())
-                    newName = ""
-                }
-                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
-                Spacer()
-                Button("Restore Built-ins") {
-                    model.resetHidePresets()
-                }
-            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
     }
 }
 
@@ -1258,73 +1263,78 @@ private struct KeyboardTab: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(
-                "A profile sets the shortcuts its editor is known for and leaves the "
-                    + "rest alone. Changing one on top of a profile keeps the profile; "
-                    + "\"Save as profile\" turns what is in force into one of your own. "
-                    + "Shortcuts are written as \"cmd+shift+f\" — cmd is Command here "
-                    + "and Ctrl on Linux."
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        // One scrolling column per tab: a settings screen that
+        // cannot scroll turns one more setting into a setting
+        // nobody can reach.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(
+                    "A profile sets the shortcuts its editor is known for and leaves the "
+                        + "rest alone. Changing one on top of a profile keeps the profile; "
+                        + "\"Save as profile\" turns what is in force into one of your own. "
+                        + "Shortcuts are written as \"cmd+shift+f\" — cmd is Command here "
+                        + "and Ctrl on Linux."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 8) {
-                Picker("Profile", selection: $model.keysProfile) {
-                    Text("Textchum").tag("")
-                    ForEach(model.keyProfileChoices, id: \.id) { choice in
-                        Text(choice.name).tag(choice.id)
-                    }
-                }
-                .frame(width: 320)
-                Button("Reset changes") { model.clearKeyBindings() }
-                    .disabled(model.keyOverrides.isEmpty)
-                Spacer()
-            }
-
-            HStack(spacing: 8) {
-                TextField("Save as profile…", text: $newProfileName)
-                    .frame(width: 200)
-                Button("Save as profile") {
-                    model.saveKeyProfile(named: newProfileName)
-                    newProfileName = ""
-                }
-                .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
-                if !model.keysProfile.isEmpty {
-                    Button("Delete profile") {
-                        model.removeKeyProfile(named: model.keysProfile)
-                    }
-                }
-                Spacer()
-            }
-
-            TextField("Filter commands…", text: $filter)
-
-            List {
-                if model.shortcutCatalog.isEmpty {
-                    Text("Open the Settings window from the app to see the commands.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(shown) { shortcut in
-                    HStack(spacing: 12) {
-                        Text(shortcut.title)
-                            .frame(width: 220, alignment: .leading)
-                            .help(shortcut.action)
-                        ShortcutField(
-                            shortcut: shortcut,
-                            overridden: model.keyOverrides[shortcut.action] != nil
-                        ) { spec in
-                            model.setKeyBinding(action: shortcut.action, spec: spec)
+                HStack(spacing: 8) {
+                    Picker("Profile", selection: $model.keysProfile) {
+                        Text("Textchum").tag("")
+                        ForEach(model.keyProfileChoices, id: \.id) { choice in
+                            Text(choice.name).tag(choice.id)
                         }
-                        Spacer()
+                    }
+                    .frame(width: 320)
+                    Button("Reset changes") { model.clearKeyBindings() }
+                        .disabled(model.keyOverrides.isEmpty)
+                    Spacer()
+                }
+
+                HStack(spacing: 8) {
+                    TextField("Save as profile…", text: $newProfileName)
+                        .frame(width: 200)
+                    Button("Save as profile") {
+                        model.saveKeyProfile(named: newProfileName)
+                        newProfileName = ""
+                    }
+                    .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if !model.keysProfile.isEmpty {
+                        Button("Delete profile") {
+                            model.removeKeyProfile(named: model.keysProfile)
+                        }
+                    }
+                    Spacer()
+                }
+
+                TextField("Filter commands…", text: $filter)
+
+                List {
+                    if model.shortcutCatalog.isEmpty {
+                        Text("Open the Settings window from the app to see the commands.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(shown) { shortcut in
+                        HStack(spacing: 12) {
+                            Text(shortcut.title)
+                                .frame(width: 220, alignment: .leading)
+                                .help(shortcut.action)
+                            ShortcutField(
+                                shortcut: shortcut,
+                                overridden: model.keyOverrides[shortcut.action] != nil
+                            ) { spec in
+                                model.setKeyBinding(action: shortcut.action, spec: spec)
+                            }
+                            Spacer()
+                        }
                     }
                 }
+                .frame(height: 260)
             }
-            .frame(minHeight: 200)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
     }
 }
 
@@ -1379,240 +1389,245 @@ private struct ProjectsTab: View {
     @State private var copyFrom = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(
-                "How projects are detected. By default a repository is one project; "
-                    + "\"manifest projects\" lets nested language manifests (pyproject.toml, "
-                    + "Cargo.toml, …) split it into sub-projects, and \"recursive config\" "
-                    + "makes a root's per-project settings apply to the nested projects "
-                    + "beneath it. \"Ctags fallback\" answers Jump to Definition from a "
-                    + "Universal Ctags index when no language server is available."
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        // One scrolling column per tab: a settings screen that
+        // cannot scroll turns one more setting into a setting
+        // nobody can reach.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(
+                    "How projects are detected. By default a repository is one project; "
+                        + "\"manifest projects\" lets nested language manifests (pyproject.toml, "
+                        + "Cargo.toml, …) split it into sub-projects, and \"recursive config\" "
+                        + "makes a root's per-project settings apply to the nested projects "
+                        + "beneath it. \"Ctags fallback\" answers Jump to Definition from a "
+                        + "Universal Ctags index when no language server is available."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            GroupBox("Defaults (all projects)") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 24) {
-                        Toggle("Manifest projects", isOn: $model.manifestProjectsDefault)
-                        Toggle("Recursive config", isOn: $model.recursiveConfigDefault)
-                        Toggle("Ctags fallback", isOn: $model.ctagsFallbackDefault)
-                        Spacer()
-                    }
-                    HStack(spacing: 8) {
-                        Text("Hide in tree:")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        GlobEditorButton(
-                            title: "Hidden in every project",
-                            presets: model.hidePresets,
-                            initial: model.hideGlobsDefault,
-                            commit: { globs in
-                                model.hideGlobsDefault = globs.isEmpty ? ".*" : globs
-                            },
-                            autoOpen: ProcessInfo.processInfo
-                                .environment["TEXTCHUM_DEBUG_GLOBS"] != nil
-                        )
-                        Text(model.hideGlobsDefault)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        Spacer()
-                    }
-                }
-                .padding(6)
-            }
-
-            List {
-                if model.workspaceEntries.isEmpty {
-                    Text("No per-project overrides.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(model.workspaceEntries) { entry in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 12) {
-                            Text(entry.scopeLabel)
-                                .fontWeight(.semibold)
-                                .help(entry.scope)
-                            if !model.projectExists(entry.scope) {
-                                // Nothing will ever match this root
-                                // again, which is worth saying rather
-                                // than leaving the reader to wonder.
-                                Text("missing")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .help("This directory no longer exists")
-                            }
-                            Menu {
-                                ForEach(
-                                    model.workspaceEntries.filter { $0.scope != entry.scope }
-                                ) { source in
-                                    Button(source.scopeLabel) {
-                                        model.copyProjectSettings(
-                                            from: source.scope, to: entry.scope)
-                                    }
-                                    .help(source.scope)
-                                }
-                            } label: {
-                                Text("Copy from…")
-                            }
-                            .frame(width: 120)
-                            .disabled(model.workspaceEntries.count < 2)
+                GroupBox("Defaults (all projects)") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 24) {
+                            Toggle("Manifest projects", isOn: $model.manifestProjectsDefault)
+                            Toggle("Recursive config", isOn: $model.recursiveConfigDefault)
+                            Toggle("Ctags fallback", isOn: $model.ctagsFallbackDefault)
                             Spacer()
-                            Toggle(
-                                "Manifest projects",
-                                isOn: Binding(
-                                    get: { entry.manifestProjects },
-                                    set: {
-                                        model.setWorkspaceFlag(
-                                            scope: entry.scope, key: "manifest_projects",
-                                            value: $0)
-                                    }
-                                ))
-                            Toggle(
-                                "Recursive config",
-                                isOn: Binding(
-                                    get: { entry.recursiveConfig },
-                                    set: {
-                                        model.setWorkspaceFlag(
-                                            scope: entry.scope, key: "recursive_config",
-                                            value: $0)
-                                    }
-                                ))
-                            Toggle(
-                                "Ctags fallback",
-                                isOn: Binding(
-                                    get: { entry.ctagsFallback },
-                                    set: {
-                                        model.setWorkspaceFlag(
-                                            scope: entry.scope, key: "ctags_fallback",
-                                            value: $0)
-                                    }
-                                ))
-                            Button {
-                                model.removeWorkspaceEntry(entry)
-                            } label: {
-                                Image(systemName: "minus.circle")
-                            }
-                            .buttonStyle(.borderless)
                         }
-                        // Editor overrides for windows inside this root.
-                        // An empty field inherits, and says what it
-                        // inherits: a blank box otherwise leaves the
-                        // reader to go and look.
                         HStack(spacing: 8) {
-                            Text("Editor:")
+                            Text("Hide in tree:")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            OverrideField(
-                                placeholder: model.fontFamily.isEmpty
-                                    ? "font family" : model.fontFamily,
-                                width: 140,
-                                initial: entry.fontFamily
-                            ) { text in
-                                model.setEditorOverride(
-                                    scope: entry.scope, key: "font_family",
-                                    valueJSON: text.isEmpty
-                                        ? nil
-                                        : "\"\(text.replacingOccurrences(of: "\"", with: ""))\"")
-                            }
-                            OverrideField(
-                                placeholder: String(Int(model.fontSize)), width: 52,
-                                initial: entry.fontSize
-                            ) { text in
-                                model.setEditorOverride(
-                                    scope: entry.scope, key: "font_size",
-                                    valueJSON: Double(text).map { String($0) })
-                            }
-                            OverrideField(
-                                placeholder: String(model.tabWidth), width: 72,
-                                initial: entry.tabWidth
-                            ) { text in
-                                model.setEditorOverride(
-                                    scope: entry.scope, key: "tab_width",
-                                    valueJSON: Int(text).map(String.init))
-                            }
                             GlobEditorButton(
-                                title: "Hidden in \(entry.scopeLabel)",
+                                title: "Hidden in every project",
                                 presets: model.hidePresets,
-                                initial: entry.hideGlobs
-                            ) { globs in
-                                model.setHideGlobs(scope: entry.scope, globs: globs)
+                                initial: model.hideGlobsDefault,
+                                commit: { globs in
+                                    model.hideGlobsDefault = globs.isEmpty ? ".*" : globs
+                                },
+                                autoOpen: ProcessInfo.processInfo
+                                    .environment["TEXTCHUM_DEBUG_GLOBS"] != nil
+                            )
+                            Text(model.hideGlobsDefault)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            Spacer()
+                        }
+                    }
+                    .padding(6)
+                }
+
+                List {
+                    if model.workspaceEntries.isEmpty {
+                        Text("No per-project overrides.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.workspaceEntries) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 12) {
+                                Text(entry.scopeLabel)
+                                    .fontWeight(.semibold)
+                                    .help(entry.scope)
+                                if !model.projectExists(entry.scope) {
+                                    // Nothing will ever match this root
+                                    // again, which is worth saying rather
+                                    // than leaving the reader to wonder.
+                                    Text("missing")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .help("This directory no longer exists")
+                                }
+                                Menu {
+                                    ForEach(
+                                        model.workspaceEntries.filter { $0.scope != entry.scope }
+                                    ) { source in
+                                        Button(source.scopeLabel) {
+                                            model.copyProjectSettings(
+                                                from: source.scope, to: entry.scope)
+                                        }
+                                        .help(source.scope)
+                                    }
+                                } label: {
+                                    Text("Copy from…")
+                                }
+                                .frame(width: 120)
+                                .disabled(model.workspaceEntries.count < 2)
+                                Spacer()
+                                Toggle(
+                                    "Manifest projects",
+                                    isOn: Binding(
+                                        get: { entry.manifestProjects },
+                                        set: {
+                                            model.setWorkspaceFlag(
+                                                scope: entry.scope, key: "manifest_projects",
+                                                value: $0)
+                                        }
+                                    ))
+                                Toggle(
+                                    "Recursive config",
+                                    isOn: Binding(
+                                        get: { entry.recursiveConfig },
+                                        set: {
+                                            model.setWorkspaceFlag(
+                                                scope: entry.scope, key: "recursive_config",
+                                                value: $0)
+                                        }
+                                    ))
+                                Toggle(
+                                    "Ctags fallback",
+                                    isOn: Binding(
+                                        get: { entry.ctagsFallback },
+                                        set: {
+                                            model.setWorkspaceFlag(
+                                                scope: entry.scope, key: "ctags_fallback",
+                                                value: $0)
+                                        }
+                                    ))
+                                Button {
+                                    model.removeWorkspaceEntry(entry)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                            // Editor overrides for windows inside this root.
+                            // An empty field inherits, and says what it
+                            // inherits: a blank box otherwise leaves the
+                            // reader to go and look.
+                            HStack(spacing: 8) {
+                                Text("Editor:")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                OverrideField(
+                                    placeholder: model.fontFamily.isEmpty
+                                        ? "font family" : model.fontFamily,
+                                    width: 140,
+                                    initial: entry.fontFamily
+                                ) { text in
+                                    model.setEditorOverride(
+                                        scope: entry.scope, key: "font_family",
+                                        valueJSON: text.isEmpty
+                                            ? nil
+                                            : "\"\(text.replacingOccurrences(of: "\"", with: ""))\"")
+                                }
+                                OverrideField(
+                                    placeholder: String(Int(model.fontSize)), width: 52,
+                                    initial: entry.fontSize
+                                ) { text in
+                                    model.setEditorOverride(
+                                        scope: entry.scope, key: "font_size",
+                                        valueJSON: Double(text).map { String($0) })
+                                }
+                                OverrideField(
+                                    placeholder: String(model.tabWidth), width: 72,
+                                    initial: entry.tabWidth
+                                ) { text in
+                                    model.setEditorOverride(
+                                        scope: entry.scope, key: "tab_width",
+                                        valueJSON: Int(text).map(String.init))
+                                }
+                                GlobEditorButton(
+                                    title: "Hidden in \(entry.scopeLabel)",
+                                    presets: model.hidePresets,
+                                    initial: entry.hideGlobs
+                                ) { globs in
+                                    model.setHideGlobs(scope: entry.scope, globs: globs)
+                                }
                             }
                         }
                     }
                 }
-            }
-            .frame(minHeight: 120)
+                .frame(height: 220)
 
-            GroupBox("Add project override") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        PathPicker(text: $newScope, placeholder: "Project root path")
-                        // The roots are known — every open document has
-                        // one — so a project is added by picking it.
-                        Menu("Open projects") {
-                            if model.addableProjectRoots.isEmpty {
-                                Text("Every open project is already listed")
-                            }
-                            ForEach(model.addableProjectRoots, id: \.self) { root in
-                                Button((root as NSString).lastPathComponent) {
-                                    newScope = root
+                GroupBox("Add project override") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            PathPicker(text: $newScope, placeholder: "Project root path")
+                            // The roots are known — every open document has
+                            // one — so a project is added by picking it.
+                            Menu("Open projects") {
+                                if model.addableProjectRoots.isEmpty {
+                                    Text("Every open project is already listed")
                                 }
-                                .help(root)
+                                ForEach(model.addableProjectRoots, id: \.self) { root in
+                                    Button((root as NSString).lastPathComponent) {
+                                        newScope = root
+                                    }
+                                    .help(root)
+                                }
                             }
+                            .frame(width: 150)
+                            Button("Add") {
+                                model.addWorkspaceEntry(
+                                    scope: newScope,
+                                    copyingFrom: copyFrom.isEmpty ? nil : copyFrom)
+                                newScope = ""
+                                copyFrom = ""
+                            }
+                            .disabled(newScope.isEmpty)
                         }
-                        .frame(width: 150)
-                        Button("Add") {
-                            model.addWorkspaceEntry(
-                                scope: newScope,
-                                copyingFrom: copyFrom.isEmpty ? nil : copyFrom)
-                            newScope = ""
-                            copyFrom = ""
+                        HStack(spacing: 8) {
+                            Text("Copy settings from:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Menu(copyFrom.isEmpty ? "Nothing" : (copyFrom as NSString).lastPathComponent) {
+                                Button("Nothing") { copyFrom = "" }
+                                ForEach(model.workspaceEntries) { entry in
+                                    Button(entry.scopeLabel) { copyFrom = entry.scope }
+                                        .help(entry.scope)
+                                }
+                            }
+                            .frame(width: 200)
+                            Text("servers, save commands, flags and editor overrides")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
                         }
-                        .disabled(newScope.isEmpty)
                     }
+                    .padding(6)
+                }
+
+                if !model.staleProjectRoots.isEmpty {
                     HStack(spacing: 8) {
-                        Text("Copy settings from:")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Menu(copyFrom.isEmpty ? "Nothing" : (copyFrom as NSString).lastPathComponent) {
-                            Button("Nothing") { copyFrom = "" }
-                            ForEach(model.workspaceEntries) { entry in
-                                Button(entry.scopeLabel) { copyFrom = entry.scope }
-                                    .help(entry.scope)
-                            }
-                        }
-                        .frame(width: 200)
-                        Text("servers, save commands, flags and editor overrides")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Text(
+                            model.staleProjectRoots.count == 1
+                                ? "1 configured project no longer exists on disk."
+                                : "\(model.staleProjectRoots.count) configured projects "
+                                    + "no longer exist on disk."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        Button("Remove missing") { model.removeStaleProjects() }
+                            .controlSize(.small)
                         Spacer()
                     }
                 }
-                .padding(6)
             }
-
-            if !model.staleProjectRoots.isEmpty {
-                HStack(spacing: 8) {
-                    Text(
-                        model.staleProjectRoots.count == 1
-                            ? "1 configured project no longer exists on disk."
-                            : "\(model.staleProjectRoots.count) configured projects "
-                                + "no longer exist on disk."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    Button("Remove missing") { model.removeStaleProjects() }
-                        .controlSize(.small)
-                    Spacer()
-                }
-            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
     }
 }
 
@@ -1662,122 +1677,127 @@ private struct LanguageServersTab: View {
     @State private var newCommand = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(
-                "Override which server command runs per language — for every project "
-                    + "(Default) or for one project root. Project entries win over defaults; "
-                    + "unlisted languages use the built-in registry."
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        // One scrolling column per tab: a settings screen that
+        // cannot scroll turns one more setting into a setting
+        // nobody can reach.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(
+                    "Override which server command runs per language — for every project "
+                        + "(Default) or for one project root. Project entries win over defaults; "
+                        + "unlisted languages use the built-in registry."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            List {
-                if model.lspEntries.isEmpty {
-                    Text("No overrides — the built-in registry serves all languages.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(model.lspEntries) { entry in
-                    HStack(alignment: .center, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text(entry.scopeLabel)
-                                    .fontWeight(.semibold)
-                                Text(entry.language)
-                                    .foregroundStyle(.secondary)
-                            }
-                            // Editable in place: ⏎ or clicking away
-                            // applies; scope and language are the entry's
-                            // identity and stay fixed.
-                            CommandField(entry: entry) { command in
-                                model.updateLSPEntry(entry, command: command)
-                            }
-                        }
-                        .help(entry.scope.isEmpty ? "All projects" : entry.scope)
-                        Spacer()
-                        Button {
-                            model.removeLSPEntry(entry)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.borderless)
+                List {
+                    if model.lspEntries.isEmpty {
+                        Text("No overrides — the built-in registry serves all languages.")
+                            .foregroundStyle(.secondary)
                     }
-                }
-            }
-            .frame(minHeight: 140)
-
-            // What there is to configure, and whether it would start.
-            // A screen listing only overrides cannot answer either
-            // question, and "not installed" is the answer behind "I
-            // installed a server and nothing happened".
-            GroupBox("Built-in servers") {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(CoreLSPRegistry.all, id: \.id) { server in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(server.languages.joined(separator: ", "))
-                                .fontWeight(.semibold)
-                                .frame(width: 110, alignment: .leading)
-                            Text(server.command)
-                                .font(.system(.caption, design: .monospaced))
+                    ForEach(model.lspEntries) { entry in
+                        HStack(alignment: .center, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Text(entry.scopeLabel)
+                                        .fontWeight(.semibold)
+                                    Text(entry.language)
+                                        .foregroundStyle(.secondary)
+                                }
+                                // Editable in place: ⏎ or clicking away
+                                // applies; scope and language are the entry's
+                                // identity and stay fixed.
+                                CommandField(entry: entry) { command in
+                                    model.updateLSPEntry(entry, command: command)
+                                }
+                            }
+                            .help(entry.scope.isEmpty ? "All projects" : entry.scope)
                             Spacer()
-                            if CoreLSPRegistry.isInstalled(server.command) {
-                                Label("found", systemImage: "checkmark.circle")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Label("not installed", systemImage: "exclamationmark.circle")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
-                                    .help(server.installHint)
+                            Button {
+                                model.removeLSPEntry(entry)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+                .frame(height: 220)
+
+                // What there is to configure, and whether it would start.
+                // A screen listing only overrides cannot answer either
+                // question, and "not installed" is the answer behind "I
+                // installed a server and nothing happened".
+                GroupBox("Built-in servers") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(CoreLSPRegistry.all, id: \.id) { server in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(server.languages.joined(separator: ", "))
+                                    .fontWeight(.semibold)
+                                    .frame(width: 110, alignment: .leading)
+                                Text(server.command)
+                                    .font(.system(.caption, design: .monospaced))
+                                Spacer()
+                                if CoreLSPRegistry.isInstalled(server.command) {
+                                    Label("found", systemImage: "checkmark.circle")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Label("not installed", systemImage: "exclamationmark.circle")
+                                        .font(.caption)
+                                        .foregroundStyle(.orange)
+                                        .help(server.installHint)
+                                }
                             }
                         }
                     }
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
 
-            GroupBox("Add override") {
-                VStack(spacing: 8) {
-                    PathPicker(
-                        text: $newScope,
-                        placeholder: "Project root (empty = default for all projects)")
-                    HStack(spacing: 8) {
-                        EditableCombo(
-                            text: $newLanguage,
-                            placeholder: "Language (e.g. python)",
-                            options: model.knownLanguages
-                        )
-                        .frame(width: 180)
-                        TextField(
-                            "Server command (e.g. pyright-langserver --stdio)",
-                            text: $newCommand)
-                        Button("Add") {
-                            model.addLSPEntry(
-                                scope: newScope, language: newLanguage, command: newCommand)
-                            newScope = ""
-                            newLanguage = ""
-                            newCommand = ""
+                GroupBox("Add override") {
+                    VStack(spacing: 8) {
+                        PathPicker(
+                            text: $newScope,
+                            placeholder: "Project root (empty = default for all projects)")
+                        HStack(spacing: 8) {
+                            EditableCombo(
+                                text: $newLanguage,
+                                placeholder: "Language (e.g. python)",
+                                options: model.knownLanguages
+                            )
+                            .frame(width: 180)
+                            TextField(
+                                "Server command (e.g. pyright-langserver --stdio)",
+                                text: $newCommand)
+                            Button("Add") {
+                                model.addLSPEntry(
+                                    scope: newScope, language: newLanguage, command: newCommand)
+                                newScope = ""
+                                newLanguage = ""
+                                newCommand = ""
+                            }
+                            .disabled(newLanguage.isEmpty || newCommand.isEmpty)
                         }
-                        .disabled(newLanguage.isEmpty || newCommand.isEmpty)
+                    }
+                    .textFieldStyle(.roundedBorder)
+                    .padding(6)
+                }
+
+                HStack {
+                    Text("Changes apply to servers started afterwards.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Restart Servers Now") {
+                        model.onRestartServers?()
                     }
                 }
-                .textFieldStyle(.roundedBorder)
-                .padding(6)
             }
-
-            HStack {
-                Text("Changes apply to servers started afterwards.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Restart Servers Now") {
-                    model.onRestartServers?()
-                }
-            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
     }
 }
 
@@ -1791,82 +1811,87 @@ private struct PreprocessorsTab: View {
     @State private var newCommands = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(
-                "Save preprocessors run before every save (and on Run Save Preprocessors), "
-                    + "one command per line in order — each reads the document on standard "
-                    + "input and writes it back on standard output, like `ruff check --fix -` "
-                    + "then `black -`. {path} and {filename} expand to the document's. "
-                    + "A project entry replaces the default chain."
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        // One scrolling column per tab: a settings screen that
+        // cannot scroll turns one more setting into a setting
+        // nobody can reach.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(
+                    "Save preprocessors run before every save (and on Run Save Preprocessors), "
+                        + "one command per line in order — each reads the document on standard "
+                        + "input and writes it back on standard output, like `ruff check --fix -` "
+                        + "then `black -`. {path} and {filename} expand to the document's. "
+                        + "A project entry replaces the default chain."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            List {
-                if model.preprocessorEntries.isEmpty {
-                    Text("No preprocessors — documents save exactly as typed.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(model.preprocessorEntries) { entry in
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text(entry.scopeLabel)
-                                    .fontWeight(.semibold)
-                                Text(entry.language)
-                                    .foregroundStyle(.secondary)
+                List {
+                    if model.preprocessorEntries.isEmpty {
+                        Text("No preprocessors — documents save exactly as typed.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.preprocessorEntries) { entry in
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Text(entry.scopeLabel)
+                                        .fontWeight(.semibold)
+                                    Text(entry.language)
+                                        .foregroundStyle(.secondary)
+                                }
+                                CommandsField(entry: entry) { commands in
+                                    model.updatePreprocessorEntry(entry, commands: commands)
+                                }
                             }
-                            CommandsField(entry: entry) { commands in
-                                model.updatePreprocessorEntry(entry, commands: commands)
+                            .help(entry.scope.isEmpty ? "All projects" : entry.scope)
+                            Spacer()
+                            Button {
+                                model.removePreprocessorEntry(entry)
+                            } label: {
+                                Image(systemName: "minus.circle")
                             }
+                            .buttonStyle(.borderless)
                         }
-                        .help(entry.scope.isEmpty ? "All projects" : entry.scope)
-                        Spacer()
-                        Button {
-                            model.removePreprocessorEntry(entry)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.borderless)
                     }
                 }
-            }
-            .frame(minHeight: 160)
+                .frame(height: 220)
 
-            GroupBox("Add preprocessor chain") {
-                VStack(spacing: 8) {
-                    PathPicker(
-                        text: $newScope,
-                        placeholder: "Project root (empty = default for all projects)")
-                    HStack(alignment: .top, spacing: 8) {
-                        EditableCombo(
-                            text: $newLanguage,
-                            placeholder: "Language (e.g. python)",
-                            options: model.knownLanguages
-                        )
-                        .frame(width: 180)
-                        CommandsEditor(
-                            placeholder: "Commands, one per line — Return adds a line",
-                            text: $newCommands)
-                        Button("Add") {
-                            model.addPreprocessorEntry(
-                                scope: newScope,
-                                language: newLanguage,
-                                commands: newCommands)
-                            newScope = ""
-                            newLanguage = ""
-                            newCommands = ""
+                GroupBox("Add preprocessor chain") {
+                    VStack(spacing: 8) {
+                        PathPicker(
+                            text: $newScope,
+                            placeholder: "Project root (empty = default for all projects)")
+                        HStack(alignment: .top, spacing: 8) {
+                            EditableCombo(
+                                text: $newLanguage,
+                                placeholder: "Language (e.g. python)",
+                                options: model.knownLanguages
+                            )
+                            .frame(width: 180)
+                            CommandsEditor(
+                                placeholder: "Commands, one per line — Return adds a line",
+                                text: $newCommands)
+                            Button("Add") {
+                                model.addPreprocessorEntry(
+                                    scope: newScope,
+                                    language: newLanguage,
+                                    commands: newCommands)
+                                newScope = ""
+                                newLanguage = ""
+                                newCommands = ""
+                            }
+                            .disabled(newLanguage.isEmpty || newCommands.isEmpty)
                         }
-                        .disabled(newLanguage.isEmpty || newCommands.isEmpty)
                     }
+                    .textFieldStyle(.roundedBorder)
+                    .padding(6)
                 }
-                .textFieldStyle(.roundedBorder)
-                .padding(6)
             }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
     }
 }
 
