@@ -9,25 +9,15 @@
 use std::path::PathBuf;
 
 use adw::prelude::*;
-use gtk::glib;
 use serde_json::{json, Value};
 
 use crate::shell::Shell;
 use crate::workbench::Workbench;
 
 /// `$XDG_STATE_HOME/textchum/session.json` (`~/.local/state` by
-/// default).
+/// default), or the profile `--data-dir` named.
 pub fn session_path() -> PathBuf {
-    state_dir().join("textchum/session.json")
-}
-
-/// The XDG state directory: not config (this is not configuration) and
-/// not cache (losing it loses real state).
-pub fn state_dir() -> PathBuf {
-    std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .unwrap_or_else(|| glib::home_dir().join(".local/state"))
+    crate::paths::session_path()
 }
 
 /// Writes the current session: every pathed page with its caret, and

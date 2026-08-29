@@ -49,10 +49,7 @@ enum HighlightPalette {
 /// one JSON per theme, selected by file name (without extension). A file
 /// sharing a built-in theme's name overrides it.
 enum ThemeFiles {
-    static var directory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Textchum/themes", isDirectory: true)
-    }
+    static var directory: URL { AppPaths.themesDirectory }
 
     static var names: [String] {
         let entries =

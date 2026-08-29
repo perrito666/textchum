@@ -84,6 +84,26 @@ Les valeurs hors limites ou mal typées ne comptent pas comme une casse : un
 `font_size` de `4000` est ramené dans la plage valide, un `font_family` de
 `42` est ignoré, et le reste du fichier fonctionne normalement.
 
+### Ailleurs, le temps d'une exécution
+
+`--data-dir <chemin>` garde tout ce que Textchum possède sous un seul
+répertoire pour cette exécution — la configuration, les thèmes, les
+packs d'icônes, la session et le journal du serveur de langage — au
+lieu des emplacements habituels :
+
+```bash
+Textchum --data-dir ~/profil-d-essai
+```
+
+C'est un profil entier fabriqué pour l'occasion et jeté ensuite, le
+vrai n'étant jamais ouvert ; `make playground` s'en sert, et tout ce
+qui ne doit pas toucher à vos réglages aussi. Sous Linux, une exécution
+avec son propre profil est son propre processus : remettre les fichiers
+à une instance déjà lancée les ouvrirait dans le profil de celle-ci.
+
+`--config <chemin>` en est la version étroite : il désigne un fichier
+de configuration, et la session le suit.
+
 ## Thèmes
 
 Le sélecteur **Theme** de l'onglet General choisit la palette de

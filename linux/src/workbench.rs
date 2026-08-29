@@ -2875,7 +2875,7 @@ fn show_server_status(workbench: &Rc<Workbench>) {
                 lines.push(format!("  {clock}  {server} [{root}]: {line}"));
             }
             lines.push(String::new());
-            lines.push("Full trail: ~/.local/state/textchum/lsp.log".into());
+            lines.push(format!("Full trail: {}", crate::paths::lsp_log_for_display()));
             label.set_text(&lines.join("\n"));
         }
     };
@@ -5167,9 +5167,10 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     window.present();
 }
 
-/// Where imported icon packs live: `~/.local/share/textchum/icons`.
+/// Where imported icon packs live: `~/.local/share/textchum/icons`,
+/// or the profile `--data-dir` named.
 fn icon_packs_dir() -> PathBuf {
-    glib::user_data_dir().join("textchum/icons")
+    crate::paths::icons_dir()
 }
 
 /// Asks for an icon pack — the theme's JSON file, or the extension

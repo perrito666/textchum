@@ -86,14 +86,15 @@ thread_local! {
 }
 
 /// `~/.config/textchum/config.json` — the Linux home of the same file.
+/// `--data-dir` moves it, along with the rest of the profile; see
+/// [`crate::paths`].
 pub fn config_path() -> PathBuf {
-    glib::user_config_dir().join("textchum/config.json")
+    crate::paths::config_path()
 }
 
-/// `~/.config/textchum/themes/` — user theme JSON files, one per
-/// theme, named by their file stem.
+/// User theme JSON files, one per theme, named by their file stem.
 pub fn themes_dir() -> PathBuf {
-    glib::user_config_dir().join("textchum/themes")
+    crate::paths::themes_dir()
 }
 
 /// Every selectable theme name: the built-ins, then user files that do
@@ -130,7 +131,7 @@ impl Shell {
             }
             // The same debug log the macOS shell keeps, at the Linux
             // conventional spot.
-            let log_path = crate::session::state_dir().join("textchum/lsp.log");
+            let log_path = crate::paths::lsp_log_path();
             if let Some(parent) = log_path.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }

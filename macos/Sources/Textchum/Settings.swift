@@ -358,10 +358,7 @@ final class SettingsModel: ObservableObject {
 
     /// Where imported icon packs live:
     /// `~/Library/Application Support/Textchum/icons/`.
-    static var iconPacksDirectory: String {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Textchum/icons", isDirectory: true).path
-    }
+    static var iconPacksDirectory: String { AppPaths.iconsDirectory.path }
 
     /// The packs on offer: the imported ones first, then the ones
     /// opened from elsewhere.

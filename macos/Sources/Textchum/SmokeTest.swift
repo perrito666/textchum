@@ -1009,6 +1009,25 @@ func runSmokeTest() -> Int32 {
     try? FileManager.default.removeItem(at: packScratch)
     print("icon packs ok (imported, listed as ours, refused twice, deleted)")
 
+    // --data-dir moves the whole profile, so a run can be given one
+    // built for the occasion. What matters is that every path follows
+    // it: a profile with the configuration in it and the session
+    // somewhere else is not a profile.
+    let profileArguments = ["Textchum", "--data-dir", "/tmp/textchum-profile", "a.py"]
+    guard let namedProfile = AppPaths.dataDirectory(from: profileArguments),
+        namedProfile.path == "/tmp/textchum-profile"
+    else {
+        print("FAIL: --data-dir did not name the profile")
+        return 1
+    }
+    guard AppPaths.dataDirectory(from: ["Textchum", "a.py"]) == nil,
+        AppPaths.dataDirectory(from: ["Textchum", "--data-dir"]) == nil
+    else {
+        print("FAIL: a profile was named where none was")
+        return 1
+    }
+    print("profile paths ok (--data-dir names one, its absence names none)")
+
     // Repainting the syntax colours on every scroll turn was the
     // stutter; the margin around the viewport is there so that most
     // turns need no repaint at all. The wiring needs a window server,

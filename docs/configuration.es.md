@@ -84,6 +84,27 @@ Los valores fuera de rango o con tipo incorrecto no cuentan como rotura: un
 `font_size` de `4000` se recorta al rango válido, un `font_family` de `42`
 se ignora y el resto del archivo funciona con normalidad.
 
+### En otro sitio, por una ejecución
+
+`--data-dir <ruta>` guarda todo lo que Textchum posee bajo un único
+directorio durante esa ejecución —la configuración, los temas, los
+paquetes de iconos, la sesión y el registro del servidor de lenguaje—
+en vez de en los sitios de siempre:
+
+```bash
+Textchum --data-dir ~/perfil-de-pruebas
+```
+
+Es un perfil entero hecho para la ocasión y desechado después, sin que
+el de verdad se abra nunca; `make playground` lo usa, y también
+cualquier otra cosa que no deba tocar tus ajustes. En Linux una
+ejecución con perfil propio es su propio proceso, ya que entregar los
+archivos a una instancia ya en marcha los abriría en el perfil de esa
+instancia.
+
+`--config <ruta>` es la versión estrecha: apunta a un archivo de
+configuración, y la sesión lo acompaña.
+
 ## Temas
 
 El selector **Theme** de la pestaña General elige la paleta de

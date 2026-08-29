@@ -79,6 +79,25 @@ Out-of-range or mistyped values do not count as breakage: a `font_size` of
 `4000` is clamped to the valid range, a `font_family` of `42` is ignored,
 and the rest of the file works normally.
 
+### Somewhere else, for a run
+
+`--data-dir <path>` keeps everything Textchum owns under one directory
+for that run — the configuration, themes, icon packs, the session and
+the language-server log — instead of the usual places:
+
+```bash
+Textchum --data-dir ~/scratch-profile
+```
+
+That is a whole profile made for the occasion and thrown away
+afterwards, with the real one never opened; `make playground` uses it,
+and so does anything else that must not touch your settings. On Linux a
+run with its own profile is its own process, since handing the files to
+an instance already running would open them in that instance's profile.
+
+`--config <path>` is the narrower version: it points at one
+configuration file, and the session follows it.
+
 ## Themes
 
 The **Theme** picker in the General tab selects the syntax palette.

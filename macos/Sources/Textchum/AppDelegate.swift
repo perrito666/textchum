@@ -14,16 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var editors: [EditorWindowController] = []
 
     /// `~/Library/Application Support/Textchum/config.json` — GUI-managed,
-    /// hand-editable JSON. A hidden `--config <path>` points elsewhere,
-    /// for tests that must not touch the real settings.
-    private static var configPath: String {
-        let arguments = CommandLine.arguments
-        if let flag = arguments.firstIndex(of: "--config"), arguments.count > flag + 1 {
-            return arguments[flag + 1]
-        }
-        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Textchum/config.json").path
-    }
+    /// hand-editable JSON. `--config <path>` points at another file and
+    /// `--data-dir <path>` moves the whole profile; see `AppPaths`.
+    private static var configPath: String { AppPaths.configPath }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let mainMenu = makeMainMenu()
@@ -85,11 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Language-server debug trail: every pool decision and status
         // transition, for when "why is there no server?" needs an answer.
-        let logDirectory = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)
-            .first?.appendingPathComponent("Logs/Textchum", isDirectory: true)
-        if let logFile = logDirectory?.appendingPathComponent("lsp.log") {
-            CoreWorkspace.setLSPLogPath(logFile.path)
-        }
+        CoreWorkspace.setLSPLogPath(AppPaths.logFile.path)
 
         // The core's event channel; ping once on launch so a broken
         // channel is caught immediately.
@@ -116,8 +105,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let flag = arguments.firstIndex(of: "--debug-panel") {
             flagValueIndexes = [flag + 1, flag + 2, flag + 3]
         }
-        if let flag = arguments.firstIndex(of: "--config") {
-            flagValueIndexes.insert(flag + 1)
+        for flag in AppPaths.valueFlags {
+            if let at = arguments.firstIndex(of: flag) {
+                flagValueIndexes.insert(at + 1)
+            }
         }
         let fileArguments = arguments.enumerated()
             .filter { index, argument in
@@ -595,7 +586,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     "\(server) exited during startup"
                     + (message.isEmpty || message == "during initialize"
                         ? "" : " (\(message))")
-                    + ". Its own error output is in ~/Library/Logs/Textchum/lsp.log."
+                    + ". Its own error output is in \(AppPaths.logFileForDisplay)."
                 alert.runModal()
             }
         }
@@ -812,7 +803,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             )
         }
         lines.append("")
-        lines.append("Full trail: ~/Library/Logs/Textchum/lsp.log")
+        lines.append("Full trail: \(AppPaths.logFileForDisplay)")
         text.string = lines.joined(separator: "\n")
     }
 
