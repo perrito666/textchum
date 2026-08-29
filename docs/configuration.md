@@ -394,6 +394,22 @@ file spells it as an `editor` object on the workspace entry:
 }
 ```
 
+## Adding a project
+
+The Projects tab lists the roots of the open documents, so a project is
+added by picking it rather than by typing its path. **Copy settings
+from** starts the new entry from one already configured — its servers,
+save commands, flags and editor overrides, all of it — which is what a
+second service in the same layout needs. The same choice sits on each
+project's own row, for copying onto one that already exists.
+
+An empty override field shows what it inherits, so a blank box says
+what applies rather than leaving you to go and look.
+
+A configured root whose directory is gone is marked *missing*, and
+**Remove missing** forgets every one of them: nothing will ever match
+those entries again.
+
 ## Not there yet
 
 - Nothing at the moment — file an itch when one appears.

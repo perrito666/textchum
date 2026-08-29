@@ -1055,6 +1055,48 @@ void tc_config_set_workspace_flag(struct TcConfig *config,
                                   bool value);
 
 /**
+ * Every project root the configuration mentions, in any section, as a
+ * nul-terminated JSON array of strings. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_configured_projects(const struct TcConfig *config);
+
+/**
+ * Removes every trace of a project root: flags, editor overrides,
+ * hidden globs, servers and save commands.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `root` must point to
+ * `root_len` readable bytes.
+ */
+void tc_config_remove_project(struct TcConfig *config, const char *root, uintptr_t root_len);
+
+/**
+ * Copies one project's settings onto another root, taking the parts
+ * asked for: `workspace` is the flags, editor overrides and hidden
+ * globs; `servers` is the language servers; `preprocessors` is the
+ * save commands. Each part replaces the target's.
+ *
+ * Returns whether anything was copied — a source with no settings of
+ * its own copies nothing, and neither does a root onto itself.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+bool tc_config_copy_project(struct TcConfig *config,
+                            const char *from,
+                            uintptr_t from_len,
+                            const char *to,
+                            uintptr_t to_len,
+                            bool workspace,
+                            bool servers,
+                            bool preprocessors);
+
+/**
  * Where opened files go, as a `TC_OPEN_IN_*` value.
  *
  * # Safety

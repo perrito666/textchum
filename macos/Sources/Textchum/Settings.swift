@@ -354,15 +354,57 @@ final class SettingsModel: ObservableObject {
         workspaceEntries = entries.sorted { $0.scope < $1.scope }
     }
 
-    func addWorkspaceEntry(scope: String) {
+    /// The project roots of the documents that are open, for adding one
+    /// by picking it. The app fills this in; Settings has no idea what
+    /// is open on its own.
+    @Published var openProjectRoots: [String] = []
+
+    /// Open projects that have no entry yet — the ones worth offering.
+    var addableProjectRoots: [String] {
+        let configured = Set(workspaceEntries.map(\.scope))
+        return openProjectRoots.filter { !configured.contains($0) }.sorted()
+    }
+
+    /// Configured projects whose directory is gone. Nothing will ever
+    /// match these again, so they are worth saying so about.
+    var staleProjectRoots: [String] {
+        config.configuredProjects.filter {
+            !FileManager.default.fileExists(atPath: $0)
+        }
+    }
+
+    /// Adds an entry for `scope`, optionally taking another project's
+    /// settings — a second service in the same layout wants the same
+    /// ones, and entering them again is a transcription exercise with a
+    /// typo in it.
+    func addWorkspaceEntry(scope: String, copyingFrom source: String? = nil) {
         let scope = (scope as NSString).expandingTildeInPath
         guard !scope.isEmpty else { return }
+        if let source, !source.isEmpty {
+            config.copyProject(from: source, to: scope)
+        }
         config.setWorkspaceFlag(
             root: scope, key: "manifest_projects", value: manifestProjectsDefault)
         config.setWorkspaceFlag(
             root: scope, key: "recursive_config", value: recursiveConfigDefault)
         config.setWorkspaceFlag(
             root: scope, key: "ctags_fallback", value: ctagsFallbackDefault)
+        persistWorkspaceChange()
+    }
+
+    /// Copies one project's settings onto another that already exists.
+    func copyProjectSettings(from source: String, to target: String) {
+        guard config.copyProject(from: source, to: target) else { return }
+        persistWorkspaceChange()
+    }
+
+    /// Forgets every configured project whose directory is gone.
+    func removeStaleProjects() {
+        let stale = staleProjectRoots
+        guard !stale.isEmpty else { return }
+        for root in stale {
+            config.removeProject(root: root)
+        }
         persistWorkspaceChange()
     }
 
@@ -376,6 +418,11 @@ final class SettingsModel: ObservableObject {
         config.setWorkspaceFlag(root: entry.scope, key: "recursive_config", value: nil)
         config.setWorkspaceFlag(root: entry.scope, key: "ctags_fallback", value: nil)
         persistWorkspaceChange()
+    }
+
+    /// Whether a configured project's directory is still there.
+    func projectExists(_ scope: String) -> Bool {
+        FileManager.default.fileExists(atPath: scope)
     }
 
     private func persistWorkspaceChange() {
@@ -1034,6 +1081,8 @@ private struct OverrideField: View {
 private struct ProjectsTab: View {
     @ObservedObject var model: SettingsModel
     @State private var newScope = ""
+    /// Which configured project the new one should start from.
+    @State private var copyFrom = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1093,6 +1142,30 @@ private struct ProjectsTab: View {
                             Text(entry.scopeLabel)
                                 .fontWeight(.semibold)
                                 .help(entry.scope)
+                            if !model.projectExists(entry.scope) {
+                                // Nothing will ever match this root
+                                // again, which is worth saying rather
+                                // than leaving the reader to wonder.
+                                Text("missing")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .help("This directory no longer exists")
+                            }
+                            Menu {
+                                ForEach(
+                                    model.workspaceEntries.filter { $0.scope != entry.scope }
+                                ) { source in
+                                    Button(source.scopeLabel) {
+                                        model.copyProjectSettings(
+                                            from: source.scope, to: entry.scope)
+                                    }
+                                    .help(source.scope)
+                                }
+                            } label: {
+                                Text("Copy from…")
+                            }
+                            .frame(width: 120)
+                            .disabled(model.workspaceEntries.count < 2)
                             Spacer()
                             Toggle(
                                 "Manifest projects",
@@ -1131,14 +1204,18 @@ private struct ProjectsTab: View {
                             }
                             .buttonStyle(.borderless)
                         }
-                        // Editor overrides for windows inside this root;
-                        // empty fields inherit the General tab's values.
+                        // Editor overrides for windows inside this root.
+                        // An empty field inherits, and says what it
+                        // inherits: a blank box otherwise leaves the
+                        // reader to go and look.
                         HStack(spacing: 8) {
                             Text("Editor:")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             OverrideField(
-                                placeholder: "font family", width: 140,
+                                placeholder: model.fontFamily.isEmpty
+                                    ? "font family" : model.fontFamily,
+                                width: 140,
                                 initial: entry.fontFamily
                             ) { text in
                                 model.setEditorOverride(
@@ -1148,14 +1225,16 @@ private struct ProjectsTab: View {
                                         : "\"\(text.replacingOccurrences(of: "\"", with: ""))\"")
                             }
                             OverrideField(
-                                placeholder: "size", width: 52, initial: entry.fontSize
+                                placeholder: String(Int(model.fontSize)), width: 52,
+                                initial: entry.fontSize
                             ) { text in
                                 model.setEditorOverride(
                                     scope: entry.scope, key: "font_size",
                                     valueJSON: Double(text).map { String($0) })
                             }
                             OverrideField(
-                                placeholder: "tab width", width: 72, initial: entry.tabWidth
+                                placeholder: String(model.tabWidth), width: 72,
+                                initial: entry.tabWidth
                             ) { text in
                                 model.setEditorOverride(
                                     scope: entry.scope, key: "tab_width",
@@ -1175,15 +1254,67 @@ private struct ProjectsTab: View {
             .frame(minHeight: 120)
 
             GroupBox("Add project override") {
-                HStack(spacing: 8) {
-                    PathPicker(text: $newScope, placeholder: "Project root path")
-                    Button("Add") {
-                        model.addWorkspaceEntry(scope: newScope)
-                        newScope = ""
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        PathPicker(text: $newScope, placeholder: "Project root path")
+                        // The roots are known — every open document has
+                        // one — so a project is added by picking it.
+                        Menu("Open projects") {
+                            if model.addableProjectRoots.isEmpty {
+                                Text("Every open project is already listed")
+                            }
+                            ForEach(model.addableProjectRoots, id: \.self) { root in
+                                Button((root as NSString).lastPathComponent) {
+                                    newScope = root
+                                }
+                                .help(root)
+                            }
+                        }
+                        .frame(width: 150)
+                        Button("Add") {
+                            model.addWorkspaceEntry(
+                                scope: newScope,
+                                copyingFrom: copyFrom.isEmpty ? nil : copyFrom)
+                            newScope = ""
+                            copyFrom = ""
+                        }
+                        .disabled(newScope.isEmpty)
                     }
-                    .disabled(newScope.isEmpty)
+                    HStack(spacing: 8) {
+                        Text("Copy settings from:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Menu(copyFrom.isEmpty ? "Nothing" : (copyFrom as NSString).lastPathComponent) {
+                            Button("Nothing") { copyFrom = "" }
+                            ForEach(model.workspaceEntries) { entry in
+                                Button(entry.scopeLabel) { copyFrom = entry.scope }
+                                    .help(entry.scope)
+                            }
+                        }
+                        .frame(width: 200)
+                        Text("servers, save commands, flags and editor overrides")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
                 }
                 .padding(6)
+            }
+
+            if !model.staleProjectRoots.isEmpty {
+                HStack(spacing: 8) {
+                    Text(
+                        model.staleProjectRoots.count == 1
+                            ? "1 configured project no longer exists on disk."
+                            : "\(model.staleProjectRoots.count) configured projects "
+                                + "no longer exist on disk."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    Button("Remove missing") { model.removeStaleProjects() }
+                        .controlSize(.small)
+                    Spacer()
+                }
             }
         }
         .padding(.horizontal, 24)

@@ -4767,6 +4767,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
 
     let workspace_overrides = adw::PreferencesGroup::new();
     workspace_overrides.set_title("Per-project overrides");
+    let configured_roots = shell.config.borrow().configured_projects();
     if let Some(projects) = workspace["projects"].as_object() {
         for (root, flags) in projects {
             let expander = adw::ExpanderRow::new();
@@ -4775,7 +4776,41 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| root.clone());
             expander.set_title(&basename);
-            expander.set_subtitle(root);
+            if Path::new(root).exists() {
+                expander.set_subtitle(root);
+            } else {
+                expander.set_subtitle(&format!("{root} — missing"));
+            }
+            {
+                // Copying onto a project that already exists: the same
+                // question, asked from the other end.
+                let sources: Vec<String> = configured_roots
+                    .iter()
+                    .filter(|other| *other != root)
+                    .cloned()
+                    .collect();
+                let row = adw::EntryRow::new();
+                row.set_title("copy settings from this project");
+                row.set_show_apply_button(true);
+                attach_path_choices(&row, "Configured projects", sources);
+                let shell = Rc::clone(&shell);
+                let root = root.clone();
+                row.connect_apply(move |row| {
+                    let source = row.text().trim().to_string();
+                    if source.is_empty() {
+                        return;
+                    }
+                    shell.config.borrow_mut().copy_project(
+                        &source,
+                        &root,
+                        textchum_core::ProjectParts::default(),
+                    );
+                    shell.save_config();
+                    shell.reconfigure_pool();
+                    row.set_text("");
+                });
+                expander.add_row(&row);
+            }
             for (key, title) in [
                 ("manifest_projects", "Manifest projects"),
                 ("recursive_config", "Recursive config"),
@@ -4882,15 +4917,43 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             }
         }
     }
+    // A second service in the same layout wants the settings the first
+    // one has; entering them again is a transcription exercise with a
+    // typo in it.
+    let copy_from = adw::EntryRow::new();
+    copy_from.set_title("start from this project's settings (optional)");
+    attach_path_choices(
+        &copy_from,
+        "Configured projects",
+        shell.config.borrow().configured_projects(),
+    );
+
     let add_workspace_root = adw::EntryRow::new();
     add_workspace_root.set_title("add project root path");
     add_workspace_root.set_show_apply_button(true);
+    attach_path_choices(
+        &add_workspace_root,
+        "Open projects",
+        open_project_roots()
+            .into_iter()
+            .filter(|root| !configured_roots.contains(root))
+            .collect(),
+    );
     {
         let shell = Rc::clone(&shell);
+        let copy_from = copy_from.clone();
         add_workspace_root.connect_apply(move |row| {
             let root = row.text().trim().to_string();
             if root.is_empty() {
                 return;
+            }
+            let source = copy_from.text().trim().to_string();
+            if !source.is_empty() {
+                shell.config.borrow_mut().copy_project(
+                    &source,
+                    &root,
+                    textchum_core::ProjectParts::default(),
+                );
             }
             shell
                 .config
@@ -4903,9 +4966,45 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             shell.save_config();
             shell.reconfigure_pool();
             row.set_text("");
+            copy_from.set_text("");
         });
     }
+    workspace_overrides.add(&copy_from);
     workspace_overrides.add(&add_workspace_root);
+
+    // A root whose directory is gone is an entry nothing will ever
+    // match again.
+    let stale: Vec<String> = configured_roots
+        .iter()
+        .filter(|root| !Path::new(root).exists())
+        .cloned()
+        .collect();
+    if !stale.is_empty() {
+        let row = adw::ActionRow::new();
+        row.set_title(&if stale.len() == 1 {
+            "1 configured project no longer exists on disk".to_string()
+        } else {
+            format!("{} configured projects no longer exist on disk", stale.len())
+        });
+        row.set_subtitle(&stale.join(", "));
+        let button = gtk::Button::with_label("Remove missing");
+        button.set_valign(gtk::Align::Center);
+        {
+            let shell = Rc::clone(&shell);
+            let stale = stale.clone();
+            button.connect_clicked(move |button| {
+                for root in &stale {
+                    shell.config.borrow_mut().remove_project(root);
+                }
+                shell.save_config();
+                shell.reconfigure_pool();
+                button.set_sensitive(false);
+                button.set_label("Removed");
+            });
+        }
+        row.add_suffix(&button);
+        workspace_overrides.add(&row);
+    }
     projects_page.add(&workspace_overrides);
 
     // The presets themselves, edited the same way: one pattern per
@@ -4994,6 +5093,87 @@ fn describe_server(language: &str, command: &str, overridden: bool) -> String {
 /// Re-runs the spell checker over every open document, in every
 /// window: the dictionary and the personal word list are application
 /// settings, so accepting one word changes what every page shows.
+/// The project roots of the documents that are open.
+///
+/// Adding a per-project entry meant knowing the root and typing it. The
+/// roots are known: every open document has one.
+fn open_project_roots() -> Vec<String> {
+    let mut roots: Vec<String> = Vec::new();
+    Workbench::for_each(|workbench| {
+        for page in workbench.all_pages() {
+            let Some(path) = page.path.borrow().clone() else {
+                continue;
+            };
+            let Some(root) = workspace::project_root_for(Path::new(&path)) else {
+                continue;
+            };
+            let root = root.to_string_lossy().into_owned();
+            if !roots.contains(&root) {
+                roots.push(root);
+            }
+        }
+    });
+    roots.sort();
+    roots
+}
+
+/// Offers a list of paths on a row that still takes any text.
+fn attach_path_choices(row: &adw::EntryRow, tooltip: &str, paths: Vec<String>) {
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::None);
+    list.set_activate_on_single_click(true);
+    if paths.is_empty() {
+        // An empty list is a gap the reader has to interpret; say why.
+        let label = gtk::Label::new(Some("Nothing to offer"));
+        label.set_margin_start(8);
+        label.set_margin_end(8);
+        label.set_margin_top(4);
+        label.set_margin_bottom(4);
+        label.set_sensitive(false);
+        list.append(&label);
+    }
+    for path in &paths {
+        let label = gtk::Label::new(Some(path));
+        label.set_xalign(0.0);
+        label.set_margin_start(8);
+        label.set_margin_end(8);
+        label.set_margin_top(4);
+        label.set_margin_bottom(4);
+        list.append(&label);
+    }
+
+    let scroller = gtk::ScrolledWindow::new();
+    scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    scroller.set_max_content_height(320);
+    scroller.set_propagate_natural_height(true);
+    scroller.set_child(Some(&list));
+
+    let popover = gtk::Popover::new();
+    popover.set_child(Some(&scroller));
+
+    let button = gtk::MenuButton::new();
+    button.set_icon_name("pan-down-symbolic");
+    button.set_tooltip_text(Some(tooltip));
+    button.add_css_class("flat");
+    button.set_valign(gtk::Align::Center);
+    button.set_popover(Some(&popover));
+
+    {
+        let row = row.clone();
+        let popover = popover.clone();
+        list.connect_row_activated(move |_, activated| {
+            if let Some(label) = activated.child().and_downcast::<gtk::Label>() {
+                if label.is_sensitive() {
+                    row.set_text(&label.text());
+                }
+            }
+            popover.popdown();
+        });
+    }
+
+    row.add_suffix(&button);
+}
+
 /// Redraws the occurrence marks everywhere: the settings that decide
 /// them just changed.
 fn refresh_every_page_occurrences() {

@@ -411,6 +411,23 @@ de la pestaña Proyectos llevan los tres campos (vacío significa
 }
 ```
 
+## Añadir un proyecto
+
+La pestaña Proyectos lista las raíces de los documentos abiertos, así
+que un proyecto se añade eligiéndolo y no escribiendo su ruta.
+**Copiar ajustes de** parte de uno ya configurado — sus servidores,
+comandos de guardado, indicadores y ajustes del editor, todo — que es
+lo que necesita un segundo servicio con la misma disposición. La misma
+opción está en la fila de cada proyecto, para copiar sobre uno que ya
+existe.
+
+Un campo de anulación vacío muestra lo que hereda, así que una casilla
+en blanco dice qué se aplica en vez de dejarte ir a mirar.
+
+Una raíz configurada cuyo directorio ya no está se marca como *missing*,
+y **Remove missing** olvida todas: nada volverá a coincidir con esas
+entradas.
+
 ## Aún no está
 
 - Nada por el momento — apunta la próxima molestia cuando aparezca.

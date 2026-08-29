@@ -1566,6 +1566,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func showSettings(_ sender: Any?) {
         guard let settingsModel else { return }
+        // The Projects tab offers the open projects to add; only the
+        // app knows what they are, and only now does it matter.
+        settingsModel.openProjectRoots = Array(
+            Set(editors.compactMap(\.projectRoot))
+        ).sorted()
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(model: settingsModel)
             settingsWindowController?.window?.center()
