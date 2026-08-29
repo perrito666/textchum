@@ -317,6 +317,64 @@ public final class CoreApp {
         router.register(id, completion)
     }
 
+    /// Requests the code actions offered at an LSP position — the quick
+    /// fixes and refactorings a server has for it.
+    ///
+    /// The findings under the caret go with the request, as the server
+    /// itself published them — the core keeps them, so the caller does
+    /// not have to carry them back. That is what turns the answer into
+    /// quick fixes rather than the refactorings the range allows.
+    @MainActor
+    public func lspCodeAction(
+        path: String,
+        line: Int,
+        character: Int,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_code_action(
+                handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
+    /// Sends a code action back to have its edit filled in.
+    @MainActor
+    public func lspResolveCodeAction(
+        path: String,
+        actionJSON: String,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            withUTF8(actionJSON) { action, actionLen in
+                tc_lsp_resolve_code_action(handle, path, pathLen, action, actionLen)
+            }
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
+    /// Runs a command a code action carried instead of an edit.
+    @MainActor
+    public func lspExecuteCommand(
+        path: String,
+        command: String,
+        argumentsJSON: String,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            withUTF8(command) { name, nameLen in
+                withUTF8(argumentsJSON) { arguments, argumentsLen in
+                    tc_lsp_execute_command(
+                        handle, path, pathLen, name, nameLen, arguments, argumentsLen)
+                }
+            }
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
     /// Requests whole-document formatting; same contract as
     /// ``lspHover(path:line:character:completion:)``. The JSON is an LSP
     /// `TextEdit[]`.

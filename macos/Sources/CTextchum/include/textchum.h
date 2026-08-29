@@ -298,6 +298,58 @@ uint64_t tc_lsp_references(struct TcApp *app,
                            uint32_t character);
 
 /**
+ * Requests the code actions offered at an LSP position — the quick
+ * fixes and refactorings a server has for it.
+ *
+ * The findings under the caret go with the request, as the server
+ * itself published them — the pool keeps them, so the caller does not
+ * have to carry them back.
+ *
+ * Same contract as [`tc_lsp_hover`]. The response's `result` is an
+ * array of `Command` and `CodeAction`; read it with
+ * [`tc_code_actions`].
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_code_action(struct TcApp *app,
+                            const char *path,
+                            uintptr_t path_len,
+                            uint32_t line,
+                            uint32_t character);
+
+/**
+ * Sends a code action back to have its edit filled in, for a server
+ * that answered cheaply. `action` is the action's own JSON, from
+ * `tc_code_action_outcome`'s `resolve` answer.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`]; `action` must point to
+ * `action_len` readable bytes.
+ */
+uint64_t tc_lsp_resolve_code_action(struct TcApp *app,
+                                    const char *path,
+                                    uintptr_t path_len,
+                                    const char *action,
+                                    uintptr_t action_len);
+
+/**
+ * Runs a command a code action carried instead of an edit. The server
+ * does the work and sends back whatever edits it makes.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`]; each pointer/length pair must
+ * describe readable bytes.
+ */
+uint64_t tc_lsp_execute_command(struct TcApp *app,
+                                const char *path,
+                                uintptr_t path_len,
+                                const char *command,
+                                uintptr_t command_len,
+                                const char *arguments,
+                                uintptr_t arguments_len);
+
+/**
  * Requests a workspace-wide rename of the symbol at an LSP position to
  * `new_name` (`new_name_len` bytes of UTF-8); same contract as
  * [`tc_lsp_hover`]. The response's `result` is an LSP `WorkspaceEdit`.
@@ -1481,6 +1533,40 @@ uintptr_t tc_document_len_lines(const struct TcDocument *document);
  * `path` must point to `len` readable bytes.
  */
 bool tc_path_is_test(const char *path, uintptr_t len);
+
+/**
+ * The code actions in a `textDocument/codeAction` result, as a
+ * nul-terminated JSON array of `{"title", "kind", "preferred"}`.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `result` must point to `result_len` readable bytes.
+ */
+char *tc_code_actions(const char *result, uintptr_t result_len);
+
+/**
+ * What choosing the action at `index` means, as a nul-terminated JSON
+ * object — `{"do": "edit", "edit": {…}}`, `{"do": "command", "name":
+ * …, "arguments": […]}`, `{"do": "resolve", "action": {…}}`, or
+ * `{"do": "nothing"}`. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `result` must point to `result_len` readable bytes.
+ */
+char *tc_code_action_outcome(const char *result, uintptr_t result_len, uintptr_t index);
+
+/**
+ * The findings under a caret, as the `context.diagnostics` of a code
+ * action request. A nul-terminated JSON array, released with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `diagnostics` must point to `diagnostics_len` readable bytes.
+ */
+char *tc_diagnostics_at(const char *diagnostics,
+                        uintptr_t diagnostics_len,
+                        uint32_t line,
+                        uint32_t character);
 
 /**
  * Transforms a stretch of text: `upper`, `lower`, `title`, `invert`,

@@ -74,6 +74,16 @@ nadie.
   hallazgos del documento en el orden en que aparecen —el orden en que
   se arreglan y el que muestra el margen—, con la gravedad en cada
   fila. ⏎ salta, y el salto entra en la pila de vuelta atrás.
+- **Acciones de código…** (⌘., Ctrl+. en Linux) pregunta qué puede
+  hacer el servidor con el sitio donde está el cursor —importar este
+  nombre, añadir la rama que falta, quitar la variable sin usar— y
+  lista lo que llega, con la sugerencia del propio servidor marcada.
+  Los hallazgos bajo el cursor viajan con la petición tal como los
+  publicó el servidor, con `code` y `data` incluidos: así reconoce el
+  servidor lo que él mismo encontró, y uno reconstruido no le dice
+  nada. Una acción que el servidor mandó sin su edición se le devuelve
+  para que la termine antes de aplicarla, y una que trae un comando en
+  vez de una edición la ejecuta el servidor.
 - **Renombrar símbolo…** (⌃⌘R) renombra en todo el espacio de trabajo:
   las ventanas abiertas se editan en el sitio (el deshacer funciona por
   ventana) y los archivos que nadie tiene abiertos se reescriben en

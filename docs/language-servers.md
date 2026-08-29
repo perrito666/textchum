@@ -62,6 +62,26 @@ never join someone else's workspace either.
   the document, in the order they appear — which is the order they get
   fixed in and the order the gutter shows them, with the severity in
   each row. ⏎ jumps, and the jump joins the back stack.
+- **Code Actions…** (⌘., Ctrl+. on Linux) asks what the server can do
+  about the place the caret is — import this name, add the missing
+  match arm, remove the unused variable — and lists what comes back,
+  the server's own suggestion marked as such. The findings under the
+  caret go with the request exactly as the server published them,
+  `code` and `data` included: that is how a server recognizes its own
+  finding, and a reconstructed one gets a shrug. An action the server
+  answered without its edit is sent back to be finished before it is
+  applied, and one that carries a command rather than an edit is run by
+  the server.
+- **Code Actions…** (⌘., Ctrl+. on Linux) asks what the server can do
+  about the place the caret is — import this name, add the missing
+  match arm, remove the unused variable — and lists what comes back,
+  the server's own suggestion marked as such. The findings under the
+  caret go with the request exactly as the server published them,
+  `code` and `data` included: that is how a server recognizes its own
+  finding, and a reconstructed one gets a shrug. An action the server
+  answered without its edit is sent back to be finished before it is
+  applied, and one that carries a command rather than an edit is run by
+  the server.
 - **Rename Symbol…** (⌃⌘R) renames across the whole workspace: open
   windows edit in place (undo works per window), files nobody has open
   are rewritten on disk.

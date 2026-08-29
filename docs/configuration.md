@@ -407,7 +407,7 @@ character, `f1` to `f20`, or
 Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `undo`, `redo`, `find`, `findAndReplace`, `findNext`, `findPrevious`,
 `useSelectionForFind`, `findInProject`, `jumpToDefinition`,
-`findReferences`, `renameSymbol`, `formatDocument`, `runPreprocessors`,
+`findReferences`, `codeActions`, `renameSymbol`, `formatDocument`, `runPreprocessors`,
 `documentOutline`,
 `goBack`, `goForward`,
 `blameLine`, `goToLine`,

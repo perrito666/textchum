@@ -74,6 +74,17 @@ quelqu'un d'autre.
   diagnostics du document dans l'ordre où ils apparaissent — celui dans
   lequel on les corrige et celui de la gouttière — avec la gravité sur
   chaque ligne. ⏎ y saute, et le saut entre dans la pile de retour.
+- **Actions de code…** (⌘., Ctrl+. sous Linux) demande ce que le
+  serveur peut faire de l'endroit où est le curseur — importer ce nom,
+  ajouter la branche manquante, ôter la variable inutilisée — et liste
+  ce qui revient, la suggestion du serveur étant signalée comme telle.
+  Les signalements sous le curseur accompagnent la requête tels que le
+  serveur les a publiés, `code` et `data` compris : c'est ainsi qu'un
+  serveur reconnaît ce qu'il a lui-même trouvé, et un signalement
+  reconstruit ne lui dit rien. Une action que le serveur a envoyée sans
+  sa modification lui est renvoyée pour qu'il la termine avant qu'elle
+  soit appliquée, et une action qui porte une commande plutôt qu'une
+  modification est exécutée par le serveur.
 - **Renommer le symbole…** (⌃⌘R) renomme dans tout l'espace de
   travail : les fenêtres ouvertes sont éditées sur place (l'annulation
   fonctionne par fenêtre) et les fichiers que personne n'a ouverts sont

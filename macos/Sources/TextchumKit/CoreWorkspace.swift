@@ -158,6 +158,103 @@ public enum CoreReferences {
     }
 }
 
+/// Reading a `textDocument/codeAction` answer: what the server offers,
+/// and what choosing one of them means.
+public enum CoreCodeActions {
+    public struct Action {
+        public let title: String
+        /// The LSP kind (`quickfix`, `refactor.extract`, …), empty when
+        /// the server did not say.
+        public let kind: String
+        /// Whether the server marked it as the one to reach for.
+        public let preferred: Bool
+    }
+
+    /// What choosing an action means.
+    public enum Outcome {
+        case edit(String)
+        case command(name: String, argumentsJSON: String)
+        case resolve(actionJSON: String)
+        case nothing
+    }
+
+    public static func actions(inResultJSON json: String) -> [Action] {
+        var json = json
+        let raw = json.withUTF8 { bytes in
+            tc_code_actions(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count))
+        }
+        guard let raw else { return [] }
+        defer { tc_string_free(raw) }
+        let data = Data(String(cString: raw).utf8)
+        let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+        return parsed.compactMap { item in
+            guard let title = item["title"] as? String else { return nil }
+            return Action(
+                title: title,
+                kind: item["kind"] as? String ?? "",
+                preferred: item["preferred"] as? Bool ?? false)
+        }
+    }
+
+    /// What to do with the action at `index` of that same result.
+    public static func outcome(inResultJSON json: String, at index: Int) -> Outcome {
+        var json = json
+        let raw = json.withUTF8 { bytes in
+            tc_code_action_outcome(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count), UInt(max(0, index)))
+        }
+        guard let raw else { return .nothing }
+        defer { tc_string_free(raw) }
+        let text = String(cString: raw)
+        let data = Data(text.utf8)
+        guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let what = parsed["do"] as? String
+        else { return .nothing }
+        func member(_ key: String) -> String {
+            guard let value = parsed[key],
+                let data = try? JSONSerialization.data(
+                    withJSONObject: value, options: [.fragmentsAllowed]),
+                let text = String(data: data, encoding: .utf8)
+            else { return "null" }
+            return text
+        }
+        switch what {
+        case "edit": return .edit(member("edit"))
+        case "command":
+            return .command(
+                name: parsed["name"] as? String ?? "",
+                argumentsJSON: member("arguments"))
+        case "resolve": return .resolve(actionJSON: member("action"))
+        default: return .nothing
+        }
+    }
+
+    /// The findings under a caret, as the context of a code action
+    /// request.
+    public static func diagnostics(
+        in json: String, line: Int, character: Int
+    ) -> String {
+        var json = json
+        let raw = json.withUTF8 { bytes in
+            tc_diagnostics_at(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count), UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard let raw else { return "[]" }
+        defer { tc_string_free(raw) }
+        return String(cString: raw)
+    }
+}
+
 /// Transformations over a stretch of text: case, sorting, joining,
 /// trimming, line endings.
 public enum CoreTransform {
