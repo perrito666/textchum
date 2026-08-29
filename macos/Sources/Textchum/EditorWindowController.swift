@@ -1114,6 +1114,19 @@ final class EditorWindowController: NSWindowController {
         closeSplit()
     }
 
+    /// Edit ▸ Other Side: the keyboard crosses the divider.
+    ///
+    /// Reading one half of a file while writing the other means going
+    /// back and forth, and reaching for the mouse every time is what
+    /// makes a split not worth opening.
+    @objc func focusOtherSide(_ sender: Any?) {
+        guard let second = secondaryTextView, let first = textView else { return }
+        let goingTo = window?.firstResponder === second ? first : second
+        window?.makeFirstResponder(goingTo)
+        // The caret is where it was left, and it should be in sight.
+        goingTo.scrollRangeToVisible(goingTo.selectedRange())
+    }
+
     /// Takes the second view away.
     func closeSplit() {
         guard let editorHost, let mine = editorArea, let split = secondarySplit else {
@@ -3820,6 +3833,8 @@ extension EditorWindowController: NSMenuItemValidation {
             #selector(formatDocument(_:)), #selector(showDocumentOutline(_:)),
             #selector(showCodeActions(_:)):
             return lspOpenPath != nil
+        case #selector(closeSplitCommand(_:)), #selector(focusOtherSide(_:)):
+            return secondaryTextView != nil
         case #selector(goToBlockStart(_:)), #selector(goToBlockEnd(_:)):
             return coreDocument.languageName != nil
         case #selector(togglePreview(_:)):

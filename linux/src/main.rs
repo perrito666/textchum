@@ -347,7 +347,7 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.unfold-all", "<Ctrl>bracketright"),
     ("win.split", "<Ctrl>backslash"),
     ("win.unsplit", "<Ctrl><Shift>backslash"),
-    ("win.focus-other-group", "<Ctrl>grave"),
+    ("win.focus-other-group", "<Alt><Ctrl>backslash"),
     ("win.reopen-tab", "<Ctrl><Shift>t"),
     ("window.close", "<Ctrl><Shift>w"),
     ("app.quit", "<Ctrl>q"),
@@ -1144,6 +1144,30 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
             if shell.document_count() != opened {
                 eprintln!("FAIL: a split opened a second document");
+                return 1;
+            }
+            // The command has a shortcut, and it names an action the
+            // window actually has: a menu item with neither is a
+            // command nobody can reach from the keyboard.
+            let accels = app.accels_for_action("win.focus-other-group");
+            if accels.is_empty() {
+                eprintln!("FAIL: Other Side has no shortcut");
+                return 1;
+            }
+            if crate::keyboard::gtk_action("otherSide") != Some("win.focus-other-group") {
+                eprintln!("FAIL: Other Side is not in the command list");
+                return 1;
+            }
+            // The keyboard crosses to the other group and comes back.
+            let first = workbench.active_view();
+            workbench.focus_other_group();
+            if workbench.active_view() == first {
+                eprintln!("FAIL: the focus did not cross to the other side");
+                return 1;
+            }
+            workbench.focus_other_group();
+            if workbench.active_view() != first {
+                eprintln!("FAIL: the focus did not come back");
                 return 1;
             }
             workbench.unsplit();
