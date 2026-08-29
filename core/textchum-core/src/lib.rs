@@ -13,6 +13,7 @@
 mod app;
 pub mod blame;
 mod buffer;
+pub mod carets;
 pub mod changes;
 pub mod code_action;
 pub mod definition;
