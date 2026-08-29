@@ -819,6 +819,45 @@ func runSmokeTest() -> Int32 {
     }
     print("definition key ok (jump, on-the-definition, uses without the declaration)")
 
+    // The context menu is the editor's own, not AppKit's. What matters
+    // is what it holds — the commands that act on the place clicked —
+    // and what it leaves out: Services, Speech, Substitutions and the
+    // rest of the general text menu.
+    let contextEditor = EditorWindowController(document: CoreDocument())
+    contextEditor.window?.makeKeyAndOrderFront(nil)
+    let contextView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    contextView.string = "def greet(name):\n    return name\n"
+    let clicked = 6
+    guard
+        let contextMenu = contextEditor.textView(
+            contextView, menu: NSMenu(), for: NSEvent(), at: clicked)
+    else {
+        print("FAIL: no context menu was built")
+        return 1
+    }
+    let contextTitles = contextMenu.items.map { $0.title }
+    let wanted = ["Cut", "Copy", "Paste", "Format Document", "File Properties…"]
+    guard wanted.allSatisfy({ contextTitles.contains($0) }) else {
+        print("FAIL: context menu is missing items: \(contextTitles)")
+        return 1
+    }
+    let unwanted = ["Services", "Speech", "Substitutions", "Transformations", "Share"]
+    guard !unwanted.contains(where: { contextTitles.contains($0) }) else {
+        print("FAIL: context menu kept AppKit's items: \(contextTitles)")
+        return 1
+    }
+    // Every command carries the character that was clicked, so it can
+    // answer about that place rather than about the caret.
+    let carried = contextMenu.items.compactMap {
+        ($0.representedObject as? EditorWindowController.ContextCommand)?.index
+    }
+    guard !carried.isEmpty, carried.allSatisfy({ $0 == clicked }) else {
+        print("FAIL: context commands do not carry the clicked character")
+        return 1
+    }
+    contextEditor.window?.close()
+    print("context menu ok (editor commands, AppKit's extras left out, clicked position)")
+
     // Repainting the syntax colours on every scroll turn was the
     // stutter; the margin around the viewport is there so that most
     // turns need no repaint at all. The wiring needs a window server,

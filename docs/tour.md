@@ -34,6 +34,15 @@ language, and the problem count once a language server has an opinion.
 The tree follows along: switching tabs expands the path to the current
 file and highlights it.
 
+Right-clicking in the text opens the editor's own menu: Jump to
+Definition, Find References, Rename Symbol, the diagnostics of the
+line, Blame Line, Format Document and File Properties, beside cut,
+copy, paste and the spelling suggestions. Those commands act on the
+character that was clicked rather than on the caret, which the click
+leaves where it was. What the document has no use for is not there —
+no server running means no Find References, no findings means no
+diagnostics rows.
+
 ## Language servers
 
 Diagnostics arrive as tinted marks in the text and a count in the

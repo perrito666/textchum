@@ -593,6 +593,45 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             return 1;
         }
         println!("reference split ok (conventions matched, near-misses left alone)");
+
+    // The context menu carries the editor's own commands, each about
+    // the character that was clicked rather than about the caret.
+    {
+        use gtk::prelude::*;
+        let offset = 42;
+        let menu = crate::page::context_menu(None, false, Some("/p/main.py"), offset);
+        let mut labels = Vec::new();
+        let mut targets = Vec::new();
+        for section in 0..menu.n_items() {
+            let Some(items) = menu.item_link(section, gtk::gio::MENU_LINK_SECTION) else {
+                continue;
+            };
+            for at in 0..items.n_items() {
+                if let Some(label) = items
+                    .item_attribute_value(at, "label", None)
+                    .and_then(|value| value.str().map(str::to_owned))
+                {
+                    labels.push(label);
+                }
+                if let Some(action) = items
+                    .item_attribute_value(at, "target", None)
+                    .and_then(|value| value.get::<(String, i32)>())
+                {
+                    targets.push(action);
+                }
+            }
+        }
+        let wanted = ["Jump to Definition", "Blame Line…", "File Properties…"];
+        if !wanted.iter().all(|label| labels.iter().any(|had| had == label)) {
+            eprintln!("FAIL: context menu is missing items: {labels:?}");
+            return 1;
+        }
+        if targets.is_empty() || targets.iter().any(|(_, at)| *at != offset) {
+            eprintln!("FAIL: context commands do not carry the clicked character");
+            return 1;
+        }
+        println!("context menu ok (editor commands, clicked position)");
+    }
     }
 
     // The gutter's git marks: a committed file, edited three ways.

@@ -35,6 +35,16 @@ langage, et le nombre de problèmes dès qu'un serveur de langage a un
 avis. L'arbre suit : changer d'onglet déplie le chemin du fichier
 courant et le met en évidence.
 
+Un clic droit dans le texte ouvre le menu de l'éditeur : aller à la
+définition, chercher les références, renommer le symbole, le
+diagnostic de la ligne, le blame de la ligne, formater le document et
+les propriétés du fichier, à côté de couper, copier, coller et des
+suggestions orthographiques. Ces commandes agissent sur le caractère
+cliqué et non sur le curseur, que le clic laisse où il était. Ce dont
+le document n'a pas l'usage n'y est pas : sans serveur pas de
+recherche des références, sans signalements pas de lignes de
+diagnostics.
+
 ## Serveurs de langage
 
 Les diagnostics arrivent en marques teintées dans le texte et en

@@ -53,6 +53,10 @@ pub struct Page {
     /// The git change bar, and the marks it draws: line number to kind.
     change_bar: gtk::DrawingArea,
     change_marks: RefCell<Vec<(i32, ChangeKind)>>,
+    /// The character a context-menu command is about, while one runs.
+    /// A right-click does not move the caret, and the menu is about
+    /// what was clicked.
+    pub context_offset: Cell<Option<i32>>,
 }
 
 /// The completion popup: a popover under the caret, filtered by the
@@ -227,6 +231,7 @@ impl Page {
             },
             change_bar: change_bar.clone(),
             change_marks: RefCell::new(Vec::new()),
+            context_offset: Cell::new(None),
         });
         install_completion_keys(&page);
         install_snippet_keys(&page);
@@ -476,6 +481,26 @@ pub fn char_offset(text: &str, target: usize) -> i32 {
 }
 
 /// The caret as an LSP position (zero-based line, UTF-16 column).
+/// Where a command that acts "under the caret" should look: the
+/// character a context-menu command is about, or the caret.
+pub fn lsp_anchor(page: &Page) -> (u32, u32) {
+    let Some(offset) = page.context_offset.get() else {
+        return lsp_caret(&page.buffer);
+    };
+    let at = page.buffer.iter_at_offset(offset);
+    let line = at.line();
+    let line_start = page
+        .buffer
+        .iter_at_line(line)
+        .unwrap_or_else(|| page.buffer.start_iter());
+    let column = page
+        .buffer
+        .text(&line_start, &at, true)
+        .encode_utf16()
+        .count();
+    (line.max(0) as u32, column as u32)
+}
+
 pub fn lsp_caret(buffer: &sourceview5::Buffer) -> (u32, u32) {
     let insert = buffer.iter_at_mark(&buffer.get_insert());
     let line = insert.line();
@@ -1514,9 +1539,17 @@ fn install_spelling_menu(page: &Rc<Page>) {
             // span.
             crate::spell::note_menu_target(word, *start, *end);
         }
+        let offset = page
+            .view
+            .iter_at_location(bx, by)
+            .map(|iter| iter.offset())
+            .unwrap_or_else(|| page.buffer.iter_at_mark(&page.buffer.get_insert()).offset());
+        let path = page.path.borrow().clone();
         let menu = context_menu(
             misspelling.as_ref().map(|(word, _, _)| word.as_str()),
             page.buffer.has_selection(),
+            path.as_deref(),
+            offset,
         );
         // A fresh GMenu every time: the setter compares pointers, and
         // handing back the same object would leave the cached popover
@@ -1530,9 +1563,19 @@ fn install_spelling_menu(page: &Rc<Page>) {
 }
 
 /// The application's half of the context menu: spelling actions when
-/// the pointer is on a misspelling, and Change Case when there is a
-/// selection to apply it to.
-fn context_menu(misspelling: Option<&str>, has_selection: bool) -> gtk::gio::Menu {
+/// the pointer is on a misspelling, Change Case when there is a
+/// selection to apply it to, and the editor's own commands.
+///
+/// Those commands act on `offset` — the character that was clicked —
+/// rather than on the caret, which a right-click leaves where it was.
+/// The ones that need a language server are left out when none is
+/// running for the document: a greyed row explains nothing.
+pub fn context_menu(
+    misspelling: Option<&str>,
+    has_selection: bool,
+    path: Option<&str>,
+    offset: i32,
+) -> gtk::gio::Menu {
     let menu = gtk::gio::Menu::new();
     if let Some(word) = misspelling {
         let replacements = gtk::gio::Menu::new();
@@ -1571,7 +1614,58 @@ fn context_menu(misspelling: Option<&str>, has_selection: bool) -> gtk::gio::Men
         holder.append_submenu(Some("Change Case"), &case);
         menu.append_section(None, &holder);
     }
+
+    let mut commands: Vec<(&str, &str)> = Vec::new();
+    if path.is_some() {
+        // Without a server the ctags index may still answer.
+        commands.push(("Jump to Definition", "definition"));
+    }
+    if path.is_some_and(server_running_for) {
+        commands.push(("Find References", "references"));
+        commands.push(("Rename Symbol…", "rename"));
+    }
+    if path.is_some_and(has_diagnostics) {
+        commands.push(("Show Diagnostic for Line", "diagnostic"));
+        commands.push(("Diagnostics…", "diagnostic-list"));
+    }
+    if path.is_some() {
+        commands.push(("Blame Line…", "blame"));
+    }
+    // Formatting falls back to the save-preprocessor chain, so it is
+    // offered with or without a server.
+    commands.push(("Format Document", "format"));
+    commands.push(("File Properties…", "file-properties"));
+
+    let editor = gtk::gio::Menu::new();
+    for (label, action) in commands {
+        editor.append(
+            Some(label),
+            Some(&format!("win.context-command(('{action}', {offset}))")),
+        );
+    }
+    menu.append_section(None, &editor);
     menu
+}
+
+/// Whether the server has said anything about this document. With
+/// nothing reported the two diagnostic commands have nothing to show,
+/// so they are left out.
+fn has_diagnostics(path: &str) -> bool {
+    Shell::instance()
+        .pages
+        .borrow()
+        .get(path)
+        .is_some_and(|handles| !handles.diagnostics.borrow().is_empty())
+}
+
+/// Whether a language server is up for this document.
+fn server_running_for(path: &str) -> bool {
+    Shell::instance()
+        .pool
+        .borrow()
+        .running()
+        .iter()
+        .any(|(_, root)| Path::new(path).starts_with(root))
 }
 
 /// Applies the project root's `editor` overrides (font family, size,
