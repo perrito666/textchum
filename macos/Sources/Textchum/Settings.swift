@@ -10,6 +10,8 @@ struct EditorSettings {
     let tabWidth: Int
     let lineNumbers: Bool
     let hoverDocs: Bool
+    /// Whether a file stays open when the window showing it closes.
+    let keepBuffers: Bool
     let spellLanguage: String?
     /// The setting split into the dictionaries it names — several can
     /// apply at once, and a word any of them knows is spelled right.
@@ -50,6 +52,7 @@ struct EditorSettings {
         self.tabWidth = tabWidth
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
+        self.keepBuffers = config.keepBuffers
         self.markOccurrences = config.markOccurrences
         self.occurrencesCaseSensitive = config.occurrencesCaseSensitive
         self.occurrencesWholeWord = config.occurrencesWholeWord
@@ -119,6 +122,9 @@ final class SettingsModel: ObservableObject {
     }
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
+    }
+    @Published var keepBuffers: Bool {
+        didSet { persist { $0.keepBuffers = keepBuffers } }
     }
     @Published var followFile: Bool {
         didSet { persist { $0.followFile = followFile } }
@@ -276,6 +282,7 @@ final class SettingsModel: ObservableObject {
         tabWidth = config.tabWidth
         lineNumbers = config.lineNumbers
         hoverDocs = config.hoverDocs
+        keepBuffers = config.keepBuffers
         keysProfile = config.keysProfile
         markOccurrences = config.markOccurrences
         occurrencesCaseSensitive = config.occurrencesCaseSensitive
@@ -303,6 +310,7 @@ final class SettingsModel: ObservableObject {
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
+        self.keepBuffers = config.keepBuffers
         self.followFile = config.followFile
         self.spellLanguage = config.spellLanguage ?? ""
         self.spellWords = config.spellWords.joined(separator: "\n")
@@ -942,6 +950,7 @@ struct GeneralSettingsTab: View {
             }
             Toggle("Show line numbers", isOn: $model.lineNumbers)
             Toggle("Hover documentation", isOn: $model.hoverDocs)
+            Toggle("Keep files open when their window closes", isOn: $model.keepBuffers)
             Toggle("Reveal the current file in the tree", isOn: $model.followFile)
             Toggle("Mark the selected word elsewhere on screen", isOn: $model.markOccurrences)
             Toggle("  Match case", isOn: $model.occurrencesCaseSensitive)

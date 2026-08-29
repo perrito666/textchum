@@ -935,8 +935,28 @@ func runSmokeTest() -> Int32 {
         print("FAIL: closing left the document behind")
         return 1
     }
+
+    // A closed file is kept whole: reopening it is taking the closing
+    // back, so what was typed and never saved is still there.
+    guard let takenBack = DocumentStore.shared.reclaim(path: "/tmp/renamed") else {
+        print("FAIL: the closed document did not come back")
+        return 1
+    }
+    guard takenBack.id == firstDocument.id else {
+        print("FAIL: reopening made a second document")
+        return 1
+    }
+    guard DocumentStore.shared.document(forPath: "/tmp/renamed") != nil else {
+        print("FAIL: the document that came back is not open")
+        return 1
+    }
+    guard DocumentStore.shared.reclaim(path: "/tmp/never-closed") == nil else {
+        print("FAIL: a file that was never closed came out of the cache")
+        return 1
+    }
+    DocumentStore.shared.close(takenBack.id)
     try? FileManager.default.removeItem(atPath: storeScratch)
-    print("documents ok (one per path, renamed and closed without a second)")
+    print("documents ok (one per path, renamed, closed and taken back)")
 
     // Selecting a word marks the other places it appears. The rules
     // live in the core; what is checked here is that they survive the
