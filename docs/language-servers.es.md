@@ -96,6 +96,19 @@ Textchum encuentra los servidores en el `PATH` — no los instala:
 | Swift | sourcekit-lsp | viene con la cadena de herramientas de Xcode |
 | Zig | zls | `brew install zls` |
 | Bash | bash-language-server | `npm install -g bash-language-server` |
+| JSON | vscode-json-language-server | `npm install -g vscode-langservers-extracted` |
+| HTML | vscode-html-language-server | `npm install -g vscode-langservers-extracted` |
+| CSS | vscode-css-language-server | `npm install -g vscode-langservers-extracted` |
+| YAML | yaml-language-server | `npm install -g yaml-language-server` |
+| TOML | taplo | `brew install taplo` |
+| Markdown | marksman | `brew install marksman` |
+
+Las plantillas de Go también las atiende `gopls`. Varios lenguajes
+tienen más de un servidor registrado: Python cuenta con `pyright`,
+`basedpyright`, `pylsp`, `ruff`, `jedi`, `ty` y `pyrefly`; JavaScript
+con `typescript-language-server`, `vtsls`, `deno` y `biome`. La tabla
+nombra el que se usa cuando la configuración no dice nada; a los demás
+se los pide por identificador.
 
 ## Elegir los servidores
 
@@ -114,6 +127,11 @@ edición a mano habituales del archivo:
   }
 }
 ```
+
+El campo de lenguaje ofrece los lenguajes que esta compilación conoce y
+sigue aceptando cualquier texto: se puede configurar un lenguaje antes
+de que exista una gramática para él, y la entrada sigue sirviendo
+cuando llega.
 
 ### Definir un servidor que el editor no conoce
 
@@ -148,9 +166,8 @@ cambia cuál usa un lenguaje por omisión: eso lo decide `lsp.defaults`.
 La entrada de un lenguaje acepta el identificador de un servidor que el
 editor conoce o una línea de órdenes.
 
-Un identificador trae consigo los argumentos del servidor. Para Python
-hay varios registrados —`pyright`, `basedpyright`, `pylsp`, `ruff` y
-`jedi`— y un lenguaje con más de uno usa el primero salvo que la
+Un identificador trae consigo los argumentos del servidor. Un lenguaje
+con más de un servidor registrado usa el primero salvo que la
 configuración nombre otro.
 
 Una línea de órdenes se ejecuta tal cual, con dos sustituciones:
