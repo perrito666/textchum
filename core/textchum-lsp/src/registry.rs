@@ -76,7 +76,7 @@ static SERVERS: &[ServerSpec] = &[
         id: "gopls",
         command: "gopls",
         args: &[],
-        languages: &["go"],
+        languages: &["go", "gotmpl"],
         install_hint: "go install golang.org/x/tools/gopls@latest",
     },
     ServerSpec {
@@ -113,6 +113,84 @@ static SERVERS: &[ServerSpec] = &[
         args: &["start"],
         languages: &["bash"],
         install_hint: "npm install -g bash-language-server",
+    },
+    ServerSpec {
+        id: "ty",
+        command: "ty",
+        args: &["server"],
+        languages: &["python"],
+        install_hint: "uv tool install ty",
+    },
+    ServerSpec {
+        id: "pyrefly",
+        command: "pyrefly",
+        args: &["lsp"],
+        languages: &["python"],
+        install_hint: "uv tool install pyrefly",
+    },
+    ServerSpec {
+        id: "vtsls",
+        command: "vtsls",
+        args: &["--stdio"],
+        languages: &["javascript"],
+        install_hint: "npm install -g @vtsls/language-server",
+    },
+    ServerSpec {
+        id: "deno",
+        command: "deno",
+        args: &["lsp"],
+        languages: &["javascript"],
+        install_hint: "brew install deno",
+    },
+    ServerSpec {
+        id: "biome",
+        command: "biome",
+        args: &["lsp-proxy"],
+        languages: &["javascript"],
+        install_hint: "npm install -g @biomejs/biome",
+    },
+    ServerSpec {
+        id: "vscode-json-language-server",
+        command: "vscode-json-language-server",
+        args: &["--stdio"],
+        languages: &["json"],
+        install_hint: "npm install -g vscode-langservers-extracted",
+    },
+    ServerSpec {
+        id: "vscode-html-language-server",
+        command: "vscode-html-language-server",
+        args: &["--stdio"],
+        languages: &["html"],
+        install_hint: "npm install -g vscode-langservers-extracted",
+    },
+    ServerSpec {
+        id: "vscode-css-language-server",
+        command: "vscode-css-language-server",
+        args: &["--stdio"],
+        languages: &["css"],
+        install_hint: "npm install -g vscode-langservers-extracted",
+    },
+    ServerSpec {
+        id: "yaml-language-server",
+        command: "yaml-language-server",
+        args: &["--stdio"],
+        languages: &["yaml"],
+        install_hint: "npm install -g yaml-language-server",
+    },
+    ServerSpec {
+        id: "taplo",
+        command: "taplo",
+        args: &["lsp", "stdio"],
+        languages: &["toml"],
+        install_hint: "brew install taplo \
+                       (or: cargo install taplo-cli --features lsp)",
+    },
+    ServerSpec {
+        id: "marksman",
+        command: "marksman",
+        args: &["server"],
+        languages: &["markdown"],
+        install_hint: "brew install marksman",
     },
 ];
 
@@ -174,7 +252,9 @@ mod tests {
     fn known_languages_resolve() {
         assert_eq!(server_for_language("rust").unwrap().id, "rust-analyzer");
         assert_eq!(server_for_language("c").unwrap().id, "clangd");
-        assert!(server_for_language("markdown").is_none());
+        assert_eq!(server_for_language("markdown").unwrap().id, "marksman");
+        // A language nothing here serves.
+        assert!(server_for_language("make").is_none());
     }
 
     #[test]

@@ -4441,6 +4441,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     add_root.set_title("project root path");
     let add_project_language = adw::EntryRow::new();
     add_project_language.set_title("language");
+    attach_language_choices(&add_project_language);
     let add_project_command = adw::EntryRow::new();
     add_project_command.set_title("command");
     add_project_command.set_show_apply_button(true);
@@ -4472,6 +4473,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
 
     let add_language = adw::EntryRow::new();
     add_language.set_title("language (e.g. python)");
+    attach_language_choices(&add_language);
     let add_command = adw::EntryRow::new();
     add_command.set_title("command (e.g. pylsp)");
     add_command.set_show_apply_button(true);
@@ -4964,4 +4966,54 @@ fn for_all_views(apply: impl Fn(&sourceview5::View)) {
             }
         }
     });
+}
+
+/// Offer the languages the build knows on a row that still accepts any
+/// text.
+///
+/// A language field cannot be a closed picker: configuration may name a
+/// language this build has no grammar for yet, and typing it must keep
+/// working. So the row stays an entry and grows a list beside it.
+fn attach_language_choices(row: &adw::EntryRow) {
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::None);
+    list.set_activate_on_single_click(true);
+    for name in textchum_core::syntax::languages::selectable_names() {
+        let label = gtk::Label::new(Some(name));
+        label.set_xalign(0.0);
+        label.set_margin_start(8);
+        label.set_margin_end(8);
+        label.set_margin_top(4);
+        label.set_margin_bottom(4);
+        list.append(&label);
+    }
+
+    let scroller = gtk::ScrolledWindow::new();
+    scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    scroller.set_max_content_height(320);
+    scroller.set_propagate_natural_height(true);
+    scroller.set_child(Some(&list));
+
+    let popover = gtk::Popover::new();
+    popover.set_child(Some(&scroller));
+
+    let button = gtk::MenuButton::new();
+    button.set_icon_name("pan-down-symbolic");
+    button.set_tooltip_text(Some("Known languages"));
+    button.add_css_class("flat");
+    button.set_valign(gtk::Align::Center);
+    button.set_popover(Some(&popover));
+
+    {
+        let row = row.clone();
+        let popover = popover.clone();
+        list.connect_row_activated(move |_, activated| {
+            if let Some(label) = activated.child().and_downcast::<gtk::Label>() {
+                row.set_text(&label.text());
+            }
+            popover.popdown();
+        });
+    }
+
+    row.add_suffix(&button);
 }

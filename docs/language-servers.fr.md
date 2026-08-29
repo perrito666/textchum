@@ -96,6 +96,19 @@ Textchum trouve les serveurs sur le `PATH` — il ne les installe pas :
 | Swift | sourcekit-lsp | fourni avec la chaîne d'outils Xcode |
 | Zig | zls | `brew install zls` |
 | Bash | bash-language-server | `npm install -g bash-language-server` |
+| JSON | vscode-json-language-server | `npm install -g vscode-langservers-extracted` |
+| HTML | vscode-html-language-server | `npm install -g vscode-langservers-extracted` |
+| CSS | vscode-css-language-server | `npm install -g vscode-langservers-extracted` |
+| YAML | yaml-language-server | `npm install -g yaml-language-server` |
+| TOML | taplo | `brew install taplo` |
+| Markdown | marksman | `brew install marksman` |
+
+Les modèles Go sont servis par `gopls` également. Plusieurs langages ont
+plus d'un serveur enregistré : Python dispose de `pyright`,
+`basedpyright`, `pylsp`, `ruff`, `jedi`, `ty` et `pyrefly` ; JavaScript
+de `typescript-language-server`, `vtsls`, `deno` et `biome`. Le tableau
+nomme celui qui sert quand la configuration ne dit rien ; les autres se
+demandent par identifiant.
 
 ## Choisir ses serveurs
 
@@ -114,6 +127,11 @@ habituelles du fichier :
   }
 }
 ```
+
+Le champ de langage propose les langages que cette compilation connaît
+et accepte toujours n'importe quel texte : un langage peut être
+configuré avant qu'une grammaire existe pour lui, et l'entrée sert
+encore quand elle arrive.
 
 ### Définir un serveur que l'éditeur ne connaît pas
 
@@ -149,9 +167,8 @@ décide.
 L'entrée d'un langage accepte l'identifiant d'un serveur connu de
 l'éditeur ou une ligne de commande.
 
-Un identifiant apporte avec lui les arguments du serveur. Plusieurs sont
-enregistrés pour Python — `pyright`, `basedpyright`, `pylsp`, `ruff` et
-`jedi` — et un langage qui en a plusieurs utilise le premier tant que la
+Un identifiant apporte avec lui les arguments du serveur. Un langage qui
+a plusieurs serveurs enregistrés utilise le premier tant que la
 configuration n'en nomme pas un autre.
 
 Une ligne de commande est exécutée telle quelle, avec deux

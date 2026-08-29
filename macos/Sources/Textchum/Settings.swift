@@ -229,6 +229,14 @@ final class SettingsModel: ObservableObject {
 
     /// Built-ins plus the user's theme files; a user file sharing a
     /// built-in's name shows once (the file wins when applied).
+    /// The languages the build knows, for the fields that take one.
+    /// The set is open: a language absent from this list can still be
+    /// typed, since configuration may name one the build has no grammar
+    /// for yet.
+    var knownLanguages: [String] {
+        CoreLanguages.all.map(\.name).sorted()
+    }
+
     var availableThemes: [String] {
         var names = CoreTheme.builtinNames
         for user in ThemeFiles.names where !names.contains(user) {
@@ -1282,8 +1290,12 @@ private struct LanguageServersTab: View {
                         text: $newScope,
                         placeholder: "Project root (empty = default for all projects)")
                     HStack(spacing: 8) {
-                        TextField("Language (e.g. python)", text: $newLanguage)
-                            .frame(width: 180)
+                        EditableCombo(
+                            text: $newLanguage,
+                            placeholder: "Language (e.g. python)",
+                            options: model.knownLanguages
+                        )
+                        .frame(width: 180)
                         TextField(
                             "Server command (e.g. pyright-langserver --stdio)",
                             text: $newCommand)
@@ -1375,8 +1387,12 @@ private struct PreprocessorsTab: View {
                         text: $newScope,
                         placeholder: "Project root (empty = default for all projects)")
                     HStack(alignment: .top, spacing: 8) {
-                        TextField("Language (e.g. python)", text: $newLanguage)
-                            .frame(width: 180)
+                        EditableCombo(
+                            text: $newLanguage,
+                            placeholder: "Language (e.g. python)",
+                            options: model.knownLanguages
+                        )
+                        .frame(width: 180)
                         CommandsEditor(
                             placeholder: "Commands, one per line — Return adds a line",
                             text: $newCommands)

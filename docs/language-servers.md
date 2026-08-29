@@ -84,6 +84,19 @@ Textchum finds servers on `PATH` — it does not install them:
 | Swift | sourcekit-lsp | ships with the Xcode toolchain |
 | Zig | zls | `brew install zls` |
 | Bash | bash-language-server | `npm install -g bash-language-server` |
+| JSON | vscode-json-language-server | `npm install -g vscode-langservers-extracted` |
+| HTML | vscode-html-language-server | `npm install -g vscode-langservers-extracted` |
+| CSS | vscode-css-language-server | `npm install -g vscode-langservers-extracted` |
+| YAML | yaml-language-server | `npm install -g yaml-language-server` |
+| TOML | taplo | `brew install taplo` |
+| Markdown | marksman | `brew install marksman` |
+
+Go templates are served by `gopls` too. Several languages have more than
+one server registered: Python has `pyright`, `basedpyright`, `pylsp`,
+`ruff`, `jedi`, `ty` and `pyrefly`; JavaScript has
+`typescript-language-server`, `vtsls`, `deno` and `biome`. The table
+names the one used when the configuration says nothing; the others are
+asked for by id.
 
 ## Choosing servers yourself
 
@@ -101,6 +114,10 @@ hand-editing guarantees:
   }
 }
 ```
+
+The language field lists the languages this build knows and still
+accepts anything typed: a language can be configured before there is a
+grammar for it, and the entry keeps working when one arrives.
 
 ### Defining a server the editor does not know
 
@@ -135,10 +152,9 @@ which one a language gets by default — `lsp.defaults` decides that.
 A language's entry takes either the id of a server the editor knows or a
 command line.
 
-An id brings the server's own arguments with it. Python has several
-registered — `pyright`, `basedpyright`, `pylsp`, `ruff` and `jedi` — and
-a language with more than one uses the first unless the configuration
-names another.
+An id brings the server's own arguments with it. A language with more
+than one registered server uses the first unless the configuration names
+another.
 
 A command line is run as written, with two substitutions:
 
