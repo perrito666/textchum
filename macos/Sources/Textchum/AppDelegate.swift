@@ -1846,6 +1846,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Programmatic main menu: the app has no nib. Undo/redo use dedicated
     /// selectors handled by the editor window controller, since document
     /// history lives in the core rather than in an `NSUndoManager`.
+    /// Edit ▸ Transform: what to do to the selection, or to the whole
+    /// document when nothing is selected.
+    ///
+    /// AppKit has a Transformations submenu of its own, but it appears
+    /// only in the context menu the editor no longer uses, and it knows
+    /// nothing about lines. These go through the core, so both shells
+    /// agree on what sorting and joining mean.
+    private func makeTransformMenuItem() -> NSMenuItem {
+        let menu = NSMenu(title: "Transform")
+        let groups: [[(String, String)]] = [
+            [
+                ("Upper Case", "upper"),
+                ("Lower Case", "lower"),
+                ("Title Case", "title"),
+                ("Invert Case", "invert"),
+            ],
+            [
+                ("Sort Lines", "sort"),
+                ("Sort Lines Reversed", "sort-reversed"),
+                ("Remove Duplicate Lines", "dedupe"),
+                ("Join Lines", "join"),
+                ("Trim Trailing Whitespace", "trim"),
+            ],
+            [
+                ("Convert to Unix Line Endings (LF)", "lf"),
+                ("Convert to Windows Line Endings (CRLF)", "crlf"),
+            ],
+        ]
+        for (at, group) in groups.enumerated() {
+            if at > 0 { menu.addItem(.separator()) }
+            for (title, kind) in group {
+                let item = NSMenuItem(
+                    title: title,
+                    action: #selector(EditorWindowController.transformText(_:)),
+                    keyEquivalent: "")
+                item.representedObject = kind
+                menu.addItem(item)
+            }
+        }
+        let item = NSMenuItem(title: "Transform", action: nil, keyEquivalent: "")
+        item.submenu = menu
+        return item
+    }
+
     private func makeMainMenu() -> NSMenu {
         let mainMenu = NSMenu()
 
@@ -2119,6 +2163,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let findMenuItem = NSMenuItem(title: "Find", action: nil, keyEquivalent: "")
         findMenuItem.submenu = findMenu
         editMenu.addItem(findMenuItem)
+
+        editMenu.addItem(.separator())
+        editMenu.addItem(makeTransformMenuItem())
 
         let editMenuItem = NSMenuItem()
         editMenuItem.submenu = editMenu

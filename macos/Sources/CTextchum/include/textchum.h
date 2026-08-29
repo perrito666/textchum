@@ -1483,6 +1483,30 @@ uintptr_t tc_document_len_lines(const struct TcDocument *document);
 bool tc_path_is_test(const char *path, uintptr_t len);
 
 /**
+ * Transforms a stretch of text: `upper`, `lower`, `title`, `invert`,
+ * `sort`, `sort-reversed`, `dedupe`, `join`, `trim`, `lf`, `crlf`.
+ *
+ * Returns the transformed text as a nul-terminated string, released
+ * with [`tc_string_free`], or null for a name that is not one of
+ * those.
+ *
+ * # Safety
+ * Each pointer/length pair must describe readable bytes.
+ */
+char *tc_transform(const char *kind, uintptr_t kind_len, const char *text, uintptr_t text_len);
+
+/**
+ * Whether a transformation is about lines rather than characters.
+ *
+ * A line-wise one is given whole lines: the shell grows the selection
+ * to the line boundaries around it first.
+ *
+ * # Safety
+ * `kind` must point to `kind_len` readable bytes.
+ */
+bool tc_transform_is_line_wise(const char *kind, uintptr_t kind_len);
+
+/**
  * The other places the selected word appears, for marking them.
  *
  * `text` is the stretch to search — the visible one, so a long file

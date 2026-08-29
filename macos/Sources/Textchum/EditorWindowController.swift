@@ -992,6 +992,35 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    // MARK: Text transformations
+
+    /// Sorts, cases, trims or converts the selection — or the whole
+    /// document when nothing is selected, since that is what the
+    /// operation is about when no part of it was singled out.
+    ///
+    /// A line-wise transformation is given whole lines: the selection
+    /// grows to the boundaries around it first, because sorting half a
+    /// line is not something anyone asked for.
+    @objc func transformText(_ sender: NSMenuItem) {
+        guard let textView, let kind = sender.representedObject as? String else { return }
+        let text = textView.string as NSString
+        var range = textView.selectedRange()
+        if range.length == 0 {
+            range = NSRange(location: 0, length: text.length)
+        } else if CoreTransform.isLineWise(kind) {
+            range = text.lineRange(for: range)
+        }
+        guard range.length > 0,
+            let replacement = CoreTransform.apply(kind, to: text.substring(with: range)),
+            replacement != text.substring(with: range)
+        else { return }
+        textView.insertText(replacement, replacementRange: range)
+        // The transformed stretch stays selected, so a second one can
+        // follow without selecting it again.
+        textView.setSelectedRange(
+            NSRange(location: range.location, length: (replacement as NSString).length))
+    }
+
     /// View → Document Outline (⇧⌘O): the file's symbols from its
     /// server, fuzzy-filterable; selecting one jumps (via the jump
     /// stack, so Go Back returns here).
