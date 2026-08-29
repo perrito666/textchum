@@ -214,6 +214,32 @@ impl Pool {
         (!trimmed.is_empty()).then(|| trimmed.to_owned())
     }
 
+    /// Expands the placeholders a configured command line may use.
+    ///
+    /// `{project}` is the root the instance is keyed on, so a server
+    /// kept inside a checkout can be named without an absolute path
+    /// that only works on one machine:
+    ///
+    /// ```text
+    /// {project}/.venv/bin/basedpyright-langserver --stdio
+    /// ```
+    ///
+    /// `{home}` is the user's home directory, for tooling installed per
+    /// user and shared configuration that has to find it.
+    ///
+    /// Expansion happens per argument, after the command line is split,
+    /// so a project path containing spaces stays one argument.
+    fn expand_placeholders(value: &str, root: &Path) -> String {
+        let mut out = value.replace("{project}", &root.to_string_lossy());
+        if out.contains("{home}") {
+            let home = std::env::var_os("HOME")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_default();
+            out = out.replace("{home}", &home.to_string_lossy());
+        }
+        out
+    }
+
     /// Registers a server consulted before the built-in registry. Used by
     /// tests (scripted servers) and, later, by user configuration.
     pub fn add_override(&mut self, config: ServerConfig) {
@@ -224,7 +250,23 @@ impl Pool {
     /// user default → programmatic override → built-in registry.
     fn config_for(&self, root: &Path, language: &str) -> Option<ServerConfig> {
         if let Some(command_line) = self.configured_command(root, language) {
-            let mut parts = command_line.split_whitespace().map(str::to_owned);
+            // A value naming a server the registry knows takes that
+            // server's command and its required arguments. Several
+            // servers serve one language and only the first is reachable
+            // by language alone, so naming one is how the others are
+            // asked for.
+            if let Some(spec) = crate::registry::server_by_id(command_line.trim()) {
+                return Some(ServerConfig {
+                    id: spec.id.into(),
+                    command: Self::expand_placeholders(spec.command, root),
+                    args: spec.args.iter().map(|arg| Self::expand_placeholders(arg, root)).collect(),
+                    languages: vec![language.to_owned()],
+                    install_hint: spec.install_hint.into(),
+                });
+            }
+            let mut parts = command_line
+                .split_whitespace()
+                .map(|part| Self::expand_placeholders(part, root));
             let command = parts.next()?;
             let args: Vec<String> = parts.collect();
             // A custom command that is the registry's server minus its
@@ -502,5 +544,85 @@ impl Pool {
             .keys()
             .map(|(id, root)| (id.clone(), root.to_string_lossy().into_owned()))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A pool with nowhere to send events: these tests ask it which
+    /// server a language resolves to and never start one.
+    fn pool_with(config: &str) -> Pool {
+        let (events, _receiver) = std::sync::mpsc::channel();
+        let mut pool = Pool::new(events);
+        pool.configure(config);
+        pool
+    }
+
+    #[test]
+    fn a_command_line_can_name_the_project_directory() {
+        let pool = pool_with(
+            r#"{"lsp": {"defaults":
+               {"python": "{project}/.venv/bin/basedpyright-langserver --stdio"}}}"#,
+        );
+        let config = pool
+            .config_for(Path::new("/work/service"), "python")
+            .expect("a server");
+        assert_eq!(config.command, "/work/service/.venv/bin/basedpyright-langserver");
+        assert_eq!(config.args, vec!["--stdio".to_owned()]);
+    }
+
+    #[test]
+    fn a_project_path_with_spaces_stays_one_argument() {
+        let pool = pool_with(
+            r#"{"lsp": {"defaults": {"python": "{project}/bin/server --stdio"}}}"#,
+        );
+        let config = pool
+            .config_for(Path::new("/work/two words"), "python")
+            .expect("a server");
+        assert_eq!(config.command, "/work/two words/bin/server");
+        assert_eq!(config.args, vec!["--stdio".to_owned()]);
+    }
+
+    #[test]
+    fn naming_a_registered_server_takes_its_command_and_arguments() {
+        let pool = pool_with(r#"{"lsp": {"defaults": {"python": "basedpyright"}}}"#);
+        let config = pool
+            .config_for(Path::new("/work/service"), "python")
+            .expect("a server");
+        assert_eq!(config.id, "basedpyright");
+        assert_eq!(config.command, "basedpyright-langserver");
+        // The arguments the server needs come with it; a command line
+        // that omits them is the classic "exited during initialize".
+        assert_eq!(config.args, vec!["--stdio".to_owned()]);
+        assert!(config.install_hint.contains("basedpyright"));
+    }
+
+    #[test]
+    fn an_unregistered_name_is_still_a_command_line() {
+        let pool = pool_with(r#"{"lsp": {"defaults": {"python": "my-server --lsp"}}}"#);
+        let config = pool
+            .config_for(Path::new("/work/service"), "python")
+            .expect("a server");
+        assert_eq!(config.command, "my-server");
+        assert_eq!(config.args, vec!["--lsp".to_owned()]);
+    }
+
+    #[test]
+    fn a_language_with_no_configuration_gets_the_first_registered_server() {
+        let pool = pool_with("{}");
+        let config = pool
+            .config_for(Path::new("/work/service"), "python")
+            .expect("a server");
+        assert_eq!(config.id, "pyright");
+    }
+
+    #[test]
+    fn placeholders_left_alone_when_nothing_asks_for_them() {
+        assert_eq!(
+            Pool::expand_placeholders("plain-server", Path::new("/work")),
+            "plain-server"
+        );
     }
 }

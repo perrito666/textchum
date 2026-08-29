@@ -43,6 +43,36 @@ static SERVERS: &[ServerSpec] = &[
                        python to pylsp in Preferences → Language Servers",
     },
     ServerSpec {
+        id: "basedpyright",
+        command: "basedpyright-langserver",
+        args: &["--stdio"],
+        languages: &["python"],
+        install_hint: "uv tool install basedpyright (or: npm install -g basedpyright)",
+    },
+    ServerSpec {
+        id: "pylsp",
+        command: "pylsp",
+        args: &[],
+        languages: &["python"],
+        install_hint: "uv tool install python-lsp-server \
+                       (or: pipx install python-lsp-server)",
+    },
+    ServerSpec {
+        id: "ruff",
+        command: "ruff",
+        args: &["server"],
+        languages: &["python"],
+        install_hint: "uv tool install ruff (or: pipx install ruff)",
+    },
+    ServerSpec {
+        id: "jedi",
+        command: "jedi-language-server",
+        args: &[],
+        languages: &["python"],
+        install_hint: "uv tool install jedi-language-server \
+                       (or: pipx install jedi-language-server)",
+    },
+    ServerSpec {
         id: "gopls",
         command: "gopls",
         args: &[],
@@ -93,6 +123,24 @@ pub fn server_for_language(language: &str) -> Option<&'static ServerSpec> {
         .find(|spec| spec.languages.contains(&language))
 }
 
+/// The server with this id, whatever language it serves.
+///
+/// A configuration entry that names an id gets that server's command
+/// and its required arguments. Several servers now serve one language,
+/// and only the first is reachable through [`server_for_language`].
+pub fn server_by_id(id: &str) -> Option<&'static ServerSpec> {
+    SERVERS.iter().find(|spec| spec.id == id)
+}
+
+/// The servers registered for a language, in the order they are listed.
+/// The first is what a language gets when configuration says nothing.
+pub fn servers_for_language(language: &str) -> Vec<&'static ServerSpec> {
+    SERVERS
+        .iter()
+        .filter(|spec| spec.languages.contains(&language))
+        .collect()
+}
+
 /// Every server the registry knows, for a settings screen that wants to
 /// show what is available rather than only what has been overridden.
 pub fn all() -> &'static [ServerSpec] {
@@ -130,12 +178,35 @@ mod tests {
     }
 
     #[test]
-    fn every_registered_server_is_reachable_by_its_language() {
+    fn every_registered_server_is_reachable() {
+        // A language may have several servers, and only the first
+        // answers to the language alone. The rest are asked for by id,
+        // so every entry has to be findable that way.
         for spec in all() {
+            assert_eq!(server_by_id(spec.id).unwrap().command, spec.command);
             for language in spec.languages {
-                assert_eq!(server_for_language(language).unwrap().id, spec.id);
+                assert!(
+                    servers_for_language(language).iter().any(|s| s.id == spec.id),
+                    "{} is not listed for {language}",
+                    spec.id
+                );
             }
         }
+    }
+
+    #[test]
+    fn ids_are_unique() {
+        let mut seen = std::collections::HashSet::new();
+        for spec in all() {
+            assert!(seen.insert(spec.id), "two servers share the id {}", spec.id);
+        }
+    }
+
+    #[test]
+    fn a_language_with_several_servers_defaults_to_the_first() {
+        let python = servers_for_language("python");
+        assert!(python.len() > 1, "python has alternatives to offer");
+        assert_eq!(server_for_language("python").unwrap().id, python[0].id);
     }
 
     #[test]
