@@ -45,6 +45,18 @@ el que se hizo clic, no sobre el cursor, que el clic deja donde
 estaba. Lo que el documento no puede usar no está: sin servidor no hay
 buscar referencias, sin hallazgos no hay filas de diagnósticos.
 
+## Divisiones
+
+**Split Editor** (⌘\\, Ctrl+\\ en Linux) pone otro documento abierto
+al lado de este en la misma ventana; **Close Split** (⇧⌘\\) lo
+devuelve. En Linux los dos lados son grupos de edición con sus propias
+barras de pestañas, así que se pueden arrastrar pestañas entre ellos, y
+**Other Side** (Ctrl+K) pasa el foco al otro.
+
+Una división contiene dos documentos, nunca dos vistas de uno. Dos
+vistas serían dos cursores sobre dos historias del mismo archivo, y el
+primer guardado decidiría con cuál se queda.
+
 ## Servidores de lenguaje
 
 Los diagnósticos llegan como marcas tintadas en el texto y un contador

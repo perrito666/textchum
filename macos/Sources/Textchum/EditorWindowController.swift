@@ -83,6 +83,27 @@ final class EditorWindowController: NSWindowController {
     /// The one floating list: references, the outline, the diagnostics.
     /// One at a time, so one panel.
     private let listPanel = ListPanel()
+    /// The gutter and text view together — the part of the window a
+    /// split moves. A pane is a controller whose area sits in another
+    /// controller's window while its own window waits, hidden.
+    private(set) var editorArea: NSView?
+    /// The view controller whose view holds the editor area in this
+    /// window, and the view inside it that the split swaps.
+    private var editorItemController: NSViewController?
+    private var editorHost: NSView?
+    /// The controller hosting this one as a pane, while one is.
+    weak var splitHost: EditorWindowController?
+    /// The pane this controller is hosting, while it is hosting one,
+    /// and the split view holding the two.
+    private(set) var splitPane: EditorWindowController?
+    private var splitView: NSSplitView?
+
+    /// The window panels and alerts belong over: a pane has a window of
+    /// its own, but it is hidden, and a sheet on a hidden window is a
+    /// sheet nobody can answer.
+    var displayWindow: NSWindow? {
+        splitHost?.displayWindow ?? window
+    }
     /// This document's project root (nearest root marker), cached and
     /// refreshed when the path changes.
     private(set) var projectRoot: String?
@@ -216,6 +237,14 @@ final class EditorWindowController: NSWindowController {
         gutter.setVisible(settings?.lineNumbers ?? true)
         self.lineRuler = gutter
         let editorContainer = NSView()
+        self.editorArea = editorContainer
+        // The editor area lives inside a host view, whichever way the
+        // window is put together: a split swaps what is inside the
+        // host, and one construction path is easier to trust than two.
+        let editorHost = NSView()
+        self.editorHost = editorHost
+        editorContainer.autoresizingMask = [.width, .height]
+        editorHost.addSubview(editorContainer)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         editorContainer.addSubview(gutter)
         editorContainer.addSubview(scrollView)
@@ -258,7 +287,8 @@ final class EditorWindowController: NSWindowController {
             // Sidebar + editor in a split view controller; the sidebar item
             // brings native collapse behavior and the toggleSidebar action.
             let editorController = NSViewController()
-            editorController.view = editorContainer
+            editorController.view = editorHost
+            self.editorItemController = editorController
 
             let splitController = NSSplitViewController()
             let sidebarView = SidebarView(
@@ -318,7 +348,7 @@ final class EditorWindowController: NSWindowController {
             window.center()
             self.splitController = splitController
         } else {
-            window.contentView = editorContainer
+            window.contentView = editorHost
         }
 
         if let settings {
@@ -769,7 +799,7 @@ final class EditorWindowController: NSWindowController {
             return .item("\(diagnostic.line + 1)  \(kind)  \(message)")
         }
         listPanel.show(
-            rows: rows, over: window,
+            rows: rows, over: displayWindow,
             title: "Diagnostics (\(ordered.count))", placeholder: "message…"
         ) { [weak self] index in
             guard let self, ordered.indices.contains(index) else { return }
@@ -811,7 +841,7 @@ final class EditorWindowController: NSWindowController {
             .item(String(repeating: "  ", count: symbol.depth) + symbol.name)
         }
         listPanel.show(
-            rows: rows, over: window, title: "Document Outline", placeholder: "symbol…"
+            rows: rows, over: displayWindow, title: "Document Outline", placeholder: "symbol…"
         ) { [weak self] index in
             guard let self, let path = self.coreDocument.path,
                 symbols.indices.contains(index)
@@ -857,7 +887,7 @@ final class EditorWindowController: NSWindowController {
             ordered = code + tests
         }
         listPanel.show(
-            rows: rows, over: window,
+            rows: rows, over: displayWindow,
             title: title ?? "References (\(locations.count))",
             monospaced: true
         ) { [weak self] index in
@@ -992,6 +1022,94 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
+    // MARK: Splits
+
+    /// Puts `pane`'s editor beside this one in this window.
+    ///
+    /// A split holds two documents, never two views of one: two views
+    /// would be two carets over two histories of the same file. So the
+    /// second half is another document's controller, moved here — its
+    /// own window waits, hidden, until the split closes.
+    func host(pane: EditorWindowController) {
+        guard splitPane == nil, pane !== self,
+            let editorHost,
+            let mine = editorArea,
+            let theirs = pane.editorArea
+        else { return }
+        let split = NSSplitView(frame: editorHost.bounds)
+        split.isVertical = true
+        split.dividerStyle = .thin
+        split.autoresizingMask = [.width, .height]
+
+        theirs.removeFromSuperview()
+        mine.removeFromSuperview()
+        mine.autoresizingMask = [.width, .height]
+        theirs.autoresizingMask = [.width, .height]
+        split.addArrangedSubview(mine)
+        split.addArrangedSubview(theirs)
+        editorHost.addSubview(split)
+        split.setPosition(editorHost.bounds.width / 2, ofDividerAt: 0)
+        self.splitView = split
+
+        pane.splitHost = self
+        splitPane = pane
+        // The pane's own window has nothing in it now; keeping it on
+        // screen would show an empty frame in the tab bar.
+        pane.window?.orderOut(nil)
+        window?.makeFirstResponder(textView)
+    }
+
+    /// Gives the pane its window back and takes the split away.
+    func closeSplit() {
+        guard let pane = splitPane, let editorHost,
+            let mine = editorArea, let theirs = pane.editorArea
+        else { return }
+        theirs.removeFromSuperview()
+        mine.removeFromSuperview()
+        splitView?.removeFromSuperview()
+        splitView = nil
+        restore(area: mine, into: editorHost)
+        pane.restoreOwnWindow(area: theirs)
+        pane.splitHost = nil
+        splitPane = nil
+        window?.makeFirstResponder(textView)
+    }
+
+    /// Puts this controller's editor back in its own window and shows
+    /// it again.
+    fileprivate func restoreOwnWindow(area: NSView) {
+        guard let window else { return }
+        // The window comes back first: a hidden window has not been
+        // laid out, and an area sized to its bounds would come back
+        // with no size at all.
+        window.orderFront(nil)
+        if let editorHost {
+            restore(area: area, into: editorHost)
+        } else {
+            window.contentView = area
+        }
+        // Back into the group it was a tab of, if there is still one.
+        if let host = splitHost?.window, host.tabbedWindows != nil {
+            host.addTabbedWindow(window, ordered: .above)
+        }
+    }
+
+    /// Puts an editor area back into a host view.
+    ///
+    /// `NSSplitView.addArrangedSubview` turns off
+    /// `translatesAutoresizingMaskIntoConstraints`, so a view that has
+    /// been in a split comes out laid out by constraints it no longer
+    /// has — which is a view with no size. Turning it back on is what
+    /// makes the frame count again.
+    private func restore(area: NSView, into host: NSView) {
+        area.isHidden = false
+        area.translatesAutoresizingMaskIntoConstraints = true
+        area.frame = host.bounds
+        area.autoresizingMask = [.width, .height]
+        host.addSubview(area)
+        host.layoutSubtreeIfNeeded()
+    }
+
     // MARK: Code actions
 
     /// What the server offers for the place the caret is: the quick fix
@@ -1021,7 +1139,7 @@ final class EditorWindowController: NSWindowController {
                 .item(action.preferred ? "\(action.title)  ·  suggested" : action.title)
             }
             self.listPanel.show(
-                rows: rows, over: self.window, title: "Code Actions (\(actions.count))",
+                rows: rows, over: self.displayWindow, title: "Code Actions (\(actions.count))",
                 placeholder: "action…"
             ) { [weak self] index in
                 guard let self, actions.indices.contains(index) else { return }
@@ -1198,7 +1316,7 @@ final class EditorWindowController: NSWindowController {
         let line = Self.lspPosition(ofIndex: anchorIndex, in: text).0 + 1
         do {
             let blame = try CoreBlame.line(line, ofPath: path, text: coreDocument.text)
-            BlamePanel.shared.show(blame, file: path, over: window)
+            BlamePanel.shared.show(blame, file: path, over: displayWindow)
         } catch {
             presentError("git could not blame this line.", details: "\(error)")
         }
@@ -3118,7 +3236,7 @@ extension EditorWindowController: NSWindowDelegate {
         let facts =
             "\(coreDocument.encodingName) · \(coreDocument.lengthInBytes) bytes\n\(path)"
         FilePropertiesPanel.shared.show(
-            over: window,
+            over: displayWindow,
             title: (path as NSString).lastPathComponent,
             facts: facts,
             detected: CoreLanguages.detected(forPath: path),
