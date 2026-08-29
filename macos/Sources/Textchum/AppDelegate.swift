@@ -965,8 +965,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(goForward(_:)): "goForward",
             #selector(EditorWindowController.findReferences(_:)): "findReferences",
             #selector(EditorWindowController.showCodeActions(_:)): "codeActions",
-            #selector(splitEditor(_:)): "splitEditor",
-            #selector(closeSplit(_:)): "closeSplit",
+            #selector(EditorWindowController.toggleSplit(_:)): "splitEditor",
+            #selector(EditorWindowController.closeSplitCommand(_:)): "closeSplit",
             #selector(EditorWindowController.renameSymbol(_:)): "renameSymbol",
             #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
             #selector(EditorWindowController.runPreprocessors(_:)): "runPreprocessors",
@@ -1614,57 +1614,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    // MARK: Splits
-
-    /// Puts another open document beside this one in the same window.
-    ///
-    /// The other document keeps its own controller — a split holds two
-    /// documents, never two views of one — so what moves is its editor,
-    /// and its window waits hidden until the split closes.
-    @objc func splitEditor(_ sender: Any?) {
-        guard let host = frontmostEditor() else { return }
-        if host.splitPane != nil {
-            host.closeSplit()
-            return
-        }
-        // The other documents, most recently used first, so ⏎ takes the
-        // one you were just in.
-        let others = editors.filter { $0 !== host && $0.splitHost == nil }
-        guard !others.isEmpty else {
-            NSSound.beep()
-            return
-        }
-        if others.count == 1 {
-            host.host(pane: others[0])
-            return
-        }
-        let rows: [ListPanel.Row] = others.map { editor in
-            .item(editor.coreDocument.path.map { ($0 as NSString).lastPathComponent }
-                ?? "Untitled")
-        }
-        splitPanel.show(
-            rows: rows, over: host.window, title: "Split With", placeholder: "document…"
-        ) { [weak self] index in
-            guard let self, others.indices.contains(index) else { return }
-            _ = self
-            host.host(pane: others[index])
-        }
-    }
-
-    /// Edit ▸ Close Split.
-    @objc func closeSplit(_ sender: Any?) {
-        frontmostEditor()?.closeSplit()
-    }
-
-    /// The editor whose window is frontmost, hosting or not.
-    private func frontmostEditor() -> EditorWindowController? {
-        editors.first { $0.window?.isKeyWindow == true && $0.splitHost == nil }
-            ?? editors.first { $0.splitHost == nil }
-    }
-
-    /// The panel that asks which document to split with.
-    private let splitPanel = ListPanel()
-
     // MARK: Settings
 
     @objc func showSettings(_ sender: Any?) {
@@ -2229,13 +2178,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenu.addItem(.separator())
         let splitItem = NSMenuItem(
             title: "Split Editor",
-            action: #selector(splitEditor(_:)),
+            action: #selector(EditorWindowController.toggleSplit(_:)),
             keyEquivalent: "\\")
         splitItem.keyEquivalentModifierMask = [.command]
         editMenu.addItem(splitItem)
         let closeSplitItem = NSMenuItem(
             title: "Close Split",
-            action: #selector(closeSplit(_:)),
+            action: #selector(EditorWindowController.closeSplitCommand(_:)),
             keyEquivalent: "\\")
         closeSplitItem.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(closeSplitItem)

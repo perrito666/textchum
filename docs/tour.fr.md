@@ -45,18 +45,6 @@ le document n'a pas l'usage n'y est pas : sans serveur pas de
 recherche des références, sans signalements pas de lignes de
 diagnostics.
 
-## Divisions
-
-**Split Editor** (⌘\\, Ctrl+\\ sous Linux) place un autre document
-ouvert à côté de celui-ci dans la même fenêtre ; **Close Split**
-(⇧⌘\\) le remet. Sous Linux les deux côtés sont des groupes d'édition
-avec leurs propres barres d'onglets, on peut donc y faire glisser des
-onglets, et **Other Side** (Ctrl+K) déplace le focus de l'autre côté.
-
-Une division contient deux documents, jamais deux vues d'un seul. Deux
-vues seraient deux curseurs sur deux histoires du même fichier, et le
-premier enregistrement déciderait laquelle le fichier garde.
-
 ## Serveurs de langage
 
 Les diagnostics arrivent en marques teintées dans le texte et en

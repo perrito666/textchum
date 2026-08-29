@@ -59,6 +59,10 @@ pub struct Page {
     pub context_offset: Cell<Option<i32>>,
     /// The line ranges folded away, by the line each one opens.
     folded: RefCell<Vec<(i32, i32)>>,
+    /// Where a second view of this document goes, and the one that is
+    /// there while the document is split.
+    split_paned: gtk::Paned,
+    split_view: RefCell<Option<sourceview5::View>>,
 }
 
 /// The completion popup: a popover under the caret, filtered by the
@@ -127,6 +131,16 @@ impl Page {
         editor_row.append(&change_bar);
         editor_row.append(&scrolled);
 
+        // A second view of the same buffer goes here when the document
+        // is split. One buffer, so one history and one save — what
+        // differs between the two is where each is looking.
+        let split_paned = gtk::Paned::new(gtk::Orientation::Horizontal);
+        split_paned.set_hexpand(true);
+        split_paned.set_vexpand(true);
+        split_paned.set_shrink_start_child(false);
+        split_paned.set_shrink_end_child(false);
+        split_paned.set_start_child(Some(&editor_row));
+
         // Markdown gets a live preview pane beside the text — the
         // core's HTML, reloaded shortly after edits settle.
         let is_markdown = state.borrow().document.language_name() == Some("markdown");
@@ -135,14 +149,14 @@ impl Page {
             web.set_hexpand(true);
             web.set_vexpand(true);
             let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
-            paned.set_start_child(Some(&editor_row));
+            paned.set_start_child(Some(&split_paned));
             paned.set_end_child(Some(&web));
             paned.set_position(480);
             paned.set_resize_start_child(true);
             paned.set_resize_end_child(true);
             (paned.upcast::<gtk::Widget>(), Some(web))
         } else {
-            (editor_row.clone().upcast::<gtk::Widget>(), None)
+            (split_paned.clone().upcast::<gtk::Widget>(), None)
         };
 
         let search_settings = sourceview5::SearchSettings::new();
@@ -237,6 +251,8 @@ impl Page {
             change_marks: RefCell::new(Vec::new()),
             context_offset: Cell::new(None),
             folded: RefCell::new(Vec::new()),
+            split_paned: split_paned.clone(),
+            split_view: RefCell::new(None),
         });
         install_completion_keys(&page);
         install_snippet_keys(&page);
@@ -458,6 +474,57 @@ pub fn apply_whole_document(page: &Rc<Page>, new: &str) {
     buffer.delete(&mut start, &mut end);
     let mut at = start;
     buffer.insert(&mut at, &replacement);
+}
+
+// MARK: Splitting
+
+/// Shows this document twice, side by side, or closes the second view.
+///
+/// Both views share the buffer, so there is one history and one save —
+/// what differs is where each is looking. That is the whole point:
+/// reading the top of a file while editing the bottom of it.
+pub fn toggle_split(page: &Rc<Page>) -> bool {
+    if close_split(page) {
+        return true;
+    }
+    let view = sourceview5::View::with_buffer(&page.buffer);
+    // The same look as the first view: they are one document.
+    view.set_monospace(true);
+    view.set_show_line_numbers(page.view.shows_line_numbers());
+    view.set_highlight_current_line(page.view.is_highlight_current_line());
+    view.set_tab_width(page.view.tab_width());
+    view.set_left_margin(6);
+    view.set_top_margin(6);
+    view.set_hexpand(true);
+    view.set_vexpand(true);
+
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&view)
+        .hexpand(true)
+        .vexpand(true)
+        .build();
+    page.split_paned.set_end_child(Some(&scrolled));
+    page.split_paned
+        .set_position(page.split_paned.width().max(2) / 2);
+    *page.split_view.borrow_mut() = Some(view.clone());
+    view.grab_focus();
+    true
+}
+
+/// Takes the second view away, if there is one.
+pub fn close_split(page: &Rc<Page>) -> bool {
+    if page.split_view.borrow().is_none() {
+        return false;
+    }
+    page.split_paned.set_end_child(None::<&gtk::Widget>);
+    *page.split_view.borrow_mut() = None;
+    page.view.grab_focus();
+    true
+}
+
+/// Whether this document is showing twice.
+pub fn is_split(page: &Rc<Page>) -> bool {
+    page.split_view.borrow().is_some()
 }
 
 // MARK: Folding

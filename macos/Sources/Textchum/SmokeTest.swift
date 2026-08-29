@@ -858,45 +858,34 @@ func runSmokeTest() -> Int32 {
     contextEditor.window?.close()
     print("context menu ok (editor commands, AppKit's extras left out, clicked position)")
 
-    // A split puts another document's editor beside this one in one
-    // window. What is checked is that the areas move and come back:
-    // the pane keeps its own controller, so a split holds two
-    // documents and never two views of one.
-    let hostEditor = EditorWindowController(document: CoreDocument())
-    let paneEditor = EditorWindowController(document: CoreDocument())
-    guard let hostArea = hostEditor.editorArea, let paneArea = paneEditor.editorArea else {
-        print("FAIL: an editor has no area to split")
+    // A split shows one document twice. TextKit 2 lets several layout
+    // managers share one content storage, which is what makes the two
+    // views one document; what does not come free is the painting,
+    // since colour lives on the layout manager.
+    let splitEditor = EditorWindowController(document: CoreDocument())
+    splitEditor.window?.makeKeyAndOrderFront(nil)
+    splitEditor.toggleSplit(nil)
+    guard let secondView = splitEditor.secondaryView else {
+        print("FAIL: splitting made no second view")
         return 1
     }
-    let hostParentBefore = hostArea.superview
-    hostEditor.host(pane: paneEditor)
-    guard hostEditor.splitPane === paneEditor, paneEditor.splitHost === hostEditor else {
-        print("FAIL: the split did not take")
-        return 1
-    }
-    guard let splitParent = hostArea.superview as? NSSplitView,
-        paneArea.superview === splitParent,
-        splitParent.arrangedSubviews.count == 2
+    guard let primaryStorage = splitEditor.primaryView?.textLayoutManager?.textContentManager,
+        secondView.textLayoutManager?.textContentManager === primaryStorage
     else {
-        print("FAIL: the two areas are not in one split view")
+        print("FAIL: the two views are not on one document")
         return 1
     }
-    // A pane's panels belong over the window that is showing it.
-    guard paneEditor.displayWindow === hostEditor.window else {
-        print("FAIL: the pane would put its panels on a hidden window")
+    guard splitEditor.paintTargetCount == 2 else {
+        print("FAIL: only \(splitEditor.paintTargetCount) view would be painted")
         return 1
     }
-    hostEditor.closeSplit()
-    guard hostEditor.splitPane == nil, paneEditor.splitHost == nil,
-        hostArea.superview === hostParentBefore,
-        paneArea.superview != nil
-    else {
-        print("FAIL: closing the split did not put the editors back")
+    splitEditor.closeSplit()
+    guard splitEditor.secondaryView == nil, splitEditor.paintTargetCount == 1 else {
+        print("FAIL: closing the split left the second view behind")
         return 1
     }
-    hostEditor.window?.close()
-    paneEditor.window?.close()
-    print("split ok (two editors in one window, and back again)")
+    splitEditor.window?.close()
+    print("split ok (one document in two views, and back again)")
 
     // Selecting a word marks the other places it appears. The rules
     // live in the core; what is checked here is that they survive the

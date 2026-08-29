@@ -83,27 +83,6 @@ final class EditorWindowController: NSWindowController {
     /// The one floating list: references, the outline, the diagnostics.
     /// One at a time, so one panel.
     private let listPanel = ListPanel()
-    /// The gutter and text view together — the part of the window a
-    /// split moves. A pane is a controller whose area sits in another
-    /// controller's window while its own window waits, hidden.
-    private(set) var editorArea: NSView?
-    /// The view controller whose view holds the editor area in this
-    /// window, and the view inside it that the split swaps.
-    private var editorItemController: NSViewController?
-    private var editorHost: NSView?
-    /// The controller hosting this one as a pane, while one is.
-    weak var splitHost: EditorWindowController?
-    /// The pane this controller is hosting, while it is hosting one,
-    /// and the split view holding the two.
-    private(set) var splitPane: EditorWindowController?
-    private var splitView: NSSplitView?
-
-    /// The window panels and alerts belong over: a pane has a window of
-    /// its own, but it is hidden, and a sheet on a hidden window is a
-    /// sheet nobody can answer.
-    var displayWindow: NSWindow? {
-        splitHost?.displayWindow ?? window
-    }
     /// This document's project root (nearest root marker), cached and
     /// refreshed when the path changes.
     private(set) var projectRoot: String?
@@ -136,6 +115,30 @@ final class EditorWindowController: NSWindowController {
     private var changeMarkGeneration: UInt64 = 0
     /// The latest language-server findings for this document.
     private var diagnostics: [CoreDiagnostic] = []
+    /// The gutter and text view together, and the view they sit in —
+    /// a split swaps what is inside the host.
+    private var editorArea: NSView?
+    private var editorHost: NSView?
+
+    /// The second view of this document, while it is split, and what
+    /// it sits in. One document, so one history and one save — what
+    /// differs is where each view is looking.
+    private var secondaryTextView: NSTextView?
+    private var secondarySplit: NSSplitView?
+
+    /// Every layout manager that has to be painted. Colour and marks
+    /// are rendering attributes, which live on the layout manager
+    /// rather than the text, so a second view starts blank until it is
+    /// painted too.
+    private var paintTargets: [NSTextLayoutManager] {
+        [textView, secondaryTextView].compactMap { $0?.textLayoutManager }
+    }
+
+    /// The two views, for the smoke test to look at.
+    var primaryView: NSTextView? { textView }
+    var secondaryView: NSTextView? { secondaryTextView }
+    var paintTargetCount: Int { paintTargets.count }
+
     /// The character a context-menu command is about, while one runs.
     /// A right-click does not move the caret, and the menu is about
     /// what was clicked.
@@ -238,9 +241,6 @@ final class EditorWindowController: NSWindowController {
         self.lineRuler = gutter
         let editorContainer = NSView()
         self.editorArea = editorContainer
-        // The editor area lives inside a host view, whichever way the
-        // window is put together: a split swaps what is inside the
-        // host, and one construction path is easier to trust than two.
         let editorHost = NSView()
         self.editorHost = editorHost
         editorContainer.autoresizingMask = [.width, .height]
@@ -288,7 +288,6 @@ final class EditorWindowController: NSWindowController {
             // brings native collapse behavior and the toggleSidebar action.
             let editorController = NSViewController()
             editorController.view = editorHost
-            self.editorItemController = editorController
 
             let splitController = NSSplitViewController()
             let sidebarView = SidebarView(
@@ -799,7 +798,7 @@ final class EditorWindowController: NSWindowController {
             return .item("\(diagnostic.line + 1)  \(kind)  \(message)")
         }
         listPanel.show(
-            rows: rows, over: displayWindow,
+            rows: rows, over: window,
             title: "Diagnostics (\(ordered.count))", placeholder: "message…"
         ) { [weak self] index in
             guard let self, ordered.indices.contains(index) else { return }
@@ -841,7 +840,7 @@ final class EditorWindowController: NSWindowController {
             .item(String(repeating: "  ", count: symbol.depth) + symbol.name)
         }
         listPanel.show(
-            rows: rows, over: displayWindow, title: "Document Outline", placeholder: "symbol…"
+            rows: rows, over: window, title: "Document Outline", placeholder: "symbol…"
         ) { [weak self] index in
             guard let self, let path = self.coreDocument.path,
                 symbols.indices.contains(index)
@@ -887,7 +886,7 @@ final class EditorWindowController: NSWindowController {
             ordered = code + tests
         }
         listPanel.show(
-            rows: rows, over: displayWindow,
+            rows: rows, over: window,
             title: title ?? "References (\(locations.count))",
             monospaced: true
         ) { [weak self] index in
@@ -1022,76 +1021,111 @@ final class EditorWindowController: NSWindowController {
         }
     }
 
-    // MARK: Splits
+    // MARK: Splitting
 
-    /// Puts `pane`'s editor beside this one in this window.
+    /// Shows this document twice, side by side, or closes the second
+    /// view.
     ///
-    /// A split holds two documents, never two views of one: two views
-    /// would be two carets over two histories of the same file. So the
-    /// second half is another document's controller, moved here — its
-    /// own window waits, hidden, until the split closes.
-    func host(pane: EditorWindowController) {
-        guard splitPane == nil, pane !== self,
-            let editorHost,
-            let mine = editorArea,
-            let theirs = pane.editorArea
+    /// Both views share the text, so there is one history and one save
+    /// — what differs is where each is looking. That is the point:
+    /// reading the top of a file while editing the bottom of it.
+    ///
+    /// TextKit 2 is built for this: several layout managers can share
+    /// one content storage. What does not come free is the painting,
+    /// since colour and marks are rendering attributes and those live
+    /// on the layout manager — so both get painted.
+    @objc func toggleSplit(_ sender: Any?) {
+        if secondaryTextView != nil {
+            closeSplit()
+            return
+        }
+        guard let editorHost, let mine = editorArea,
+            let contentManager = textView?.textLayoutManager?.textContentManager
         else { return }
+
+        let layoutManager = NSTextLayoutManager()
+        contentManager.addTextLayoutManager(layoutManager)
+        let container = NSTextContainer(
+            size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        container.widthTracksTextView = true
+        layoutManager.textContainer = container
+
+        let second = NSTextView(frame: .zero, textContainer: container)
+        second.isRichText = false
+        second.allowsUndo = false
+        second.isAutomaticQuoteSubstitutionEnabled = false
+        second.isAutomaticDashSubstitutionEnabled = false
+        second.isAutomaticTextReplacementEnabled = false
+        second.font = appliedFont
+        second.delegate = self
+        second.isVerticallyResizable = true
+        second.isHorizontallyResizable = false
+        second.autoresizingMask = [.width]
+
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.documentView = second
+        // Repaint when this one scrolls too: the painted stretch is
+        // what either view can see.
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(editorDidScroll(_:)),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView)
+
         let split = NSSplitView(frame: editorHost.bounds)
         split.isVertical = true
         split.dividerStyle = .thin
         split.autoresizingMask = [.width, .height]
-
-        theirs.removeFromSuperview()
         mine.removeFromSuperview()
-        mine.autoresizingMask = [.width, .height]
-        theirs.autoresizingMask = [.width, .height]
         split.addArrangedSubview(mine)
-        split.addArrangedSubview(theirs)
+        split.addArrangedSubview(scrollView)
         editorHost.addSubview(split)
+        // Neither side gets to collapse to the width of its gutter, and
+        // the divider is placed after a layout pass — before one, the
+        // split has no width to halve.
+        split.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
+        split.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 1)
+        editorHost.layoutSubtreeIfNeeded()
         split.setPosition(editorHost.bounds.width / 2, ofDividerAt: 0)
-        self.splitView = split
 
-        pane.splitHost = self
-        splitPane = pane
-        // The pane's own window has nothing in it now; keeping it on
-        // screen would show an empty frame in the tab bar.
-        pane.window?.orderOut(nil)
-        window?.makeFirstResponder(textView)
+        secondaryTextView = second
+        secondarySplit = split
+        // The new view starts unpainted: colour is a rendering
+        // attribute, and it has its own layer of those.
+        applyHighlights(force: true)
+        renderMarks()
+        window?.makeFirstResponder(second)
     }
 
-    /// Gives the pane its window back and takes the split away.
+    /// Edit ▸ Close Split.
+    @objc func closeSplitCommand(_ sender: Any?) {
+        closeSplit()
+    }
+
+    /// Takes the second view away.
     func closeSplit() {
-        guard let pane = splitPane, let editorHost,
-            let mine = editorArea, let theirs = pane.editorArea
-        else { return }
-        theirs.removeFromSuperview()
+        guard let editorHost, let mine = editorArea, let split = secondarySplit else {
+            return
+        }
+        if let second = secondaryTextView {
+            NotificationCenter.default.removeObserver(
+                self,
+                name: NSView.boundsDidChangeNotification,
+                object: second.enclosingScrollView?.contentView)
+            if let layoutManager = second.textLayoutManager,
+                let contentManager = layoutManager.textContentManager
+            {
+                contentManager.removeTextLayoutManager(layoutManager)
+            }
+        }
         mine.removeFromSuperview()
-        splitView?.removeFromSuperview()
-        splitView = nil
+        split.removeFromSuperview()
+        secondarySplit = nil
+        secondaryTextView = nil
         restore(area: mine, into: editorHost)
-        pane.restoreOwnWindow(area: theirs)
-        pane.splitHost = nil
-        splitPane = nil
         window?.makeFirstResponder(textView)
-    }
-
-    /// Puts this controller's editor back in its own window and shows
-    /// it again.
-    fileprivate func restoreOwnWindow(area: NSView) {
-        guard let window else { return }
-        // The window comes back first: a hidden window has not been
-        // laid out, and an area sized to its bounds would come back
-        // with no size at all.
-        window.orderFront(nil)
-        if let editorHost {
-            restore(area: area, into: editorHost)
-        } else {
-            window.contentView = area
-        }
-        // Back into the group it was a tab of, if there is still one.
-        if let host = splitHost?.window, host.tabbedWindows != nil {
-            host.addTabbedWindow(window, ordered: .above)
-        }
     }
 
     /// Puts an editor area back into a host view.
@@ -1139,7 +1173,7 @@ final class EditorWindowController: NSWindowController {
                 .item(action.preferred ? "\(action.title)  ·  suggested" : action.title)
             }
             self.listPanel.show(
-                rows: rows, over: self.displayWindow, title: "Code Actions (\(actions.count))",
+                rows: rows, over: self.window, title: "Code Actions (\(actions.count))",
                 placeholder: "action…"
             ) { [weak self] index in
                 guard let self, actions.indices.contains(index) else { return }
@@ -1316,7 +1350,7 @@ final class EditorWindowController: NSWindowController {
         let line = Self.lspPosition(ofIndex: anchorIndex, in: text).0 + 1
         do {
             let blame = try CoreBlame.line(line, ofPath: path, text: coreDocument.text)
-            BlamePanel.shared.show(blame, file: path, over: displayWindow)
+            BlamePanel.shared.show(blame, file: path, over: window)
         } catch {
             presentError("git could not blame this line.", details: "\(error)")
         }
@@ -2012,9 +2046,11 @@ final class EditorWindowController: NSWindowController {
             let contentManager = layoutManager.textContentManager
         else { return }
         let documentRange = layoutManager.documentRange
-        layoutManager.removeRenderingAttribute(.underlineStyle, for: documentRange)
-        layoutManager.removeRenderingAttribute(.underlineColor, for: documentRange)
-        layoutManager.removeRenderingAttribute(.backgroundColor, for: documentRange)
+        for target in paintTargets {
+            target.removeRenderingAttribute(.underlineStyle, for: documentRange)
+            target.removeRenderingAttribute(.underlineColor, for: documentRange)
+            target.removeRenderingAttribute(.backgroundColor, for: documentRange)
+        }
 
         let text = textView.string as NSString
         for occurrence in occurrenceRanges {
@@ -2024,9 +2060,11 @@ final class EditorWindowController: NSWindowController {
                 let end = contentManager.location(start, offsetBy: occurrence.length),
                 let textRange = NSTextRange(location: start, end: end)
             else { continue }
-            layoutManager.addRenderingAttribute(
-                .backgroundColor,
-                value: NSColor.systemGray.withAlphaComponent(0.30), for: textRange)
+            for target in paintTargets {
+                target.addRenderingAttribute(
+                    .backgroundColor,
+                    value: NSColor.systemGray.withAlphaComponent(0.30), for: textRange)
+            }
         }
         for spelling in spellingRanges {
             guard NSMaxRange(spelling) <= text.length,
@@ -2035,9 +2073,11 @@ final class EditorWindowController: NSWindowController {
                 let end = contentManager.location(start, offsetBy: spelling.length),
                 let textRange = NSTextRange(location: start, end: end)
             else { continue }
-            layoutManager.addRenderingAttribute(
-                .backgroundColor,
-                value: NSColor.systemPurple.withAlphaComponent(0.18), for: textRange)
+            for target in paintTargets {
+                target.addRenderingAttribute(
+                    .backgroundColor,
+                    value: NSColor.systemPurple.withAlphaComponent(0.18), for: textRange)
+            }
         }
         for diagnostic in diagnostics {
             guard let range = nsRange(of: diagnostic, in: text) else { continue }
@@ -2056,11 +2096,13 @@ final class EditorWindowController: NSWindowController {
             // The background tint is the marker TextKit 2 actually renders
             // from this layer; the underline attributes ride along for the
             // day rendering attributes honor them.
-            layoutManager.addRenderingAttribute(
-                .underlineStyle, value: NSUnderlineStyle.thick.rawValue, for: textRange)
-            layoutManager.addRenderingAttribute(.underlineColor, value: color, for: textRange)
-            layoutManager.addRenderingAttribute(
-                .backgroundColor, value: color.withAlphaComponent(0.15), for: textRange)
+            for target in paintTargets {
+                target.addRenderingAttribute(
+                    .underlineStyle, value: NSUnderlineStyle.thick.rawValue, for: textRange)
+                target.addRenderingAttribute(.underlineColor, value: color, for: textRange)
+                target.addRenderingAttribute(
+                    .backgroundColor, value: color.withAlphaComponent(0.15), for: textRange)
+            }
         }
     }
 
@@ -2237,7 +2279,9 @@ final class EditorWindowController: NSWindowController {
             }
             if toPaint.isEmpty { return true }
         } else {
-            layoutManager.removeRenderingAttribute(.foregroundColor, for: documentRange)
+            for target in paintTargets {
+                target.removeRenderingAttribute(.foregroundColor, for: documentRange)
+            }
         }
 
         let spans = toPaint.flatMap { coreDocument.highlights(in: $0) }
@@ -2261,7 +2305,9 @@ final class EditorWindowController: NSWindowController {
             else { continue }
             // `set` replaces within the range, so later spans win — the
             // ordering contract the core's span list is built around.
-            layoutManager.setRenderingAttributes([.foregroundColor: color], for: range)
+            for target in paintTargets {
+                target.setRenderingAttributes([.foregroundColor: color], for: range)
+            }
 
             guard wantsTraits, let storage = textView.textStorage else { continue }
             let traits = HighlightPalette.traits(forStyle: span.styleIndex)
@@ -3236,7 +3282,7 @@ extension EditorWindowController: NSWindowDelegate {
         let facts =
             "\(coreDocument.encodingName) · \(coreDocument.lengthInBytes) bytes\n\(path)"
         FilePropertiesPanel.shared.show(
-            over: displayWindow,
+            over: window,
             title: (path as NSString).lastPathComponent,
             facts: facts,
             detected: CoreLanguages.detected(forPath: path),

@@ -2,7 +2,7 @@
 //! sidebar, the search bar, the primary menu, preferences, and every
 //! action — over pages that each mirror one core document.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -16,17 +16,7 @@ use crate::shell::{PageHandles, Shell};
 
 pub struct Workbench {
     pub window: adw::ApplicationWindow,
-    /// The primary editor group. A window has one; splitting gives it a
-    /// second, and the two hold different documents — never two views
-    /// of one, which would be two carets over two histories of the same
-    /// file.
     pub tab_view: adw::TabView,
-    /// The paned the groups sit in.
-    editor_paned: gtk::Paned,
-    /// The second group, while there is one.
-    secondary: RefCell<Option<adw::TabView>>,
-    /// Whether the second group is the one commands act on.
-    secondary_focused: Cell<bool>,
     title: adw::WindowTitle,
     toasts: adw::ToastOverlay,
     split: adw::OverlaySplitView,
@@ -193,7 +183,6 @@ impl Workbench {
         edit_section.append(Some("Unfold All"), Some("win.unfold-all"));
         edit_section.append(Some("Split Editor"), Some("win.split"));
         edit_section.append(Some("Close Split"), Some("win.unsplit"));
-        edit_section.append(Some("Other Side"), Some("win.focus-other-group"));
         {
             // What to do to the selection, or to the whole document
             // when nothing is selected. GtkSourceView has Change Case
@@ -296,15 +285,7 @@ impl Workbench {
 
         let content_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content_box.append(&tab_bar);
-        // The editor area is a paned so a second group can appear
-        // beside the first. Until one does, the paned holds only the
-        // primary group and looks like nothing at all.
-        let editor_paned = gtk::Paned::new(gtk::Orientation::Horizontal);
-        editor_paned.set_vexpand(true);
-        editor_paned.set_shrink_start_child(false);
-        editor_paned.set_shrink_end_child(false);
-        editor_paned.set_start_child(Some(&tab_view));
-        content_box.append(&editor_paned);
+        content_box.append(&tab_view);
         tab_view.set_vexpand(true);
 
         // Sidebar: open buffers grouped by project, over the selected
@@ -358,9 +339,6 @@ impl Workbench {
         let workbench = Rc::new(Workbench {
             window: window.clone(),
             tab_view: tab_view.clone(),
-            editor_paned: editor_paned.clone(),
-            secondary: RefCell::new(None),
-            secondary_focused: Cell::new(false),
             title,
             toasts,
             split,
@@ -384,7 +362,28 @@ impl Workbench {
         });
         WORKBENCHES.with(|list| list.borrow_mut().push(Rc::clone(&workbench)));
 
-        workbench.install_group(&tab_view);
+        // Selected-page switches drive the chrome and the sidebar.
+        {
+            let workbench = Rc::downgrade(&workbench);
+            tab_view.connect_selected_page_notify(move |_| {
+                if let Some(workbench) = workbench.upgrade() {
+                    workbench.refresh_chrome();
+                    workbench.refresh_sidebar();
+                    workbench.apply_search_options();
+                }
+            });
+        }
+        // Closing a tab retires its document from the pool.
+        {
+            let workbench = Rc::downgrade(&workbench);
+            tab_view.connect_close_page(move |view, tab_page| {
+                if let Some(workbench) = workbench.upgrade() {
+                    workbench.forget(tab_page);
+                }
+                view.close_page_finish(tab_page, true);
+                glib::Propagation::Stop
+            });
+        }
         // Search acts on the selected page's context.
         {
             let workbench = Rc::downgrade(&workbench);
@@ -543,192 +542,14 @@ impl Workbench {
         self.toasts.add_toast(toast);
     }
 
-    /// Wires a group up: the chrome follows its selection, closing a
-    /// tab retires its document, and a click in it makes it the group
-    /// commands act on.
-    ///
-    /// Both groups get this, which is what keeps the second one a real
-    /// group rather than a display of the first.
-    fn install_group(self: &Rc<Self>, view: &adw::TabView) {
-        {
-            let workbench = Rc::downgrade(self);
-            view.connect_selected_page_notify(move |_| {
-                if let Some(workbench) = workbench.upgrade() {
-                    workbench.refresh_chrome();
-                    workbench.refresh_sidebar();
-                    workbench.apply_search_options();
-                }
-            });
-        }
-        {
-            let workbench = Rc::downgrade(self);
-            view.connect_close_page(move |view, tab_page| {
-                if let Some(workbench) = workbench.upgrade() {
-                    workbench.forget(tab_page);
-                    // A group emptied by its last tab closing is a
-                    // divider with nothing on one side of it.
-                    if view.n_pages() <= 1 && workbench.is_split() {
-                        let weak = Rc::downgrade(&workbench);
-                        glib::idle_add_local_once(move || {
-                            if let Some(workbench) = weak.upgrade() {
-                                if workbench
-                                    .all_views()
-                                    .iter()
-                                    .any(|view| view.n_pages() == 0)
-                                {
-                                    workbench.unsplit();
-                                }
-                            }
-                        });
-                    }
-                }
-                view.close_page_finish(tab_page, true);
-                glib::Propagation::Stop
-            });
-        }
-        {
-            // Clicking in a group is how you say which one you mean.
-            let workbench = Rc::downgrade(self);
-            let controller = gtk::EventControllerFocus::new();
-            controller.connect_enter(move |controller| {
-                let Some(workbench) = workbench.upgrade() else { return };
-                let Some(view) = controller.widget().and_downcast::<adw::TabView>() else {
-                    return;
-                };
-                let secondary = workbench
-                    .secondary
-                    .borrow()
-                    .as_ref()
-                    .is_some_and(|second| *second == view);
-                if workbench.secondary_focused.get() != secondary {
-                    workbench.secondary_focused.set(secondary);
-                    workbench.refresh_chrome();
-                    workbench.refresh_sidebar();
-                }
-            });
-            view.add_controller(controller);
-        }
-    }
-
-    /// The group commands act on: the second when it has the focus,
-    /// the first otherwise.
-    pub fn active_view(&self) -> adw::TabView {
-        if self.secondary_focused.get() {
-            if let Some(view) = self.secondary.borrow().clone() {
-                return view;
-            }
-        }
-        self.tab_view.clone()
-    }
-
-    /// Every group, for the commands that are about all the open
-    /// documents rather than the current one.
-    pub fn all_views(&self) -> Vec<adw::TabView> {
-        let mut views = vec![self.tab_view.clone()];
-        if let Some(second) = self.secondary.borrow().clone() {
-            views.push(second);
-        }
-        views
-    }
-
-    /// The group a page is in.
-    pub fn view_holding(&self, page: &Rc<Page>) -> Option<adw::TabView> {
-        self.all_views()
-            .into_iter()
-            .find(|view| tab_page_of(view, page).is_some())
-    }
-
-    /// Puts the current document in a group of its own beside the one
-    /// it was in, so two files can be read at once.
-    ///
-    /// A split holds two documents, never two views of one: two views
-    /// would be two carets over two histories of the same file.
-    pub fn split(self: &Rc<Self>) {
-        let Some(page) = self.selected() else { return };
-        let from = self.active_view();
-        if from.n_pages() < 2 && self.secondary.borrow().is_some() {
-            // Moving the only page out of a group leaves an empty one.
-            self.toast("The other side would have nothing in it.");
-            return;
-        }
-        // Taken first: the borrow would still be alive inside the arms,
-        // and the arm that makes a group writes to it.
-        let existing = self.secondary.borrow().clone();
-        let into = match existing {
-            Some(view) if !self.secondary_focused.get() => view,
-            Some(_) => self.tab_view.clone(),
-            None => {
-                if from.n_pages() < 2 {
-                    self.toast("Open another file to put beside this one.");
-                    return;
-                }
-                let view = adw::TabView::new();
-                view.set_vexpand(true);
-                let bar = adw::TabBar::new();
-                bar.set_view(Some(&view));
-                let side = gtk::Box::new(gtk::Orientation::Vertical, 0);
-                side.append(&bar);
-                side.append(&view);
-                self.editor_paned.set_end_child(Some(&side));
-                self.editor_paned.set_position(
-                    self.editor_paned.width().max(2) / 2,
-                );
-                self.install_group(&view);
-                *self.secondary.borrow_mut() = Some(view.clone());
-                view
-            }
-        };
-        if from == into {
-            return;
-        }
-        let Some(tab_page) = tab_page_of(&from, &page) else { return };
-        from.transfer_page(&tab_page, &into, into.n_pages());
-        into.set_selected_page(&tab_page);
-        self.secondary_focused.set(into != self.tab_view);
-        self.refresh_chrome();
-    }
-
-    /// Puts the second group's documents back with the first and takes
-    /// the group away.
-    pub fn unsplit(self: &Rc<Self>) {
-        let Some(second) = self.secondary.borrow_mut().take() else {
-            return;
-        };
-        while second.n_pages() > 0 {
-            let tab_page = second.nth_page(0);
-            second.transfer_page(&tab_page, &self.tab_view, self.tab_view.n_pages());
-        }
-        self.editor_paned.set_end_child(None::<&gtk::Widget>);
-        self.secondary_focused.set(false);
-        self.refresh_chrome();
-    }
-
-    /// Whether this window is split, for the commands that only make
-    /// sense when it is.
-    pub fn is_split(&self) -> bool {
-        self.secondary.borrow().is_some()
-    }
-
-    /// Moves the focus to the other group.
-    pub fn focus_other_group(self: &Rc<Self>) {
-        if !self.is_split() {
-            return;
-        }
-        self.secondary_focused.set(!self.secondary_focused.get());
-        if let Some(page) = self.selected() {
-            page.view.grab_focus();
-        }
-        self.refresh_chrome();
-    }
-
     pub fn selected(&self) -> Option<Rc<Page>> {
-        let view = self.active_view();
-        let selected = view.selected_page()?;
-        let child = selected.child();
+        let selected = self.tab_view.selected_page()?;
         self.pages
             .borrow()
             .iter()
-            .find(|page| page.root == child)
+            .find(|page| {
+                self.tab_view.page(&page.root).as_ptr() == selected.as_ptr()
+            })
             .cloned()
     }
 
@@ -754,14 +575,13 @@ impl Workbench {
             }
         }
         let page = Page::new(path);
-        let view = self.active_view();
-        let tab_page = view.append(&page.root);
+        let tab_page = self.tab_view.append(&page.root);
         tab_page.set_title(&page.display_name());
         self.pages.borrow_mut().push(Rc::clone(&page));
         if let Some(path) = page.path.borrow().clone() {
             let handles = Rc::new(PageHandles {
                 window: self.window.clone(),
-                tab_view: view.clone(),
+                tab_view: self.tab_view.clone(),
                 tab_page: tab_page.clone(),
                 buffer: page.buffer.clone(),
                 view: page.view.clone(),
@@ -781,7 +601,7 @@ impl Workbench {
             });
             Shell::instance().pages.borrow_mut().insert(path, handles);
         }
-        view.set_selected_page(&tab_page);
+        self.tab_view.set_selected_page(&tab_page);
         if let Some((line, character)) = at {
             if let Some(path) = page.path.borrow().clone() {
                 if let Some(handles) = Shell::instance().pages.borrow().get(&path).cloned() {
@@ -816,7 +636,7 @@ impl Workbench {
         let mut pages = self.pages.borrow_mut();
         if let Some(index) = pages
             .iter()
-            .position(|page| page.root == tab_page.child())
+            .position(|page| self.tab_view.page(&page.root).as_ptr() == tab_page.as_ptr())
         {
             let page = pages.remove(index);
             let path = page.path.borrow().clone();
@@ -881,7 +701,7 @@ impl Workbench {
         let shown = self.disambiguated_name(&page);
         let state = page.state.borrow();
         self.title.set_title(&format!("{dirty}{shown}"));
-        if let Some(tab_page) = self.active_view().selected_page() {
+        if let Some(tab_page) = self.tab_view.selected_page() {
             tab_page.set_title(&format!("{dirty}{shown}"));
         }
         let detail = format!(
@@ -1019,11 +839,8 @@ impl Workbench {
                     .cloned()
                     .flatten();
                 if let Some(page) = page {
-                    if let Some(view) = workbench.view_holding(&page) {
-                        let Some(tab_page) = tab_page_of(&view, &page) else { return };
-                        workbench.secondary_focused.set(view != workbench.tab_view);
-                        view.set_selected_page(&tab_page);
-                    }
+                    let tab_page = workbench.tab_view.page(&page.root);
+                    workbench.tab_view.set_selected_page(&tab_page);
                 }
             });
         }
@@ -1466,26 +1283,20 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         }
     });
     add("split", workbench, |workbench, _| {
-        workbench.split();
+        let Some(page) = workbench.selected() else { return };
+        if !crate::page::toggle_split(&page) {
+            workbench.toast("This document is already split.");
+        }
     });
     add("unsplit", workbench, |workbench, _| {
-        if !workbench.is_split() {
-            workbench.toast("This window is not split.");
-            return;
+        let Some(page) = workbench.selected() else { return };
+        if !crate::page::close_split(&page) {
+            workbench.toast("This document is not split.");
         }
-        workbench.unsplit();
-    });
-    add("focus-other-group", workbench, |workbench, _| {
-        if !workbench.is_split() {
-            workbench.toast("This window is not split.");
-            return;
-        }
-        workbench.focus_other_group();
     });
     add("close-tab", workbench, |workbench, _| {
-        let view = workbench.active_view();
-        if let Some(selected) = view.selected_page() {
-            view.close_page(&selected);
+        if let Some(selected) = workbench.tab_view.selected_page() {
+            workbench.tab_view.close_page(&selected);
         }
     });
     add("definition", workbench, |workbench, _| {
@@ -2391,8 +2202,7 @@ fn move_page_to(
     {
         return;
     }
-    let Some(source_view) = source.view_holding(&page) else { return };
-    let Some(tab_page) = tab_page_of(&source_view, &page) else { return };
+    let tab_page = source.tab_view.page(&page.root);
     let position = target.tab_view.n_pages();
     source
         .tab_view
@@ -3208,13 +3018,10 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
     page::refresh_style_tags(&page.buffer);
     page::recolor(&page.buffer);
     page::apply_highlights(&page.buffer, &page.state.borrow().document);
-    let view = workbench
-        .view_holding(&page)
-        .unwrap_or_else(|| workbench.tab_view.clone());
-    let Some(tab_page) = tab_page_of(&view, page) else { return false };
+    let tab_page = workbench.tab_view.page(&page.root);
     let handles = Rc::new(crate::shell::PageHandles {
         window: workbench.window.clone(),
-        tab_view: view.clone(),
+        tab_view: workbench.tab_view.clone(),
         tab_page,
         buffer: page.buffer.clone(),
         view: page.view.clone(),
@@ -5598,18 +5405,6 @@ where
             }
         },
     );
-}
-
-/// The tab holding a page in a group, or `None` when that group is not
-/// the one it is in.
-///
-/// `adw_tab_view_get_page` asserts that the child belongs to the view
-/// rather than answering, so it cannot be asked speculatively — and
-/// with two groups, every lookup is speculative.
-fn tab_page_of(view: &adw::TabView, page: &Rc<Page>) -> Option<adw::TabPage> {
-    (0..view.n_pages())
-        .map(|at| view.nth_page(at))
-        .find(|tab_page| tab_page.child() == page.root)
 }
 
 /// Re-installs the shortcuts after a change to the profile or an
