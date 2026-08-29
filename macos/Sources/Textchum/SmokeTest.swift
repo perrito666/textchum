@@ -858,6 +858,39 @@ func runSmokeTest() -> Int32 {
     contextEditor.window?.close()
     print("context menu ok (editor commands, AppKit's extras left out, clicked position)")
 
+    // Selecting a word marks the other places it appears. The rules
+    // live in the core; what is checked here is that they survive the
+    // bridge, including the offsets, which are UTF-16 units.
+    let occurrenceText = "item = item + items"
+    let wordSelection = CoreOccurrences.marks(
+        in: occurrenceText, selection: 0..<4, base: 0,
+        caseSensitive: true, wholeWord: true)
+    guard wordSelection.count == 2, wordSelection[1].start == 7, wordSelection[1].end == 11
+    else {
+        print("FAIL: the selected word's occurrences are \(wordSelection.count)")
+        return 1
+    }
+    // A partial word was selected for some other reason.
+    guard
+        CoreOccurrences.marks(
+            in: occurrenceText, selection: 0..<3, base: 0,
+            caseSensitive: true, wholeWord: true
+        ).isEmpty
+    else {
+        print("FAIL: a partial word marked something")
+        return 1
+    }
+    // Inside a longer name counts when asked, and the base offset is
+    // the document's.
+    let inside = CoreOccurrences.marks(
+        in: occurrenceText, selection: 0..<4, base: 100,
+        caseSensitive: true, wholeWord: false)
+    guard inside.count == 3, inside[0].start == 100, inside[2].start == 114 else {
+        print("FAIL: partial matches or base offset wrong: \(inside.map(\.start))")
+        return 1
+    }
+    print("occurrence marks ok (whole words, inside longer names, document offsets)")
+
     // Repainting the syntax colours on every scroll turn was the
     // stutter; the margin around the viewport is there so that most
     // turns need no repaint at all. The wiring needs a window server,

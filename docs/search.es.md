@@ -64,6 +64,25 @@ con `test` en el nombre, es la consulta `foo` más `line contains bar` más
 antes siquiera de abrirlos, así que las búsquedas filtradas siguen siendo
 tan rápidas como las simples.
 
+## La palabra seleccionada
+
+Seleccionar una palabra entera marca los demás lugares donde aparece
+en el texto visible — un tinte gris, distinto de la selección y de las
+coincidencias de la barra de búsqueda, para que los tres se
+distingan. Seleccionar parte de una palabra, o un tramo que abarca
+varias, no marca nada: esas selecciones se hicieron por otro motivo.
+
+⎋ guarda las marcas y deja la selección, así la palabra sigue ahí para
+actuar sobre ella. Editar o seleccionar en otro sitio vuelve a hacer
+la pregunta. La búsqueda cubre lo que está en pantalla, que es donde
+una marca se puede ver, así que un archivo largo cuesta lo que uno
+corto.
+
+Dos ajustes en Ajustes ▸ Editor deciden qué cuenta: si `Item` es
+`item`, y si `item` dentro de `items` lo es. Ambos vienen apagados —
+un nombre que difiere en mayúsculas es otro nombre, y la palabra se
+seleccionó como palabra.
+
 ## La pila de saltos
 
 Cada salto — un resultado de búsqueda, Ir a la Definición, una

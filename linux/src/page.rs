@@ -94,6 +94,7 @@ impl Page {
         install_style_tags(&buffer);
         install_diagnostic_tags(&buffer);
         crate::spell::install_tag(&buffer);
+        install_occurrence_tag(&buffer);
 
         let view = sourceview5::View::with_buffer(&buffer);
         view.set_monospace(true);
@@ -453,6 +454,97 @@ pub fn apply_whole_document(page: &Rc<Page>, new: &str) {
     buffer.delete(&mut start, &mut end);
     let mut at = start;
     buffer.insert(&mut at, &replacement);
+}
+
+// MARK: Occurrences
+
+/// The tag the other places the selected word appears wear.
+pub const OCCURRENCE_TAG: &str = "occurrence";
+
+/// Installs that tag on a fresh buffer: a neutral grey, so it reads as
+/// neither the selection, nor a misspelling, nor a finding.
+fn install_occurrence_tag(buffer: &sourceview5::Buffer) {
+    let tag = gtk::TextTag::new(Some(OCCURRENCE_TAG));
+    tag.set_background_rgba(Some(&gtk::gdk::RGBA::new(0.50, 0.50, 0.50, 0.30)));
+    buffer.tag_table().add(&tag);
+}
+
+/// Marks the other places the selected word appears, over the visible
+/// stretch — so a long document costs what a short one does.
+///
+/// Only a selection that is exactly one word marks anything; the core
+/// decides that and answers with nothing otherwise.
+pub fn refresh_occurrences(page: &Rc<Page>) {
+    let buffer = &page.buffer;
+    buffer.remove_tag_by_name(OCCURRENCE_TAG, &buffer.start_iter(), &buffer.end_iter());
+
+    let shell = Shell::instance();
+    let (mark, options) = {
+        let config = shell.config.borrow();
+        (config.mark_occurrences(), config.occurrence_options())
+    };
+    if !mark {
+        return;
+    }
+    let Some((selection_start, selection_end)) = buffer.selection_bounds() else {
+        return;
+    };
+
+    // The visible stretch, by the lines the view is showing.
+    let visible = page.view.visible_rect();
+    let (top, _) = page.view.line_at_y(visible.y());
+    let (bottom, _) = page
+        .view
+        .line_at_y(visible.y() + visible.height());
+    let from = top;
+    let mut to = bottom;
+    to.forward_to_line_end();
+    if selection_start < from || selection_end > to {
+        return;
+    }
+
+    let text = buffer.text(&from, &to, true).to_string();
+    let utf16_within = |target: &gtk::TextIter| -> usize {
+        buffer.text(&from, target, true).encode_utf16().count()
+    };
+    let spans = textchum_core::occurrences::selected_word(
+        &text,
+        utf16_within(&selection_start),
+        utf16_within(&selection_end),
+    )
+    .map(|word| textchum_core::occurrences::occurrences(&text, &word, 0, options))
+    .unwrap_or_default();
+
+    let base = from.offset();
+    for span in spans {
+        let start = base + char_offset(&text, span.start);
+        let end = base + char_offset(&text, span.end);
+        let start = buffer.iter_at_offset(start);
+        let end = buffer.iter_at_offset(end);
+        // The selection is already marked, by being selected.
+        if start == selection_start && end == selection_end {
+            continue;
+        }
+        buffer.apply_tag_by_name(OCCURRENCE_TAG, &start, &end);
+    }
+}
+
+/// Whether anything is marked, so Escape only claims the key when it
+/// has something to do.
+pub fn has_occurrences(page: &Rc<Page>) -> bool {
+    let buffer = &page.buffer;
+    let Some(tag) = buffer.tag_table().lookup(OCCURRENCE_TAG) else {
+        return false;
+    };
+    let mut at = buffer.start_iter();
+    at.forward_to_tag_toggle(Some(&tag))
+}
+
+/// Puts the occurrence marks away. Escape says "I am done looking",
+/// and leaves the selection where it is.
+pub fn clear_occurrences(page: &Rc<Page>) {
+    let buffer = &page.buffer;
+    buffer.remove_tag_by_name(OCCURRENCE_TAG, &buffer.start_iter(), &buffer.end_iter());
 }
 
 // MARK: Offsets
@@ -1071,10 +1163,17 @@ fn install_snippet_keys(page: &Rc<Page>) {
         if page.completion.popover.is_visible() {
             return glib::Propagation::Proceed;
         }
+        use gtk::gdk::Key;
         if !page.state.borrow().document.snippet_active() {
+            // Escape puts the occurrence marks away, and only those:
+            // the selection stays, so the word is still there to act
+            // on.
+            if key == Key::Escape && has_occurrences(&page) {
+                clear_occurrences(&page);
+                return glib::Propagation::Stop;
+            }
             return glib::Propagation::Proceed;
         }
-        use gtk::gdk::Key;
         match key {
             Key::Tab if !modifiers.contains(gtk::gdk::ModifierType::SHIFT_MASK) => {
                 if move_through_snippet(&page, true) {
@@ -1117,6 +1216,39 @@ fn install_snippet_keys(page: &Rc<Page>) {
                 if let Some(page) = weak.upgrade() {
                     mirror_snippet_stops(&page);
                 }
+            });
+        });
+    }
+    {
+        // A new selection asks a new question; an edit answers the old
+        // one differently. Both move the marks.
+        let weak = Rc::downgrade(page);
+        page.buffer
+            .connect_mark_set(move |_, _, mark| {
+                let Some(page) = weak.upgrade() else { return };
+                let name = mark.name();
+                let name = name.as_deref().unwrap_or_default();
+                if name != "insert" && name != "selection_bound" {
+                    return;
+                }
+                // Deferred: the caller may still hold iterators, and
+                // tagging under it invalidates them.
+                let weak = Rc::downgrade(&page);
+                glib::idle_add_local_once(move || {
+                    if let Some(page) = weak.upgrade() {
+                        refresh_occurrences(&page);
+                    }
+                });
+            });
+    }
+    {
+        // Scrolling brings fresh text into view, where the selected
+        // word may also appear.
+        let weak = Rc::downgrade(page);
+        page.view.vadjustment().inspect(|adjustment| {
+            adjustment.connect_value_changed(move |_| {
+                let Some(page) = weak.upgrade() else { return };
+                refresh_occurrences(&page);
             });
         });
     }

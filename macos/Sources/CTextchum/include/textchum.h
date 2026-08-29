@@ -854,8 +854,53 @@ uint32_t tc_config_appearance(const struct TcConfig *config);
 void tc_config_set_appearance(struct TcConfig *config, uint32_t appearance);
 
 /**
- * The configured theme name (the default theme's name when unset).
- * Release with [`tc_string_free`].
+ * Whether selecting a word marks its other occurrences on screen
+ * (`editor.mark_occurrences`, default true).
+ *
+ * # Safety
+ * `config` must be a live handle.
+ */
+bool tc_config_mark_occurrences(const struct TcConfig *config);
+
+/**
+ * # Safety
+ * `config` must be a live handle.
+ */
+void tc_config_set_mark_occurrences(struct TcConfig *config, bool enabled);
+
+/**
+ * Whether occurrence marking tells `Item` from `item`
+ * (`editor.occurrences_case_sensitive`, default true).
+ *
+ * # Safety
+ * `config` must be a live handle.
+ */
+bool tc_config_occurrences_case_sensitive(const struct TcConfig *config);
+
+/**
+ * # Safety
+ * `config` must be a live handle.
+ */
+void tc_config_set_occurrences_case_sensitive(struct TcConfig *config, bool enabled);
+
+/**
+ * Whether `item` inside `items` counts as an occurrence
+ * (`editor.occurrences_whole_word`, default true — so it does not).
+ *
+ * # Safety
+ * `config` must be a live handle.
+ */
+bool tc_config_occurrences_whole_word(const struct TcConfig *config);
+
+/**
+ * # Safety
+ * `config` must be a live handle.
+ */
+void tc_config_set_occurrences_whole_word(struct TcConfig *config, bool enabled);
+
+/**
+ * Whether hover documentation pops up on mouse rest
+ * (`editor.hover`, default true).
  *
  * # Safety
  * `config` must be a live configuration pointer.
@@ -1252,6 +1297,33 @@ uintptr_t tc_document_len_lines(const struct TcDocument *document);
  * `path` must point to `len` readable bytes.
  */
 bool tc_path_is_test(const char *path, uintptr_t len);
+
+/**
+ * The other places the selected word appears, for marking them.
+ *
+ * `text` is the stretch to search — the visible one, so a long file
+ * costs what a short one does — and `base` is its UTF-16 offset in the
+ * document. `selection_start` and `selection_end` are the selection,
+ * also in UTF-16 units and also relative to `text`.
+ *
+ * A selection that is not exactly one word answers with an empty
+ * array: a partial word and a stretch spanning several were selected
+ * for some other reason.
+ *
+ * Returns a nul-terminated JSON array — `[{"start": 12, "end": 16},
+ * …]`, in the document's UTF-16 offsets — released with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `text` must point to `text_len` readable bytes.
+ */
+char *tc_occurrences_of_selection(const char *text,
+                                  uintptr_t text_len,
+                                  uintptr_t selection_start,
+                                  uintptr_t selection_end,
+                                  uintptr_t base,
+                                  bool case_sensitive,
+                                  bool whole_word);
 
 /**
  * What to do with a `textDocument/definition` answer, given where the

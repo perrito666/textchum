@@ -66,6 +66,25 @@ les fichiers avec `test` dans le nom, c'est la requête `foo` plus
 élaguent des fichiers entiers avant même de les ouvrir ; les recherches
 filtrées restent donc aussi rapides que les simples.
 
+## Le mot sélectionné
+
+Sélectionner un mot entier marque les autres endroits où il apparaît
+dans le texte visible — une teinte grise, distincte de la sélection et
+des correspondances de la barre de recherche, pour que les trois se
+distinguent. Sélectionner une partie d'un mot, ou une étendue qui en
+couvre plusieurs, ne marque rien : ces sélections ont été faites pour
+autre chose.
+
+⎋ range les marques et laisse la sélection, le mot reste donc là pour
+agir dessus. Modifier ou sélectionner ailleurs repose la question. La
+recherche couvre ce qui est à l'écran, là où une marque se voit, et un
+fichier long coûte donc ce que coûte un court.
+
+Deux réglages dans Réglages ▸ Éditeur décident de ce qui compte : si
+`Item` vaut `item`, et si `item` dans `items` en est un. Les deux sont
+désactivés par défaut — un nom qui diffère par la casse est un autre
+nom, et le mot a été sélectionné en tant que mot.
+
 ## La pile de sauts
 
 Chaque saut — un résultat de recherche, Aller à la Définition, une

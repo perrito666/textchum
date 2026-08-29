@@ -146,7 +146,24 @@ public final class CoreConfig {
         set { tc_config_set_hover_docs(handle, newValue) }
     }
 
-    /// The chosen theme name (the default theme's name when unset).
+    /// Whether selecting a word marks its other occurrences on screen.
+    public var markOccurrences: Bool {
+        get { tc_config_mark_occurrences(handle) }
+        set { tc_config_set_mark_occurrences(handle, newValue) }
+    }
+
+    /// Whether those marks tell `Item` from `item`.
+    public var occurrencesCaseSensitive: Bool {
+        get { tc_config_occurrences_case_sensitive(handle) }
+        set { tc_config_set_occurrences_case_sensitive(handle, newValue) }
+    }
+
+    /// Whether `item` inside `items` counts as an occurrence.
+    public var occurrencesWholeWord: Bool {
+        get { tc_config_occurrences_whole_word(handle) }
+        set { tc_config_set_occurrences_whole_word(handle, newValue) }
+    }
+
     /// The file-icon pack: a path to a VS Code icon theme JSON, or the
     /// extension folder holding one. Nil means the system's own icons.
     public var iconPack: String? {

@@ -57,7 +57,10 @@ Un fichier édité à la main pourrait ressembler à :
 documentation au survol (`true`, le défaut, la laisse active).
 `editor.new_files_in` place les documents neufs dans un `"tab"` du
 groupe de la fenêtre frontale (le défaut) ou dans une `"window"` à
-eux.
+eux. `editor.mark_occurrences` (`true` par défaut) marque les autres
+endroits où apparaît le mot sélectionné ;
+`editor.occurrences_case_sensitive` et `editor.occurrences_whole_word`
+décident de ce qui en est un, tous deux `true` par défaut.
 
 Tout est optionnel — fichier, section ou clé manquants signifient
 simplement la valeur par défaut. Les écritures sont atomiques (fichier

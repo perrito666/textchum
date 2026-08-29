@@ -18,6 +18,11 @@ struct EditorSettings {
     let spellWords: [String]
     /// Seconds of quiet before an unattended save; zero is off.
     let autosaveSeconds: UInt32
+    /// Whether selecting a word marks its other occurrences on screen,
+    /// and how those are matched.
+    let markOccurrences: Bool
+    let occurrencesCaseSensitive: Bool
+    let occurrencesWholeWord: Bool
 
     /// Resolves configuration values into a usable font: the configured
     /// family if it exists on this system, the platform monospaced font
@@ -45,6 +50,9 @@ struct EditorSettings {
         self.tabWidth = tabWidth
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
+        self.markOccurrences = config.markOccurrences
+        self.occurrencesCaseSensitive = config.occurrencesCaseSensitive
+        self.occurrencesWholeWord = config.occurrencesWholeWord
         self.spellLanguage = config.spellLanguage
         self.spellLanguages = config.spellLanguages
         self.spellWords = config.spellWords
@@ -114,6 +122,15 @@ final class SettingsModel: ObservableObject {
     }
     @Published var followFile: Bool {
         didSet { persist { $0.followFile = followFile } }
+    }
+    @Published var markOccurrences: Bool {
+        didSet { persist { $0.markOccurrences = markOccurrences } }
+    }
+    @Published var occurrencesCaseSensitive: Bool {
+        didSet { persist { $0.occurrencesCaseSensitive = occurrencesCaseSensitive } }
+    }
+    @Published var occurrencesWholeWord: Bool {
+        didSet { persist { $0.occurrencesWholeWord = occurrencesWholeWord } }
     }
     /// Prose spell-check choice: "" = off, "auto", one language code, or
     /// several separated by commas.
@@ -259,6 +276,9 @@ final class SettingsModel: ObservableObject {
         tabWidth = config.tabWidth
         lineNumbers = config.lineNumbers
         hoverDocs = config.hoverDocs
+        markOccurrences = config.markOccurrences
+        occurrencesCaseSensitive = config.occurrencesCaseSensitive
+        occurrencesWholeWord = config.occurrencesWholeWord
         followFile = config.followFile
         spellLanguage = config.spellLanguage ?? ""
         spellWords = config.spellWords.joined(separator: "\n")
@@ -286,6 +306,9 @@ final class SettingsModel: ObservableObject {
         self.spellLanguage = config.spellLanguage ?? ""
         self.spellWords = config.spellWords.joined(separator: "\n")
         self.autosaveSeconds = Int(config.autosaveSeconds)
+        self.markOccurrences = config.markOccurrences
+        self.occurrencesCaseSensitive = config.occurrencesCaseSensitive
+        self.occurrencesWholeWord = config.occurrencesWholeWord
         self.isLoading = false
         reloadLSPEntries()
         reloadWorkspaceEntries()
@@ -716,6 +739,11 @@ struct GeneralSettingsTab: View {
             Toggle("Show line numbers", isOn: $model.lineNumbers)
             Toggle("Hover documentation", isOn: $model.hoverDocs)
             Toggle("Reveal the current file in the tree", isOn: $model.followFile)
+            Toggle("Mark the selected word elsewhere on screen", isOn: $model.markOccurrences)
+            Toggle("  Match case", isOn: $model.occurrencesCaseSensitive)
+                .disabled(!model.markOccurrences)
+            Toggle("  Whole words only", isOn: $model.occurrencesWholeWord)
+                .disabled(!model.markOccurrences)
             // Not a Picker: several dictionaries can apply at once, and
             // a picker can only say one thing. Each language is a toggle
             // that adds itself to the list.

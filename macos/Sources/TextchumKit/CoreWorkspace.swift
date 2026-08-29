@@ -158,6 +158,46 @@ public enum CoreReferences {
     }
 }
 
+/// The other places the selected word appears.
+///
+/// Selecting a word and then typing it into the find bar to see where
+/// else it is asks twice for one thing.
+public enum CoreOccurrences {
+    /// A span in the document, in UTF-16 units.
+    public struct Span {
+        public let start: Int
+        public let end: Int
+    }
+
+    /// Occurrences of the selected word inside `text`, which is the
+    /// visible stretch and starts at `base` in the document. Empty
+    /// when the selection is not exactly one word.
+    public static func marks(
+        in text: String, selection: Range<Int>, base: Int,
+        caseSensitive: Bool, wholeWord: Bool
+    ) -> [Span] {
+        var text = text
+        let raw = text.withUTF8 { bytes -> UnsafeMutablePointer<CChar>? in
+            tc_occurrences_of_selection(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count),
+                UInt(max(0, selection.lowerBound)), UInt(max(0, selection.upperBound)),
+                UInt(max(0, base)), caseSensitive, wholeWord)
+        }
+        guard let raw else { return [] }
+        defer { tc_string_free(raw) }
+        let data = Data(String(cString: raw).utf8)
+        let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+        return parsed.compactMap { item in
+            guard let start = item["start"] as? Int, let end = item["end"] as? Int
+            else { return nil }
+            return Span(start: start, end: end)
+        }
+    }
+}
+
 /// What to do with a definition answer.
 ///
 /// Jump to Definition has nowhere to go when the caret is already on

@@ -54,6 +54,10 @@ default) follows the system. `editor.hover` switches the mouse-rest
 documentation popover off (`true`, the default, keeps it on).
 `editor.new_files_in` places fresh documents in a `"tab"` of the
 frontmost window's group (the default) or a `"window"` of their own.
+`editor.mark_occurrences` (`true` by default) marks the other places
+the selected word appears; `editor.occurrences_case_sensitive` and
+`editor.occurrences_whole_word` decide what counts as one, both `true`
+by default.
 
 Everything is optional — a missing file, a missing section, or a missing
 key simply means the default. Writes are atomic (temporary file plus
