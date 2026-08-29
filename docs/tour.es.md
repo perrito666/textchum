@@ -45,6 +45,20 @@ el que se hizo clic, no sobre el cursor, que el clic deja donde
 estaba. Lo que el documento no puede usar no está: sin servidor no hay
 buscar referencias, sin hallazgos no hay filas de diagnósticos.
 
+## Divisiones
+
+**Split Editor** (⌘\\, Ctrl+\\ en Linux) muestra el documento dos
+veces, lado a lado; **Close Split** (⇧⌘\\) quita la segunda vista.
+Cada lado se desplaza por su cuenta, que es de lo que se trata: leer el
+principio de un archivo mientras se edita el final.
+
+Los dos lados son un solo documento. Hay una historia y un guardado,
+así que una edición en cualquiera de los dos es la misma edición y
+ninguna vista puede quedarse vieja. Ambos toolkits están hechos para
+esto —un búfer de texto que varias vistas comparten— y lo que no sale
+gratis es el coloreado, que en macOS vive en el layout y no en el
+texto; se pinta cada vista.
+
 ## Servidores de lenguaje
 
 Los diagnósticos llegan como marcas tintadas en el texto y un contador

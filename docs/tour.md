@@ -43,6 +43,20 @@ leaves where it was. What the document has no use for is not there —
 no server running means no Find References, no findings means no
 diagnostics rows.
 
+## Splits
+
+**Split Editor** (⌘\\, Ctrl+\\ on Linux) shows the document twice,
+side by side; **Close Split** (⇧⌘\\) takes the second view away. Each
+side scrolls on its own, which is the point: reading the top of a file
+while editing the bottom of it.
+
+Both sides are one document. There is one history and one save, so an
+edit on either side is the same edit, and neither view can be a stale
+copy of the other. Both toolkits are built for this — a text buffer
+that several views share — and what does not come free is the
+colouring, since on macOS that lives on the layout rather than the
+text; each view gets painted.
+
 ## Language servers
 
 Diagnostics arrive as tinted marks in the text and a count in the
