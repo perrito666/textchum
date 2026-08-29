@@ -214,6 +214,81 @@ impl Pool {
         (!trimmed.is_empty()).then(|| trimmed.to_owned())
     }
 
+    /// The server with this id, from configuration first and the
+    /// built-in registry second.
+    ///
+    /// `lsp.servers` holds entries of the same shape as the registry's,
+    /// so a server the build does not know about can be defined without
+    /// a code change, and one it does know about can be redefined by
+    /// reusing its id:
+    ///
+    /// ```json
+    /// {"lsp": {"servers": {"basedpyright": {
+    ///    "command": "{project}/.venv/bin/basedpyright-langserver",
+    ///    "args": ["--stdio"],
+    ///    "languages": ["python"],
+    ///    "install": "uv tool install basedpyright"}}}}
+    /// ```
+    ///
+    /// The built-in table stays available, so a configuration that says
+    /// nothing still has servers, and a build that learns a new one
+    /// offers it without the configuration being rewritten.
+    fn server_spec(&self, id: &str) -> Option<ServerConfig> {
+        if let Some(entry) = self.configured["servers"][id].as_object() {
+            let command = entry.get("command")?.as_str()?.to_owned();
+            let args = entry
+                .get("args")
+                .and_then(|a| a.as_array())
+                .map(|a| {
+                    a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect()
+                })
+                .unwrap_or_default();
+            let languages = entry
+                .get("languages")
+                .and_then(|l| l.as_array())
+                .map(|l| l.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect())
+                .unwrap_or_default();
+            let install_hint = entry
+                .get("install")
+                .and_then(|v| v.as_str())
+                .unwrap_or("configured in config.json under lsp.servers")
+                .to_owned();
+            return Some(ServerConfig {
+                id: id.to_owned(),
+                command,
+                args,
+                languages,
+                install_hint,
+            });
+        }
+        crate::registry::server_by_id(id).map(ServerConfig::from)
+    }
+
+    /// The ids a language has servers for, configuration first.
+    pub fn servers_for_language(&self, language: &str) -> Vec<String> {
+        let mut ids: Vec<String> = self.configured["servers"]
+            .as_object()
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter(|(_, entry)| {
+                        entry["languages"]
+                            .as_array()
+                            .map(|l| l.iter().any(|v| v.as_str() == Some(language)))
+                            .unwrap_or(false)
+                    })
+                    .map(|(id, _)| id.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        for spec in crate::registry::servers_for_language(language) {
+            if !ids.iter().any(|id| id == spec.id) {
+                ids.push(spec.id.to_owned());
+            }
+        }
+        ids
+    }
+
     /// Expands the placeholders a configured command line may use.
     ///
     /// `{project}` is the root the instance is keyed on, so a server
@@ -255,13 +330,17 @@ impl Pool {
             // servers serve one language and only the first is reachable
             // by language alone, so naming one is how the others are
             // asked for.
-            if let Some(spec) = crate::registry::server_by_id(command_line.trim()) {
+            if let Some(spec) = self.server_spec(command_line.trim()) {
                 return Some(ServerConfig {
-                    id: spec.id.into(),
-                    command: Self::expand_placeholders(spec.command, root),
-                    args: spec.args.iter().map(|arg| Self::expand_placeholders(arg, root)).collect(),
+                    id: spec.id,
+                    command: Self::expand_placeholders(&spec.command, root),
+                    args: spec
+                        .args
+                        .iter()
+                        .map(|arg| Self::expand_placeholders(arg, root))
+                        .collect(),
                     languages: vec![language.to_owned()],
-                    install_hint: spec.install_hint.into(),
+                    install_hint: spec.install_hint,
                 });
             }
             let mut parts = command_line
@@ -616,6 +695,77 @@ mod tests {
             .config_for(Path::new("/work/service"), "python")
             .expect("a server");
         assert_eq!(config.id, "pyright");
+    }
+
+    #[test]
+    fn configuration_can_define_a_server_the_build_does_not_know() {
+        let pool = pool_with(
+            r#"{"lsp": {
+                 "servers": {"mylsp": {
+                    "command": "{project}/tools/mylsp",
+                    "args": ["--lsp"],
+                    "languages": ["mylang"],
+                    "install": "make tools"}},
+                 "defaults": {"mylang": "mylsp"}}}"#,
+        );
+        let config = pool
+            .config_for(Path::new("/work/service"), "mylang")
+            .expect("a server");
+        assert_eq!(config.id, "mylsp");
+        assert_eq!(config.command, "/work/service/tools/mylsp");
+        assert_eq!(config.args, vec!["--lsp".to_owned()]);
+        assert_eq!(config.install_hint, "make tools");
+    }
+
+    #[test]
+    fn a_configured_server_redefines_the_built_in_of_the_same_id() {
+        let pool = pool_with(
+            r#"{"lsp": {
+                 "servers": {"basedpyright": {
+                    "command": "{project}/.venv/bin/basedpyright-langserver",
+                    "args": ["--stdio"],
+                    "languages": ["python"]}},
+                 "defaults": {"python": "basedpyright"}}}"#,
+        );
+        let config = pool
+            .config_for(Path::new("/work/service"), "python")
+            .expect("a server");
+        assert_eq!(
+            config.command,
+            "/work/service/.venv/bin/basedpyright-langserver"
+        );
+    }
+
+    #[test]
+    fn the_built_in_table_survives_a_configuration_that_adds_to_it() {
+        // A configuration defining one server must not hide the rest,
+        // or a build that learns a new one could never offer it.
+        let pool = pool_with(
+            r#"{"lsp": {"servers": {"mylsp": {
+                 "command": "mylsp", "languages": ["python"]}}}}"#,
+        );
+        let ids = pool.servers_for_language("python");
+        assert!(ids.contains(&"mylsp".to_owned()), "{ids:?}");
+        assert!(ids.contains(&"pyright".to_owned()), "{ids:?}");
+        assert!(ids.contains(&"basedpyright".to_owned()), "{ids:?}");
+        // Defining one does not change which server a language gets
+        // when nothing names one.
+        assert_eq!(
+            pool.config_for(Path::new("/work"), "python").unwrap().id,
+            "pyright"
+        );
+    }
+
+    #[test]
+    fn a_configured_server_missing_its_command_is_ignored() {
+        let pool = pool_with(
+            r#"{"lsp": {"servers": {"broken": {"languages": ["python"]}},
+                        "defaults": {"python": "broken"}}}"#,
+        );
+        // Nothing usable under that id, so the value falls back to
+        // being read as a command line.
+        let config = pool.config_for(Path::new("/work"), "python").expect("a server");
+        assert_eq!(config.command, "broken");
     }
 
     #[test]
