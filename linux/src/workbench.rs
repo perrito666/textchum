@@ -178,6 +178,25 @@ impl Workbench {
         edit_section.append(Some("Find in Project…"), Some("win.find-in-project"));
         edit_section.append(Some("Run Save Preprocessors"), Some("win.preprocess"));
         edit_section.append(Some("Redraw"), Some("win.redraw"));
+        {
+            // What to do to the selection, or to the whole document
+            // when nothing is selected. GtkSourceView has Change Case
+            // of its own in the context menu; these go through the
+            // core, so both shells agree on what sorting and joining
+            // mean.
+            let transforms = gtk::gio::Menu::new();
+            let mut section = gtk::gio::Menu::new();
+            for (label, kind) in crate::page::TRANSFORMS {
+                if kind.is_empty() {
+                    transforms.append_section(None, &section);
+                    section = gtk::gio::Menu::new();
+                    continue;
+                }
+                section.append(Some(label), Some(&format!("win.transform('{kind}')")));
+            }
+            transforms.append_section(None, &section);
+            edit_section.append_submenu(Some("Transform"), &transforms);
+        }
         let go_section = gtk::gio::Menu::new();
         go_section.append(Some("Jump to Definition"), Some("win.definition"));
         go_section.append(Some("Go Back"), Some("win.back"));
@@ -1546,6 +1565,24 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     }
     // Replacing a misspelling: the parameter is the chosen suggestion,
     // and the span it goes into is the one recorded when the menu was
+    // Sorts, cases, trims or converts the selection — or the whole
+    // document when nothing is selected, since that is what the
+    // operation is about when no part of it was singled out.
+    {
+        let action =
+            gtk::gio::SimpleAction::new("transform", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(workbench);
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some(kind) = parameter.and_then(|p| p.str().map(str::to_owned)) else {
+                return;
+            };
+            let Some(page) = workbench.selected() else { return };
+            crate::page::transform_selection(&page, &kind);
+        });
+        workbench.window.add_action(&action);
+    }
+
     // A context-menu command runs the ordinary action, about the
     // character that was clicked rather than about the caret: a
     // right-click does not move the caret, and a menu that answered

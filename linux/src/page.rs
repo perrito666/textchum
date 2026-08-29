@@ -456,6 +456,69 @@ pub fn apply_whole_document(page: &Rc<Page>, new: &str) {
     buffer.insert(&mut at, &replacement);
 }
 
+// MARK: Transformations
+
+/// The transformations the menu offers, in the order it offers them.
+/// An empty id is a separator.
+pub const TRANSFORMS: &[(&str, &str)] = &[
+    ("Upper Case", "upper"),
+    ("Lower Case", "lower"),
+    ("Title Case", "title"),
+    ("Invert Case", "invert"),
+    ("", ""),
+    ("Sort Lines", "sort"),
+    ("Sort Lines Reversed", "sort-reversed"),
+    ("Remove Duplicate Lines", "dedupe"),
+    ("Join Lines", "join"),
+    ("Trim Trailing Whitespace", "trim"),
+    ("", ""),
+    ("Convert to Unix Line Endings (LF)", "lf"),
+    ("Convert to Windows Line Endings (CRLF)", "crlf"),
+];
+
+/// Transforms the selection, or the whole document when nothing is
+/// selected.
+///
+/// A line-wise transformation is given whole lines: the selection grows
+/// to the boundaries around it first, because sorting half a line is
+/// not something anyone asked for.
+pub fn transform_selection(page: &Rc<Page>, kind: &str) {
+    use textchum_core::transform::Transform;
+    let Some(transform) = Transform::from_id(kind) else {
+        return;
+    };
+    let buffer = &page.buffer;
+    let (mut start, mut end) = match buffer.selection_bounds() {
+        Some(bounds) => bounds,
+        None => (buffer.start_iter(), buffer.end_iter()),
+    };
+    if transform.is_line_wise() && buffer.selection_bounds().is_some() {
+        start.set_line_offset(0);
+        if !end.ends_line() {
+            end.forward_to_line_end();
+        }
+    }
+    if start == end {
+        return;
+    }
+    let text = buffer.text(&start, &end, true).to_string();
+    let replacement = textchum_core::transform::apply(transform, &text);
+    if replacement == text {
+        return;
+    }
+
+    // One undo step: the whole stretch goes at once.
+    buffer.begin_user_action();
+    buffer.delete(&mut start, &mut end);
+    buffer.insert(&mut start, &replacement);
+    buffer.end_user_action();
+
+    // The transformed stretch stays selected, so a second one can
+    // follow without selecting it again.
+    let from = buffer.iter_at_offset(start.offset() - replacement.chars().count() as i32);
+    buffer.select_range(&from, &start);
+}
+
 // MARK: Occurrences
 
 /// The tag the other places the selected word appears wear.
