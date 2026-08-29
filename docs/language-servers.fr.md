@@ -115,6 +115,35 @@ habituelles du fichier :
 }
 ```
 
+### Définir un serveur que l'éditeur ne connaît pas
+
+`lsp.servers` contient des entrées de la même forme que la table
+intégrée : un serveur peut donc être ajouté sans changement de code, et
+un serveur déjà connu redéfini en réutilisant son identifiant :
+
+```json
+{
+  "lsp": {
+    "servers": {
+      "basedpyright": {
+        "command": "{project}/.venv/bin/basedpyright-langserver",
+        "args": ["--stdio"],
+        "languages": ["python"],
+        "install": "uv tool install basedpyright"
+      }
+    },
+    "defaults": {"python": "basedpyright"}
+  }
+}
+```
+
+`command` est obligatoire ; le reste peut être omis. La table intégrée
+reste disponible à côté de ces entrées : une configuration muette a donc
+quand même des serveurs, et une version qui en apprend un nouveau le
+propose sans réécriture de la configuration. Définir un serveur ne change
+pas celui qu'un langage utilise par défaut ; c'est `lsp.defaults` qui en
+décide.
+
 ### Nommer un serveur, et en désigner un dans le projet
 
 L'entrée d'un langage accepte l'identifiant d'un serveur connu de

@@ -102,6 +102,34 @@ hand-editing guarantees:
 }
 ```
 
+### Defining a server the editor does not know
+
+`lsp.servers` holds entries of the same shape the built-in table uses,
+so a server can be added without a code change, and one already known
+can be redefined by reusing its id:
+
+```json
+{
+  "lsp": {
+    "servers": {
+      "basedpyright": {
+        "command": "{project}/.venv/bin/basedpyright-langserver",
+        "args": ["--stdio"],
+        "languages": ["python"],
+        "install": "uv tool install basedpyright"
+      }
+    },
+    "defaults": {"python": "basedpyright"}
+  }
+}
+```
+
+`command` is required; the rest may be left out. The built-in table
+stays available alongside these, so a configuration that says nothing
+still has servers, and a build that learns a new one offers it without
+the configuration being rewritten. Defining a server does not change
+which one a language gets by default — `lsp.defaults` decides that.
+
 ### Naming a server, and pointing at one inside the project
 
 A language's entry takes either the id of a server the editor knows or a
