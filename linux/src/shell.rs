@@ -45,6 +45,28 @@ pub struct OpenDocument {
     /// well as underlined. An underline nobody can read is a
     /// notification with the message taken out.
     pub diagnostics: RefCell<Vec<Diagnostic>>,
+    /// The views showing this document. Weak, so closing a tab is
+    /// enough to be rid of its view.
+    pub views: RefCell<Vec<std::rc::Weak<crate::page::Page>>>,
+}
+
+impl OpenDocument {
+    /// Takes a view off the list — its tab closed.
+    pub fn drop_view(&self, page: &Rc<crate::page::Page>) {
+        self.views.borrow_mut().retain(|other| {
+            other
+                .upgrade()
+                .is_some_and(|other| !Rc::ptr_eq(&other, page))
+        });
+    }
+
+    /// The views of this document that are still open, oldest first.
+    /// Closed ones are dropped on the way past.
+    pub fn views(&self) -> Vec<Rc<crate::page::Page>> {
+        let mut views = self.views.borrow_mut();
+        views.retain(|view| view.strong_count() > 0);
+        views.iter().filter_map(|view| view.upgrade()).collect()
+    }
 }
 
 /// Where a document is shown: the widgets around one view of it.
@@ -238,6 +260,7 @@ impl Shell {
             monitor: RefCell::new(None),
             folded: RefCell::new(Vec::new()),
             diagnostics: RefCell::new(Vec::new()),
+            views: RefCell::new(Vec::new()),
         });
         self.documents.borrow_mut().insert(id, Rc::clone(&document));
         if let Some(path) = path {

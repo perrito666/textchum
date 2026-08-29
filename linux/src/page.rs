@@ -60,10 +60,6 @@ pub struct Page {
     /// what was clicked.
     pub context_offset: Cell<Option<i32>>,
 
-    /// Where a second view of this document goes, and the one that is
-    /// there while the document is split.
-    split_paned: gtk::Paned,
-    split_view: RefCell<Option<sourceview5::View>>,
 }
 
 /// The completion popup: a popover under the caret, filtered by the
@@ -80,6 +76,8 @@ struct CompletionState {
 }
 
 impl Page {
+    /// Opens a file — or nothing, for an untitled document — and
+    /// returns the first view of it.
     pub fn new(path: Option<PathBuf>) -> Rc<Page> {
         let document = path
             .as_deref()
@@ -103,68 +101,6 @@ impl Page {
         crate::spell::install_tag(&buffer);
         install_occurrence_tag(&buffer);
         install_fold_tag(&buffer);
-
-        let view = sourceview5::View::with_buffer(&buffer);
-        view.set_monospace(true);
-        // Return inherits (and deepens) indentation — GtkSourceView has
-        // this built in; macOS hand-rolls the same behavior.
-        view.set_auto_indent(true);
-        view.set_show_line_numbers(Shell::instance().config.borrow().line_numbers());
-        view.set_tab_width(Shell::instance().config.borrow().tab_width());
-        view.set_left_margin(6);
-        view.set_top_margin(6);
-
-        let scrolled = gtk::ScrolledWindow::builder()
-            .child(&view)
-            .hexpand(true)
-            .vexpand(true)
-            .build();
-
-        // The git change bar: a stripe per line that differs from the
-        // committed file. A sibling of the view rather than a gutter
-        // renderer, which would mean subclassing GtkSourceGutterRenderer
-        // for three coloured rectangles — and this is what the macOS
-        // shell does too, so the two look alike.
-        let change_bar = gtk::DrawingArea::new();
-        change_bar.set_content_width(5);
-        change_bar.set_vexpand(true);
-        let editor_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        editor_row.append(&change_bar);
-        editor_row.append(&scrolled);
-
-        // A second view of the same buffer goes here when the document
-        // is split. One buffer, so one history and one save — what
-        // differs between the two is where each is looking.
-        let split_paned = gtk::Paned::new(gtk::Orientation::Horizontal);
-        split_paned.set_hexpand(true);
-        split_paned.set_vexpand(true);
-        split_paned.set_shrink_start_child(false);
-        split_paned.set_shrink_end_child(false);
-        split_paned.set_start_child(Some(&editor_row));
-
-        // Markdown gets a live preview pane beside the text — the
-        // core's HTML, reloaded shortly after edits settle.
-        let is_markdown = state.borrow().document.language_name() == Some("markdown");
-        let (root, preview) = if is_markdown {
-            let web = webkit6::WebView::new();
-            web.set_hexpand(true);
-            web.set_vexpand(true);
-            let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
-            paned.set_start_child(Some(&split_paned));
-            paned.set_end_child(Some(&web));
-            paned.set_position(480);
-            paned.set_resize_start_child(true);
-            paned.set_resize_end_child(true);
-            (paned.upcast::<gtk::Widget>(), Some(web))
-        } else {
-            (split_paned.clone().upcast::<gtk::Widget>(), None)
-        };
-
-        let search_settings = sourceview5::SearchSettings::new();
-        search_settings.set_wrap_around(true);
-        search_settings.set_case_sensitive(false);
-        let search_context = sourceview5::SearchContext::new(&buffer, Some(&search_settings));
-        search_context.set_highlight(true);
 
         // --- Load ------------------------------------------------------
         {
@@ -202,6 +138,95 @@ impl Page {
             });
         }
 
+        // The document is registered before any view of it exists, and
+        // holds everything the file knows about itself.
+        let document = Shell::instance().open_document(
+            &buffer,
+            &state,
+            document_path.as_deref(),
+        );
+        install_change_handler(&document, last_typed);
+
+        let page = Page::view_of(&document);
+
+        apply_highlights(&buffer, &page.state.borrow().document);
+        update_preview(&page);
+        crate::spell::run(&page);
+
+        // The pool learns about the document.
+        if let (Some(path), Some(language)) = (
+            page.path().borrow().clone(),
+            page.state.borrow().document.language_name(),
+        ) {
+            let text = page.state.borrow().document.text();
+            Shell::instance()
+                .pool
+                .borrow_mut()
+                .did_open(Path::new(&path), language, &text);
+        }
+        page
+    }
+
+    /// Another view of a document that is already open — the other half
+    /// of a split, or the same file in a second tab. The buffer, the
+    /// path and the folds belong to the document, so the two views show
+    /// one file and not two copies of it.
+    pub fn view_of(document: &Rc<crate::shell::OpenDocument>) -> Rc<Page> {
+        let state = Rc::clone(&document.state);
+        let buffer = document.buffer.clone();
+
+        let view = sourceview5::View::with_buffer(&buffer);
+        view.set_monospace(true);
+        // Return inherits (and deepens) indentation — GtkSourceView has
+        // this built in; macOS hand-rolls the same behavior.
+        view.set_auto_indent(true);
+        view.set_show_line_numbers(Shell::instance().config.borrow().line_numbers());
+        view.set_tab_width(Shell::instance().config.borrow().tab_width());
+        view.set_left_margin(6);
+        view.set_top_margin(6);
+
+        let scrolled = gtk::ScrolledWindow::builder()
+            .child(&view)
+            .hexpand(true)
+            .vexpand(true)
+            .build();
+
+        // The git change bar: a stripe per line that differs from the
+        // committed file. A sibling of the view rather than a gutter
+        // renderer, which would mean subclassing GtkSourceGutterRenderer
+        // for three coloured rectangles — and this is what the macOS
+        // shell does too, so the two look alike.
+        let change_bar = gtk::DrawingArea::new();
+        change_bar.set_content_width(5);
+        change_bar.set_vexpand(true);
+        let editor_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        editor_row.append(&change_bar);
+        editor_row.append(&scrolled);
+
+        // Markdown gets a live preview pane beside the text — the
+        // core's HTML, reloaded shortly after edits settle.
+        let is_markdown = state.borrow().document.language_name() == Some("markdown");
+        let (root, preview) = if is_markdown {
+            let web = webkit6::WebView::new();
+            web.set_hexpand(true);
+            web.set_vexpand(true);
+            let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
+            paned.set_start_child(Some(&editor_row));
+            paned.set_end_child(Some(&web));
+            paned.set_position(480);
+            paned.set_resize_start_child(true);
+            paned.set_resize_end_child(true);
+            (paned.upcast::<gtk::Widget>(), Some(web))
+        } else {
+            (editor_row.clone().upcast::<gtk::Widget>(), None)
+        };
+
+        let search_settings = sourceview5::SearchSettings::new();
+        search_settings.set_wrap_around(true);
+        search_settings.set_case_sensitive(false);
+        let search_context = sourceview5::SearchContext::new(&buffer, Some(&search_settings));
+        search_context.set_highlight(true);
+
         let completion_list = gtk::ListBox::new();
         completion_list.set_selection_mode(gtk::SelectionMode::Browse);
         let completion_scroll = gtk::ScrolledWindow::builder()
@@ -230,20 +255,13 @@ impl Page {
         hover_label.set_margin_end(8);
         hover_popover.set_child(Some(&hover_label));
 
-        // The document is registered before any view of it exists, and
-        // holds everything the file knows about itself.
-        let document = Shell::instance().open_document(
-            &buffer,
-            &state,
-            document_path.as_deref(),
-        );
         let page = Rc::new(Page {
             state,
             buffer: buffer.clone(),
             view: view.clone(),
             search_settings,
             search_context,
-            document,
+            document: Rc::clone(document),
             root,
             preview,
             hover_popover,
@@ -257,9 +275,8 @@ impl Page {
             change_bar: change_bar.clone(),
             change_marks: RefCell::new(Vec::new()),
             context_offset: Cell::new(None),
-            split_paned: split_paned.clone(),
-            split_view: RefCell::new(None),
         });
+        document.views.borrow_mut().push(Rc::downgrade(&page));
         install_completion_keys(&page);
         install_snippet_keys(&page);
         install_change_bar(&page);
@@ -271,60 +288,80 @@ impl Page {
             glib::idle_add_local_once(move || refresh_change_marks(&page));
         }
         install_hover(&page);
+        if document.views().len() == 1 {
         install_file_monitor(&page);
+    }
         install_control_click(&page);
         install_spelling_menu(&page);
         apply_project_editor_overrides(&page);
+        page
+    }
 
+}
+/// Everything an edit sets off, installed once per document: the views
+/// are told, the colours are redone, the server pool and the autosave
+/// clock hear about it.
+fn install_change_handler(
+    document: &Rc<crate::shell::OpenDocument>,
+    last_typed: Rc<RefCell<String>>,
+) {
+    let buffer = document.buffer.clone();
+    // --- After every change: recolor, announce, verify -----------------
         // --- After every change: recolor, announce, verify -------------
         {
-            let page_weak = Rc::downgrade(&page);
+            let document_weak = Rc::downgrade(document);
             let recolor_pending = Rc::new(Cell::new(false));
             let lsp_timer: Rc<Cell<Option<glib::SourceId>>> = Rc::new(Cell::new(None));
             let autosave_timer: Rc<Cell<Option<glib::SourceId>>> = Rc::new(Cell::new(None));
             buffer.connect_changed(move |buffer| {
-                let Some(page) = page_weak.upgrade() else { return };
-                if page.state.borrow().syncing {
+                let Some(document) = document_weak.upgrade() else { return };
+                if document.state.borrow().syncing {
                     return;
                 }
-                crate::workbench::refresh_chrome_for(&page);
+                // Every view of the file learns about the edit.
+                let views = document.views();
+                for view in &views {
+                    crate::workbench::refresh_chrome_for(view);
+                }
                 debug_assert_eq!(
                     buffer.text(&buffer.start_iter(), &buffer.end_iter(), true),
-                    page.state.borrow().document.text(),
+                    document.state.borrow().document.text(),
                     "shell and core disagree about the document"
                 );
                 if !recolor_pending.replace(true) {
-                    let page = Rc::clone(&page);
+                    let document = Rc::clone(&document);
                     let pending = Rc::clone(&recolor_pending);
                     glib::idle_add_local_once(move || {
                         pending.set(false);
-                        recolor(&page.buffer);
-                        apply_highlights(&page.buffer, &page.state.borrow().document);
+                        recolor(&document.buffer);
+                        apply_highlights(&document.buffer, &document.state.borrow().document);
                     });
                 }
                 // Once the burst settles: announce to the server pool
                 // and refresh the Markdown preview.
-                let document_path = page.path().borrow().clone();
-                if document_path.is_some() || page.preview.is_some() {
+                let document_path = document.path.borrow().clone();
+                if document_path.is_some() || views.iter().any(|view| view.preview.is_some()) {
                     if let Some(previous) = lsp_timer.take() {
                         previous.remove();
                     }
-                    let page = Rc::clone(&page);
+                    let document = Rc::clone(&document);
                     let timer = Rc::clone(&lsp_timer);
                     let source = glib::timeout_add_local_once(
                         std::time::Duration::from_millis(300),
                         move || {
                             timer.set(None);
-                            if let Some(path) = page.path().borrow().clone() {
-                                let text = page.state.borrow().document.text();
+                            if let Some(path) = document.path.borrow().clone() {
+                                let text = document.state.borrow().document.text();
                                 Shell::instance()
                                     .pool
                                     .borrow_mut()
                                     .did_change(Path::new(&path), &text);
                             }
-                            update_preview(&page);
-                            crate::spell::run(&page);
-                            refresh_change_marks(&page);
+                            for view in document.views() {
+                                update_preview(&view);
+                                crate::spell::run(&view);
+                                refresh_change_marks(&view);
+                            }
                         },
                     );
                     lsp_timer.set(Some(source));
@@ -342,13 +379,15 @@ impl Page {
                     if let Some(previous) = autosave_timer.take() {
                         previous.remove();
                     }
-                    let page = Rc::clone(&page);
+                    let document = Rc::clone(&document);
                     let timer = Rc::clone(&autosave_timer);
                     let source = glib::timeout_add_local_once(
                         std::time::Duration::from_secs(autosave_after as u64),
                         move || {
                             timer.set(None);
-                            autosave(&page);
+                            if let Some(view) = document.views().first() {
+                                autosave(view);
+                            }
                         },
                     );
                     autosave_timer.set(Some(source));
@@ -359,34 +398,24 @@ impl Page {
                 let triggers = typed.len() == 1
                     && typed.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.');
                 if triggers {
-                    let page = Rc::clone(&page);
-                    glib::timeout_add_local_once(
-                        std::time::Duration::from_millis(250),
-                        move || request_completion(&page),
-                    );
+                    // The suggestion belongs under the caret being typed
+                    // at, so it goes to the view with the keyboard.
+                    if let Some(page) = views.iter().find(|view| view.view.has_focus()).cloned() {
+                        glib::timeout_add_local_once(
+                            std::time::Duration::from_millis(250),
+                            move || request_completion(&page),
+                        );
+                    }
                 } else {
-                    page.completion.popover.popdown();
+                    for view in &views {
+                        view.completion.popover.popdown();
+                    }
                 }
             });
         }
-        apply_highlights(&buffer, &page.state.borrow().document);
-        update_preview(&page);
-        crate::spell::run(&page);
+}
 
-        // The pool learns about the document.
-        if let (Some(path), Some(language)) = (
-            page.path().borrow().clone(),
-            page.state.borrow().document.language_name(),
-        ) {
-            let text = page.state.borrow().document.text();
-            Shell::instance()
-                .pool
-                .borrow_mut()
-                .did_open(Path::new(&path), language, &text);
-        }
-        page
-    }
-
+impl Page {
     /// Reloads the Markdown preview from the core's HTML.
     pub fn update_preview_now(self: &Rc<Self>) {
         update_preview(self);
@@ -499,57 +528,6 @@ impl Page {
     fn folded(&self) -> &RefCell<Vec<(i32, i32)>> {
         &self.document.folded
     }
-}
-
-// MARK: Splitting
-
-/// Shows this document twice, side by side, or closes the second view.
-///
-/// Both views share the buffer, so there is one history and one save —
-/// what differs is where each is looking. That is the whole point:
-/// reading the top of a file while editing the bottom of it.
-pub fn toggle_split(page: &Rc<Page>) -> bool {
-    if close_split(page) {
-        return true;
-    }
-    let view = sourceview5::View::with_buffer(&page.buffer);
-    // The same look as the first view: they are one document.
-    view.set_monospace(true);
-    view.set_show_line_numbers(page.view.shows_line_numbers());
-    view.set_highlight_current_line(page.view.is_highlight_current_line());
-    view.set_tab_width(page.view.tab_width());
-    view.set_left_margin(6);
-    view.set_top_margin(6);
-    view.set_hexpand(true);
-    view.set_vexpand(true);
-
-    let scrolled = gtk::ScrolledWindow::builder()
-        .child(&view)
-        .hexpand(true)
-        .vexpand(true)
-        .build();
-    page.split_paned.set_end_child(Some(&scrolled));
-    page.split_paned
-        .set_position(page.split_paned.width().max(2) / 2);
-    *page.split_view.borrow_mut() = Some(view.clone());
-    view.grab_focus();
-    true
-}
-
-/// Takes the second view away, if there is one.
-pub fn close_split(page: &Rc<Page>) -> bool {
-    if page.split_view.borrow().is_none() {
-        return false;
-    }
-    page.split_paned.set_end_child(None::<&gtk::Widget>);
-    *page.split_view.borrow_mut() = None;
-    page.view.grab_focus();
-    true
-}
-
-/// Whether this document is showing twice.
-pub fn is_split(page: &Rc<Page>) -> bool {
-    page.split_view.borrow().is_some()
 }
 
 // MARK: Folding
