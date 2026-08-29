@@ -176,18 +176,34 @@ Markdown et ne va guère plus loin — et n'a jamais entendu parler d'un
 fichier nommé `Dockerfile`.
 
 **Réglages → Général → Icônes de fichier** accepte un **pack d'icônes
-VS Code** : choisissez le fichier JSON du thème d'icônes, ou le dossier
-d'extension qui le contient (son `package.json` dit lequel).
-**Effacer** rend l'arborescence aux icônes du système. Le choix est un
-chemin dans `config.json` :
+VS Code**. Les packs déjà vus sont sur la liste, séparés entre ceux
+importés ici et ceux ouverts là où ils sont ; *System icons* est le
+retour en arrière.
+
+**Import…** copie le pack dans le dossier propre à Textchum —
+`~/Library/Application Support/Textchum/icons/` sur macOS,
+`~/.local/share/textchum/icons/` sur Linux — déplacer ou supprimer
+l'original n'emporte donc pas les icônes. **Open…** pointe vers un pack
+là où il est et s'en souvient, ce qui convient à un pack que vous
+maintenez vous-même. Les deux acceptent le fichier JSON du thème
+d'icônes ou le dossier d'extension qui le contient (son `package.json`
+dit lequel). **Delete** supprime un pack importé ; un pack ouvert
+ailleurs appartient à qui l'a mis là, il ne peut donc que sortir de la
+liste.
+
+Le choix est un chemin dans `config.json`, et les packs ouverts
+ailleurs sont retenus à côté :
 
 ```json
-{"icon_pack": "~/packs/material-icon-theme/dist/material-icons.json"}
+{
+  "icon_pack": "~/packs/material-icon-theme/dist/material-icons.json",
+  "icon_packs": ["~/packs/material-icon-theme/dist/material-icons.json"]
+}
 ```
 
-Le pack est lu là où il est — rien n'est copié — donc déplacer ou
-supprimer le dossier emporte les icônes. Un pack illisible est signalé
-une fois et l'arborescence garde les icônes du système.
+Un pack dont le dossier a disparu quitte la liste au lieu d'y rester
+pour échouer une fois choisi. Un pack illisible est signalé une fois et
+l'arborescence garde les icônes du système.
 
 La recherche suit celle de VS Code, du plus précis au moins précis :
 

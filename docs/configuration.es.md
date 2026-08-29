@@ -171,18 +171,33 @@ Markdown y no llega mucho más lejos — y nunca ha oído hablar de un
 archivo llamado `Dockerfile`.
 
 **Ajustes → General → Iconos de archivo** acepta un **paquete de
-iconos de VS Code**: elige el archivo JSON del tema de iconos, o la
-carpeta de extensión que lo contiene (su `package.json` dice cuál es).
-**Borrar** devuelve el árbol a los iconos del sistema. La elección es
-una ruta en `config.json`:
+iconos de VS Code**. Los paquetes ya vistos están en la lista,
+separados entre los importados aquí y los abiertos donde están;
+*System icons* es la vuelta atrás.
+
+**Import…** copia el paquete a la carpeta propia de Textchum —
+`~/Library/Application Support/Textchum/icons/` en macOS,
+`~/.local/share/textchum/icons/` en Linux— así que mover o borrar el
+original no se lleva los iconos. **Open…** apunta a un paquete donde
+está y lo recuerda, que es lo adecuado para uno que mantienes tú. Ambos
+aceptan el archivo JSON del tema de iconos o la carpeta de extensión
+que lo contiene (su `package.json` dice cuál es). **Delete** borra un
+paquete importado; uno abierto desde otro sitio es de quien lo puso
+ahí, así que solo se puede quitar de la lista.
+
+La elección es una ruta en `config.json`, y los paquetes abiertos desde
+otro sitio se recuerdan a su lado:
 
 ```json
-{"icon_pack": "~/packs/material-icon-theme/dist/material-icons.json"}
+{
+  "icon_pack": "~/packs/material-icon-theme/dist/material-icons.json",
+  "icon_packs": ["~/packs/material-icon-theme/dist/material-icons.json"]
+}
 ```
 
-El paquete se lee donde está —no se copia nada—, así que mover o borrar
-la carpeta se lleva los iconos. Un paquete que no se puede leer se
-avisa una vez y el árbol conserva los iconos del sistema.
+Un paquete cuya carpeta ya no está desaparece de la lista en vez de
+quedarse ahí para fallar al elegirlo. Un paquete que no se puede leer
+se avisa una vez y el árbol conserva los iconos del sistema.
 
 La búsqueda sigue la de VS Code, de lo más específico a lo menos:
 

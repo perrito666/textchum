@@ -1708,6 +1708,157 @@ pub unsafe extern "C" fn tc_config_set_workspace_flag(
     );
 }
 
+/// The icon packs on offer: the ones imported into `dir`, then the
+/// ones opened from elsewhere that are still there.
+///
+/// Returns a nul-terminated JSON array of `{"name", "path",
+/// "imported"}`, released with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `dir` must point to
+/// `dir_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_icon_packs(
+    config: *const TcConfig,
+    dir: *const c_char,
+    dir_len: usize,
+) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(dir) = (unsafe { str_from_raw(dir, dir_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let known = config.inner.known_icon_packs();
+        let current = config.inner.icon_pack();
+        let packs: Vec<serde_json::Value> = textchum_core::icons::available(
+            std::path::Path::new(dir),
+            &known,
+            current.as_deref(),
+        )
+        .into_iter()
+        .map(|pack| {
+            serde_json::json!({
+                "name": pack.name,
+                "path": pack.path,
+                "imported": pack.imported,
+            })
+        })
+        .collect();
+        owned_c_string(serde_json::Value::Array(packs).to_string())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Copies an icon pack into `dir` and points the configuration at the
+/// copy.
+///
+/// A theme is a JSON file plus the images beside it, so what is copied
+/// is the folder holding it. Returns the pack's new path, or null with
+/// `error_out` filled in — release both with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes; `error_out`, when given, must be
+/// a writable pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_import_icon_pack(
+    config: *mut TcConfig,
+    source: *const c_char,
+    source_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+    error_out: *mut *mut c_char,
+) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return std::ptr::null_mut();
+    };
+    let (source, dir) = unsafe {
+        (
+            str_from_raw(source, source_len),
+            str_from_raw(dir, dir_len),
+        )
+    };
+    let (Some(source), Some(dir)) = (source, dir) else {
+        return std::ptr::null_mut();
+    };
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::icons::import(std::path::Path::new(source), std::path::Path::new(dir))
+    }))
+    .unwrap_or_else(|_| Err("importing the pack panicked".to_string()));
+    match outcome {
+        Ok(path) => {
+            // The copy is the one on the list now; the original stops
+            // being remembered so it is not offered twice.
+            config.inner.forget_icon_pack(source);
+            owned_c_string(path)
+        }
+        Err(message) => {
+            if !error_out.is_null() {
+                unsafe { *error_out = owned_c_string(message) };
+            }
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Deletes an imported pack. Only a pack inside `dir` can be removed.
+///
+/// # Safety
+/// Each pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_remove_icon_pack(
+    config: *mut TcConfig,
+    path: *const c_char,
+    path_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+) -> bool {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return false;
+    };
+    let (path, dir) = unsafe { (str_from_raw(path, path_len), str_from_raw(dir, dir_len)) };
+    let (Some(path), Some(dir)) = (path, dir) else {
+        return false;
+    };
+    let removed = catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::icons::remove_imported(
+            std::path::Path::new(path),
+            std::path::Path::new(dir),
+        )
+    }))
+    .unwrap_or_else(|_| Err("removing the pack panicked".to_string()));
+    if removed.is_ok() {
+        config.inner.forget_icon_pack(path);
+        if config.inner.icon_pack().as_deref() == Some(path) {
+            config.inner.set_icon_pack(None);
+        }
+    }
+    removed.is_ok()
+}
+
+/// Remembers an icon pack opened from outside Textchum's folder, so it
+/// stays on the list.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `path` must point to
+/// `path_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_remember_icon_pack(
+    config: *mut TcConfig,
+    path: *const c_char,
+    path_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.remember_icon_pack(path)));
+}
+
 /// The chosen keyboard profile (`keys_profile`), or an empty string
 /// for the editor's own bindings. Release with [`tc_string_free`].
 ///

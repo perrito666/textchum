@@ -356,6 +356,44 @@ final class SettingsModel: ObservableObject {
         workspaceEntries = entries.sorted { $0.scope < $1.scope }
     }
 
+    /// Where imported icon packs live:
+    /// `~/Library/Application Support/Textchum/icons/`.
+    static var iconPacksDirectory: String {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Textchum/icons", isDirectory: true).path
+    }
+
+    /// The packs on offer: the imported ones first, then the ones
+    /// opened from elsewhere.
+    var iconPacks: [CoreConfig.IconPackEntry] {
+        config.iconPacks(in: Self.iconPacksDirectory)
+    }
+
+    /// Points at a pack chosen from outside Textchum's folder, and
+    /// remembers it so it stays on the list.
+    func useIconPack(path: String) {
+        config.rememberIconPack(path: path)
+        iconPack = path
+    }
+
+    /// Copies a pack into Textchum's folder and switches to the copy.
+    /// Returns the reason it could not be copied.
+    func importIconPack(from source: String) -> String? {
+        let outcome = config.importIconPack(from: source, into: Self.iconPacksDirectory)
+        guard let path = outcome.path else { return outcome.error }
+        iconPack = path
+        return nil
+    }
+
+    /// Deletes an imported pack.
+    func removeIconPack(path: String) {
+        config.removeIconPack(path: path, from: Self.iconPacksDirectory)
+        // Removing the one in use leaves the system's icons; the core
+        // has already cleared it, and this republishes that.
+        reloadFromConfig()
+        persistNow()
+    }
+
     /// One overridable command, with the menu title it wears and the
     /// shortcut it has now.
     struct Shortcut: Identifiable, Equatable {
@@ -739,6 +777,8 @@ struct SettingsView: View {
 /// to rather than something that is not drawn.
 struct GeneralSettingsTab: View {
     @ObservedObject var model: SettingsModel
+    /// Why the last import did not work, said once and in place.
+    @State private var iconPackError: String?
 
     /// The system's dictionaries, plus whatever the file already names
     /// — a hand-written `en_US` on a machine that spells it `en` would
@@ -800,17 +840,29 @@ struct GeneralSettingsTab: View {
     /// holding it. Both are offered because packs are distributed both
     /// ways, and requiring someone to know which is inside is asking
     /// them to read a manifest.
-    private func chooseIconPack() {
+    /// The picker's selection, which is the pack in use.
+    private var iconPackSelection: Binding<String> {
+        Binding(
+            get: { model.iconPack },
+            set: { model.iconPack = $0 }
+        )
+    }
+
+    /// Chooses a pack. Importing copies it into Textchum's folder, so
+    /// it survives the original being moved or deleted; opening points
+    /// at it where it is.
+    private func chooseIconPack(copying: Bool) {
         let panel = NSOpenPanel()
         panel.message = "Choose an icon theme file, or the extension folder holding one."
-        panel.prompt = "Use"
+        panel.prompt = copying ? "Import" : "Use"
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [UTType.json].compactMap { $0 }
         panel.treatsFilePackagesAsDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        model.iconPack = url.path
+        iconPackError = copying ? model.importIconPack(from: url.path) : nil
+        if !copying { model.useIconPack(path: url.path) }
     }
 
     private var form: some View {
@@ -829,23 +881,45 @@ struct GeneralSettingsTab: View {
             // A pack is a folder of images somewhere on disk, not a
             // name from a list, so it gets a chooser rather than a
             // picker — and a way back to the system's icons.
+            // The packs already seen are a list; a new one is a folder
+            // somewhere on disk, so both a picker and a chooser.
             LabeledContent("File icons:") {
                 HStack(spacing: 8) {
-                    Text(
-                        model.iconPack.isEmpty
-                            ? "System icons"
-                            : (model.iconPack as NSString).lastPathComponent
-                    )
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(model.iconPack.isEmpty ? .secondary : .primary)
-                    .help(model.iconPack)
-                    Spacer(minLength: 0)
-                    Button("Choose…") { chooseIconPack() }
-                    if !model.iconPack.isEmpty {
-                        Button("Clear") { model.iconPack = "" }
+                    Picker("", selection: iconPackSelection) {
+                        Text("System icons").tag("")
+                        let imported = model.iconPacks.filter(\.imported)
+                        let elsewhere = model.iconPacks.filter { !$0.imported }
+                        if !imported.isEmpty {
+                            Section("Imported") {
+                                ForEach(imported, id: \.path) { pack in
+                                    Text(pack.name).tag(pack.path)
+                                }
+                            }
+                        }
+                        if !elsewhere.isEmpty {
+                            Section("Elsewhere") {
+                                ForEach(elsewhere, id: \.path) { pack in
+                                    Text(pack.name).tag(pack.path)
+                                }
+                            }
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 220)
+                    Button("Import…") { chooseIconPack(copying: true) }
+                    Button("Open…") { chooseIconPack(copying: false) }
+                    if !model.iconPack.isEmpty,
+                        model.iconPacks.first(where: { $0.path == model.iconPack })?.imported
+                            == true
+                    {
+                        Button("Delete") { model.removeIconPack(path: model.iconPack) }
                     }
                 }
+            }
+            if let iconPackError {
+                Text(iconPackError)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Picker("Open files in:", selection: $model.openTarget) {
                 Text("Tabs").tag(CoreOpenTarget.tab)
