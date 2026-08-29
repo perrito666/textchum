@@ -12,8 +12,14 @@ whose identity *is* their name: `Makefile` (and `*.mk`), and git's
 message files (`COMMIT_EDITMSG`, `MERGE_MSG`, `TAG_EDITMSG`), so commit
 messages written through `chum --wait` arrive colored. It runs on open
 and on the first save of an untitled document. Currently recognized:
-Rust, Python, Go, C, JavaScript, JSON, Bash, Make, git commit messages,
-HTML, CSS, TOML, YAML, Swift, Zig, and Markdown. The window subtitle
+Rust, Python, Go, C, C++, TypeScript, TSX, JavaScript, Java, C#, Ruby,
+PHP, Lua, Haskell, OCaml, Scala, Elixir, Nix, R, CMake, XML, JSON, Bash,
+Make, git commit messages, Go templates, HTML, CSS, TOML, YAML, SQL,
+Swift, Zig, and Markdown.
+
+C++ and TypeScript inherit their parent's colouring — C's and
+JavaScript's — and add their own on top, which is how their grammars
+ship: each carries only what it adds. The window subtitle
 shows the active language; unrecognized files simply stay plain text.
 The navigator's file rows carry the type's own Finder icon when macOS
 genuinely differentiates it — and a small badge in the language's

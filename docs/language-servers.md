@@ -110,6 +110,17 @@ Textchum finds servers on `PATH` — it does not install them:
 | Swift | sourcekit-lsp | ships with the Xcode toolchain |
 | Zig | zls | `brew install zls` |
 | Bash | bash-language-server | `npm install -g bash-language-server` |
+| C++ | clangd | Xcode CLT, or `brew install llvm` |
+| TypeScript | typescript-language-server | `npm install -g typescript-language-server typescript` |
+| Java | jdtls | `brew install jdtls` |
+| C# | csharp-ls | `dotnet tool install --global csharp-ls` |
+| Ruby | ruby-lsp | `gem install ruby-lsp` |
+| Lua | lua-language-server | `brew install lua-language-server` |
+| Haskell | haskell-language-server | `ghcup install hls` |
+| OCaml | ocamllsp | `opam install ocaml-lsp-server` |
+| Scala | metals | `cs install metals` |
+| Nix | nil | `nix profile install nixpkgs#nil` |
+| CMake | cmake-language-server | `uv tool install cmake-language-server` |
 | JSON | vscode-json-language-server | `npm install -g vscode-langservers-extracted` |
 | HTML | vscode-html-language-server | `npm install -g vscode-langservers-extracted` |
 | CSS | vscode-css-language-server | `npm install -g vscode-langservers-extracted` |
@@ -117,10 +128,16 @@ Textchum finds servers on `PATH` — it does not install them:
 | TOML | taplo | `brew install taplo` |
 | Markdown | marksman | `brew install marksman` |
 
-Go templates are served by `gopls` too. Several languages have more than
-one server registered: Python has `pyright`, `basedpyright`, `pylsp`,
-`ruff`, `jedi`, `ty` and `pyrefly`; JavaScript has
-`typescript-language-server`, `vtsls`, `deno` and `biome`. The table
+Go templates are served by `gopls` too, C++ by `clangd`, and TypeScript
+and TSX by the JavaScript servers. Several languages have more than one
+server registered: Python has `pyright`, `basedpyright`, `pylsp`,
+`ruff`, `jedi`, `ty` and `pyrefly`; JavaScript, TypeScript and TSX have
+`typescript-language-server`, `vtsls`, `deno` and `biome`; Ruby has
+`ruby-lsp` and `solargraph`.
+
+PHP has a grammar but no registered server: the ones people use do not
+document the command line they take, and an entry that is a guess is
+worse than none — `lsp.servers` takes one you know. The table
 names the one used when the configuration says nothing; the others are
 asked for by id.
 

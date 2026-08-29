@@ -14,8 +14,13 @@ les messages de git (`COMMIT_EDITMSG`, `MERGE_MSG`, `TAG_EDITMSG`), si
 bien que les messages de commit écrits via `chum --wait` arrivent
 colorés. Elle s'exécute à l'ouverture et au premier enregistrement d'un
 document sans titre. Sont actuellement reconnus : Rust, Python, Go, C,
-JavaScript, JSON, Bash, Make, messages de commit git, HTML, CSS, TOML,
-YAML, Swift, Zig et Markdown. Le sous-titre de la fenêtre affiche le
+C++, TypeScript, TSX, JavaScript, Java, C#, Ruby, PHP, Lua, Haskell,
+OCaml, Scala, Elixir, Nix, R, CMake, XML, JSON, Bash, Make, messages de
+commit git, modèles Go, HTML, CSS, TOML, YAML, SQL, Swift, Zig et
+Markdown. C++ et TypeScript héritent de la coloration de leur parent —
+celle de C et de JavaScript — et ajoutent la leur par-dessus, ce qui est
+la façon dont leurs grammaires sont fournies : chacune ne porte que ce
+qu'elle ajoute. Le sous-titre de la fenêtre affiche le
 langage actif ; les fichiers non reconnus restent simplement en texte
 brut. Les lignes du navigateur portent l'icône Finder propre au type quand
 macOS le distingue vraiment — et un petit insigne à la couleur
