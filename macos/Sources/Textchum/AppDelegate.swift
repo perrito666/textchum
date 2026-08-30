@@ -1091,6 +1091,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.closeSplitCommand(_:)): "closeSplit",
             #selector(DocumentController.focusOtherSide(_:)): "otherSide",
             #selector(DocumentController.closeTab(_:)): "close",
+            #selector(DocumentController.toggleFold(_:)): "fold",
+            #selector(DocumentController.foldAll(_:)): "foldAll",
+            #selector(DocumentController.unfoldAll(_:)): "unfoldAll",
             #selector(DocumentController.selectNextTab(_:)): "nextTab",
             #selector(DocumentController.selectPreviousTab(_:)): "previousTab",
             #selector(DocumentController.showInEveryPane(_:)): "sameFileBothSides",
@@ -2284,6 +2287,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         findMenuItem.submenu = findMenu
         editMenu.addItem(findMenuItem)
 
+        editMenu.addItem(.separator())
+        let foldItem = NSMenuItem(
+            title: "Fold",
+            action: #selector(DocumentController.toggleFold(_:)),
+            keyEquivalent: "[")
+        foldItem.keyEquivalentModifierMask = [.command]
+        editMenu.addItem(foldItem)
+        let foldAllItem = NSMenuItem(
+            title: "Fold All",
+            action: #selector(DocumentController.foldAll(_:)),
+            keyEquivalent: "[")
+        foldAllItem.keyEquivalentModifierMask = [.command, .option]
+        editMenu.addItem(foldAllItem)
+        let unfoldItem = NSMenuItem(
+            title: "Unfold All",
+            action: #selector(DocumentController.unfoldAll(_:)),
+            keyEquivalent: "]")
+        unfoldItem.keyEquivalentModifierMask = [.command]
+        editMenu.addItem(unfoldItem)
         editMenu.addItem(.separator())
         let splitItem = NSMenuItem(
             title: "Split Editor",

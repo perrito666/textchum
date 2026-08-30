@@ -129,6 +129,11 @@ final class LineNumberGutterView: NSView {
             let offset = contentManager.offset(
                 from: documentStart, to: fragment.rangeInElement.location)
             let line = self.lineNumber(forOffset: offset)
+            // A folded line is laid out at a hundredth of a point, so
+            // its number would land on the one above it.
+            if frame.height < 1 {
+                return true
+            }
             if line != lastLine, top >= -frame.height {
                 lastLine = line
                 self.drawChangeMark(forLine: line, top: top, height: frame.height)

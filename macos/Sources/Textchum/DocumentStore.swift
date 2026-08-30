@@ -16,6 +16,10 @@ final class OpenDocument {
     /// index and the recently closed cache go on. A document saved
     /// under a new name keeps its identity and changes this.
     var path: String?
+    /// The stretches folded shut, as first and last line, both
+    /// zero-based. They belong to the document: folding a function in
+    /// one view folds it in every view of the file.
+    var folds: [(start: Int, end: Int)] = []
     /// What the server last said about it. A finding is about the
     /// file, not about the window it happens to be visible in.
     var diagnostics: [CoreDiagnostic] = []

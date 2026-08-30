@@ -45,6 +45,18 @@ le document n'a pas l'usage n'y est pas : sans serveur pas de
 recherche des références, sans signalements pas de lignes de
 diagnostics.
 
+## Repliement
+
+**Fold** (⌘[, Ctrl+[ sous Linux) referme le bloc qui s'ouvre sur la
+ligne du curseur ; **Fold All** (⌥⌘[, Ctrl+Alt+[) referme tous ceux qui
+ne sont pas déjà dans un bloc fermé, et **Unfold All** (⌘], Ctrl+]) les
+rouvre. Un bloc fermé montre sa ligne d'ouverture suivie de points de
+suspension.
+
+Les blocs viennent de l'arbre qui sert à la coloration, et les replis
+appartiennent au document : refermer une fonction dans une vue la
+referme dans toutes les vues de ce fichier.
+
 ## Divisions
 
 **Split Editor** (⌘\\, Ctrl+\\ sous Linux) montre le document deux

@@ -263,6 +263,9 @@ final class DocumentController: NSResponder {
         }
     }
 
+    private var cachedFoldSpans: [(opening: NSRange, hidden: NSRange)] = []
+    private var foldSpansAreStale = true
+
     /// The settings to dress a new view in, kept so that the second view
     /// of a document looks like the first.
     private var appliedSettings: EditorSettings?
@@ -331,6 +334,11 @@ final class DocumentController: NSResponder {
                 userInfo: nil
             ))
 
+        if let content = textView.textLayoutManager?.textContentManager
+            as? NSTextContentStorage
+        {
+            content.delegate = self
+        }
         let isFirst = views.isEmpty
         views.append(view)
         if isFirst {
@@ -1029,6 +1037,126 @@ final class DocumentController: NSResponder {
             let range = LSPEdits.nsRange(of: edit, in: textView.string as NSString)
             textView.insertText(edit.newText, replacementRange: range)
         }
+    }
+
+    // MARK: Folding
+
+    /// Folding hides the lines after the one that opens a block, and
+    /// marks that line with an ellipsis.
+    ///
+    /// TextKit 2 lays out what the content storage offers, so a fold is
+    /// a change to what the document says its paragraphs are rather
+    /// than an attribute on the text. The lines inside a fold are handed
+    /// over as a bare separator at a hundredth of a point — measured at
+    /// 0.01pt each, against 16pt for a line of code.
+    ///
+    /// Withholding those paragraphs instead is the obvious move and does
+    /// not work: `NSTextViewportLayoutController` cannot walk an
+    /// enumeration with a gap in it, and the text area renders nothing
+    /// at all. Measured before this was written.
+    @objc func toggleFold(_ sender: Any?) {
+        guard let textView else { return }
+        let line = lineNumber(ofOffset: textView.selectedRange().location)
+        if let at = openDocument.folds.firstIndex(where: { $0.start == line }) {
+            openDocument.folds.remove(at: at)
+            refreshFolds()
+            return
+        }
+        guard let range = coreDocument.foldRanges.first(where: { $0.start == line }) else {
+            NSSound.beep()
+            return
+        }
+        openDocument.folds.append(range)
+        refreshFolds()
+    }
+
+    /// Folds every block that is not inside one already folded.
+    @objc func foldAll(_ sender: Any?) {
+        var folds: [(start: Int, end: Int)] = []
+        for range in coreDocument.foldRanges {
+            // A block inside one already folded is hidden either way.
+            if folds.contains(where: { range.start > $0.start && range.start <= $0.end }) {
+                continue
+            }
+            folds.append(range)
+        }
+        if folds.isEmpty {
+            NSSound.beep()
+            return
+        }
+        openDocument.folds = folds
+        refreshFolds()
+    }
+
+    @objc func unfoldAll(_ sender: Any?) {
+        guard !openDocument.folds.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        openDocument.folds = []
+        refreshFolds()
+    }
+
+    var hasFolds: Bool { !openDocument.folds.isEmpty }
+
+    /// The line a character offset is on, zero-based.
+    private func lineNumber(ofOffset offset: Int) -> Int {
+        let text = coreDocument.text as NSString
+        var line = 0
+        var index = 0
+        while index < offset, index < text.length {
+            index = NSMaxRange(text.lineRange(for: NSRange(location: index, length: 0)))
+            if index <= offset { line += 1 }
+        }
+        return line
+    }
+
+    /// Rebuilds what the folds hide and lays the views out again.
+    func refreshFolds() {
+        foldSpansAreStale = true
+        for view in views {
+            guard let content = view.textView.textLayoutManager?.textContentManager
+                as? NSTextContentStorage
+            else { continue }
+            content.performEditingTransaction {
+                let length = content.textStorage?.length ?? 0
+                content.textStorage?.edited(
+                    .editedAttributes, range: NSRange(location: 0, length: length),
+                    changeInLength: 0)
+            }
+            view.gutter.invalidateLineStarts()
+            view.gutter.needsDisplay = true
+        }
+        applyHighlights(force: true)
+        renderMarks()
+    }
+
+    /// Where the folds are, in characters: the line that opens each one
+    /// and the run it hides. Recomputed when the folds or the text
+    /// change, and only while something is folded.
+    private func foldSpans() -> [(opening: NSRange, hidden: NSRange)] {
+        if !foldSpansAreStale { return cachedFoldSpans }
+        foldSpansAreStale = false
+        cachedFoldSpans = []
+        guard !openDocument.folds.isEmpty, let textView else { return [] }
+        let text = textView.string as NSString
+        // One walk of the file, not one per paragraph.
+        var starts: [Int] = [0]
+        var index = 0
+        while index < text.length {
+            index = NSMaxRange(text.lineRange(for: NSRange(location: index, length: 0)))
+            starts.append(index)
+        }
+        for fold in openDocument.folds {
+            guard fold.start >= 0, fold.start + 1 < starts.count, fold.end < starts.count
+            else { continue }
+            let opening = text.lineRange(for: NSRange(location: starts[fold.start], length: 0))
+            let from = starts[fold.start + 1]
+            let to = min(starts[min(fold.end + 1, starts.count - 1)], text.length)
+            guard to > from else { continue }
+            cachedFoldSpans.append((opening, NSRange(location: from, length: to - from)))
+        }
+        return cachedFoldSpans
     }
 
     // MARK: Splitting
@@ -3114,6 +3242,52 @@ final class DocumentController: NSResponder {
 
 // MARK: - Preview navigation
 
+extension DocumentController: NSTextContentStorageDelegate {
+    /// What a paragraph is, as far as layout is concerned.
+    ///
+    /// The line that opens a fold gains an ellipsis; the lines it hides
+    /// are handed over as a bare separator at a hundredth of a point,
+    /// which is what makes them take no room. Everything else is left
+    /// alone, and nil means "as it is in the document".
+    func textContentStorage(
+        _ textContentStorage: NSTextContentStorage,
+        textParagraphWith range: NSRange
+    ) -> NSTextParagraph? {
+        let spans = foldSpans()
+        guard !spans.isEmpty, let storage = textContentStorage.textStorage else { return nil }
+        if let fold = spans.first(where: { $0.opening.location == range.location }) {
+            _ = fold
+            let shown = NSMutableAttributedString(
+                attributedString: storage.attributedSubstring(from: range))
+            guard shown.length > 0 else { return nil }
+            let attributes = storage.attributes(at: range.location, effectiveRange: nil)
+            // Before the separator, not after it: after it is a new line.
+            shown.replaceCharacters(
+                in: NSRange(location: shown.length - 1, length: 1),
+                with: NSAttributedString(string: " ⋯\n", attributes: attributes))
+            return NSTextParagraph(attributedString: shown)
+        }
+        guard spans.contains(where: { NSLocationInRange(range.location, $0.hidden) }) else {
+            return nil
+        }
+        let style = NSMutableParagraphStyle()
+        style.maximumLineHeight = 0.01
+        style.minimumLineHeight = 0.01
+        style.lineSpacing = 0
+        style.paragraphSpacing = 0
+        style.paragraphSpacingBefore = 0
+        // A paragraph with no separator at all crashes the layout:
+        // NSTextParagraph reads the last character to find one.
+        return NSTextParagraph(
+            attributedString: NSAttributedString(
+                string: "\n",
+                attributes: [
+                    .font: NSFont.monospacedSystemFont(ofSize: 0.01, weight: .regular),
+                    .paragraphStyle: style,
+                ]))
+    }
+}
+
 extension DocumentController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         // The template page is ready; push the first render.
@@ -3438,6 +3612,9 @@ extension DocumentController: NSTextViewDelegate {
     }
 
     func textDidChange(_ notification: Notification) {
+        // The lines moved; where the folds sit in characters has to be
+        // worked out again before the next layout pass.
+        foldSpansAreStale = true
         mirrorSnippetStops()
         updateChrome()
         refreshDecorations()

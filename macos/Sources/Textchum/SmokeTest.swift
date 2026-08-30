@@ -950,6 +950,54 @@ func runSmokeTest() -> Int32 {
     bench.window?.close()
     print("window ok (tabs over panes, one file on both sides, tab closed)")
 
+    // Folding hides the lines after the one that opens a block. TextKit
+    // 2 lays out what the content storage offers, so what is checked
+    // here is the layout itself: the folded lines have to take no room.
+    let foldBench = Workbench(sidebar: nil)
+    let foldDocument = CoreDocument()
+    _ = foldDocument.setLanguage("rust")
+    try? foldDocument.replace(
+        utf16Range: NSRange(location: 0, length: 0),
+        with: "fn main() {\n    let a = 1;\n    let b = 2;\n}\nafter\n")
+    foldBench.add(DocumentController(document: foldDocument))
+    foldBench.window?.makeKeyAndOrderFront(nil)
+    guard let folder = foldBench.focusedDocument, let foldView = folder.primaryView else {
+        print("FAIL: the folding window has no view")
+        return 1
+    }
+    guard !folder.hasFolds else {
+        print("FAIL: a fresh document is already folded")
+        return 1
+    }
+    let heightOf: () -> CGFloat = {
+        guard let layout = foldView.textLayoutManager else { return 0 }
+        layout.ensureLayout(for: layout.documentRange)
+        var height: CGFloat = 0
+        layout.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
+            height = max(height, fragment.layoutFragmentFrame.maxY)
+            return true
+        }
+        return height
+    }
+    let unfolded = heightOf()
+    folder.foldAll(nil)
+    guard folder.hasFolds else {
+        print("FAIL: nothing folded in a document with a block")
+        return 1
+    }
+    let folded = heightOf()
+    guard folded < unfolded - 20 else {
+        print("FAIL: folding took no height away (\(unfolded) → \(folded))")
+        return 1
+    }
+    folder.unfoldAll(nil)
+    guard !folder.hasFolds, heightOf() >= unfolded - 0.5 else {
+        print("FAIL: unfolding did not give the lines back")
+        return 1
+    }
+    foldBench.window?.close()
+    print("folding ok (folded lines take no height, given back on unfold)")
+
     // The store holds documents; controllers hold views of them. A
     // path opens once however many views ask for it, and a rename
     // follows the document rather than making a second one.

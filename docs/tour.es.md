@@ -45,6 +45,18 @@ el que se hizo clic, no sobre el cursor, que el clic deja donde
 estaba. Lo que el documento no puede usar no está: sin servidor no hay
 buscar referencias, sin hallazgos no hay filas de diagnósticos.
 
+## Plegado
+
+**Fold** (⌘[, Ctrl+[ en Linux) cierra el bloque que abre en la línea
+del cursor; **Fold All** (⌥⌘[, Ctrl+Alt+[) cierra todos los que no
+estén ya dentro de uno cerrado, y **Unfold All** (⌘], Ctrl+]) los abre
+de nuevo. Un bloque cerrado muestra su línea de apertura con puntos
+suspensivos detrás.
+
+Los bloques salen del mismo árbol que usa el coloreado, y los pliegues
+son del documento: cerrar una función en una vista la cierra en todas
+las vistas de ese archivo.
+
 ## Divisiones
 
 **Split Editor** (⌘\\, Ctrl+\\ en Linux) muestra el documento dos
