@@ -907,15 +907,19 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the two views are not on one document")
         return 1
     }
-    // A column's views are views of whatever it shows: switching the
-    // tab keeps the shape and moves every view to the new file.
+    // Switching a column's tab shows the new file the way that file is
+    // shown — one view here, since `first` has never been split — and
+    // the file that left keeps its own shape for when it comes back.
     bench.showInFocusedPane(ObjectIdentifier(first))
-    // first is in all three columns now: one view each in the first
-    // two, two in the third.
-    guard bench.columns[2].views.count == 2, first.paintTargetCount == 4,
-        second.paintTargetCount == 0
+    guard bench.columns[2].views.count == 1, first.paintTargetCount == 3,
+        second.paintTargetCount == 0, second.openDocument.layout.views == 2
     else {
-        print("FAIL: the views did not follow the column's tab")
+        print("FAIL: the shape did not follow the file")
+        return 1
+    }
+    bench.addViewToFocusedColumn()
+    guard bench.columns[2].views.count == 2, first.paintTargetCount == 4 else {
+        print("FAIL: the column did not take a second view")
         return 1
     }
     bench.closeFocusedView()
@@ -923,6 +927,14 @@ func runSmokeTest() -> Int32 {
         print("FAIL: closing a view left it behind")
         return 1
     }
+    // And the file that was split comes back split: two views, because
+    // that is how this file is shown.
+    bench.showInFocusedPane(ObjectIdentifier(second))
+    guard bench.columns[2].views.count == 2, second.openDocument.layout.views == 2 else {
+        print("FAIL: the file did not come back the way it was shown")
+        return 1
+    }
+    bench.showInFocusedPane(ObjectIdentifier(first))
     // One file in every column at once.
     bench.showEverywhere(ObjectIdentifier(first))
     guard bench.columns.allSatisfy({ $0.document === first }) else {

@@ -281,15 +281,52 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         guard columns.indices.contains(index) else { return }
         let column = columns[index]
         if column.document === document { return }
-        let wanted = max(1, column.views.count)
+        // What the outgoing file looked like here is what it looks like
+        // when it comes back.
+        record(column)
         release(column)
         column.document = document
-        for _ in 0..<wanted {
+        let layout = document.openDocument.layout
+        for _ in 0..<max(1, layout.views) {
             addView(to: column)
         }
-        placeDividers(of: column)
+        placeDividers(of: column, at: layout.dividers)
+        for (view, place) in zip(column.views, layout.places) {
+            restore(view: view, to: place)
+        }
         refreshTabs()
         refreshChrome(for: document)
+    }
+
+    /// Writes down how a column is showing its file: the file is what
+    /// remembers, so any column it lands in afterwards looks the same.
+    private func record(_ column: Column) {
+        guard let document = column.document, !column.views.isEmpty else { return }
+        document.openDocument.layout = DocumentLayout(
+            views: column.views.count,
+            dividers: column.dividerFractions,
+            places: column.views.map { view in
+                DocumentLayout.Place(
+                    caret: view.textView.selectedRange().location,
+                    scroll: Double(view.scrollView.contentView.bounds.origin.y))
+            })
+    }
+
+    /// Records every column, for the session and for a file that is
+    /// about to be closed.
+    func recordLayouts() {
+        for column in columns { record(column) }
+    }
+
+    /// Puts a view back where it was looking.
+    private func restore(view: DocumentView, to place: DocumentLayout.Place) {
+        let length = (view.textView.string as NSString).length
+        view.textView.setSelectedRange(
+            NSRange(location: min(place.caret, length), length: 0))
+        if place.scroll > 0 {
+            view.scrollView.contentView.scroll(to: NSPoint(x: 0, y: place.scroll))
+            view.scrollView.reflectScrolledClipView(view.scrollView.contentView)
+        }
     }
 
     /// One more view of what the column shows, stacked under the rest.
@@ -428,6 +465,7 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         guard column.document != nil else { return }
         addView(to: column)
         placeDividers(of: column)
+        record(column)
         focus(column: focusedColumn, view: column.views.count - 1)
     }
 
@@ -447,6 +485,7 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         }
         column.split.adjustSubviews()
         placeDividers(of: column)
+        record(column)
         focus(column: focusedColumn, view: min(focusedView, column.views.count - 1))
     }
 

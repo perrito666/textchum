@@ -28,6 +28,17 @@ pub struct DocumentId(u64);
 /// belongs to the document, so two views of one file cannot disagree
 /// about it: they share the buffer, so they share the text, the
 /// history and every edit.
+/// How a file is shown, wherever it is shown.
+#[derive(Clone, Debug, Default)]
+pub struct DocumentLayout {
+    /// Views stacked in the column showing it; one when it is not
+    /// stacked at all.
+    pub views: usize,
+    /// Where the dividers between them sit, as fractions of the
+    /// column's height.
+    pub dividers: Vec<f64>,
+}
+
 pub struct OpenDocument {
     pub id: DocumentId,
     /// The text every view of this document shares.
@@ -45,6 +56,11 @@ pub struct OpenDocument {
     /// well as underlined. An underline nobody can read is a
     /// notification with the message taken out.
     pub diagnostics: RefCell<Vec<Diagnostic>>,
+    /// How this file is shown: how many views a column stacks of it,
+    /// and where the dividers between them sit as fractions of the
+    /// column's height. It belongs to the file, so a column switched to
+    /// another tab and back finds it as it was.
+    pub layout: RefCell<DocumentLayout>,
     /// The views showing this document. Weak, so closing a tab is
     /// enough to be rid of its view.
     pub views: RefCell<Vec<std::rc::Weak<crate::page::Page>>>,
@@ -281,6 +297,10 @@ impl Shell {
             monitor: RefCell::new(None),
             folded: RefCell::new(Vec::new()),
             diagnostics: RefCell::new(Vec::new()),
+            layout: RefCell::new(DocumentLayout {
+                views: 1,
+                dividers: Vec::new(),
+            }),
             views: RefCell::new(Vec::new()),
         });
         self.documents.borrow_mut().insert(id, Rc::clone(&document));
