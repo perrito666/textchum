@@ -522,6 +522,33 @@ cc -O2 -fPIC -shared -I src -o libtree-sitter-NOMBRE.dylib src/parser.c src/scan
 Una entrada que no se puede cargar cuesta ese lenguaje y nada más: el
 editor dice qué pasó y sigue.
 
+## El idioma de la interfaz
+
+La interfaz habla inglés, español o francés; **Interface language** en
+Preferencias elige uno, y *System* sigue al de la máquina. El cambio se
+aplica en el siguiente arranque.
+
+Los catálogos son del núcleo, así que los dos shells dicen lo mismo con
+las mismas palabras, y una frase sin traducir se lee como lo que dice
+en inglés en lugar de como una clave que falta. Un catálogo propio en
+el perfil se lee por encima del que trae la compilación, frase por
+frase:
+
+```json
+{
+  "Close Tab": "Cerrar pestaña",
+  "New Column": "Nueva columna"
+}
+```
+
+- `~/Library/Application Support/Textchum/translations/es.json`
+- `~/.config/textchum/translations/es.json`
+
+Corregir una línea es escribir una línea: el resto sigue viniendo del
+catálogo incluido. Un archivo con el nombre de un idioma que la
+compilación no trae se lee igual, así que un cuarto idioma es un
+archivo y no una versión nueva.
+
 ## Registros de proyecto
 
 Un archivo recuerda cómo está dividido, dónde miraba cada vista, qué

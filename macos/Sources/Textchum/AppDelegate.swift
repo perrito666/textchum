@@ -19,12 +19,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static var configPath: String { AppPaths.configPath }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let config = CoreConfig(path: Self.configPath)
+        self.config = config
+        // The interface language first: every label below is drawn in
+        // it, and the menu bar is built before anything else.
+        SessionStore.useProfile(ofConfigAt: Self.configPath)
+        CoreI18n.use(
+            config.interfaceLanguage,
+            catalogueDirectory: SessionStore.directory
+                .appendingPathComponent("translations", isDirectory: true).path)
+
         let mainMenu = makeMainMenu()
         NSApp.mainMenu = mainMenu
         registerMenuActions(in: mainMenu)
-
-        let config = CoreConfig(path: Self.configPath)
-        self.config = config
         // Grammars the build does not carry, named in the
         // configuration. One that cannot be opened costs that language
         // and nothing else, so the rest of the launch carries on.
@@ -649,12 +656,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.alertStyle = .warning
         alert.messageText =
             names.count == 1
-            ? "Do you want to save the changes made to “\(names[0])”?"
-            : "Do you want to save the changes made to \(names.count) files?"
+            ? t("Do you want to save the changes made to {}?", names[0])
+            : t("Do you want to save the changes made to {} files?", names.count)
         alert.informativeText = names.joined(separator: ", ")
-        alert.addButton(withTitle: "Save All")
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Don’t Save")
+        alert.addButton(withTitle: t("Save All"))
+        alert.addButton(withTitle: t("Cancel"))
+        alert.addButton(withTitle: t("Don’t Save"))
         switch alert.runModal() {
         case .alertFirstButtonReturn:
             var homeless = 0
@@ -1725,13 +1732,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(item)
         }
         if recents.isEmpty {
-            let empty = NSMenuItem(title: "No Recent Files", action: nil, keyEquivalent: "")
+            let empty = NSMenuItem(title: t("No Recent Files"), action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
         } else {
             menu.addItem(.separator())
             let clear = NSMenuItem(
-                title: "Clear Menu",
+                title: t("Clear Menu"),
                 action: #selector(clearRecentDocuments(_:)),
                 keyEquivalent: ""
             )
@@ -1829,7 +1836,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         formatPicker.show(
             rows: languages.map { .item($0.name) }, over: NSApp.keyWindow,
-            title: "New with Format", placeholder: "language…"
+            title: t("New with Format"), placeholder: "language…"
         ) { [weak self] index in
             guard languages.indices.contains(index) else { return }
             self?.makeUntitled(language: languages[index].name)
@@ -1984,7 +1991,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// nothing about lines. These go through the core, so both shells
     /// agree on what sorting and joining mean.
     private func makeTransformMenuItem() -> NSMenuItem {
-        let menu = NSMenu(title: "Transform")
+        let menu = NSMenu(title: t("Transform"))
         let groups: [[(String, String)]] = [
             [
                 ("Upper Case", "upper"),
@@ -2015,7 +2022,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 menu.addItem(item)
             }
         }
-        let item = NSMenuItem(title: "Transform", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: t("Transform"), action: nil, keyEquivalent: "")
         item.submenu = menu
         return item
     }
@@ -2025,35 +2032,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "About Textchum",
+            withTitle: t("About Textchum"),
             action: #selector(showAbout(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Settings…",
+            withTitle: t("Settings…"),
             action: #selector(showSettings(_:)),
             keyEquivalent: ","
         )
         appMenu.addItem(
-            withTitle: "Install chum Command…",
+            withTitle: t("Install chum Command…"),
             action: #selector(installCommandLineTool(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(
-            withTitle: "Open Themes Folder",
+            withTitle: t("Open Themes Folder"),
             action: #selector(openThemesFolder(_:)),
             keyEquivalent: ""
         )
-        let importThemeItem = NSMenuItem(title: "Import Theme", action: nil, keyEquivalent: "")
-        let importThemeMenu = NSMenu(title: "Import Theme")
+        let importThemeItem = NSMenuItem(title: t("Import Theme"), action: nil, keyEquivalent: "")
+        let importThemeMenu = NSMenu(title: t("Import Theme"))
         importThemeMenu.addItem(
-            withTitle: "From VS Code…",
+            withTitle: t("From VS Code…"),
             action: #selector(importVSCodeTheme(_:)),
             keyEquivalent: ""
         )
         importThemeMenu.addItem(
-            withTitle: "From TextMate…",
+            withTitle: t("From TextMate…"),
             action: #selector(importTextMateTheme(_:)),
             keyEquivalent: ""
         )
@@ -2061,7 +2068,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         appMenu.addItem(importThemeItem)
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Quit Textchum",
+            withTitle: t("Quit Textchum"),
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -2069,18 +2076,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
 
-        let fileMenu = NSMenu(title: "File")
+        let fileMenu = NSMenu(title: t("File"))
         fileMenu.addItem(
-            withTitle: "New", action: #selector(newDocument(_:)), keyEquivalent: "n")
+            withTitle: t("New"), action: #selector(newDocument(_:)), keyEquivalent: "n")
         let formatPickerItem = NSMenuItem(
-            title: "New with Format…",
+            title: t("New with Format…"),
             action: #selector(newDocumentWithFormatPicker(_:)),
             keyEquivalent: "n"
         )
         formatPickerItem.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(formatPickerItem)
-        let formatItem = NSMenuItem(title: "New with Format", action: nil, keyEquivalent: "")
-        let formatMenu = NSMenu(title: "New with Format")
+        let formatItem = NSMenuItem(title: t("New with Format"), action: nil, keyEquivalent: "")
+        let formatMenu = NSMenu(title: t("New with Format"))
         for language in CoreLanguages.all {
             let item = NSMenuItem(
                 title: language.name.capitalized,
@@ -2093,34 +2100,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         formatItem.submenu = formatMenu
         fileMenu.addItem(formatItem)
         fileMenu.addItem(
-            withTitle: "Open…", action: #selector(openDocument(_:)), keyEquivalent: "o")
+            withTitle: t("Open…"), action: #selector(openDocument(_:)), keyEquivalent: "o")
         fileMenu.addItem(
-            withTitle: "Open Quickly…", action: #selector(openQuickly(_:)), keyEquivalent: "t")
-        let openRecentItem = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
-        let openRecent = NSMenu(title: "Open Recent")
+            withTitle: t("Open Quickly…"), action: #selector(openQuickly(_:)), keyEquivalent: "t")
+        let openRecentItem = NSMenuItem(title: t("Open Recent"), action: nil, keyEquivalent: "")
+        let openRecent = NSMenu(title: t("Open Recent"))
         openRecent.delegate = self
         openRecentItem.submenu = openRecent
         self.openRecentMenu = openRecent
         fileMenu.addItem(openRecentItem)
         fileMenu.addItem(.separator())
         fileMenu.addItem(
-            withTitle: "Close Tab",
+            withTitle: t("Close Tab"),
             action: #selector(DocumentController.closeTab(_:)),
             keyEquivalent: "w")
         let closeWindowItem = NSMenuItem(
-            title: "Close Window",
+            title: t("Close Window"),
             action: #selector(NSWindow.performClose(_:)),
             keyEquivalent: "w")
         closeWindowItem.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(closeWindowItem)
         let properties = NSMenuItem(
-            title: "Get Info",
+            title: t("Get Info"),
             action: #selector(DocumentController.showFileProperties(_:)),
             keyEquivalent: "i"
         )
         fileMenu.addItem(properties)
         let reopen = NSMenuItem(
-            title: "Reopen Closed Tab",
+            title: t("Reopen Closed Tab"),
             action: #selector(reopenClosedDocument(_:)),
             keyEquivalent: "t"
         )
@@ -2128,19 +2135,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         reopen.target = self
         fileMenu.addItem(reopen)
         fileMenu.addItem(
-            withTitle: "Save",
+            withTitle: t("Save"),
             action: #selector(DocumentController.saveDocument(_:)),
             keyEquivalent: "s"
         )
         let saveAs = NSMenuItem(
-            title: "Save As…",
+            title: t("Save As…"),
             action: #selector(DocumentController.saveDocumentAs(_:)),
             keyEquivalent: "s"
         )
         saveAs.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(saveAs)
         let revert = NSMenuItem(
-            title: "Revert to Saved",
+            title: t("Revert to Saved"),
             action: #selector(DocumentController.revertToSaved(_:)),
             keyEquivalent: "r"
         )
@@ -2149,19 +2156,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         fileMenu.addItem(.separator())
         // The front tab's location in every useful spelling; also on the
         // context menus of buffer-list and file-tree rows.
-        let copyPathItem = NSMenuItem(title: "Copy Path", action: nil, keyEquivalent: "")
-        let copyPath = NSMenu(title: "Copy Path")
+        let copyPathItem = NSMenuItem(title: t("Copy Path"), action: nil, keyEquivalent: "")
+        let copyPath = NSMenu(title: t("Copy Path"))
         copyPath.addItem(
-            withTitle: "File Name",
+            withTitle: t("File Name"),
             action: #selector(DocumentController.copyFileName(_:)), keyEquivalent: "")
         copyPath.addItem(
-            withTitle: "Relative Path",
+            withTitle: t("Relative Path"),
             action: #selector(DocumentController.copyRelativePath(_:)), keyEquivalent: "")
         copyPath.addItem(
-            withTitle: "Absolute Path",
+            withTitle: t("Absolute Path"),
             action: #selector(DocumentController.copyAbsolutePath(_:)), keyEquivalent: "")
         copyPath.addItem(
-            withTitle: "Forge URL",
+            withTitle: t("Forge URL"),
             action: #selector(DocumentController.copyForgeURL(_:)), keyEquivalent: "")
         copyPathItem.submenu = copyPath
         fileMenu.addItem(copyPathItem)
@@ -2169,62 +2176,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)
 
-        let editMenu = NSMenu(title: "Edit")
+        let editMenu = NSMenu(title: t("Edit"))
         let undo = NSMenuItem(
-            title: "Undo",
+            title: t("Undo"),
             action: #selector(DocumentController.performUndo(_:)),
             keyEquivalent: "z"
         )
         editMenu.addItem(undo)
         let redo = NSMenuItem(
-            title: "Redo",
+            title: t("Redo"),
             action: #selector(DocumentController.performRedo(_:)),
             keyEquivalent: "Z"
         )
         editMenu.addItem(redo)
         editMenu.addItem(.separator())
         editMenu.addItem(
-            withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+            withTitle: t("Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         editMenu.addItem(
-            withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+            withTitle: t("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(
-            withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+            withTitle: t("Paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(
-            withTitle: "Select All",
+            withTitle: t("Select All"),
             action: #selector(NSText.selectAll(_:)),
             keyEquivalent: "a"
         )
         editMenu.addItem(.separator())
         let jump = NSMenuItem(
-            title: "Jump to Definition",
+            title: t("Jump to Definition"),
             action: #selector(DocumentController.jumpToDefinition(_:)),
             keyEquivalent: "j"
         )
         jump.keyEquivalentModifierMask = [.command, .control]
         editMenu.addItem(jump)
         let backItem = NSMenuItem(
-            title: "Go Back",
+            title: t("Go Back"),
             action: #selector(goBack(_:)),
             keyEquivalent: String(UnicodeScalar(NSLeftArrowFunctionKey)!)
         )
         backItem.keyEquivalentModifierMask = [.control, .command]
         editMenu.addItem(backItem)
         let forwardItem = NSMenuItem(
-            title: "Go Forward",
+            title: t("Go Forward"),
             action: #selector(goForward(_:)),
             keyEquivalent: String(UnicodeScalar(NSRightArrowFunctionKey)!)
         )
         forwardItem.keyEquivalentModifierMask = [.control, .command]
         editMenu.addItem(forwardItem)
         let references = NSMenuItem(
-            title: "Find References",
+            title: t("Find References"),
             action: #selector(DocumentController.findReferences(_:)),
             keyEquivalent: "r"
         )
         references.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(references)
         let codeActionsItem = NSMenuItem(
-            title: "Code Actions…",
+            title: t("Code Actions…"),
             action: #selector(DocumentController.showCodeActions(_:)),
             keyEquivalent: "."
         )
@@ -2232,42 +2239,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenu.addItem(codeActionsItem)
 
         let rename = NSMenuItem(
-            title: "Rename Symbol…",
+            title: t("Rename Symbol…"),
             action: #selector(DocumentController.renameSymbol(_:)),
             keyEquivalent: "r"
         )
         rename.keyEquivalentModifierMask = [.command, .control]
         editMenu.addItem(rename)
         let format = NSMenuItem(
-            title: "Format Document",
+            title: t("Format Document"),
             action: #selector(DocumentController.formatDocument(_:)),
             keyEquivalent: "f"
         )
         format.keyEquivalentModifierMask = [.command, .option, .shift]
         editMenu.addItem(format)
         let preprocess = NSMenuItem(
-            title: "Run Save Preprocessors",
+            title: t("Run Save Preprocessors"),
             action: #selector(DocumentController.runPreprocessors(_:)),
             keyEquivalent: "f"
         )
         preprocess.keyEquivalentModifierMask = [.command, .option, .control]
         editMenu.addItem(preprocess)
         let blockStart = NSMenuItem(
-            title: "Go to Block Start",
+            title: t("Go to Block Start"),
             action: #selector(DocumentController.goToBlockStart(_:)),
             keyEquivalent: String(UnicodeScalar(NSUpArrowFunctionKey)!)
         )
         blockStart.keyEquivalentModifierMask = [.control, .option]
         editMenu.addItem(blockStart)
         let blockEnd = NSMenuItem(
-            title: "Go to Block End",
+            title: t("Go to Block End"),
             action: #selector(DocumentController.goToBlockEnd(_:)),
             keyEquivalent: String(UnicodeScalar(NSDownArrowFunctionKey)!)
         )
         blockEnd.keyEquivalentModifierMask = [.control, .option]
         editMenu.addItem(blockEnd)
         let complete = NSMenuItem(
-            title: "Complete",
+            title: t("Complete"),
             action: #selector(DocumentController.triggerCompletion(_:)),
             keyEquivalent: " "
         )
@@ -2291,7 +2298,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.keyEquivalentModifierMask = modifiers
             return item
         }
-        let findMenu = NSMenu(title: "Find")
+        let findMenu = NSMenu(title: t("Find"))
         findMenu.addItem(finderItem("Find…", .showFindInterface, "f"))
         findMenu.addItem(
             finderItem("Find and Replace…", .showReplaceInterface, "f", [.command, .option]))
@@ -2300,62 +2307,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         findMenu.addItem(finderItem("Use Selection for Find", .setSearchString, "e"))
         findMenu.addItem(.separator())
         let findInProject = NSMenuItem(
-            title: "Find in Project…",
+            title: t("Find in Project…"),
             action: #selector(findInProject(_:)),
             keyEquivalent: "f"
         )
         findInProject.keyEquivalentModifierMask = [.command, .shift]
         findMenu.addItem(findInProject)
-        let findMenuItem = NSMenuItem(title: "Find", action: nil, keyEquivalent: "")
+        let findMenuItem = NSMenuItem(title: t("Find"), action: nil, keyEquivalent: "")
         findMenuItem.submenu = findMenu
         editMenu.addItem(findMenuItem)
 
         editMenu.addItem(.separator())
         let foldItem = NSMenuItem(
-            title: "Fold",
+            title: t("Fold"),
             action: #selector(DocumentController.toggleFold(_:)),
             keyEquivalent: "[")
         foldItem.keyEquivalentModifierMask = [.command]
         editMenu.addItem(foldItem)
         let foldAllItem = NSMenuItem(
-            title: "Fold All",
+            title: t("Fold All"),
             action: #selector(DocumentController.foldAll(_:)),
             keyEquivalent: "[")
         foldAllItem.keyEquivalentModifierMask = [.command, .option]
         editMenu.addItem(foldAllItem)
         let unfoldItem = NSMenuItem(
-            title: "Unfold All",
+            title: t("Unfold All"),
             action: #selector(DocumentController.unfoldAll(_:)),
             keyEquivalent: "]")
         unfoldItem.keyEquivalentModifierMask = [.command]
         editMenu.addItem(unfoldItem)
         editMenu.addItem(.separator())
         let columnItem = NSMenuItem(
-            title: "New Column",
+            title: t("New Column"),
             action: #selector(DocumentController.newColumn(_:)),
             keyEquivalent: "\\")
         columnItem.keyEquivalentModifierMask = [.command]
         editMenu.addItem(columnItem)
         let closeColumnItem = NSMenuItem(
-            title: "Close Column",
+            title: t("Close Column"),
             action: #selector(DocumentController.closeColumn(_:)),
             keyEquivalent: "\\")
         closeColumnItem.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(closeColumnItem)
         let viewItem = NSMenuItem(
-            title: "Second View",
+            title: t("Second View"),
             action: #selector(DocumentController.addView(_:)),
             keyEquivalent: "\\")
         viewItem.keyEquivalentModifierMask = [.command, .option]
         editMenu.addItem(viewItem)
         let closeViewItem = NSMenuItem(
-            title: "Close View",
+            title: t("Close View"),
             action: #selector(DocumentController.closeView(_:)),
             keyEquivalent: "\\")
         closeViewItem.keyEquivalentModifierMask = [.command, .option, .shift]
         editMenu.addItem(closeViewItem)
         let nextPaneItem = NSMenuItem(
-            title: "Next Pane",
+            title: t("Next Pane"),
             action: #selector(DocumentController.focusOtherSide(_:)),
             keyEquivalent: "`")
         nextPaneItem.keyEquivalentModifierMask = [.command, .option]
@@ -2367,97 +2374,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 
-        let viewMenu = NSMenu(title: "View")
+        let viewMenu = NSMenu(title: t("View"))
         let toggleNavigator = NSMenuItem(
-            title: "Toggle Navigator",
+            title: t("Toggle Navigator"),
             action: #selector(NSSplitViewController.toggleSidebar(_:)),
             keyEquivalent: "0"
         )
         viewMenu.addItem(toggleNavigator)
         let togglePreview = NSMenuItem(
-            title: "Toggle Markdown Preview",
+            title: t("Toggle Markdown Preview"),
             action: #selector(DocumentController.togglePreview(_:)),
             keyEquivalent: "p"
         )
         togglePreview.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(togglePreview)
         let lineNumbersItem = NSMenuItem(
-            title: "Toggle Line Numbers",
+            title: t("Toggle Line Numbers"),
             action: #selector(toggleLineNumbers(_:)),
             keyEquivalent: "l"
         )
         lineNumbersItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(lineNumbersItem)
         let pathDisplayItem = NSMenuItem(
-            title: "Toggle Path Display",
+            title: t("Toggle Path Display"),
             action: #selector(togglePathDisplay(_:)),
             keyEquivalent: "t"
         )
         pathDisplayItem.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(pathDisplayItem)
         let hoverDocsItem = NSMenuItem(
-            title: "Hover Documentation",
+            title: t("Hover Documentation"),
             action: #selector(toggleHoverDocs(_:)),
             keyEquivalent: ""
         )
         viewMenu.addItem(hoverDocsItem)
         let showHoverItem = NSMenuItem(
-            title: "Show Documentation for Symbol",
+            title: t("Show Documentation for Symbol"),
             action: #selector(DocumentController.showHoverAtCaret(_:)),
             keyEquivalent: "h"
         )
         showHoverItem.keyEquivalentModifierMask = [.command, .control]
         viewMenu.addItem(showHoverItem)
         let serverStatusItem = NSMenuItem(
-            title: "Language Server Status",
+            title: t("Language Server Status"),
             action: #selector(showServerStatus(_:)),
             keyEquivalent: ""
         )
         viewMenu.addItem(serverStatusItem)
         let revealItem = NSMenuItem(
-            title: "Reveal in Tree",
+            title: t("Reveal in Tree"),
             action: #selector(DocumentController.revealInTree(_:)),
             keyEquivalent: "j"
         )
         revealItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(revealItem)
         let outlineItem = NSMenuItem(
-            title: "Document Outline…",
+            title: t("Document Outline…"),
             action: #selector(DocumentController.showDocumentOutline(_:)),
             keyEquivalent: "o"
         )
         outlineItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(outlineItem)
         let diagnosticListItem = NSMenuItem(
-            title: "Diagnostics…",
+            title: t("Diagnostics…"),
             action: #selector(DocumentController.showDiagnosticList(_:)),
             keyEquivalent: "e"
         )
         diagnosticListItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(diagnosticListItem)
         let diagnosticItem = NSMenuItem(
-            title: "Show Diagnostic for Line",
+            title: t("Show Diagnostic for Line"),
             action: #selector(DocumentController.showDiagnosticAtCaret(_:)),
             keyEquivalent: "e"
         )
         diagnosticItem.keyEquivalentModifierMask = [.command, .control]
         viewMenu.addItem(diagnosticItem)
         let blameItem = NSMenuItem(
-            title: "Blame Line…",
+            title: t("Blame Line…"),
             action: #selector(DocumentController.blameLine(_:)),
             keyEquivalent: "b"
         )
         blameItem.keyEquivalentModifierMask = [.command, .control]
         viewMenu.addItem(blameItem)
         let goToLineItem = NSMenuItem(
-            title: "Go to Line…",
+            title: t("Go to Line…"),
             action: #selector(DocumentController.goToLine(_:)),
             keyEquivalent: "l"
         )
         goToLineItem.keyEquivalentModifierMask = [.command]
         viewMenu.addItem(goToLineItem)
         let redrawItem = NSMenuItem(
-            title: "Redraw",
+            title: t("Redraw"),
             action: #selector(DocumentController.redrawDocument(_:)),
             keyEquivalent: "l"
         )
@@ -2465,7 +2472,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         viewMenu.addItem(redrawItem)
         viewMenu.addItem(.separator())
         let paletteItem = NSMenuItem(
-            title: "Command Palette…",
+            title: t("Command Palette…"),
             action: #selector(showCommandPalette(_:)),
             keyEquivalent: "p"
         )
@@ -2475,21 +2482,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
 
-        let windowMenu = NSMenu(title: "Window")
+        let windowMenu = NSMenu(title: t("Window"))
         windowMenu.addItem(
-            withTitle: "Minimize",
+            withTitle: t("Minimize"),
             action: #selector(NSWindow.performMiniaturize(_:)),
             keyEquivalent: "m"
         )
         windowMenu.addItem(.separator())
         let nextTab = NSMenuItem(
-            title: "Next Tab",
+            title: t("Next Tab"),
             action: #selector(DocumentController.selectNextTab(_:)),
             keyEquivalent: "\t")
         nextTab.keyEquivalentModifierMask = [.control]
         windowMenu.addItem(nextTab)
         let previousTab = NSMenuItem(
-            title: "Previous Tab",
+            title: t("Previous Tab"),
             action: #selector(DocumentController.selectPreviousTab(_:)),
             keyEquivalent: "\t")
         previousTab.keyEquivalentModifierMask = [.control, .shift]
@@ -2508,11 +2515,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         windowMenu.addItem(.separator())
         windowMenu.addItem(
-            withTitle: "This File in Every Column",
+            withTitle: t("This File in Every Column"),
             action: #selector(DocumentController.showInEveryPane(_:)),
             keyEquivalent: "")
         windowMenu.addItem(
-            withTitle: "Move Tab to New Window",
+            withTitle: t("Move Tab to New Window"),
             action: #selector(DocumentController.moveTabToNewWindow(_:)),
             keyEquivalent: "")
         windowMenu.addItem(.separator())

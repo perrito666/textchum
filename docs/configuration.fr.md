@@ -532,6 +532,33 @@ cc -O2 -fPIC -shared -I src -o libtree-sitter-NOM.dylib src/parser.c src/scanner
 pas.) Une entrée qui ne charge pas coûte ce langage et rien d'autre :
 l'éditeur dit ce qui s'est passé et continue.
 
+## La langue de l'interface
+
+L'interface parle anglais, espagnol ou français ; **Interface
+language** dans les Préférences en choisit une, et *System* suit celle
+de la machine. Le changement s'applique au démarrage suivant.
+
+Les catalogues appartiennent au cœur : les deux shells disent donc les
+mêmes choses avec les mêmes mots, et une phrase sans traduction se lit
+telle qu'elle est écrite en anglais plutôt que comme une clé manquante.
+Un catalogue à soi, dans le profil, est lu par-dessus celui de la
+compilation, phrase par phrase :
+
+```json
+{
+  "Close Tab": "Fermer l'onglet",
+  "New Column": "Nouvelle colonne"
+}
+```
+
+- `~/Library/Application Support/Textchum/translations/fr.json`
+- `~/.config/textchum/translations/fr.json`
+
+Corriger une ligne, c'est écrire une ligne : le reste vient toujours du
+catalogue d'origine. Un fichier nommé d'après une langue que la
+compilation ne porte pas se lit de la même façon : une quatrième langue
+est un fichier, pas une version.
+
 ## Registres de projet
 
 Un fichier se souvient de la façon dont il est divisé, de l'endroit que

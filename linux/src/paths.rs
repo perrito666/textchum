@@ -80,6 +80,15 @@ pub fn icons_dir() -> PathBuf {
     }
 }
 
+/// User translation catalogues, one JSON file per language, read over
+/// the ones the build carries.
+pub fn translations_dir() -> PathBuf {
+    match data_dir() {
+        Some(dir) => dir.join("translations"),
+        None => glib::user_config_dir().join("textchum/translations"),
+    }
+}
+
 /// Project records: what each file remembers about itself. State, like
 /// the session, and one file per project root.
 pub fn projects_dir() -> PathBuf {

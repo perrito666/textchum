@@ -881,6 +881,62 @@ uint32_t tc_config_project_state_keep_days(const struct TcConfig *config);
 void tc_config_set_project_state_keep_days(struct TcConfig *config, uint32_t days);
 
 /**
+ * Chooses the language the interface speaks. `system` follows the
+ * locale given in `locale`; anything the build does not carry reads as
+ * English.
+ *
+ * # Safety
+ * The pointers and lengths must describe valid UTF-8.
+ */
+void tc_i18n_set_language(const char *tag,
+                          uintptr_t tag_len,
+                          const char *locale,
+                          uintptr_t locale_len);
+
+/**
+ * Reads user catalogues from `dir`, over the built-in ones.
+ *
+ * # Safety
+ * The pointer and length must describe valid UTF-8.
+ */
+void tc_i18n_set_catalogue_dir(const char *dir, uintptr_t dir_len);
+
+/**
+ * The catalogue in use, as a JSON object of `{english: translation}`.
+ * Read once and looked up in the shell afterwards, so that a label
+ * does not cross the bridge to be drawn. Release with
+ * [`tc_string_free`].
+ */
+char *tc_i18n_catalogue(void);
+
+/**
+ * The language in use, as a two-letter tag. Release with
+ * [`tc_string_free`].
+ */
+char *tc_i18n_language(void);
+
+/**
+ * The languages the build carries, as a JSON array of `[tag, name]`
+ * pairs. Release with [`tc_string_free`].
+ */
+char *tc_i18n_languages(void);
+
+/**
+ * Whether the interface follows the machine's language, or one named.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_interface_language(const struct TcConfig *config);
+
+/**
+ * # Safety
+ * `config` must be live, and the pointer and length describe UTF-8.
+ */
+void tc_config_set_interface_language(struct TcConfig *config, const char *tag, uintptr_t tag_len);
+
+/**
  * What a file remembers about itself, as JSON: how many views it is
  * shown in, the dividers between them, what is folded, what language
  * it was told it is, and where each view was looking. `{}` when the

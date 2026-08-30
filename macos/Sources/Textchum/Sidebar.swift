@@ -314,7 +314,7 @@ struct SidebarView: View {
     private var bufferPane: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Open Files")
+                Text(t("Open Files"))
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
