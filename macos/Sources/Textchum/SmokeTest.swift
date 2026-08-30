@@ -1,6 +1,7 @@
 // AppKit for the Settings window check below: this test builds a
 // real window, not a stand-in.
 import AppKit
+import Combine
 import Foundation
 import SwiftUI
 import TextchumKit
@@ -11,6 +12,19 @@ import TextchumKit
 /// asynchronous event makes it from a core thread back to the main queue.
 ///
 /// Returns a process exit code: 0 on success.
+/// Turns the runloop until `condition` holds, or the deadline passes.
+/// `RunLoop.run(until:)` on its own returns immediately when no source
+/// or timer is registered, which makes a plain sleep-and-check flaky on
+/// a machine with nothing else going on.
+@MainActor
+func spin(untilTrue condition: () -> Bool, seconds: TimeInterval = 2) {
+    let deadline = Date().addingTimeInterval(seconds)
+    while !condition(), Date() < deadline {
+        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        usleep(2000)
+    }
+}
+
 @MainActor
 func runSmokeTest() -> Int32 {
     print("textchum core \(Core.version)")
@@ -599,6 +613,36 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     print("sidebar width sync ok (adopts changes, ignores echoes and collapsed)")
+
+    // Revealing a file in the tree publishes to SwiftUI, and the call
+    // comes from windowDidBecomeKey, which AppKit sends in the middle of
+    // a display cycle. State set while a view is being laid out from it
+    // is what AttributeGraph ends the process over, so the change waits
+    // for the next turn — and never happens at all when nothing moved.
+    let tree = FileTreeState()
+    var publishes = 0
+    let watch = tree.objectWillChange.sink { _ in publishes += 1 }
+    tree.reveal(path: "/site/content/posts/first.md", under: "/site")
+    guard tree.expanded.isEmpty, publishes == 0 else {
+        print("FAIL: revealing published during the call")
+        return 1
+    }
+    // RunLoop.run(until:) returns at once when nothing is scheduled on
+    // it, so the wait is for the work rather than for a length of time.
+    spin(untilTrue: { tree.expanded.count == 3 })
+    guard tree.expanded.count == 3, publishes > 0 else {
+        print("FAIL: revealing did not expand the folders: \(tree.expanded)")
+        return 1
+    }
+    let settled = publishes
+    tree.reveal(path: "/site/content/posts/first.md", under: "/site")
+    spin(untilTrue: { false }, seconds: 0.2)
+    guard publishes == settled else {
+        print("FAIL: revealing the same file again published anyway")
+        return 1
+    }
+    watch.cancel()
+    print("reveal in tree ok (deferred off the display cycle, quiet when nothing moved)")
 
     // Which keys a running snippet takes. The routing needs a window
     // server; the table it consults is a pure decision and is checked
