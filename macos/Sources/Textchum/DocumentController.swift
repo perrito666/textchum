@@ -2815,7 +2815,17 @@ final class DocumentController: NSResponder {
         guard state != publishedState else { return }
         if state.2 != publishedState.2 {
             projectRoot = state.2.flatMap(resolveProjectRoot)
-            sidebarContext?.projectRoot = projectRoot
+            // Off the current turn: chrome is updated from places AppKit
+            // reaches while it is laying out, and the navigator reads
+            // this as it draws. SwiftUI ends the process over a value
+            // set while its view graph is updating.
+            let root = projectRoot
+            let context = sidebarContext
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if context?.projectRoot != root { context?.projectRoot = root }
+                }
+            }
         }
         publishedState = state
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
@@ -2825,7 +2835,9 @@ final class DocumentController: NSResponder {
     /// (called when those settings change).
     func refreshProjectRoot() {
         projectRoot = coreDocument.path.flatMap(resolveProjectRoot)
-        sidebarContext?.projectRoot = projectRoot
+        if sidebarContext?.projectRoot != projectRoot {
+            sidebarContext?.projectRoot = projectRoot
+        }
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
     }
 

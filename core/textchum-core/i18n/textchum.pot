@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: textchum\n"
 "Report-Msgid-Bugs-To: https://github.com/perrito666/textchum/issues\n"
-"POT-Creation-Date: 2026-08-30 13:10+0200\n"
+"POT-Creation-Date: 2026-08-30 14:20+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,8 +30,8 @@ msgstr ""
 #: core/textchum-core/src/i18n.rs:352 linux/src/keyboard.rs:23
 #: linux/src/main.rs:1361 linux/src/main.rs:1376 linux/src/workbench.rs:356
 #: macos/Sources/Textchum/AppDelegate.swift:2136
-#: macos/Sources/Textchum/SmokeTest.swift:1071
-#: macos/Sources/Textchum/SmokeTest.swift:1092
+#: macos/Sources/Textchum/SmokeTest.swift:1100
+#: macos/Sources/Textchum/SmokeTest.swift:1121
 msgid "Close Tab"
 msgstr ""
 
@@ -56,7 +56,7 @@ msgstr ""
 
 #: linux/src/keyboard.rs:20 linux/src/workbench.rs:290
 #: linux/src/workbench.rs:1265 macos/Sources/Textchum/AppDelegate.swift:2160
-#: macos/Sources/Textchum/DocumentController.swift:3483
+#: macos/Sources/Textchum/DocumentController.swift:3495
 msgid "Save"
 msgstr ""
 
@@ -262,7 +262,7 @@ msgid "Configured grammars: {}"
 msgstr ""
 
 #: linux/src/main.rs:152 linux/src/main.rs:1365 linux/src/workbench.rs:1158
-#: macos/Sources/Textchum/SmokeTest.swift:1075
+#: macos/Sources/Textchum/SmokeTest.swift:1104
 msgid "Save changes to {}?"
 msgstr ""
 
@@ -279,8 +279,8 @@ msgstr[1] ""
 #: macos/Sources/Textchum/DocumentController.swift:1019
 #: macos/Sources/Textchum/DocumentController.swift:1522
 #: macos/Sources/Textchum/DocumentController.swift:2639
-#: macos/Sources/Textchum/DocumentController.swift:3185
-#: macos/Sources/Textchum/DocumentController.swift:3484
+#: macos/Sources/Textchum/DocumentController.swift:3197
+#: macos/Sources/Textchum/DocumentController.swift:3496
 msgid "Cancel"
 msgstr ""
 
@@ -293,25 +293,25 @@ msgstr ""
 msgid "Save All"
 msgstr ""
 
-#: linux/src/main.rs:1371 macos/Sources/Textchum/SmokeTest.swift:1079
+#: linux/src/main.rs:1371 macos/Sources/Textchum/SmokeTest.swift:1108
 msgid "A phrase nobody has translated"
 msgstr ""
 
 #: linux/src/main.rs:1380 linux/src/main.rs:1385
 #: macos/Sources/Textchum/Settings.swift:2113
-#: macos/Sources/Textchum/SmokeTest.swift:1085
-#: macos/Sources/Textchum/SmokeTest.swift:1086
-#: macos/Sources/Textchum/SmokeTest.swift:1093
+#: macos/Sources/Textchum/SmokeTest.swift:1114
+#: macos/Sources/Textchum/SmokeTest.swift:1115
+#: macos/Sources/Textchum/SmokeTest.swift:1122
 msgid "{} file"
 msgid_plural "{} files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: linux/src/page.rs:1989 macos/Sources/Textchum/DocumentController.swift:3613
+#: linux/src/page.rs:1989 macos/Sources/Textchum/DocumentController.swift:3625
 msgid "Add to Dictionary"
 msgstr ""
 
-#: linux/src/page.rs:1990 macos/Sources/Textchum/DocumentController.swift:3621
+#: linux/src/page.rs:1990 macos/Sources/Textchum/DocumentController.swift:3633
 msgid "Ignore While This Runs"
 msgstr ""
 
@@ -468,7 +468,7 @@ msgstr ""
 msgid "The file could not be saved."
 msgstr ""
 
-#: linux/src/workbench.rs:1600 macos/Sources/Textchum/Sidebar.swift:317
+#: linux/src/workbench.rs:1600 macos/Sources/Textchum/Sidebar.swift:336
 msgid "Open Files"
 msgstr ""
 
@@ -644,7 +644,7 @@ msgid "Could not save the document."
 msgstr ""
 
 #: linux/src/workbench.rs:4102
-#: macos/Sources/Textchum/DocumentController.swift:3184
+#: macos/Sources/Textchum/DocumentController.swift:3196
 msgid "Save Without Preprocessing"
 msgstr ""
 
@@ -934,7 +934,7 @@ msgid "Untitled"
 msgstr ""
 
 #: macos/Sources/Textchum/AppDelegate.swift:662
-#: macos/Sources/Textchum/DocumentController.swift:3481
+#: macos/Sources/Textchum/DocumentController.swift:3493
 msgid "Do you want to save the changes made to {}?"
 msgstr ""
 
@@ -945,7 +945,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: macos/Sources/Textchum/AppDelegate.swift:669
-#: macos/Sources/Textchum/DocumentController.swift:3485
+#: macos/Sources/Textchum/DocumentController.swift:3497
 msgid "Don’t Save"
 msgstr ""
 
@@ -1215,11 +1215,11 @@ msgid ""
 "them back)."
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:3482
+#: macos/Sources/Textchum/DocumentController.swift:3494
 msgid "Your changes will be lost if you don’t save them."
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:3597
+#: macos/Sources/Textchum/DocumentController.swift:3609
 msgid "No Suggestions"
 msgstr ""
 
@@ -1541,15 +1541,15 @@ msgstr ""
 msgid "Forget Selected"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:343
+#: macos/Sources/Textchum/Sidebar.swift:362
 msgid "Split into New Window"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:346
+#: macos/Sources/Textchum/Sidebar.swift:365
 msgid "Gather Into"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:432
+#: macos/Sources/Textchum/Sidebar.swift:451
 msgid "No project"
 msgstr ""
 

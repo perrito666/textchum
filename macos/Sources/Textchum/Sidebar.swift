@@ -102,14 +102,33 @@ final class FileTreeState: ObservableObject {
     /// Directory URLs are built directory-shaped: the tree's nodes come
     /// from directory enumeration, whose URLs carry the trailing slash,
     /// and URL equality cares.
+    ///
+    /// Nothing is published unless something changed, and the change
+    /// waits for the next turn of the runloop. This is called from
+    /// `windowDidBecomeKey`, which AppKit can send in the middle of a
+    /// display cycle: setting state a SwiftUI view is being laid out
+    /// from is what AttributeGraph aborts the process over. A file
+    /// nested a few folders deep — a Hugo post under content/posts —
+    /// is the case where the expansion set really does change.
     func reveal(path: String, under root: String) {
         let rootURL = treeKey(root, isDirectory: true)
-        highlighted = treeKey(path, isDirectory: false)
-        var ancestor = treeKey(path, isDirectory: false).deletingLastPathComponent()
+        let file = treeKey(path, isDirectory: false)
+        var ancestors: Set<URL> = []
+        var ancestor = file.deletingLastPathComponent()
         while ancestor.path.hasPrefix(rootURL.path), ancestor.path != "/" {
-            expanded.insert(treeKey(ancestor.path, isDirectory: true))
+            ancestors.insert(treeKey(ancestor.path, isDirectory: true))
             if ancestor.path == rootURL.path { break }
             ancestor.deleteLastPathComponent()
+        }
+        guard highlighted != file || !ancestors.isSubset(of: expanded) else { return }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if self.highlighted != file { self.highlighted = file }
+                if !ancestors.isSubset(of: self.expanded) {
+                    self.expanded.formUnion(ancestors)
+                }
+            }
         }
     }
 
