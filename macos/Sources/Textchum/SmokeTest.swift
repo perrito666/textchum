@@ -1087,6 +1087,28 @@ func runSmokeTest() -> Int32 {
     }
     print("interface language ok (catalogue, arguments, fallback)")
 
+    // Every bundled keyboard profile names commands this platform has,
+    // and every shortcut it gives parses. A profile naming a command
+    // nobody answers to is a profile that quietly does nothing.
+    let keyScratch = NSTemporaryDirectory() + "textchum-keys-\(getpid()).json"
+    let keyConfig = CoreConfig(path: keyScratch)
+    for (id, _) in keyConfig.keyProfileChoices where !id.isEmpty {
+        keyConfig.keysProfile = id
+        let bindings = keyConfig.effectiveKeys
+        guard !bindings.isEmpty else {
+            print("FAIL: profile \(id) binds nothing")
+            return 1
+        }
+        for (action, spec) in bindings {
+            guard AppDelegate.parseShortcut(spec) != nil else {
+                print("FAIL: profile \(id) has unparseable \(spec) for \(action)")
+                return 1
+            }
+        }
+    }
+    try? FileManager.default.removeItem(atPath: keyScratch)
+    print("keyboard profiles ok (every binding parses)")
+
     // The store holds documents; controllers hold views of them. A
     // path opens once however many views ask for it, and a rename
     // follows the document rather than making a second one.
