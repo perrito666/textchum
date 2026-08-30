@@ -20,6 +20,7 @@ use adw::prelude::*;
 use gtk::gio;
 use workbench::Workbench;
 use textchum_core::t;
+use textchum_core::i18n::{fill, tr, tr_n};
 
 const APP_ID: &str = "to.perri.textchum";
 
@@ -95,7 +96,7 @@ fn announce_grammar_problems(workbench: &std::rc::Rc<Workbench>) {
     if problems.is_empty() || SAID.with(|said| said.replace(true)) {
         return;
     }
-    let note = format!("Configured grammars: {}", problems.join("; "));
+    let note = fill(&tr("Configured grammars: {}"), &[&problems.join("; ")]);
     let workbench = std::rc::Rc::clone(workbench);
     gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(700), move || {
         workbench.explain(&note)
@@ -148,14 +149,17 @@ fn asks_before_quitting(app: &adw::Application) -> bool {
         })
         .collect();
     let title = if names.len() == 1 {
-        format!("Save changes to {}?", names[0])
+        fill(&tr("Save changes to {}?"), &[&names[0]])
     } else {
-        format!("Save changes to {} files?", names.len())
+        fill(
+            &tr_n("Save changes to {} file?", "Save changes to {} files?", names.len()),
+            &[&names.len().to_string()],
+        )
     };
     let dialog = adw::AlertDialog::new(Some(&title), Some(&names.join(", ")));
-    dialog.add_response("cancel", &t!("Cancel"));
-    dialog.add_response("discard", &t!("Quit Without Saving"));
-    dialog.add_response("save", &t!("Save All"));
+    dialog.add_response("cancel", &tr("Cancel"));
+    dialog.add_response("discard", &tr("Quit Without Saving"));
+    dialog.add_response("save", &tr("Save All"));
     dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
     dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
     dialog.set_default_response(Some("save"));
@@ -1358,7 +1362,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                     eprintln!("FAIL: the catalogue did not answer in Spanish");
                     return 1;
                 }
-                if textchum_core::t!("Save changes to {}?", "main.rs")
+                if textchum_core::i18n::fill(&i18n::tr("Save changes to {}?"), &["main.rs"])
                     != "¿Guardar los cambios en main.rs?"
                 {
                     eprintln!("FAIL: the argument did not land");
@@ -1373,7 +1377,17 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                     eprintln!("FAIL: English is the text in the source");
                     return 1;
                 }
-                println!("interface language ok (catalogue, arguments, fallback)");
+                if fill(&tr_n("{} file", "{} files", 1), &[&1.to_string()]) != "1 file" {
+                    eprintln!("FAIL: English is the text in the source");
+                    return 1;
+                }
+                i18n::set_language("es");
+                if fill(&tr_n("{} file", "{} files", 4), &[&4.to_string()]) != "4 archivos" {
+                    eprintln!("FAIL: the plural rule did not come from the catalogue");
+                    return 1;
+                }
+                i18n::set_language("en");
+                println!("interface language ok (gettext catalogue, plurals, fallback)");
 
                 // A keyboard profile reaches the accelerators: what it
                 // names moves, what it does not keeps what it had.

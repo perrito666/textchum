@@ -13,6 +13,7 @@ use textchum_core::{blame, goto, icons, references, t, theme_import, workspace, 
 
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
+use textchum_core::i18n::{fill, tr, tr_n};
 
 /// One column: a tab group, and the views of that group's file
 /// stacked under it.
@@ -250,10 +251,10 @@ impl Workbench {
                 Some(&format!("win.new-with-format('{name}')")),
             );
         }
-        file_section.append(Some(&t!("New with Format…")), Some("win.new-format-picker"));
-        file_section.append_submenu(Some(&t!("New with Format")), &formats_menu);
-        file_section.append(Some(&t!("New Window")), Some("win.new"));
-        file_section.append(Some(&t!("Open…")), Some("win.open"));
+        file_section.append(Some(&tr("New with Format…")), Some("win.new-format-picker"));
+        file_section.append_submenu(Some(&tr("New with Format")), &formats_menu);
+        file_section.append(Some(&tr("New Window")), Some("win.new"));
+        file_section.append(Some(&tr("Open…")), Some("win.open"));
         // The desktop's shared recent-files list, newest first — and
         // only the part of it this editor can open. The list belongs to
         // the whole session, so a photo viewer's PNGs are in it too, and
@@ -284,26 +285,26 @@ impl Workbench {
             let empty = gtk::gio::MenuItem::new(Some("No recent text files"), None);
             recent_menu.append_item(&empty);
         }
-        file_section.append_submenu(Some(&t!("Open Recent")), &recent_menu);
-        file_section.append(Some(&t!("Open Quickly…")), Some("win.quick-open"));
-        file_section.append(Some(&t!("Save")), Some("win.save"));
-        file_section.append(Some(&t!("Save As…")), Some("win.save-as"));
-        file_section.append(Some(&t!("Revert to Saved")), Some("win.revert"));
+        file_section.append_submenu(Some(&tr("Open Recent")), &recent_menu);
+        file_section.append(Some(&tr("Open Quickly…")), Some("win.quick-open"));
+        file_section.append(Some(&tr("Save")), Some("win.save"));
+        file_section.append(Some(&tr("Save As…")), Some("win.save-as"));
+        file_section.append(Some(&tr("Revert to Saved")), Some("win.revert"));
         let edit_section = gtk::gio::Menu::new();
-        edit_section.append(Some(&t!("Undo")), Some("win.undo"));
-        edit_section.append(Some(&t!("Redo")), Some("win.redo"));
+        edit_section.append(Some(&tr("Undo")), Some("win.undo"));
+        edit_section.append(Some(&tr("Redo")), Some("win.redo"));
         edit_section.append(Some("Find…"), Some("win.find"));
-        edit_section.append(Some(&t!("Find in Project…")), Some("win.find-in-project"));
-        edit_section.append(Some(&t!("Run Save Preprocessors")), Some("win.preprocess"));
-        edit_section.append(Some(&t!("Redraw")), Some("win.redraw"));
-        edit_section.append(Some(&t!("Fold")), Some("win.fold"));
-        edit_section.append(Some(&t!("Fold All")), Some("win.fold-all"));
-        edit_section.append(Some(&t!("Unfold All")), Some("win.unfold-all"));
-        edit_section.append(Some(&t!("New Column")), Some("win.new-column"));
-        edit_section.append(Some(&t!("Close Column")), Some("win.close-column"));
-        edit_section.append(Some(&t!("Second View")), Some("win.add-view"));
-        edit_section.append(Some(&t!("Close View")), Some("win.close-view"));
-        edit_section.append(Some(&t!("Next Pane")), Some("win.focus-other-group"));
+        edit_section.append(Some(&tr("Find in Project…")), Some("win.find-in-project"));
+        edit_section.append(Some(&tr("Run Save Preprocessors")), Some("win.preprocess"));
+        edit_section.append(Some(&tr("Redraw")), Some("win.redraw"));
+        edit_section.append(Some(&tr("Fold")), Some("win.fold"));
+        edit_section.append(Some(&tr("Fold All")), Some("win.fold-all"));
+        edit_section.append(Some(&tr("Unfold All")), Some("win.unfold-all"));
+        edit_section.append(Some(&tr("New Column")), Some("win.new-column"));
+        edit_section.append(Some(&tr("Close Column")), Some("win.close-column"));
+        edit_section.append(Some(&tr("Second View")), Some("win.add-view"));
+        edit_section.append(Some(&tr("Close View")), Some("win.close-view"));
+        edit_section.append(Some(&tr("Next Pane")), Some("win.focus-other-group"));
         {
             // What to do to the selection, or to the whole document
             // when nothing is selected. GtkSourceView has Change Case
@@ -321,41 +322,41 @@ impl Workbench {
                 section.append(Some(label), Some(&format!("win.transform('{kind}')")));
             }
             transforms.append_section(None, &section);
-            edit_section.append_submenu(Some(&t!("Transform")), &transforms);
+            edit_section.append_submenu(Some(&tr("Transform")), &transforms);
         }
         let go_section = gtk::gio::Menu::new();
-        go_section.append(Some(&t!("Jump to Definition")), Some("win.definition"));
-        go_section.append(Some(&t!("Go Back")), Some("win.back"));
-        go_section.append(Some(&t!("Go Forward")), Some("win.forward"));
-        go_section.append(Some(&t!("Find References")), Some("win.references"));
-        go_section.append(Some(&t!("Code Actions…")), Some("win.code-actions"));
-        go_section.append(Some(&t!("Rename Symbol…")), Some("win.rename"));
-        go_section.append(Some(&t!("Format Document")), Some("win.format"));
-        go_section.append(Some(&t!("Document Outline…")), Some("win.outline"));
-        go_section.append(Some(&t!("Show Documentation for Symbol")), Some("win.hover"));
-        go_section.append(Some(&t!("Go to Line…")), Some("win.goto-line"));
-        go_section.append(Some(&t!("Blame Line…")), Some("win.blame"));
-        go_section.append(Some(&t!("Show Diagnostic for Line")), Some("win.diagnostic"));
-        go_section.append(Some(&t!("Diagnostics…")), Some("win.diagnostic-list"));
-        go_section.append(Some(&t!("Go to Block Start")), Some("win.block-start"));
-        go_section.append(Some(&t!("Go to Block End")), Some("win.block-end"));
-        go_section.append(Some(&t!("Command Palette…")), Some("win.palette"));
-        go_section.append(Some(&t!("Language Server Status")), Some("win.server-status"));
+        go_section.append(Some(&tr("Jump to Definition")), Some("win.definition"));
+        go_section.append(Some(&tr("Go Back")), Some("win.back"));
+        go_section.append(Some(&tr("Go Forward")), Some("win.forward"));
+        go_section.append(Some(&tr("Find References")), Some("win.references"));
+        go_section.append(Some(&tr("Code Actions…")), Some("win.code-actions"));
+        go_section.append(Some(&tr("Rename Symbol…")), Some("win.rename"));
+        go_section.append(Some(&tr("Format Document")), Some("win.format"));
+        go_section.append(Some(&tr("Document Outline…")), Some("win.outline"));
+        go_section.append(Some(&tr("Show Documentation for Symbol")), Some("win.hover"));
+        go_section.append(Some(&tr("Go to Line…")), Some("win.goto-line"));
+        go_section.append(Some(&tr("Blame Line…")), Some("win.blame"));
+        go_section.append(Some(&tr("Show Diagnostic for Line")), Some("win.diagnostic"));
+        go_section.append(Some(&tr("Diagnostics…")), Some("win.diagnostic-list"));
+        go_section.append(Some(&tr("Go to Block Start")), Some("win.block-start"));
+        go_section.append(Some(&tr("Go to Block End")), Some("win.block-end"));
+        go_section.append(Some(&tr("Command Palette…")), Some("win.palette"));
+        go_section.append(Some(&tr("Language Server Status")), Some("win.server-status"));
         go_section.append(Some("File Properties…"), Some("win.file-properties"));
-        go_section.append(Some(&t!("Toggle Path Display")), Some("win.paths"));
+        go_section.append(Some(&tr("Toggle Path Display")), Some("win.paths"));
         go_section.append(Some("Toggle File Tree"), Some("win.sidebar"));
-        go_section.append(Some(&t!("Toggle Markdown Preview")), Some("win.preview"));
+        go_section.append(Some(&tr("Toggle Markdown Preview")), Some("win.preview"));
         let app_section = gtk::gio::Menu::new();
         app_section.append(Some("Preferences…"), Some("win.preferences"));
         let import_theme = gtk::gio::Menu::new();
-        import_theme.append(Some(&t!("From VS Code…")), Some("win.import-theme-vscode"));
-        import_theme.append(Some(&t!("From TextMate…")), Some("win.import-theme-textmate"));
-        app_section.append_submenu(Some(&t!("Import Theme")), &import_theme);
-        app_section.append(Some(&t!("About Textchum")), Some("win.about"));
-        app_section.append(Some(&t!("Close Tab")), Some("win.close-tab"));
-        app_section.append(Some(&t!("Reopen Closed Tab")), Some("win.reopen-tab"));
-        app_section.append(Some(&t!("Close Window")), Some("window.close"));
-        app_section.append(Some(&t!("Quit")), Some("app.quit"));
+        import_theme.append(Some(&tr("From VS Code…")), Some("win.import-theme-vscode"));
+        import_theme.append(Some(&tr("From TextMate…")), Some("win.import-theme-textmate"));
+        app_section.append_submenu(Some(&tr("Import Theme")), &import_theme);
+        app_section.append(Some(&tr("About Textchum")), Some("win.about"));
+        app_section.append(Some(&tr("Close Tab")), Some("win.close-tab"));
+        app_section.append(Some(&tr("Reopen Closed Tab")), Some("win.reopen-tab"));
+        app_section.append(Some(&tr("Close Window")), Some("window.close"));
+        app_section.append(Some(&tr("Quit")), Some("app.quit"));
         let menu = gtk::gio::Menu::new();
         menu.append_section(None, &file_section);
         menu.append_section(None, &edit_section);
@@ -375,10 +376,10 @@ impl Workbench {
         }
 
         let search_entry = gtk::SearchEntry::new();
-        search_entry.set_placeholder_text(Some(&t!("Find in file…")));
+        search_entry.set_placeholder_text(Some(&tr("Find in file…")));
         search_entry.set_hexpand(true);
         let search_case = gtk::ToggleButton::with_label("Aa");
-        search_case.set_tooltip_text(Some(&t!("Match case")));
+        search_case.set_tooltip_text(Some(&tr("Match case")));
         let search_regex = gtk::ToggleButton::with_label(".*");
         search_regex.set_tooltip_text(Some("Regular expression"));
         let search_word = gtk::ToggleButton::with_label("⌊w⌋");
@@ -389,7 +390,7 @@ impl Workbench {
         find_row.append(&search_regex);
         find_row.append(&search_word);
         let replace_entry = gtk::Entry::new();
-        replace_entry.set_placeholder_text(Some(&t!("Replace with…")));
+        replace_entry.set_placeholder_text(Some(&tr("Replace with…")));
         replace_entry.set_hexpand(true);
         let replace_button = gtk::Button::with_label("Replace");
         let replace_all_button = gtk::Button::with_label("All");
@@ -576,8 +577,8 @@ impl Workbench {
                 let Some(page) = workbench.selected() else { return };
                 let replacement = workbench.replace_entry.text();
                 match page.search_context.replace_all(&replacement) {
-                    Ok(()) => workbench.toast(&t!("Replaced every occurrence.")),
-                    Err(error) => workbench.toast(&t!("Replace failed: {}", error)),
+                    Ok(()) => workbench.toast(&tr("Replaced every occurrence.")),
+                    Err(error) => workbench.toast(&fill(&tr("Replace failed: {}"), &[&error.to_string()])),
                 }
             });
         }
@@ -1154,14 +1155,17 @@ impl Workbench {
             })
             .collect();
         let title = if names.len() == 1 {
-            format!("Save changes to {}?", names[0])
+            fill(&tr("Save changes to {}?"), &[&names[0]])
         } else {
-            format!("Save changes to {} files?", names.len())
+            fill(
+            &tr_n("Save changes to {} file?", "Save changes to {} files?", names.len()),
+            &[&names.len().to_string()],
+        )
         };
         let dialog = adw::AlertDialog::new(Some(&title), Some(&names.join(", ")));
-        dialog.add_response("cancel", &t!("Cancel"));
-        dialog.add_response("discard", &t!("Close Without Saving"));
-        dialog.add_response("save", &t!("Save All"));
+        dialog.add_response("cancel", &tr("Cancel"));
+        dialog.add_response("discard", &tr("Close Without Saving"));
+        dialog.add_response("save", &tr("Save All"));
         dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
         dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
         dialog.set_default_response(Some("save"));
@@ -1216,7 +1220,7 @@ impl Workbench {
             page.search_context.backward(&start.min(end))
         };
         let Some((mut from, to, _)) = found else {
-            self.toast(&t!("No more matches."));
+            self.toast(&tr("No more matches."));
             return;
         };
         buffer.select_range(&to, &from);
@@ -1254,11 +1258,11 @@ impl Workbench {
         let name = self.disambiguated_name(&page);
         let dialog = adw::AlertDialog::new(
             Some(&format!("Save changes to {name}?")),
-            Some(&t!("Changes that are not saved are lost when the file closes.")),
+            Some(&tr("Changes that are not saved are lost when the file closes.")),
         );
-        dialog.add_response("cancel", &t!("Cancel"));
-        dialog.add_response("discard", &t!("Discard"));
-        dialog.add_response("save", &t!("Save"));
+        dialog.add_response("cancel", &tr("Cancel"));
+        dialog.add_response("discard", &tr("Discard"));
+        dialog.add_response("save", &tr("Save"));
         dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
         dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
         dialog.set_default_response(Some("save"));
@@ -1278,7 +1282,7 @@ impl Workbench {
                             Shell::instance().note_own_save(path);
                         }
                         if !saved {
-                            workbench.toast(&t!("The file could not be saved."));
+                            workbench.toast(&tr("The file could not be saved."));
                             view.close_page_finish(&tab_page, false);
                             return;
                         }
@@ -1593,7 +1597,7 @@ impl Workbench {
         while let Some(child) = self.buffers_box.first_child() {
             self.buffers_box.remove(&child);
         }
-        let heading = gtk::Label::new(Some(&t!("Open Files")));
+        let heading = gtk::Label::new(Some(&tr("Open Files")));
         heading.set_xalign(0.0);
         heading.add_css_class("heading");
         heading.set_margin_start(12);
@@ -2024,7 +2028,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("reopen-tab", workbench, |workbench, _| {
         let Some((path, line, character)) = workbench.closed_tabs.borrow_mut().pop() else {
-            workbench.toast(&t!("No recently closed tab to reopen."));
+            workbench.toast(&tr("No recently closed tab to reopen."));
             return;
         };
         // A file closed a moment ago is still in the shell's cache,
@@ -2037,7 +2041,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             return;
         }
         if !path.is_file() {
-            workbench.toast(&t!("{} is no longer there.", path.display()));
+            workbench.toast(&fill(&tr("{} is no longer there."), &[&path.display().to_string()]));
             return;
         }
         // Reopening is a jump to where the caret was, not a plain open,
@@ -2112,7 +2116,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 web.set_visible(!web.is_visible());
                 page.update_preview_now();
             }
-            None => workbench.toast(&t!("Not a Markdown document.")),
+            None => workbench.toast(&tr("Not a Markdown document.")),
         }
     });
     add("sidebar", workbench, |workbench, _| {
@@ -2123,19 +2127,19 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("fold", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if !crate::page::toggle_fold(&page) {
-            workbench.toast(&t!("No block opens on this line."));
+            workbench.toast(&tr("No block opens on this line."));
         }
     });
     add("fold-all", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if !crate::page::fold_all(&page) {
-            workbench.toast(&t!("Nothing here folds."));
+            workbench.toast(&tr("Nothing here folds."));
         }
     });
     add("unfold-all", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if !crate::page::unfold_all(&page) {
-            workbench.toast(&t!("Nothing is folded."));
+            workbench.toast(&tr("Nothing is folded."));
         }
     });
     add("new-column", workbench, |workbench, _| {
@@ -2143,7 +2147,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("close-column", workbench, |workbench, _| {
         if !workbench.is_split() {
-            workbench.toast(&t!("This window has one column."));
+            workbench.toast(&tr("This window has one column."));
             return;
         }
         workbench.close_column();
@@ -2156,7 +2160,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("focus-other-group", workbench, |workbench, _| {
         if !workbench.has_several_panes() {
-            workbench.toast(&t!("There is one pane in this window."));
+            workbench.toast(&tr("There is one pane in this window."));
             return;
         }
         workbench.focus_other_group();
@@ -2170,7 +2174,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("definition", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&t!("Save the file first — untitled documents have no server."));
+            workbench.toast(&tr("Save the file first — untitled documents have no server."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
@@ -2183,7 +2187,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             // No server: the ctags fallback gets its chance before the
             // explanation does.
             if !ctags_jump(workbench, &page, &path) {
-                workbench.toast(&t!("No language server is running for this document."));
+                workbench.toast(&tr("No language server is running for this document."));
             }
             return;
         }
@@ -2209,7 +2213,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                     // The server answered but had nothing; consult the
                     // index for projects that opted in.
                     if !ctags_jump(&workbench, &fallback_page, &path) {
-                        workbench.toast(&t!("No definition found."));
+                        workbench.toast(&tr("No definition found."));
                     }
                 }
             }
@@ -2230,7 +2234,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("reveal-in-tree", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&t!("Save the file first — an untitled document has no path."));
+            workbench.toast(&tr("Save the file first — an untitled document has no path."));
             return;
         };
         let _ = path;
@@ -2271,7 +2275,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let Some(page) = workbench.selected() else { return };
         let lines = page.state.borrow().document.len_lines();
         let dialog = adw::AlertDialog::new(
-            Some(&t!("Go to Line")),
+            Some(&tr("Go to Line")),
             Some(&format!("Line number, or line:column — of {lines}.")),
         );
         let entry = gtk::Entry::new();
@@ -2279,8 +2283,8 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         entry.set_activates_default(true);
         dialog.set_extra_child(Some(&entry));
         let entry_for_focus = entry.clone();
-        dialog.add_response("cancel", &t!("Cancel"));
-        dialog.add_response("go", &t!("Go"));
+        dialog.add_response("cancel", &tr("Cancel"));
+        dialog.add_response("go", &tr("Go"));
         dialog.set_response_appearance("go", adw::ResponseAppearance::Suggested);
         dialog.set_default_response(Some("go"));
         let weak = Rc::downgrade(workbench);
@@ -2293,7 +2297,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             // same shapes: a bare number, `412:8` from a compiler, a
             // whole pasted `src/main.rs:412:8`.
             let Some(target) = goto::parse(&entry.text()) else {
-                workbench.toast(&t!("Nothing in that names a line."));
+                workbench.toast(&tr("Nothing in that names a line."));
                 return;
             };
             let Some(page) = workbench.selected() else { return };
@@ -2325,7 +2329,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("blame", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&t!("Save the file first — git has nothing to blame yet."));
+            workbench.toast(&tr("Save the file first — git has nothing to blame yet."));
             return;
         };
         // The buffer's text goes with the line number, so an unsaved
@@ -2336,7 +2340,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let blame = match blame::blame_line(Path::new(&path), line, &text) {
             Ok(blame) => blame,
             Err(error) => {
-                workbench.toast(&t!("git could not blame this line: {}", error));
+                workbench.toast(&fill(&tr("git could not blame this line: {}"), &[&error.to_string()]));
                 return;
             }
         };
@@ -2345,7 +2349,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("diagnostic", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&t!("No diagnostics for an unsaved document."));
+            workbench.toast(&tr("No diagnostics for an unsaved document."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
@@ -2359,13 +2363,13 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 })
         };
         let Some(found) = found else {
-            workbench.toast(&t!("Nothing reported on this line."));
+            workbench.toast(&tr("Nothing reported on this line."));
             return;
         };
         // The same words the balloon uses, in a dialog: the caret is
         // not a place a balloon can point at reliably.
         let dialog = adw::AlertDialog::new(Some(found.kind()), Some(&found.message));
-        dialog.add_response("close", &t!("Close"));
+        dialog.add_response("close", &tr("Close"));
         dialog.set_default_response(Some("close"));
         dialog.set_close_response("close");
         dialog.present(Some(&workbench.window.clone()));
@@ -2373,7 +2377,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("diagnostic-list", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&t!("No diagnostics for an unsaved document."));
+            workbench.toast(&tr("No diagnostics for an unsaved document."));
             return;
         };
         let shell = Shell::instance();
@@ -2385,7 +2389,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             }
         };
         if found.is_empty() {
-            workbench.toast(&t!("Nothing reported in this document."));
+            workbench.toast(&tr("Nothing reported in this document."));
             return;
         }
         // In the order they appear, which is the order they are fixed
@@ -2560,7 +2564,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             // offsets would corrupt it. Only proceed if the span still
             // holds the word the menu was built for.
             if buffer.text(&from, &to, false) != word {
-                workbench.toast(&t!("The text moved — nothing was replaced."));
+                workbench.toast(&tr("The text moved — nothing was replaced."));
                 return;
             }
             buffer.delete(&mut from, &mut to);
@@ -2597,7 +2601,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 };
                 match shape(&path) {
                     Some(text) => workbench.window.clipboard().set_text(&text),
-                    None => workbench.toast(&t!("Not in a git repository with a remote.")),
+                    None => workbench.toast(&tr("Not in a git repository with a remote.")),
                 }
             });
             workbench.window.add_action(&action);
@@ -2656,7 +2660,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("preprocess", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if preprocessor_chain(&page).is_none() {
-            workbench.toast(&t!("No save preprocessors configured for this language."));
+            workbench.toast(&tr("No save preprocessors configured for this language."));
             return;
         }
         match run_preprocessor_chain(&page) {
@@ -2672,7 +2676,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("revert", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if page.path().borrow().is_none() {
-            workbench.toast(&t!("Untitled documents have no file to revert to."));
+            workbench.toast(&tr("Untitled documents have no file to revert to."));
             return;
         }
         if !page.state.borrow().document.is_dirty() {
@@ -2680,11 +2684,11 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             return;
         }
         let dialog = adw::AlertDialog::new(
-            Some(&t!("Revert to Saved?")),
-            Some(&t!("Local changes will be replaced with the file on disk.")),
+            Some(&tr("Revert to Saved?")),
+            Some(&tr("Local changes will be replaced with the file on disk.")),
         );
-        dialog.add_response("cancel", &t!("Cancel"));
-        dialog.add_response("revert", &t!("Revert"));
+        dialog.add_response("cancel", &tr("Cancel"));
+        dialog.add_response("revert", &tr("Revert"));
         dialog.set_response_appearance("revert", adw::ResponseAppearance::Destructive);
         let page = Rc::clone(&page);
         dialog.connect_response(None, move |_, response| {
@@ -2703,7 +2707,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             Some((path, line, character)) => {
                 jump_without_trail(workbench, &path, line, character);
             }
-            None => workbench.toast(&t!("Nowhere to go back to.")),
+            None => workbench.toast(&tr("Nowhere to go back to.")),
         }
     });
     add("forward", workbench, |workbench, _| {
@@ -2712,7 +2716,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             Some((path, line, character)) => {
                 jump_without_trail(workbench, &path, line, character);
             }
-            None => workbench.toast(&t!("Nowhere to go forward to.")),
+            None => workbench.toast(&tr("Nowhere to go forward to.")),
         }
     });
     add("references", workbench, |workbench, _| {
@@ -2723,7 +2727,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 path.map(|path| (page, path))
             })
         else {
-            workbench.toast(&t!("Save the file first — untitled documents have no server."));
+            workbench.toast(&tr("Save the file first — untitled documents have no server."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
@@ -2733,7 +2737,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .borrow_mut()
             .references(Path::new(&path), line, character);
         if id == 0 {
-            workbench.toast(&t!("No language server is running for this document."));
+            workbench.toast(&tr("No language server is running for this document."));
             return;
         }
         let weak = Rc::downgrade(workbench);
@@ -2751,7 +2755,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 path.map(|path| (page, path))
             })
         else {
-            workbench.toast(&t!("Save the file first — untitled documents have no server."));
+            workbench.toast(&tr("Save the file first — untitled documents have no server."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
@@ -2761,7 +2765,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .borrow_mut()
             .code_action(Path::new(&path), line, character);
         if id == 0 {
-            workbench.toast(&t!("No language server is running for this document."));
+            workbench.toast(&tr("No language server is running for this document."));
             return;
         }
         let weak = Rc::downgrade(workbench);
@@ -2778,18 +2782,18 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 path.map(|path| (page, path))
             })
         else {
-            workbench.toast(&t!("Save the file first — untitled documents have no server."));
+            workbench.toast(&tr("Save the file first — untitled documents have no server."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
-        let dialog = adw::AlertDialog::new(Some(&t!("Rename Symbol")), None);
+        let dialog = adw::AlertDialog::new(Some(&tr("Rename Symbol")), None);
         let entry = gtk::Entry::new();
-        entry.set_placeholder_text(Some(&t!("New name")));
+        entry.set_placeholder_text(Some(&tr("New name")));
         entry.set_activates_default(true);
         dialog.set_extra_child(Some(&entry));
         let entry_for_focus = entry.clone();
-        dialog.add_response("cancel", &t!("Cancel"));
-        dialog.add_response("rename", &t!("Rename"));
+        dialog.add_response("cancel", &tr("Cancel"));
+        dialog.add_response("rename", &tr("Rename"));
         dialog.set_response_appearance("rename", adw::ResponseAppearance::Suggested);
         dialog.set_default_response(Some("rename"));
         let weak = Rc::downgrade(workbench);
@@ -2809,7 +2813,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             let weak = weak.clone();
             if id == 0 {
                 if let Some(workbench) = weak.upgrade() {
-                    workbench.toast(&t!("No language server is running for this document."));
+                    workbench.toast(&tr("No language server is running for this document."));
                 }
                 return;
             }
@@ -2874,7 +2878,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             // Markdown outlines itself; anything else needs a server,
             // and a server needs a file.
             if !show_markdown_outline(workbench, &page) {
-                workbench.toast(&t!("Save the file first — untitled documents have no server."));
+                workbench.toast(&tr("Save the file first — untitled documents have no server."));
             }
             return;
         };
@@ -2882,7 +2886,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let id = shell.pool.borrow_mut().document_symbols(Path::new(&path));
         if id == 0 {
             if !show_markdown_outline(workbench, &page) {
-                workbench.toast(&t!("No language server is running for this document."));
+                workbench.toast(&tr("No language server is running for this document."));
             }
             return;
         }
@@ -2893,7 +2897,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 if !show_outline(&workbench, &path, json)
                     && !show_markdown_outline(&workbench, &fallback)
                 {
-                    workbench.toast(&t!("The server offered no outline."));
+                    workbench.toast(&tr("The server offered no outline."));
                 }
             }
         });
@@ -2953,7 +2957,7 @@ fn uses_of_definition(workbench: &Rc<Workbench>, path: &str, line: u32, characte
         let Some(workbench) = weak.upgrade() else { return };
         let uses = textchum_core::definition::elsewhere(json, &path, line, character);
         match uses.len() {
-            0 => workbench.toast(&t!("Nothing else refers to this symbol.")),
+            0 => workbench.toast(&tr("Nothing else refers to this symbol.")),
             1 => workbench.open(
                 Some(PathBuf::from(uses[0].path.clone())),
                 Some((uses[0].line as i32, uses[0].character as usize)),
@@ -3145,7 +3149,7 @@ fn move_to_block_edge(workbench: &Rc<Workbench>, to_start: bool) {
     let insert = buffer.iter_at_mark(&buffer.get_insert());
     let position = page::utf16_offset(buffer, insert.offset());
     let Some((start, end)) = page.state.borrow().document.block_bounds(position) else {
-        workbench.toast(&t!("No enclosing block here."));
+        workbench.toast(&tr("No enclosing block here."));
         return;
     };
     let target_utf16 = if to_start { start } else { end };
@@ -3213,7 +3217,7 @@ fn show_file_properties(workbench: &Rc<Workbench>) {
     let Some(path) = page.path().borrow().clone() else {
         // Nothing to remember a choice against; New with Format is
         // where an untitled document's language is set.
-        workbench.toast(&t!("Save the file first — an untitled document has no path."));
+        workbench.toast(&tr("Save the file first — an untitled document has no path."));
         return;
     };
     let shell = Shell::instance();
@@ -3236,7 +3240,7 @@ fn show_file_properties(workbench: &Rc<Workbench>) {
     let group = adw::PreferencesGroup::new();
 
     let language_row = adw::ComboRow::new();
-    language_row.set_title(&t!("Language"));
+    language_row.set_title(&tr("Language"));
     let names: Vec<&'static str> =
         textchum_core::syntax::languages::selectable_names().to_vec();
     let automatic = match detected {
@@ -3257,13 +3261,13 @@ fn show_file_properties(workbench: &Rc<Workbench>) {
     group.add(&language_row);
 
     let tab_row = adw::SpinRow::with_range(0.0, 16.0, 1.0);
-    tab_row.set_title(&t!("Tab width"));
-    tab_row.set_subtitle(&t!("0 follows the project"));
+    tab_row.set_title(&tr("Tab width"));
+    tab_row.set_subtitle(&tr("0 follows the project"));
     tab_row.set_value(stored.tab_width.unwrap_or(0) as f64);
     group.add(&tab_row);
 
     let indent_row = adw::ComboRow::new();
-    indent_row.set_title(&t!("Indent with"));
+    indent_row.set_title(&tr("Indent with"));
     indent_row.set_model(Some(&gtk::StringList::new(&["Automatic", "Spaces", "Tabs"])));
     indent_row.set_selected(match stored.spaces {
         Some(true) => 1,
@@ -3419,7 +3423,7 @@ fn filterable_picker(
     choose: impl Fn(&Rc<Workbench>, usize) + 'static,
 ) {
     let entry = gtk::SearchEntry::new();
-    entry.set_placeholder_text(Some(&t!("Type to filter…")));
+    entry.set_placeholder_text(Some(&tr("Type to filter…")));
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Browse);
     let scrolled = gtk::ScrolledWindow::builder()
@@ -3539,7 +3543,7 @@ fn filterable_picker(
 /// selection. The shortcut for when the shortcut escapes memory.
 fn show_palette(workbench: &Rc<Workbench>) {
     let entry = gtk::SearchEntry::new();
-    entry.set_placeholder_text(Some(&t!("Type a command…")));
+    entry.set_placeholder_text(Some(&tr("Type a command…")));
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Browse);
     let scrolled = gtk::ScrolledWindow::builder()
@@ -3909,7 +3913,7 @@ fn show_server_status(workbench: &Rc<Workbench>) {
 pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> bool {
     let previous = page.path().borrow().clone();
     if page.state.borrow_mut().document.save_as(path).is_err() {
-        workbench.toast(&t!("Could not save the document."));
+        workbench.toast(&tr("Could not save the document."));
         return false;
     }
     let key = path.to_string_lossy().into_owned();
@@ -4094,8 +4098,8 @@ fn preprocess_gate(
                 Some(&format!("Save preprocessor failed: {}", failure.command)),
                 Some(&failure.details),
             );
-            dialog.add_response("cancel", &t!("Cancel"));
-            dialog.add_response("save", &t!("Save Without Preprocessing"));
+            dialog.add_response("cancel", &tr("Cancel"));
+            dialog.add_response("save", &tr("Save Without Preprocessing"));
             let parent = workbench.window.clone();
             let workbench = Rc::clone(workbench);
             let page = Rc::clone(page);
@@ -4124,7 +4128,7 @@ fn jump_without_trail(workbench: &Rc<Workbench>, path: &str, line: i32, characte
 /// A floating list of locations (references); activating a row jumps.
 fn show_locations(workbench: &Rc<Workbench>, title: &str, json: &str) {
     let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
-        workbench.toast(&t!("No references found."));
+        workbench.toast(&tr("No references found."));
         return;
     };
     let mut rows: Vec<(String, i32, usize)> = Vec::new();
@@ -4136,7 +4140,7 @@ fn show_locations(workbench: &Rc<Workbench>, title: &str, json: &str) {
         rows.push((percent_decode(path), line, character));
     }
     if rows.is_empty() {
-        workbench.toast(&t!("No references found."));
+        workbench.toast(&tr("No references found."));
         return;
     }
     show_places(workbench, title, rows);
@@ -4148,7 +4152,7 @@ fn show_code_actions(workbench: &Rc<Workbench>, path: &str, json: &str) {
     use textchum_core::code_action;
     let actions = code_action::actions(json);
     if actions.is_empty() {
-        workbench.toast(&t!("The language server has no action for this place."));
+        workbench.toast(&tr("The language server has no action for this place."));
         return;
     }
     let labels: Vec<String> = actions
@@ -4197,7 +4201,7 @@ fn run_code_action(
                 .borrow_mut()
                 .execute_command(Path::new(path), &name, arguments);
             if id == 0 {
-                workbench.toast(&t!("The language server would not run that action."));
+                workbench.toast(&tr("The language server would not run that action."));
             }
         }
         Outcome::Resolve(action) => {
@@ -4206,7 +4210,7 @@ fn run_code_action(
                 .borrow_mut()
                 .resolve_code_action(Path::new(path), action);
             if id == 0 {
-                workbench.toast(&t!("The language server would not finish that action."));
+                workbench.toast(&tr("The language server would not finish that action."));
                 return;
             }
             let weak = Rc::downgrade(workbench);
@@ -4227,7 +4231,7 @@ fn run_code_action(
                             arguments,
                         );
                     }
-                    _ => workbench.toast(&t!("The language server had no edit for that action.")),
+                    _ => workbench.toast(&tr("The language server had no edit for that action.")),
                 }
             });
         }
@@ -4482,7 +4486,7 @@ fn apply_edits_to_page(page: &Rc<Page>, edits: Vec<crate::lsp_edits::TextEdit>) 
 fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str) {
     let by_file = crate::lsp_edits::workspace_edits(json);
     if by_file.is_empty() {
-        workbench.toast(&t!("The server had no rename to offer."));
+        workbench.toast(&tr("The server had no rename to offer."));
         return;
     }
     let mut touched = 0usize;
@@ -4536,7 +4540,7 @@ pub fn percent_decode(text: &str) -> String {
 /// selection (or the first hit) as a tab, ⎋ closes.
 fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
     let entry = gtk::SearchEntry::new();
-    entry.set_placeholder_text(Some(&t!("fuzzy file name…")));
+    entry.set_placeholder_text(Some(&tr("fuzzy file name…")));
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Browse);
     let scrolled = gtk::ScrolledWindow::builder()
@@ -4684,7 +4688,7 @@ fn wire_escape(dialog: &adw::Window, entry: &gtk::SearchEntry) {
 /// files searched, or the reason nothing was (bad pattern quoted).
 fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
     let entry = gtk::SearchEntry::new();
-    entry.set_placeholder_text(Some(&t!("regular expression…")));
+    entry.set_placeholder_text(Some(&tr("regular expression…")));
     let filters_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
     let add_button = gtk::Button::with_label("＋ Add Filter");
     add_button.set_halign(gtk::Align::Start);
@@ -4859,7 +4863,7 @@ fn add_filter_row(filters_box: &gtk::Box, rerun: &Rc<dyn Fn()>) {
     ]);
     let kind = gtk::DropDown::new(Some(kinds), gtk::Expression::NONE);
     let pattern = gtk::Entry::new();
-    pattern.set_placeholder_text(Some(&t!("filter text…")));
+    pattern.set_placeholder_text(Some(&tr("filter text…")));
     pattern.set_hexpand(true);
     let remove = gtk::Button::from_icon_name("list-remove-symbolic");
     remove.add_css_class("flat");
@@ -4960,9 +4964,9 @@ fn show_blame(workbench: &Rc<Workbench>, blame: &blame::Blame, path: &str) {
     };
 
     let dialog = adw::AlertDialog::new(Some(&format!("{name}:{}", blame.line)), Some(&detail));
-    dialog.add_response("close", &t!("Close"));
+    dialog.add_response("close", &tr("Close"));
     if !blame.commit.is_empty() {
-        dialog.add_response("copy", &t!("Copy Commit"));
+        dialog.add_response("copy", &tr("Copy Commit"));
         dialog.set_response_appearance("copy", adw::ResponseAppearance::Suggested);
         dialog.set_default_response(Some("copy"));
         let commit = blame.commit.clone();
@@ -5047,7 +5051,7 @@ fn finish_theme_import(
             .first()
             .cloned()
             .unwrap_or_else(|| format!("No {} theme was found there.", source.label()));
-        workbench.toast(&t!("Nothing was imported. {}", reason));
+        workbench.toast(&fill(&tr("Nothing was imported. {}"), &[&reason]));
         return;
     }
 
@@ -5117,7 +5121,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         window.set_application(Some(&app));
     }
     window.set_modal(false);
-    window.set_title(Some(&t!("Preferences")));
+    window.set_title(Some(&tr("Preferences")));
     PREFERENCES.with(|slot| *slot.borrow_mut() = Some(window.clone()));
     window.connect_close_request(|_| {
         PREFERENCES.with(|slot| *slot.borrow_mut() = None);
@@ -5125,13 +5129,13 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     });
 
     let general = adw::PreferencesPage::new();
-    general.set_title(&t!("General"));
+    general.set_title(&tr("General"));
     general.set_icon_name(Some("preferences-system-symbolic"));
 
     let appearance_group = adw::PreferencesGroup::new();
-    appearance_group.set_title(&t!("Appearance"));
+    appearance_group.set_title(&tr("Appearance"));
     let appearance_row = adw::ComboRow::new();
-    appearance_row.set_title(&t!("Appearance"));
+    appearance_row.set_title(&tr("Appearance"));
     let appearance_model = gtk::StringList::new(&["System", "Light", "Dark"]);
     appearance_row.set_model(Some(&appearance_model));
     appearance_row.set_selected(match shell.config.borrow().appearance() {
@@ -5156,7 +5160,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     appearance_group.add(&appearance_row);
 
     let theme_row = adw::ComboRow::new();
-    theme_row.set_title(&t!("Theme"));
+    theme_row.set_title(&tr("Theme"));
     let names: Vec<String> = crate::shell::theme_names();
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let theme_model = gtk::StringList::new(&name_refs);
@@ -5183,10 +5187,10 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     // into Textchum's own folder, where moving or deleting the original
     // cannot take it away.
     let icons_row = adw::ComboRow::new();
-    icons_row.set_title(&t!("File icons"));
+    icons_row.set_title(&tr("File icons"));
     let import = gtk::Button::with_label("Import…");
     import.set_valign(gtk::Align::Center);
-    let open = gtk::Button::with_label(&t!("Open…"));
+    let open = gtk::Button::with_label(&tr("Open…"));
     open.set_valign(gtk::Align::Center);
     let delete = gtk::Button::with_label("Delete");
     delete.set_valign(gtk::Align::Center);
@@ -5360,9 +5364,9 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     general.add(&appearance_group);
 
     let editor_group = adw::PreferencesGroup::new();
-    editor_group.set_title(&t!("Editor"));
+    editor_group.set_title(&tr("Editor"));
     let font_row = adw::SpinRow::with_range(6.0, 72.0, 1.0);
-    font_row.set_title(&t!("Font size"));
+    font_row.set_title(&tr("Font size"));
     font_row.set_value(shell.config.borrow().font_size());
     {
         let shell = Rc::clone(&shell);
@@ -5374,7 +5378,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&font_row);
     let tab_row = adw::SpinRow::with_range(1.0, 16.0, 1.0);
-    tab_row.set_title(&t!("Tab width"));
+    tab_row.set_title(&tr("Tab width"));
     tab_row.set_value(shell.config.borrow().tab_width() as f64);
     {
         let shell = Rc::clone(&shell);
@@ -5386,7 +5390,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&tab_row);
     let lines_row = adw::SwitchRow::new();
-    lines_row.set_title(&t!("Show line numbers"));
+    lines_row.set_title(&tr("Show line numbers"));
     lines_row.set_active(shell.config.borrow().line_numbers());
     {
         let shell = Rc::clone(&shell);
@@ -5398,7 +5402,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&lines_row);
     let keep_row = adw::SwitchRow::new();
-    keep_row.set_title(&t!("Keep files open when their window closes"));
+    keep_row.set_title(&tr("Keep files open when their window closes"));
     keep_row.set_subtitle(
         "Closing a window puts its files aside with anything unsaved, to \
          reopen or settle when the editor closes",
@@ -5413,7 +5417,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&keep_row);
     let in_project_row = adw::SwitchRow::new();
-    in_project_row.set_title(&t!("Keep each project's state with the checkout"));
+    in_project_row.set_title(&tr("Keep each project's state with the checkout"));
     in_project_row.set_subtitle(
         "A file remembers how it is split, what is folded and what it was told it is. \
          With this on that goes to .tchum in the project; otherwise it is kept here, \
@@ -5433,10 +5437,10 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     editor_group.add(&in_project_row);
 
     let language_row = adw::ComboRow::new();
-    language_row.set_title(&t!("Interface language"));
-    language_row.set_subtitle(&t!("Restart to apply"));
+    language_row.set_title(&tr("Interface language"));
+    language_row.set_subtitle(&tr("Restart to apply"));
     let language_names = gtk::StringList::new(&[]);
-    language_names.append(&t!("System"));
+    language_names.append(&tr("System"));
     for (_, name) in textchum_core::i18n::LANGUAGES {
         language_names.append(name);
     }
@@ -5469,7 +5473,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     editor_group.add(&language_row);
 
     let records_row = adw::EntryRow::new();
-    records_row.set_title(&t!("Records folder"));
+    records_row.set_title(&tr("Records folder"));
     records_row.set_text(
         &shell
             .config
@@ -5487,7 +5491,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             shell.save_config();
         });
     }
-    let manage = gtk::Button::with_label(&t!("Manage…"));
+    let manage = gtk::Button::with_label(&tr("Manage…"));
     manage.set_valign(gtk::Align::Center);
     {
         let window = window.clone();
@@ -5497,7 +5501,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     editor_group.add(&records_row);
 
     let sweep_row = adw::SwitchRow::new();
-    sweep_row.set_title(&t!("Forget records at launch"));
+    sweep_row.set_title(&tr("Forget records at launch"));
     sweep_row.set_subtitle(
         "On a thread of its own, and the records of projects that are no longer there \
          go whatever the window says",
@@ -5516,8 +5520,8 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     editor_group.add(&sweep_row);
 
     let keep_days_row = adw::SpinRow::with_range(0.0, 3650.0, 30.0);
-    keep_days_row.set_title(&t!("Keep records for"));
-    keep_days_row.set_subtitle(&t!("Days since a record was last written; zero keeps them"));
+    keep_days_row.set_title(&tr("Keep records for"));
+    keep_days_row.set_subtitle(&tr("Days since a record was last written; zero keeps them"));
     keep_days_row.set_value(shell.config.borrow().project_state_keep_days() as f64);
     {
         let shell = Rc::clone(&shell);
@@ -5531,8 +5535,8 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&keep_days_row);
     let hover_row = adw::SwitchRow::new();
-    hover_row.set_title(&t!("Hover documentation"));
-    hover_row.set_subtitle(&t!("Show server documentation when the mouse rests on a symbol"));
+    hover_row.set_title(&tr("Hover documentation"));
+    hover_row.set_subtitle(&tr("Show server documentation when the mouse rests on a symbol"));
     hover_row.set_active(shell.config.borrow().hover_docs());
     {
         let shell = Rc::clone(&shell);
@@ -5544,16 +5548,16 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     editor_group.add(&hover_row);
 
     let occurrences_row = adw::SwitchRow::new();
-    occurrences_row.set_title(&t!("Mark the selected word elsewhere"));
-    occurrences_row.set_subtitle(&t!("Selecting a whole word marks its other occurrences on screen"));
+    occurrences_row.set_title(&tr("Mark the selected word elsewhere"));
+    occurrences_row.set_subtitle(&tr("Selecting a whole word marks its other occurrences on screen"));
     occurrences_row.set_active(shell.config.borrow().mark_occurrences());
     let occurrences_case = adw::SwitchRow::new();
-    occurrences_case.set_title(&t!("Match case"));
+    occurrences_case.set_title(&tr("Match case"));
     occurrences_case.set_active(shell.config.borrow().occurrence_options().case_sensitive);
     occurrences_case.set_sensitive(occurrences_row.is_active());
     let occurrences_word = adw::SwitchRow::new();
-    occurrences_word.set_title(&t!("Whole words only"));
-    occurrences_word.set_subtitle(&t!("Off marks `item` inside `items` too"));
+    occurrences_word.set_title(&tr("Whole words only"));
+    occurrences_word.set_subtitle(&tr("Off marks `item` inside `items` too"));
     occurrences_word.set_active(shell.config.borrow().occurrence_options().whole_word);
     occurrences_word.set_sensitive(occurrences_row.is_active());
     {
@@ -5595,7 +5599,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     editor_group.add(&occurrences_word);
 
     let spell_row = adw::EntryRow::new();
-    spell_row.set_title(&t!("Spell check prose (off, auto, or dictionaries like en_US, es_ES)"));
+    spell_row.set_title(&tr("Spell check prose (off, auto, or dictionaries like en_US, es_ES)"));
     spell_row.set_text(
         shell
             .config
@@ -5699,7 +5703,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     editor_group.add(&words_row);
 
     let autosave_row = adw::SpinRow::with_range(0.0, 600.0, 5.0);
-    autosave_row.set_title(&t!("Autosave after (seconds)"));
+    autosave_row.set_title(&tr("Autosave after (seconds)"));
     autosave_row.set_subtitle(
         "0 keeps saving manual. Files that have a name only, and without \
          running save preprocessors — a formatter reflowing the line you are \
@@ -5724,10 +5728,10 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     // macOS Settings edit — language → command line, applied to the
     // pool for servers started afterwards.
     let servers = adw::PreferencesPage::new();
-    servers.set_title(&t!("Language Servers"));
+    servers.set_title(&tr("Language Servers"));
     servers.set_icon_name(Some("network-workgroup-symbolic"));
     let servers_group = adw::PreferencesGroup::new();
-    servers_group.set_title(&t!("Default server commands"));
+    servers_group.set_title(&tr("Default server commands"));
     servers_group.set_description(Some(
         "Override which command serves a language (for every project). \
          Unlisted languages use the built-in registry.",
@@ -5817,7 +5821,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
 
     let projects_group = adw::PreferencesGroup::new();
-    projects_group.set_title(&t!("Per-project overrides"));
+    projects_group.set_title(&tr("Per-project overrides"));
     projects_group.set_description(Some(
         "A project root's own command wins over the defaults above.",
     ));
@@ -5874,12 +5878,12 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         projects_group.add(&row);
     }
     let add_root = adw::EntryRow::new();
-    add_root.set_title(&t!("project root path"));
+    add_root.set_title(&tr("project root path"));
     let add_project_language = adw::EntryRow::new();
-    add_project_language.set_title(&t!("language"));
+    add_project_language.set_title(&tr("language"));
     attach_language_choices(&add_project_language);
     let add_project_command = adw::EntryRow::new();
-    add_project_command.set_title(&t!("command"));
+    add_project_command.set_title(&tr("command"));
     add_project_command.set_show_apply_button(true);
     {
         let shell = Rc::clone(&shell);
@@ -5908,10 +5912,10 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     projects_group.add(&add_project_command);
 
     let add_language = adw::EntryRow::new();
-    add_language.set_title(&t!("language (e.g. python)"));
+    add_language.set_title(&tr("language (e.g. python)"));
     attach_language_choices(&add_language);
     let add_command = adw::EntryRow::new();
-    add_command.set_title(&t!("command (e.g. pylsp)"));
+    add_command.set_title(&tr("command (e.g. pylsp)"));
     add_command.set_show_apply_button(true);
     {
         let shell = Rc::clone(&shell);
@@ -5941,7 +5945,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     // one command per link, ` ;; ` separating links in these rows
     // (the file stores them as an array, one per line).
     let preprocessors_group = adw::PreferencesGroup::new();
-    preprocessors_group.set_title(&t!("Save preprocessors"));
+    preprocessors_group.set_title(&tr("Save preprocessors"));
     preprocessors_group.set_description(Some(
         "Commands run before every save, in order, separated by ' ;; ' — \
          each reads the document on stdin and writes it back on stdout \
@@ -6007,11 +6011,11 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         preprocessors_group.add(&row);
     }
     let add_preprocessor_root = adw::EntryRow::new();
-    add_preprocessor_root.set_title(&t!("project root (empty = default for all projects)"));
+    add_preprocessor_root.set_title(&tr("project root (empty = default for all projects)"));
     let add_preprocessor_language = adw::EntryRow::new();
-    add_preprocessor_language.set_title(&t!("language (e.g. python)"));
+    add_preprocessor_language.set_title(&tr("language (e.g. python)"));
     let add_preprocessor_chain = adw::EntryRow::new();
-    add_preprocessor_chain.set_title(&t!("commands (e.g. ruff check --fix - ;; black -)"));
+    add_preprocessor_chain.set_title(&tr("commands (e.g. ruff check --fix - ;; black -)"));
     add_preprocessor_chain.set_show_apply_button(true);
     {
         let shell = Rc::clone(&shell);
@@ -6044,10 +6048,10 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     // Projects: how roots are detected, defaults plus per-root
     // overrides — the same workspace section the macOS Settings edit.
     let projects_page = adw::PreferencesPage::new();
-    projects_page.set_title(&t!("Projects"));
+    projects_page.set_title(&tr("Projects"));
     projects_page.set_icon_name(Some("folder-symbolic"));
     let workspace_defaults = adw::PreferencesGroup::new();
-    workspace_defaults.set_title(&t!("Defaults (all projects)"));
+    workspace_defaults.set_title(&tr("Defaults (all projects)"));
     workspace_defaults.set_description(Some(
         "Manifest projects splits a repository at language manifests; \
          recursive config cascades a root's settings into nested projects.",
@@ -6095,7 +6099,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     projects_page.add(&workspace_defaults);
 
     let workspace_overrides = adw::PreferencesGroup::new();
-    workspace_overrides.set_title(&t!("Per-project overrides"));
+    workspace_overrides.set_title(&tr("Per-project overrides"));
     let configured_roots = shell.config.borrow().configured_projects();
     if let Some(projects) = workspace["projects"].as_object() {
         for (root, flags) in projects {
@@ -6119,7 +6123,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
                     .cloned()
                     .collect();
                 let row = adw::EntryRow::new();
-                row.set_title(&t!("copy settings from this project"));
+                row.set_title(&tr("copy settings from this project"));
                 row.set_show_apply_button(true);
                 attach_path_choices(&row, "Configured projects", sources);
                 let shell = Rc::clone(&shell);
@@ -6250,7 +6254,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     // one has; entering them again is a transcription exercise with a
     // typo in it.
     let copy_from = adw::EntryRow::new();
-    copy_from.set_title(&t!("start from this project's settings (optional)"));
+    copy_from.set_title(&tr("start from this project's settings (optional)"));
     attach_path_choices(
         &copy_from,
         "Configured projects",
@@ -6258,7 +6262,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     );
 
     let add_workspace_root = adw::EntryRow::new();
-    add_workspace_root.set_title(&t!("add project root path"));
+    add_workspace_root.set_title(&tr("add project root path"));
     add_workspace_root.set_show_apply_button(true);
     attach_path_choices(
         &add_workspace_root,
@@ -6316,7 +6320,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             format!("{} configured projects no longer exist on disk", stale.len())
         });
         row.set_subtitle(&stale.join(", "));
-        let button = gtk::Button::with_label(&t!("Remove missing"));
+        let button = gtk::Button::with_label(&tr("Remove missing"));
         button.set_valign(gtk::Align::Center);
         {
             let shell = Rc::clone(&shell);
@@ -6339,7 +6343,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     // The presets themselves, edited the same way: one pattern per
     // line. Editing any preset takes ownership of the whole set.
     let presets_group = adw::PreferencesGroup::new();
-    presets_group.set_title(&t!("Hide presets"));
+    presets_group.set_title(&tr("Hide presets"));
     presets_group.set_description(Some(
         "Named glob sets the hide editors add in one click. Edit any preset \
          and this list replaces the built-in one, so removals stick.",
@@ -6362,7 +6366,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         ));
     }
     let add_preset = adw::EntryRow::new();
-    add_preset.set_title(&t!("new preset name"));
+    add_preset.set_title(&tr("new preset name"));
     add_preset.set_show_apply_button(true);
     {
         let shell = Rc::clone(&shell);
@@ -6383,7 +6387,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     presets_group.add(&add_preset);
     let restore = adw::ActionRow::new();
-    restore.set_title(&t!("Restore built-in presets"));
+    restore.set_title(&tr("Restore built-in presets"));
     let restore_button = gtk::Button::with_label("Restore");
     restore_button.set_valign(gtk::Align::Center);
     {
@@ -6435,7 +6439,7 @@ where
                 return;
             }
             let dialog = gtk::FileDialog::new();
-            dialog.set_title(&t!("Choose an icon pack"));
+            dialog.set_title(&tr("Choose an icon pack"));
             let done = done.clone();
             let chosen = move |result: Result<gtk::gio::File, glib::Error>| {
                 let Ok(file) = result else { return };
@@ -6484,11 +6488,11 @@ fn reapply_keys() {
 /// makes it a profile of its own.
 fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
     let page = adw::PreferencesPage::new();
-    page.set_title(&t!("Keyboard"));
+    page.set_title(&tr("Keyboard"));
     page.set_icon_name(Some("preferences-desktop-keyboard-symbolic"));
 
     let profile_group = adw::PreferencesGroup::new();
-    profile_group.set_title(&t!("Profile"));
+    profile_group.set_title(&tr("Profile"));
     profile_group.set_description(Some(
         "A profile sets the shortcuts its editor is known for and leaves the rest \
          alone. Changing one on top of a profile keeps the profile; saving turns \
@@ -6502,7 +6506,7 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
     let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
     let chosen = shell.config.borrow().keys_profile();
     let profile_row = adw::ComboRow::new();
-    profile_row.set_title(&t!("Profile"));
+    profile_row.set_title(&tr("Profile"));
     profile_row.set_model(Some(&gtk::StringList::new(&label_refs)));
     profile_row.set_selected(
         choices
@@ -6530,7 +6534,7 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
     profile_group.add(&profile_row);
 
     let save_row = adw::EntryRow::new();
-    save_row.set_title(&t!("save what is in force as a profile named"));
+    save_row.set_title(&tr("save what is in force as a profile named"));
     save_row.set_show_apply_button(true);
     {
         let shell = Rc::clone(shell);
@@ -6564,8 +6568,8 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
     profile_group.add(&save_row);
 
     let reset = adw::ActionRow::new();
-    reset.set_title(&t!("Reset changes"));
-    reset.set_subtitle(&t!("Give every command back the shortcut its profile says it has"));
+    reset.set_title(&tr("Reset changes"));
+    reset.set_subtitle(&tr("Give every command back the shortcut its profile says it has"));
     let reset_button = gtk::Button::with_label("Reset");
     reset_button.set_valign(gtk::Align::Center);
     {
@@ -6581,7 +6585,7 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
     page.add(&profile_group);
 
     let commands = adw::PreferencesGroup::new();
-    commands.set_title(&t!("Commands"));
+    commands.set_title(&tr("Commands"));
     commands.set_description(Some(
         "An empty field gives the command back the shortcut its profile — or the \
          editor — says it has.",
@@ -6597,7 +6601,7 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
     let mut rows: Vec<(&'static str, adw::EntryRow)> = Vec::new();
     for (action, title) in crate::keyboard::commands() {
         let row = adw::EntryRow::new();
-        row.set_title(&t!(title));
+        row.set_title(&tr(title));
         row.set_text(
             bindings
                 .get(action)
@@ -6915,7 +6919,7 @@ fn attach_language_choices(row: &adw::EntryRow) {
 /// is.
 fn show_project_records(parent: &adw::PreferencesWindow) {
     let window = adw::Window::new();
-    window.set_title(Some(&t!("Project Records")));
+    window.set_title(Some(&tr("Project Records")));
     window.set_default_size(560, 420);
     window.set_transient_for(Some(parent));
     window.set_modal(true);
@@ -6924,13 +6928,13 @@ fn show_project_records(parent: &adw::PreferencesWindow) {
     toolbar.add_top_bar(&adw::HeaderBar::new());
     let page = adw::PreferencesPage::new();
     let group = adw::PreferencesGroup::new();
-    group.set_title(&t!("Records"));
+    group.set_title(&tr("Records"));
 
     let dir = crate::shell::project_state_dir();
     let records = textchum_core::project_state::records(&dir);
     if records.is_empty() {
         let empty = adw::ActionRow::new();
-        empty.set_title(&t!("No project has anything recorded yet"));
+        empty.set_title(&tr("No project has anything recorded yet"));
         group.add(&empty);
     }
     for record in &records {
@@ -6950,7 +6954,7 @@ fn show_project_records(parent: &adw::PreferencesWindow) {
         )));
         let forget = gtk::Button::from_icon_name("user-trash-symbolic");
         forget.set_valign(gtk::Align::Center);
-        forget.set_tooltip_text(Some(&t!("Forget this record")));
+        forget.set_tooltip_text(Some(&tr("Forget this record")));
         forget.add_css_class("flat");
         {
             let path = record.path.clone();
@@ -6976,7 +6980,7 @@ fn show_project_records(parent: &adw::PreferencesWindow) {
         format!("Forget records older than {days} days")
     };
     sweep_row.set_title(&sweep_title);
-    let sweep = gtk::Button::with_label(&t!("Forget"));
+    let sweep = gtk::Button::with_label(&tr("Forget"));
     sweep.set_valign(gtk::Align::Center);
     sweep.add_css_class("destructive-action");
     {

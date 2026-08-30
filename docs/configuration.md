@@ -506,26 +506,33 @@ The interface speaks English, Spanish or French; **Interface language**
 in Preferences picks one, and *System* follows the machine. The change
 applies at the next launch.
 
-The catalogues belong to the core, so both shells say the same things
-in the same words, and a phrase with no translation reads as what it
-says in English rather than as a missing key. A catalogue of your own
-in the profile is read over the one the build carries, phrase by
-phrase:
+The catalogues are gettext, kept in the core so that both shells and
+the core itself say the same things in the same words. The source of
+truth is `core/textchum-core/i18n/<language>.po` — the format
+translators and their tools speak — and the build compiles each into
+the `.mo` the editor reads. A phrase with no translation reads as what
+it says in English rather than as a missing key.
 
-```json
-{
-  "Close Tab": "Cerrar pestaña",
-  "New Column": "Nueva columna"
-}
+A catalogue of your own goes in the profile, and is read instead of the
+one the build carries:
+
+```bash
+msgfmt -o ~/.config/textchum/translations/es.mo my-es.po
 ```
 
-- `~/Library/Application Support/Textchum/translations/es.json`
-- `~/.config/textchum/translations/es.json`
+- `~/Library/Application Support/Textchum/translations/<language>.mo`
+- `~/.config/textchum/translations/<language>.mo`
 
-Correcting one line means writing one line: the rest still comes from
-the built-in catalogue. A file named for a language the build does not
-carry is read the same way, so a fourth language is a file rather than
-a release.
+A file named for a language the build does not carry is read the same
+way, so a fourth language is a catalogue rather than a release.
+
+To work on the translations in the repository, `scripts/i18n.sh`
+extracts the strings and merges them into every catalogue, the way
+gettext means it: `xgettext` finds them, `msgmerge` carries the
+existing translations over and marks as fuzzy the ones whose English
+changed, and `msgfmt` checks the result. `make check` runs
+`scripts/i18n.sh --check`, so a string added without a translation
+fails the build instead of shipping in English.
 
 ## Project records
 

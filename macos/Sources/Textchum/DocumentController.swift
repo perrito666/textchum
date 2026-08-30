@@ -829,7 +829,7 @@ final class DocumentController: NSResponder {
             switch uses.count {
             case 0:
                 self.presentInfo(
-                    "On the definition",
+                    t("On the definition"),
                     details: t("Nothing else in the workspace refers to this symbol."))
             case 1:
                 self.openLocation?(uses[0].path, uses[0].line, uses[0].character)
@@ -1314,7 +1314,7 @@ final class DocumentController: NSResponder {
             let actions = CoreCodeActions.actions(inResultJSON: json)
             guard !actions.isEmpty else {
                 self.presentInfo(
-                    "Nothing on offer",
+                    t("Nothing on offer"),
                     details: t("The language server has no action for this place."))
                 return
             }
@@ -1360,7 +1360,7 @@ final class DocumentController: NSResponder {
                         path: path, command: name, argumentsJSON: argumentsJSON) { _ in }
                 default:
                     self.presentInfo(
-                        "Nothing came back",
+                        t("Nothing came back"),
                         details: t("The language server had no edit for that action."))
                 }
             }
@@ -2612,10 +2612,7 @@ final class DocumentController: NSResponder {
             alert.alertStyle = .warning
             alert.messageText = "“\(window?.title ?? "Document")” changed on disk."
             alert.informativeText =
-                t(
-                    "The file was modified by another program, and you have unsaved "
-                        + "changes. Reloading will discard your changes (one Undo brings "
-                        + "them back).")
+                t("The file was modified by another program, and you have unsaved changes. Reloading will discard your changes (one Undo brings them back).")
             alert.addButton(withTitle: t("Keep My Changes"))
             alert.addButton(withTitle: t("Reload From Disk"))
             if alert.runModal() == .alertSecondButtonReturn {
@@ -2637,9 +2634,7 @@ final class DocumentController: NSResponder {
             alert.alertStyle = .warning
             alert.messageText = t("Revert to the saved version?")
             alert.informativeText =
-                t(
-                    "Your unsaved changes will be replaced by the file on disk "
-                        + "(one Undo brings them back).")
+                t("Your unsaved changes will be replaced by the file on disk (one Undo brings them back).")
             alert.addButton(withTitle: t("Revert"))
             alert.addButton(withTitle: t("Cancel"))
             guard alert.runModal() == .alertFirstButtonReturn else { return }
@@ -2787,7 +2782,7 @@ final class DocumentController: NSResponder {
     /// What this document is called on the tab and, while it has the
     /// keyboard, in the title bar.
     var chromeTitle: String {
-        guard let path = coreDocument.path else { return "Untitled" }
+        guard let path = coreDocument.path else { return t("Untitled") }
         return displayTitle ?? URL(fileURLWithPath: path).lastPathComponent
     }
 

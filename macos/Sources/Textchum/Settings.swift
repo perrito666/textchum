@@ -1011,11 +1011,7 @@ struct GeneralSettingsTab: View {
                     }
                 }
             }
-            Text(
-                "Checks comments in code, and everything in Markdown, git commit "
-                    + "messages, and plain text. Several dictionaries can apply at "
-                    + "once; a word any of them knows is spelled correctly."
-            )
+            Text("Checks comments in code, and everything in Markdown, git commit messages, and plain text. Several dictionaries can apply at once; a word any of them knows is spelled correctly.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -1035,11 +1031,7 @@ struct GeneralSettingsTab: View {
                         ? "Autosave: off"
                         : "Autosave after \(model.autosaveSeconds) s of quiet")
             }
-            Text(
-                "Files that have a name only, and without running save "
-                    + "preprocessors — a formatter reflowing the line you are typing "
-                    + "is not a favour."
-            )
+            Text("Files that have a name only, and without running save preprocessors — a formatter reflowing the line you are typing is not a favour.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -1063,11 +1055,7 @@ private struct PresetsTab: View {
         // nobody can reach.
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text(
-                    "Named glob sets the hide editors can add in one click. "
-                        + "They are yours to change: edit any preset and this list "
-                        + "replaces the built-in one, so removals stick."
-                )
+                Text("Named glob sets the hide editors can add in one click. They are yours to change: edit any preset and this list replaces the built-in one, so removals stick.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1160,7 +1148,7 @@ struct GlobEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             CommandsEditor(
-                placeholder: "one pattern per line — *.pyc, target, .git",
+                placeholder: t("one pattern per line — *.pyc, target, .git"),
                 text: $text, onFocusLost: onCommit)
             HStack {
                 Menu("Add preset") {
@@ -1726,11 +1714,7 @@ private struct LanguageServersTab: View {
         // nobody can reach.
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text(
-                    "Override which server command runs per language — for every project "
-                        + "(Default) or for one project root. Project entries win over defaults; "
-                        + "unlisted languages use the built-in registry."
-                )
+                Text("Override which server command runs per language — for every project (Default) or for one project root. Project entries win over defaults; unlisted languages use the built-in registry.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1860,13 +1844,7 @@ private struct PreprocessorsTab: View {
         // nobody can reach.
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text(
-                    "Save preprocessors run before every save (and on Run Save Preprocessors), "
-                        + "one command per line in order — each reads the document on standard "
-                        + "input and writes it back on standard output, like `ruff check --fix -` "
-                        + "then `black -`. {path} and {filename} expand to the document's. "
-                        + "A project entry replaces the default chain."
-                )
+                Text("Save preprocessors run before every save (and on Run Save Preprocessors), one command per line in order — each reads the document on standard input and writes it back on standard output, like `ruff check --fix -` then `black -`. {path} and {filename} expand to the document's. A project entry replaces the default chain.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1915,7 +1893,7 @@ private struct PreprocessorsTab: View {
                             )
                             .frame(width: 180)
                             CommandsEditor(
-                                placeholder: "Commands, one per line — Return adds a line",
+                                placeholder: t("Commands, one per line — Return adds a line"),
                                 text: $newCommands)
                             Button(t("Add")) {
                                 model.addPreprocessorEntry(
@@ -2051,11 +2029,7 @@ struct ProjectRecordsSettings: View {
     var body: some View {
         Toggle(t("Keep each project's state with the checkout"), isOn: $model.projectStateInProject)
         Text(
-            t(
-                "A file remembers how it is split, where each view was looking, what is "
-                    + "folded, and what it was told it is. With this on, that is written "
-                    + "to .tchum in the project; otherwise it is kept here, one record "
-                    + "per project.")
+            t("A file remembers how it is split, where each view was looking, what is folded, and what it was told it is. With this on, that is written to .tchum in the project; otherwise it is kept here, one record per project.")
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -2084,10 +2058,7 @@ struct ProjectRecordsSettings: View {
         }
         .disabled(!model.projectStateSweep)
         Text(
-            t(
-                "The sweep runs on a thread of its own at launch, and forgets the "
-                    + "records of projects that are no longer there whatever the window "
-                    + "says.")
+            t("The sweep runs on a thread of its own at launch, and forgets the records of projects that are no longer there whatever the window says.")
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -2139,7 +2110,7 @@ struct ProjectRecordsList: View {
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(
                                 record.missing
-                                    ? t("missing") : t("{} files", record.files)
+                                    ? t("missing") : tn("{} file", "{} files", record.files)
                             )
                             .foregroundStyle(record.missing ? .red : .secondary)
                             Text(record.updated, style: .date)

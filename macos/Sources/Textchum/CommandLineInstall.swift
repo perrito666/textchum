@@ -12,9 +12,7 @@ extension AppDelegate {
             alert.alertStyle = .warning
             alert.messageText = t("Could not find the chum script")
             alert.informativeText =
-                t(
-                    "The app bundle is missing its chum resource; rebuild with "
-                        + "`make app`, or install from a checkout with `make install-cli`.")
+                t("The app bundle is missing its chum resource; rebuild with `make app`, or install from a checkout with `make install-cli`.")
             alert.runModal()
             return
         }

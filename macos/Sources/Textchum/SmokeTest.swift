@@ -1080,12 +1080,22 @@ func runSmokeTest() -> Int32 {
         print("FAIL: an untranslated phrase should read as itself")
         return 1
     }
+    // Plurals belong to the catalogue: Spanish and French each have
+    // their own rule, and one string gave "1 archivos".
+    guard tn("{} file", "{} files", 1) == "1 archivo",
+        tn("{} file", "{} files", 4) == "4 archivos"
+    else {
+        print("FAIL: the plural rule did not come from the catalogue")
+        return 1
+    }
     CoreI18n.use("en")
-    guard t("Close Tab") == "Close Tab", CoreI18n.languages.count >= 3 else {
+    guard t("Close Tab") == "Close Tab", CoreI18n.languages.count >= 3,
+        tn("{} file", "{} files", 1) == "1 file", tn("{} file", "{} files", 2) == "2 files"
+    else {
         print("FAIL: English is the text in the source")
         return 1
     }
-    print("interface language ok (catalogue, arguments, fallback)")
+    print("interface language ok (gettext catalogue, plurals, fallback)")
 
     // Every bundled keyboard profile names commands this platform has,
     // and every shortcut it gives parses. A profile naming a command
