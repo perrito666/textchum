@@ -16,6 +16,11 @@ final class OpenDocument {
     /// index and the recently closed cache go on. A document saved
     /// under a new name keeps its identity and changes this.
     var path: String?
+    /// How this file is shown: how many views a column stacks of it,
+    /// where the dividers between them sit, and where each view was
+    /// looking. It belongs to the file, so a column switched to
+    /// another tab and back finds it as it was.
+    var layout = DocumentLayout()
     /// The stretches folded shut, as first and last line, both
     /// zero-based. They belong to the document: folding a function in
     /// one view folds it in every view of the file.
@@ -27,6 +32,24 @@ final class OpenDocument {
     init(id: Int, core: CoreDocument) {
         self.id = id
         self.core = core
+    }
+}
+
+/// How a file is shown, wherever it is shown. Values only, so a
+/// document can hold one without being tied to the main thread.
+struct DocumentLayout {
+    /// Views stacked in the column showing it, at least one.
+    var views = 1
+    /// Where the dividers between them sit, as fractions of the
+    /// column's height.
+    var dividers: [Double] = []
+    /// Where each view was looking: the caret in UTF-16 units, and the
+    /// scroll in points.
+    var places: [Place] = []
+
+    struct Place {
+        var caret = 0
+        var scroll = 0.0
     }
 }
 

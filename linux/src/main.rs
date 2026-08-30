@@ -1224,6 +1224,48 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 eprintln!("FAIL: closing a column closed the file");
                 return 1;
             }
+            // How a file is shown belongs to the file: a column
+            // switched to another tab and back finds it as it was.
+            let other = workbench
+                .all_pages()
+                .into_iter()
+                .find(|other| !Rc::ptr_eq(&other.document, &page.document));
+            if let Some(other) = other {
+                workbench.add_view();
+                let split_views = page.document.layout.borrow().views;
+                if split_views != 2 {
+                    eprintln!("FAIL: the file did not remember its two views");
+                    return 1;
+                }
+                if let Some(view) = workbench.view_holding(&other) {
+                    if let Some(tab) = crate::workbench::tab_page_of(&view, &other) {
+                        view.set_selected_page(&tab);
+                        context.iteration(false);
+                    }
+                }
+                if other.document.layout.borrow().views != 1 {
+                    eprintln!("FAIL: the file that arrived did not bring its own shape");
+                    return 1;
+                }
+                if page.document.layout.borrow().views != 2 {
+                    eprintln!("FAIL: the file that left forgot how it was shown");
+                    return 1;
+                }
+                // Back to the file this section started on, and shown
+                // the way it is shown: two views again.
+                if let Some(view) = workbench.view_holding(&page) {
+                    if let Some(tab) = crate::workbench::tab_page_of(&view, &page) {
+                        view.set_selected_page(&tab);
+                        context.iteration(false);
+                    }
+                }
+                if page.document.views().len() != 2 {
+                    eprintln!("FAIL: the file did not come back the way it was shown");
+                    return 1;
+                }
+                workbench.close_view();
+                context.iteration(false);
+            }
             println!("columns ok (a column of views, tabs across columns)");
 
             // Closing the last view keeps the document in the cache, so

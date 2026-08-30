@@ -26,6 +26,10 @@ struct Column {
     root: gtk::Box,
     /// The views under the tab group, top to bottom.
     views: RefCell<Vec<Rc<Page>>>,
+    /// The file this column is showing. Kept because the tab has
+    /// already changed by the time the change is announced, and the
+    /// shape being written down belongs to the file that left.
+    showing: RefCell<Option<Rc<crate::shell::OpenDocument>>>,
 }
 
 impl Column {
@@ -38,6 +42,7 @@ impl Column {
             tab_view: tab_view.clone(),
             root,
             views: RefCell::new(Vec::new()),
+            showing: RefCell::new(None),
         }
     }
 
@@ -677,8 +682,12 @@ impl Workbench {
     fn install_group(self: &Rc<Self>, view: &adw::TabView) {
         {
             let workbench = Rc::downgrade(self);
-            view.connect_selected_page_notify(move |_| {
+            view.connect_selected_page_notify(move |view| {
                 if let Some(workbench) = workbench.upgrade() {
+                    // A column shows one file at a time, so the views
+                    // stacked in it follow the tab — and the new file
+                    // is shown the way that file is shown.
+                    workbench.follow_tab(view);
                     workbench.refresh_chrome();
                     workbench.refresh_sidebar();
                     workbench.apply_search_options();
@@ -782,6 +791,9 @@ impl Workbench {
             tab_page.set_title(&copy.display_name());
             self.pages.borrow_mut().push(Rc::clone(&copy));
             view.set_selected_page(&tab_page);
+            if let Some(column) = self.columns.borrow().last() {
+                *column.showing.borrow_mut() = Some(Rc::clone(&page.document));
+            }
         }
         let last = self.columns.borrow().len() - 1;
         self.focus_pane(last, 0);
@@ -839,6 +851,7 @@ impl Workbench {
             column.views.borrow_mut().push(Rc::clone(&view));
         }
         self.rebuild_columns();
+        self.record_layout(at);
         let count = self.columns.borrow()[at].views.borrow().len();
         self.focus_pane(at, count);
     }
@@ -862,6 +875,7 @@ impl Workbench {
         };
         self.forget_view(&gone);
         self.rebuild_columns();
+        self.record_layout(at);
         self.focus_pane(at, which.saturating_sub(1));
     }
 
@@ -906,6 +920,72 @@ impl Workbench {
                 })
             })
             .collect()
+    }
+
+    /// Points a column's stacked views at the file its tab bar now
+    /// shows, in as many views as that file is shown with.
+    fn follow_tab(self: &Rc<Self>, view: &adw::TabView) {
+        let Some(at) = self.all_views().iter().position(|other| *other == *view) else {
+            return;
+        };
+        let Some(document) = view
+            .selected_page()
+            .and_then(|tab_page| self.page_of(&tab_page))
+            .map(|page| Rc::clone(&page.document))
+        else {
+            return;
+        };
+        let already = {
+            let columns = self.columns.borrow();
+            let Some(column) = columns.get(at) else { return };
+            let showing = column.showing.borrow();
+            showing
+                .as_ref()
+                .is_some_and(|current| Rc::ptr_eq(current, &document))
+        };
+        if already {
+            return;
+        }
+        // What the outgoing file looked like here is what it looks like
+        // when it comes back.
+        self.record_layout(at);
+        let wanted = document.layout.borrow().views.max(1);
+        {
+            let columns = self.columns.borrow();
+            let Some(column) = columns.get(at) else { return };
+            let gone: Vec<Rc<Page>> = column.views.borrow_mut().drain(..).collect();
+            for page in gone {
+                self.forget_view(&page);
+            }
+            let mut views = column.views.borrow_mut();
+            for _ in 1..wanted {
+                let page = Page::view_of(&document);
+                self.pages.borrow_mut().push(Rc::clone(&page));
+                views.push(page);
+            }
+            *column.showing.borrow_mut() = Some(Rc::clone(&document));
+        }
+        self.rebuild_columns();
+    }
+
+    /// Writes down how a column is showing its file: the file is what
+    /// remembers, so any column it lands in afterwards looks the same.
+    fn record_layout(&self, at: usize) {
+        let columns = self.columns.borrow();
+        let Some(column) = columns.get(at) else { return };
+        let document = column.showing.borrow().clone().or_else(|| {
+            column
+                .tab_view
+                .selected_page()
+                .and_then(|tab_page| self.page_of(&tab_page))
+                .map(|page| Rc::clone(&page.document))
+        });
+        let Some(document) = document else { return };
+        let views = column.views.borrow().len() + 1;
+        *document.layout.borrow_mut() = crate::shell::DocumentLayout {
+            views,
+            dividers: Vec::new(),
+        };
     }
 
     /// Takes away any column whose last tab has closed: a divider with
@@ -6181,7 +6261,7 @@ where
 /// `adw_tab_view_get_page` asserts that the child belongs to the view
 /// rather than answering, so it cannot be asked speculatively — and
 /// with two groups, every lookup is speculative.
-fn tab_page_of(view: &adw::TabView, page: &Rc<Page>) -> Option<adw::TabPage> {
+pub fn tab_page_of(view: &adw::TabView, page: &Rc<Page>) -> Option<adw::TabPage> {
     (0..view.n_pages())
         .map(|at| view.nth_page(at))
         .find(|tab_page| tab_page.child() == page.root)
