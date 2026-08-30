@@ -823,6 +823,17 @@ bool tc_config_line_numbers(const struct TcConfig *config);
 void tc_config_set_line_numbers(struct TcConfig *config, bool shown);
 
 /**
+ * Opens the grammars named in the configuration's `languages`
+ * section, and answers with what could not be opened — one line per
+ * entry, empty when every one of them loaded (or none were named).
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_load_grammars(const struct TcConfig *config);
+
+/**
  * Whether a file stays open when the window showing it closes
  * (default false).
  *

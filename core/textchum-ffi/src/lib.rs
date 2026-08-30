@@ -1288,6 +1288,22 @@ pub unsafe extern "C" fn tc_config_set_line_numbers(config: *mut TcConfig, shown
     }
 }
 
+/// Opens the grammars named in the configuration's `languages`
+/// section, and answers with what could not be opened — one line per
+/// entry, empty when every one of them loaded (or none were named).
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_load_grammars(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return owned_c_string(String::new());
+    };
+    let problems = textchum_core::grammar::load_configured(&config.inner.grammars_json());
+    owned_c_string(problems.join("\n"))
+}
+
 /// Whether a file stays open when the window showing it closes
 /// (default false).
 ///

@@ -82,6 +82,25 @@ fn accommodate_webkit_sandbox() {
 
 /// Tells the user, once, that the sandbox had to go.
 ///
+/// Says once what the configured grammars could not do. A language
+/// that silently fails to load looks like a language with no colour,
+/// which is indistinguishable from a grammar nobody configured.
+fn announce_grammar_problems(workbench: &std::rc::Rc<Workbench>) {
+    use std::cell::Cell;
+    thread_local! {
+        static SAID: Cell<bool> = const { Cell::new(false) };
+    }
+    let problems = shell::Shell::instance().grammar_problems.borrow().clone();
+    if problems.is_empty() || SAID.with(|said| said.replace(true)) {
+        return;
+    }
+    let note = format!("Configured grammars: {}", problems.join("; "));
+    let workbench = std::rc::Rc::clone(workbench);
+    gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(700), move || {
+        workbench.explain(&note)
+    });
+}
+
 /// Called from both entry points: launching with a file goes through
 /// `open` and launching without one through `activate`, and opening a
 /// file is the common case — a message wired into only one of them is a
@@ -223,6 +242,7 @@ fn main() -> gtk::glib::ExitCode {
         }
         workbench.window.present();
         announce_sandbox_note(&workbench);
+        announce_grammar_problems(&workbench);
     });
     app.connect_shutdown(|_| session::save());
     app.connect_open(|app, files, _hint| {
@@ -250,6 +270,7 @@ fn main() -> gtk::glib::ExitCode {
         }
         workbench.window.present();
         announce_sandbox_note(&workbench);
+        announce_grammar_problems(&workbench);
     });
 
     install_default_accels(&app);

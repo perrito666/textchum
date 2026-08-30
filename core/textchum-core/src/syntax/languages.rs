@@ -26,8 +26,8 @@ pub struct LanguageSpec {
     /// identity is their name, not an extension (Makefile, git's
     /// COMMIT_EDITMSG).
     pub filenames: &'static [&'static str],
-    language: fn() -> Language,
-    highlights: &'static str,
+    pub(crate) language: LanguageSource,
+    pub(crate) highlights: &'static str,
     /// Patterns appended to `highlights` when the grammar's own query
     /// is wrong for us. A grammar ships one query, written against
     /// whichever highlighter its author uses, and nvim-treesitter
@@ -35,8 +35,27 @@ pub struct LanguageSpec {
     /// uses a regular expression — so a predicate can be silently false
     /// here and true there. Appended rather than replacing, because a
     /// later pattern wins and the rest of a 400-line query is fine.
-    highlights_extra: Option<&'static str>,
-    injections: Option<&'static str>,
+    pub(crate) highlights_extra: Option<&'static str>,
+    pub(crate) injections: Option<&'static str>,
+}
+
+/// Where a grammar comes from: compiled into the build, or loaded from
+/// a library named in the configuration.
+pub enum LanguageSource {
+    Built(fn() -> Language),
+    /// Kept by value: the library it came from is leaked deliberately,
+    /// since a grammar that is unloaded while a tree still points into
+    /// it takes the process with it.
+    Loaded(Language),
+}
+
+impl LanguageSpec {
+    fn language(&self) -> Language {
+        match &self.language {
+            LanguageSource::Built(make) => make(),
+            LanguageSource::Loaded(language) => language.clone(),
+        }
+    }
 }
 
 /// A language with its grammar loaded and queries compiled.
@@ -59,7 +78,7 @@ impl RegisteredLanguage {
     /// Compiles the grammar's queries on first call; cheap afterwards.
     pub fn compiled(&'static self) -> &'static CompiledLanguage {
         self.compiled.get_or_init(|| {
-            let language = (self.spec.language)();
+            let language = self.spec.language();
             let source = match self.spec.highlights_extra {
                 Some(extra) => {
                     std::borrow::Cow::Owned(format!("{}\n{extra}", self.spec.highlights))
@@ -108,7 +127,7 @@ macro_rules! lang {
             aliases: $aliases,
             extensions: $exts,
             filenames: $files,
-            language: || $lang.into(),
+            language: LanguageSource::Built(|| $lang.into()),
             highlights: $hl,
             highlights_extra: $extra,
             injections: $inj,
@@ -456,7 +475,7 @@ static SPECS: &[LanguageSpec] = &[
     ),
 ];
 
-fn registry() -> &'static [RegisteredLanguage] {
+fn built_in() -> &'static [RegisteredLanguage] {
     static REGISTRY: OnceLock<Vec<RegisteredLanguage>> = OnceLock::new();
     REGISTRY.get_or_init(|| {
         SPECS
@@ -469,10 +488,41 @@ fn registry() -> &'static [RegisteredLanguage] {
     })
 }
 
+/// Languages loaded from a library at runtime, newest first: a
+/// configured grammar for a name the build already knows replaces it,
+/// which is what makes a wrong or dated built-in fixable without a
+/// release.
+static LOADED: std::sync::RwLock<Vec<&'static RegisteredLanguage>> =
+    std::sync::RwLock::new(Vec::new());
+
+/// Adds a language loaded at runtime. The spec is leaked: a grammar
+/// stays for the life of the process, since the trees that point into
+/// it do too.
+pub(crate) fn register_loaded(spec: LanguageSpec) {
+    let entry: &'static RegisteredLanguage = Box::leak(Box::new(RegisteredLanguage {
+        spec: Box::leak(Box::new(spec)),
+        compiled: OnceLock::new(),
+    }));
+    let mut loaded = LOADED.write().expect("loaded languages lock");
+    loaded.retain(|other| other.spec.name != entry.spec.name);
+    loaded.insert(0, entry);
+}
+
+/// Every language, loaded ones first so that they win a name the build
+/// also has.
+fn all() -> Vec<&'static RegisteredLanguage> {
+    let loaded = LOADED.read().expect("loaded languages lock");
+    loaded
+        .iter()
+        .copied()
+        .chain(built_in().iter())
+        .collect()
+}
+
 /// Finds a language by canonical name or alias (case-insensitive).
 pub fn by_name(name: &str) -> Option<&'static RegisteredLanguage> {
     let needle = name.to_ascii_lowercase();
-    registry().iter().find(|entry| {
+    all().into_iter().find(|entry| {
         entry.spec.name == needle || entry.spec.aliases.iter().any(|alias| *alias == needle)
     })
 }
@@ -492,24 +542,26 @@ pub fn by_path(path: &std::path::Path) -> Option<&'static RegisteredLanguage> {
         }
     }
     if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-        if let Some(entry) = registry()
-            .iter()
+        if let Some(entry) = all()
+            .into_iter()
             .find(|entry| entry.spec.filenames.iter().any(|file| *file == name))
         {
             return Some(entry);
         }
     }
     let extension = path.extension()?.to_str()?.to_ascii_lowercase();
-    registry()
-        .iter()
+    all()
+        .into_iter()
         .find(|entry| entry.spec.extensions.iter().any(|ext| *ext == extension))
 }
 
 /// Every registered language name that files can map to (for UI pickers).
 pub fn selectable_names() -> Vec<&'static str> {
-    registry()
-        .iter()
+    let mut names: Vec<&'static str> = all()
+        .into_iter()
         .filter(|entry| !entry.spec.extensions.is_empty())
         .map(|entry| entry.spec.name)
-        .collect()
+        .collect();
+    names.dedup();
+    names
 }

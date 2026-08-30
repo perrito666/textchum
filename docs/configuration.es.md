@@ -484,6 +484,44 @@ Una raíz configurada cuyo directorio ya no está se marca como *missing*,
 y **Remove missing** olvida todas: nada volverá a coincidir con esas
 entradas.
 
+## Lenguajes que la compilación no conoce
+
+El coloreado de Textchum viene de gramáticas tree-sitter compiladas en
+el binario. Un lenguaje que no trae se puede nombrar en `languages`,
+con la gramática como biblioteca compilada y su consulta de resaltado
+como archivo:
+
+```json
+{
+  "languages": {
+    "dockerfile": {
+      "grammar": "~/.local/share/textchum/grammars/libtree-sitter-dockerfile.dylib",
+      "highlights": "~/.local/share/textchum/grammars/dockerfile/highlights.scm",
+      "extensions": ["dockerfile"],
+      "filenames": ["Dockerfile", "Containerfile"]
+    }
+  }
+}
+```
+
+`aliases`, `filenames` e `injections` son opcionales, y `symbol`
+también: el constructor es `tree_sitter_<nombre>` salvo que se nombre,
+con guiones y puntos vueltos guiones bajos. Una gramática hecha para
+otro tree-sitter se rechaza por su número de ABI en lugar de confiar en
+ella y romper, y un nombre que la compilación ya conoce queda
+reemplazado por el configurado: así se arregla una gramática vieja sin
+esperar una versión nueva.
+
+Para construir una, desde el repositorio de la gramática:
+
+```bash
+cc -O2 -fPIC -shared -I src -o libtree-sitter-NOMBRE.dylib src/parser.c src/scanner.c
+```
+
+(`.so` en Linux, y sin `src/scanner.c` cuando la gramática no lo trae.)
+Una entrada que no se puede cargar cuesta ese lenguaje y nada más: el
+editor dice qué pasó y sigue.
+
 ## Aún no está
 
 - Nada por el momento — apunta la próxima molestia cuando aparezca.

@@ -140,6 +140,19 @@ public final class CoreConfig {
         set { tc_config_set_line_numbers(handle, newValue) }
     }
 
+    /// Opens the grammars named under `languages`, and answers with
+    /// what could not be opened — one line each, empty when every one
+    /// of them loaded or none were named.
+    ///
+    /// The library stays loaded for the life of the process: a syntax
+    /// tree points into the grammar's tables.
+    public func loadGrammars() -> [String] {
+        guard let raw = tc_load_grammars(handle) else { return [] }
+        defer { tc_string_free(raw) }
+        let text = String(cString: raw)
+        return text.isEmpty ? [] : text.components(separatedBy: "\n")
+    }
+
     /// Whether a file stays open when the window showing it closes,
     /// with anything unsaved, to be settled when the editor closes.
     public var keepBuffers: Bool {

@@ -463,6 +463,43 @@ A configured root whose directory is gone is marked *missing*, and
 **Remove missing** forgets every one of them: nothing will ever match
 those entries again.
 
+## Languages the build does not know
+
+Textchum's colouring comes from tree-sitter grammars compiled into the
+build. A language it does not carry can be named in `languages`, with
+the grammar as a compiled library and its highlights query as a file:
+
+```json
+{
+  "languages": {
+    "dockerfile": {
+      "grammar": "~/.local/share/textchum/grammars/libtree-sitter-dockerfile.dylib",
+      "highlights": "~/.local/share/textchum/grammars/dockerfile/highlights.scm",
+      "extensions": ["dockerfile"],
+      "filenames": ["Dockerfile", "Containerfile"]
+    }
+  }
+}
+```
+
+`aliases`, `filenames` and `injections` are optional, and so is
+`symbol`: the constructor is `tree_sitter_<name>` unless it is named,
+with dashes and dots turned into underscores. A grammar built for a
+different tree-sitter is refused by its ABI number rather than trusted
+and crashed on, and a name the build already knows is replaced by the
+configured one — which is how a dated built-in grammar gets fixed
+without waiting for a release.
+
+Building one, from a grammar's own repository:
+
+```bash
+cc -O2 -fPIC -shared -I src -o libtree-sitter-NAME.dylib src/parser.c src/scanner.c
+```
+
+(`.so` on Linux, and drop `src/scanner.c` when the grammar has none.)
+An entry that cannot be loaded costs that one language: the editor says
+what went wrong and carries on.
+
 ## Not there yet
 
 - Nothing at the moment — file an itch when one appears.

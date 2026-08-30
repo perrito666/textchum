@@ -141,6 +141,9 @@ pub struct Shell {
     /// document is here once however many views show it.
     documents: RefCell<HashMap<DocumentId, Rc<OpenDocument>>>,
     documents_by_path: RefCell<HashMap<String, DocumentId>>,
+    /// What the configured grammars could not do, for the first window
+    /// to say once.
+    pub grammar_problems: RefCell<Vec<String>>,
     next_document_id: std::cell::Cell<u64>,
     /// Documents whose last view closed, newest last. A closed file is
     /// kept whole for a while so that reopening it is taking back the
@@ -196,6 +199,14 @@ impl Shell {
             if let Some(warning) = warning {
                 eprintln!("textchum: {warning}");
             }
+            // Grammars the build does not carry, named in the
+            // configuration. One that cannot be opened costs that
+            // language and nothing else.
+            let grammar_problems =
+                textchum_core::grammar::load_configured(&config.grammars_json());
+            for problem in &grammar_problems {
+                eprintln!("textchum: languages: {problem}");
+            }
             // The same debug log the macOS shell keeps, at the Linux
             // conventional spot.
             let log_path = crate::paths::lsp_log_path();
@@ -227,6 +238,7 @@ impl Shell {
                 config_monitor: RefCell::new(None),
                 documents: RefCell::new(HashMap::new()),
                 documents_by_path: RefCell::new(HashMap::new()),
+                grammar_problems: RefCell::new(grammar_problems),
                 closed_documents: RefCell::new(Vec::new()),
                 next_document_id: std::cell::Cell::new(1),
             });
