@@ -19,6 +19,7 @@ mod workbench;
 use adw::prelude::*;
 use gtk::gio;
 use workbench::Workbench;
+use textchum_core::t;
 
 const APP_ID: &str = "to.perri.textchum";
 
@@ -152,9 +153,9 @@ fn asks_before_quitting(app: &adw::Application) -> bool {
         format!("Save changes to {} files?", names.len())
     };
     let dialog = adw::AlertDialog::new(Some(&title), Some(&names.join(", ")));
-    dialog.add_response("cancel", "Cancel");
-    dialog.add_response("discard", "Quit Without Saving");
-    dialog.add_response("save", "Save All");
+    dialog.add_response("cancel", &t!("Cancel"));
+    dialog.add_response("discard", &t!("Quit Without Saving"));
+    dialog.add_response("save", &t!("Save All"));
     dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
     dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
     dialog.set_default_response(Some("save"));

@@ -830,7 +830,7 @@ final class DocumentController: NSResponder {
             case 0:
                 self.presentInfo(
                     "On the definition",
-                    details: "Nothing else in the workspace refers to this symbol.")
+                    details: t("Nothing else in the workspace refers to this symbol."))
             case 1:
                 self.openLocation?(uses[0].path, uses[0].line, uses[0].character)
             default:
@@ -868,7 +868,7 @@ final class DocumentController: NSResponder {
     @objc func showDiagnosticList(_ sender: Any?) {
         guard let textView else { return }
         guard !diagnostics.isEmpty else {
-            presentInfo("Nothing reported", details: "No diagnostics for this document.")
+            presentInfo(t("Nothing reported"), details: t("No diagnostics for this document."))
             return
         }
         let text = textView.string as NSString
@@ -885,7 +885,7 @@ final class DocumentController: NSResponder {
         }
         listPanel.show(
             rows: rows, over: window,
-            title: "Diagnostics (\(ordered.count))", placeholder: "message…"
+            title: "Diagnostics (\(ordered.count))", placeholder: t("message…")
         ) { [weak self] index in
             guard let self, ordered.indices.contains(index) else { return }
             let diagnostic = ordered[index]
@@ -926,7 +926,7 @@ final class DocumentController: NSResponder {
             .item(String(repeating: "  ", count: symbol.depth) + symbol.name)
         }
         listPanel.show(
-            rows: rows, over: window, title: t("Document Outline"), placeholder: "symbol…"
+            rows: rows, over: window, title: t("Document Outline"), placeholder: t("symbol…")
         ) { [weak self] index in
             guard let self, let path = self.coreDocument.path,
                 symbols.indices.contains(index)
@@ -1009,13 +1009,13 @@ final class DocumentController: NSResponder {
         guard let lspApp, let path = lspOpenPath, let textView else { return }
         let current = symbolUnderCaret() ?? ""
         let alert = NSAlert()
-        alert.messageText = "Rename Symbol"
+        alert.messageText = t("Rename Symbol")
         alert.informativeText =
             current.isEmpty ? "New name:" : "New name for “\(current)”:"
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
         field.stringValue = current
         alert.accessoryView = field
-        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: t("Rename"))
         alert.addButton(withTitle: t("Cancel"))
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return }
@@ -1315,7 +1315,7 @@ final class DocumentController: NSResponder {
             guard !actions.isEmpty else {
                 self.presentInfo(
                     "Nothing on offer",
-                    details: "The language server has no action for this place.")
+                    details: t("The language server has no action for this place."))
                 return
             }
             let rows: [ListPanel.Row] = actions.map { action in
@@ -1323,7 +1323,7 @@ final class DocumentController: NSResponder {
             }
             self.listPanel.show(
                 rows: rows, over: self.window, title: "Code Actions (\(actions.count))",
-                placeholder: "action…"
+                placeholder: t("action…")
             ) { [weak self] index in
                 guard let self, actions.indices.contains(index) else { return }
                 self.run(CoreCodeActions.outcome(inResultJSON: json, at: index), path: path)
@@ -1361,7 +1361,7 @@ final class DocumentController: NSResponder {
                 default:
                     self.presentInfo(
                         "Nothing came back",
-                        details: "The language server had no edit for that action.")
+                        details: t("The language server had no edit for that action."))
                 }
             }
         case .nothing:
@@ -1492,7 +1492,7 @@ final class DocumentController: NSResponder {
         guard let path = coreDocument.path else {
             presentError(
                 "This document has no file yet.",
-                details: "Save it before asking git who wrote a line.")
+                details: t("Save it before asking git who wrote a line."))
             return
         }
         let text = textView.string as NSString
@@ -1513,7 +1513,7 @@ final class DocumentController: NSResponder {
     @objc func goToLine(_ sender: Any?) {
         guard let textView else { return }
         let alert = NSAlert()
-        alert.messageText = "Go to Line"
+        alert.messageText = t("Go to Line")
         alert.informativeText = "Line number, or line:column — of \(coreDocument.lineCount)."
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
         field.placeholderString = "412 or 412:8"
@@ -2612,10 +2612,12 @@ final class DocumentController: NSResponder {
             alert.alertStyle = .warning
             alert.messageText = "“\(window?.title ?? "Document")” changed on disk."
             alert.informativeText =
-                "The file was modified by another program, and you have unsaved changes. "
-                + "Reloading will discard your changes (one Undo brings them back)."
-            alert.addButton(withTitle: "Keep My Changes")
-            alert.addButton(withTitle: "Reload From Disk")
+                t(
+                    "The file was modified by another program, and you have unsaved "
+                        + "changes. Reloading will discard your changes (one Undo brings "
+                        + "them back).")
+            alert.addButton(withTitle: t("Keep My Changes"))
+            alert.addButton(withTitle: t("Reload From Disk"))
             if alert.runModal() == .alertSecondButtonReturn {
                 reloadFromDisk()
             }
@@ -2633,11 +2635,12 @@ final class DocumentController: NSResponder {
         if coreDocument.isDirty {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = "Revert to the saved version?"
+            alert.messageText = t("Revert to the saved version?")
             alert.informativeText =
-                "Your unsaved changes will be replaced by the file on disk "
-                + "(one Undo brings them back)."
-            alert.addButton(withTitle: "Revert")
+                t(
+                    "Your unsaved changes will be replaced by the file on disk "
+                        + "(one Undo brings them back).")
+            alert.addButton(withTitle: t("Revert"))
             alert.addButton(withTitle: t("Cancel"))
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
@@ -3183,7 +3186,7 @@ final class DocumentController: NSResponder {
             alert.alertStyle = .warning
             alert.messageText = "Save preprocessor failed: \(failure.command)"
             alert.informativeText = failure.details
-            alert.addButton(withTitle: "Save Without Preprocessing")
+            alert.addButton(withTitle: t("Save Without Preprocessing"))
             alert.addButton(withTitle: t("Cancel"))
             return alert.runModal() == .alertFirstButtonReturn
         }
@@ -3596,7 +3599,7 @@ extension DocumentController: NSTextViewDelegate {
         if guesses.isEmpty {
             // An empty section is a gap the reader has to interpret; a
             // disabled label says why it is empty.
-            let none = NSMenuItem(title: "No Suggestions", action: nil, keyEquivalent: "")
+            let none = NSMenuItem(title: t("No Suggestions"), action: nil, keyEquivalent: "")
             none.isEnabled = false
             spelling.addItem(none)
         }
@@ -3612,7 +3615,7 @@ extension DocumentController: NSTextViewDelegate {
         }
         spelling.addItem(.separator())
         let add = NSMenuItem(
-            title: "Add to Dictionary",
+            title: t("Add to Dictionary"),
             action: #selector(addMisspellingToDictionary(_:)),
             keyEquivalent: ""
         )
@@ -3620,7 +3623,7 @@ extension DocumentController: NSTextViewDelegate {
         add.representedObject = SpellingFix(range: range, word: word, replacement: nil)
         spelling.addItem(add)
         let ignore = NSMenuItem(
-            title: "Ignore While This Runs",
+            title: t("Ignore While This Runs"),
             action: #selector(ignoreMisspelling(_:)),
             keyEquivalent: ""
         )

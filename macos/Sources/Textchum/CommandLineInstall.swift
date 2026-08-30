@@ -1,4 +1,5 @@
 import AppKit
+import TextchumKit
 
 extension AppDelegate {
     /// Textchum → Install chum Command…: puts `chum` on the PATH at
@@ -9,11 +10,11 @@ extension AppDelegate {
         guard let source = Self.chumScript() else {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = "Could not find the chum script"
+            alert.messageText = t("Could not find the chum script")
             alert.informativeText =
-                "The app bundle is missing its chum resource; "
-                + "rebuild with `make app`, or install from a checkout with "
-                + "`make install-cli`."
+                t(
+                    "The app bundle is missing its chum resource; rebuild with "
+                        + "`make app`, or install from a checkout with `make install-cli`.")
             alert.runModal()
             return
         }
@@ -34,11 +35,11 @@ extension AppDelegate {
         let alert = NSAlert()
         if let failure {
             alert.alertStyle = .warning
-            alert.messageText = "chum was not installed"
+            alert.messageText = t("chum was not installed")
             alert.informativeText = failure
         } else {
             alert.alertStyle = .informational
-            alert.messageText = "chum installed"
+            alert.messageText = t("chum installed")
             alert.informativeText =
                 "\(target) is ready. From a terminal:\n\n"
                 + "chum notes.md — open a file\n"

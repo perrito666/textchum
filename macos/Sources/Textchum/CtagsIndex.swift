@@ -1,4 +1,5 @@
 import AppKit
+import TextchumKit
 
 /// Symbol definitions from Universal Ctags, the fallback for projects
 /// whose language has no server running. Off by default; the Projects
@@ -110,10 +111,9 @@ final class CtagsIndex {
         warnedMissingBinary = true
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "Universal Ctags is not installed"
+        alert.messageText = t("Universal Ctags is not installed")
         alert.informativeText =
-            "The ctags fallback needs Universal Ctags "
-            + "(install with: brew install universal-ctags)."
+            t("The ctags fallback needs Universal Ctags (install with: brew install universal-ctags).")
         alert.runModal()
     }
 }

@@ -340,10 +340,10 @@ struct SidebarView: View {
                         .padding(.top, 6)
                         .contentShape(Rectangle())
                         .contextMenu {
-                            Button("Split into New Window") {
+                            Button(t("Split into New Window")) {
                                 onSplitGroup(group)
                             }
-                            Menu("Gather Into") {
+                            Menu(t("Gather Into")) {
                                 ForEach(windowTargets()) { target in
                                     Button(target.title) {
                                         onMergeGroup(group, target.id)
@@ -429,7 +429,7 @@ struct SidebarView: View {
                     }
                 }
             } else {
-                Text("No project")
+                Text(t("No project"))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

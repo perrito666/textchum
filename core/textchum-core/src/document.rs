@@ -67,11 +67,15 @@ pub enum DocumentError {
 }
 
 impl fmt::Display for DocumentError {
+    /// In the interface language: these reach the user as they are, so
+    /// they are prose and not identifiers. The operating system's own
+    /// message comes through untranslated, which is the one part
+    /// neither shell can do anything about.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Buffer(e) => write!(f, "{e}"),
             Self::Io { path, source } => write!(f, "{}: {source}", path.display()),
-            Self::NoPath => write!(f, "document has no file path"),
+            Self::NoPath => write!(f, "{}", crate::i18n::tr("document has no file path")),
         }
     }
 }

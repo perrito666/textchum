@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TextchumKit
 
 /// Clipboard helpers for the shapes a file's location takes: bare name,
 /// project-relative, absolute, or a URL on the repository's forge
@@ -127,20 +128,20 @@ struct PathCopyMenu: View {
 
     var body: some View {
         if let onReveal {
-            Button("Reveal in Tree") { onReveal(path) }
+            Button(t("Reveal in Tree")) { onReveal(path) }
             Divider()
         }
-        Button("Copy File Name") {
+        Button(t("Copy File Name")) {
             PathActions.copy((path as NSString).lastPathComponent)
         }
-        Button("Copy Relative Path") {
+        Button(t("Copy Relative Path")) {
             PathActions.copy(PathActions.relativePath(path, projectRoot: projectRoot))
         }
-        Button("Copy Absolute Path") {
+        Button(t("Copy Absolute Path")) {
             PathActions.copy(path)
         }
         if PathActions.isInGitRepository(path) {
-            Button("Copy Forge URL") {
+            Button(t("Copy Forge URL")) {
                 if let url = PathActions.forgeURL(forPath: path, isDirectory: isDirectory) {
                     PathActions.copy(url)
                 } else {

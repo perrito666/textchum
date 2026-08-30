@@ -776,22 +776,22 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $model.selectedTab) {
             GeneralSettingsTab(model: model)
-                .tabItem { Label("General", systemImage: "gearshape") }
+                .tabItem { Label(t("General"), systemImage: "gearshape") }
                 .tag("general")
             KeyboardTab(model: model)
-                .tabItem { Label("Keyboard", systemImage: "keyboard") }
+                .tabItem { Label(t("Keyboard"), systemImage: "keyboard") }
                 .tag("keyboard")
             ProjectsTab(model: model)
-                .tabItem { Label("Projects", systemImage: "folder.badge.gearshape") }
+                .tabItem { Label(t("Projects"), systemImage: "folder.badge.gearshape") }
                 .tag("projects")
             LanguageServersTab(model: model)
-                .tabItem { Label("Language Servers", systemImage: "network") }
+                .tabItem { Label(t("Language Servers"), systemImage: "network") }
                 .tag("servers")
             PreprocessorsTab(model: model)
-                .tabItem { Label("Preprocessors", systemImage: "wand.and.rays") }
+                .tabItem { Label(t("Preprocessors"), systemImage: "wand.and.rays") }
                 .tag("preprocessors")
             PresetsTab(model: model)
-                .tabItem { Label("Presets", systemImage: "eye.slash") }
+                .tabItem { Label(t("Presets"), systemImage: "eye.slash") }
                 .tag("presets")
         }
         .frame(
@@ -897,13 +897,13 @@ struct GeneralSettingsTab: View {
 
     private var form: some View {
         Form {
-            Picker("Appearance:", selection: $model.appearance) {
+            Picker(t("Appearance:"), selection: $model.appearance) {
                 Text(t("System")).tag(CoreAppearance.system)
                 Text(t("Light")).tag(CoreAppearance.light)
                 Text(t("Dark")).tag(CoreAppearance.dark)
             }
             .pickerStyle(.segmented)
-            Picker("Theme:", selection: $model.theme) {
+            Picker(t("Theme:"), selection: $model.theme) {
                 ForEach(model.availableThemes, id: \.self) { name in
                     Text(name).tag(name)
                 }
@@ -913,7 +913,7 @@ struct GeneralSettingsTab: View {
             // picker — and a way back to the system's icons.
             // The packs already seen are a list; a new one is a folder
             // somewhere on disk, so both a picker and a chooser.
-            LabeledContent("File icons:") {
+            LabeledContent(t("File icons:")) {
                 HStack(spacing: 8) {
                     Picker("", selection: iconPackSelection) {
                         Text(t("System icons")).tag("")
@@ -951,16 +951,16 @@ struct GeneralSettingsTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Picker("Open files in:", selection: $model.openTarget) {
+            Picker(t("Open files in:"), selection: $model.openTarget) {
                 Text(t("Tabs")).tag(CoreOpenTarget.tab)
                 Text(t("Windows")).tag(CoreOpenTarget.window)
             }
-            Picker("New files in:", selection: $model.newFileTarget) {
+            Picker(t("New files in:"), selection: $model.newFileTarget) {
                 Text(t("Tabs")).tag(CoreOpenTarget.tab)
                 Text(t("Windows")).tag(CoreOpenTarget.window)
             }
             .pickerStyle(.segmented)
-            Picker("Font:", selection: $model.fontFamily) {
+            Picker(t("Font:"), selection: $model.fontFamily) {
                 Text(t("System Monospaced")).tag("")
                 Divider()
                 ForEach(monospacedFamilies, id: \.self) { family in
@@ -968,10 +968,10 @@ struct GeneralSettingsTab: View {
                 }
             }
             Stepper(value: $model.fontSize, in: 6...72, step: 1) {
-                Text("Font size: \(Int(model.fontSize)) pt")
+                Text(t("Font size: {} pt", Int(model.fontSize)))
             }
             Stepper(value: $model.tabWidth, in: 1...16) {
-                Text("Tab width: \(model.tabWidth) columns")
+                Text(t("Tab width: {} columns", model.tabWidth))
             }
             Toggle(t("Show line numbers"), isOn: $model.lineNumbers)
             Toggle(t("Hover documentation"), isOn: $model.hoverDocs)
@@ -988,9 +988,9 @@ struct GeneralSettingsTab: View {
             ProjectRecordsSettings(model: model)
             Toggle(t("Reveal the current file in the tree"), isOn: $model.followFile)
             Toggle(t("Mark the selected word elsewhere on screen"), isOn: $model.markOccurrences)
-            Toggle("  Match case", isOn: $model.occurrencesCaseSensitive)
+            Toggle(t("  Match case"), isOn: $model.occurrencesCaseSensitive)
                 .disabled(!model.markOccurrences)
-            Toggle("  Whole words only", isOn: $model.occurrencesWholeWord)
+            Toggle(t("  Whole words only"), isOn: $model.occurrencesWholeWord)
                 .disabled(!model.markOccurrences)
             // Not a Picker: several dictionaries can apply at once, and
             // a picker can only say one thing. Each language is a toggle
@@ -1074,7 +1074,7 @@ private struct PresetsTab: View {
 
                 List {
                     if model.hidePresets.isEmpty {
-                        Text("No presets — add one below, or restore the built-ins.")
+                        Text(t("No presets — add one below, or restore the built-ins."))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(model.hidePresets, id: \.name) { preset in
@@ -1140,7 +1140,7 @@ private struct PresetGlobsField: View {
     }
 
     var body: some View {
-        CommandsEditor(placeholder: "one pattern per line", text: $text) {
+        CommandsEditor(placeholder: t("one pattern per line"), text: $text) {
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmed != initial else { return }
             commit(trimmed.split(whereSeparator: \.isNewline).joined(separator: " "))
@@ -1165,7 +1165,7 @@ struct GlobEditor: View {
             HStack {
                 Menu("Add preset") {
                     if presets.isEmpty {
-                        Text("No presets — add some in the Presets tab")
+                        Text(t("No presets — add some in the Presets tab"))
                     }
                     ForEach(presets, id: \.name) { preset in
                         Button(preset.name) { append(preset.globs) }
@@ -1324,7 +1324,7 @@ private struct KeyboardTab: View {
                 .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {
-                    Picker("Profile", selection: $model.keysProfile) {
+                    Picker(t("Profile"), selection: $model.keysProfile) {
                         Text("Textchum").tag("")
                         ForEach(model.keyProfileChoices, id: \.id) { choice in
                             Text(choice.name).tag(choice.id)
@@ -1345,7 +1345,7 @@ private struct KeyboardTab: View {
                     }
                     .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
                     if !model.keysProfile.isEmpty {
-                        Button("Delete profile") {
+                        Button(t("Delete profile")) {
                             model.removeKeyProfile(named: model.keysProfile)
                         }
                     }
@@ -1356,7 +1356,7 @@ private struct KeyboardTab: View {
 
                 List {
                     if model.shortcutCatalog.isEmpty {
-                        Text("Open the Settings window from the app to see the commands.")
+                        Text(t("Open the Settings window from the app to see the commands."))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(shown) { shortcut in
@@ -1418,7 +1418,7 @@ private struct ShortcutField: View {
             if overridden {
                 // Which rows you changed is the question this screen
                 // gets asked next.
-                Text("changed")
+                Text(t("changed"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1453,17 +1453,17 @@ private struct ProjectsTab: View {
                 GroupBox("Defaults (all projects)") {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 24) {
-                            Toggle("Manifest projects", isOn: $model.manifestProjectsDefault)
-                            Toggle("Recursive config", isOn: $model.recursiveConfigDefault)
-                            Toggle("Ctags fallback", isOn: $model.ctagsFallbackDefault)
+                            Toggle(t("Manifest projects"), isOn: $model.manifestProjectsDefault)
+                            Toggle(t("Recursive config"), isOn: $model.recursiveConfigDefault)
+                            Toggle(t("Ctags fallback"), isOn: $model.ctagsFallbackDefault)
                             Spacer()
                         }
                         HStack(spacing: 8) {
-                            Text("Hide in tree:")
+                            Text(t("Hide in tree:"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             GlobEditorButton(
-                                title: "Hidden in every project",
+                                title: t("Hidden in every project"),
                                 presets: model.hidePresets,
                                 initial: model.hideGlobsDefault,
                                 commit: { globs in
@@ -1485,7 +1485,7 @@ private struct ProjectsTab: View {
 
                 List {
                     if model.workspaceEntries.isEmpty {
-                        Text("No per-project overrides.")
+                        Text(t("No per-project overrides."))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(model.workspaceEntries) { entry in
@@ -1498,7 +1498,7 @@ private struct ProjectsTab: View {
                                     // Nothing will ever match this root
                                     // again, which is worth saying rather
                                     // than leaving the reader to wonder.
-                                    Text("missing")
+                                    Text(t("missing"))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .help("This directory no longer exists")
@@ -1514,7 +1514,7 @@ private struct ProjectsTab: View {
                                         .help(source.scope)
                                     }
                                 } label: {
-                                    Text("Copy from…")
+                                    Text(t("Copy from…"))
                                 }
                                 .frame(width: 120)
                                 .disabled(model.workspaceEntries.count < 2)
@@ -1561,7 +1561,7 @@ private struct ProjectsTab: View {
                             // inherits: a blank box otherwise leaves the
                             // reader to go and look.
                             HStack(spacing: 8) {
-                                Text("Editor:")
+                                Text(t("Editor:"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 OverrideField(
@@ -1608,12 +1608,12 @@ private struct ProjectsTab: View {
                 GroupBox("Add project override") {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 8) {
-                            PathPicker(text: $newScope, placeholder: "Project root path")
+                            PathPicker(text: $newScope, placeholder: t("Project root path"))
                             // The roots are known — every open document has
                             // one — so a project is added by picking it.
                             Menu("Open projects") {
                                 if model.addableProjectRoots.isEmpty {
-                                    Text("Every open project is already listed")
+                                    Text(t("Every open project is already listed"))
                                 }
                                 ForEach(model.addableProjectRoots, id: \.self) { root in
                                     Button((root as NSString).lastPathComponent) {
@@ -1633,18 +1633,18 @@ private struct ProjectsTab: View {
                             .disabled(newScope.isEmpty)
                         }
                         HStack(spacing: 8) {
-                            Text("Copy settings from:")
+                            Text(t("Copy settings from:"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Menu(copyFrom.isEmpty ? "Nothing" : (copyFrom as NSString).lastPathComponent) {
-                                Button("Nothing") { copyFrom = "" }
+                                Button(t("Nothing")) { copyFrom = "" }
                                 ForEach(model.workspaceEntries) { entry in
                                     Button(entry.scopeLabel) { copyFrom = entry.scope }
                                         .help(entry.scope)
                                 }
                             }
                             .frame(width: 200)
-                            Text("servers, save commands, flags and editor overrides")
+                            Text(t("servers, save commands, flags and editor overrides"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -1737,7 +1737,7 @@ private struct LanguageServersTab: View {
 
                 List {
                     if model.lspEntries.isEmpty {
-                        Text("No overrides — the built-in registry serves all languages.")
+                        Text(t("No overrides — the built-in registry serves all languages."))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(model.lspEntries) { entry in
@@ -1784,11 +1784,11 @@ private struct LanguageServersTab: View {
                                     .font(.system(.caption, design: .monospaced))
                                 Spacer()
                                 if CoreLSPRegistry.isInstalled(server.command) {
-                                    Label("found", systemImage: "checkmark.circle")
+                                    Label(t("found"), systemImage: "checkmark.circle")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 } else {
-                                    Label("not installed", systemImage: "exclamationmark.circle")
+                                    Label(t("not installed"), systemImage: "exclamationmark.circle")
                                         .font(.caption)
                                         .foregroundStyle(.orange)
                                         .help(server.installHint)
@@ -1804,11 +1804,11 @@ private struct LanguageServersTab: View {
                     VStack(spacing: 8) {
                         PathPicker(
                             text: $newScope,
-                            placeholder: "Project root (empty = default for all projects)")
+                            placeholder: t("Project root (empty = default for all projects)"))
                         HStack(spacing: 8) {
                             EditableCombo(
                                 text: $newLanguage,
-                                placeholder: "Language (e.g. python)",
+                                placeholder: t("Language (e.g. python)"),
                                 options: model.knownLanguages
                             )
                             .frame(width: 180)
@@ -1830,11 +1830,11 @@ private struct LanguageServersTab: View {
                 }
 
                 HStack {
-                    Text("Changes apply to servers started afterwards.")
+                    Text(t("Changes apply to servers started afterwards."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Restart Servers Now") {
+                    Button(t("Restart Servers Now")) {
                         model.onRestartServers?()
                     }
                 }
@@ -1873,7 +1873,7 @@ private struct PreprocessorsTab: View {
 
                 List {
                     if model.preprocessorEntries.isEmpty {
-                        Text("No preprocessors — documents save exactly as typed.")
+                        Text(t("No preprocessors — documents save exactly as typed."))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(model.preprocessorEntries) { entry in
@@ -1906,11 +1906,11 @@ private struct PreprocessorsTab: View {
                     VStack(spacing: 8) {
                         PathPicker(
                             text: $newScope,
-                            placeholder: "Project root (empty = default for all projects)")
+                            placeholder: t("Project root (empty = default for all projects)"))
                         HStack(alignment: .top, spacing: 8) {
                             EditableCombo(
                                 text: $newLanguage,
-                                placeholder: "Language (e.g. python)",
+                                placeholder: t("Language (e.g. python)"),
                                 options: model.knownLanguages
                             )
                             .frame(width: 180)
@@ -1994,7 +1994,7 @@ private struct CommandsField: View {
     }
 
     var body: some View {
-        CommandsEditor(placeholder: "commands, one per line", text: $text) {
+        CommandsEditor(placeholder: t("commands, one per line"), text: $text) {
             commitIfChanged()
         }
         .onDisappear(perform: commitIfChanged)
@@ -2017,7 +2017,7 @@ final class SettingsWindowController: NSWindowController {
         let window = NSWindow(contentViewController: NSHostingController(
             rootView: SettingsView(model: model)
         ))
-        window.title = "Settings"
+        window.title = t("Settings")
         // Resizable, because the tallest tab grows every time a setting
         // is added and a fixed window turns that into content nobody
         // can reach. The minimum keeps the forms from being squeezed
@@ -2051,9 +2051,11 @@ struct ProjectRecordsSettings: View {
     var body: some View {
         Toggle(t("Keep each project's state with the checkout"), isOn: $model.projectStateInProject)
         Text(
-            "A file remembers how it is split, where each view was looking, what is "
-                + "folded, and what it was told it is. With this on, that is written to "
-                + ".tchum in the project; otherwise it is kept here, one record per project."
+            t(
+                "A file remembers how it is split, where each view was looking, what is "
+                    + "folded, and what it was told it is. With this on, that is written "
+                    + "to .tchum in the project; otherwise it is kept here, one record "
+                    + "per project.")
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -2066,7 +2068,7 @@ struct ProjectRecordsSettings: View {
                     prompt: Text(ProjectState.directory.path)
                 )
                 .textFieldStyle(.roundedBorder)
-                Button("Choose…") { chooseFolder() }
+                Button(t("Choose…")) { chooseFolder() }
                 Button(t("Manage…")) { showingRecords = true }
             }
         }
@@ -2082,8 +2084,10 @@ struct ProjectRecordsSettings: View {
         }
         .disabled(!model.projectStateSweep)
         Text(
-            "The sweep runs on a thread of its own at launch, and forgets the records "
-                + "of projects that are no longer there whatever the window says."
+            t(
+                "The sweep runs on a thread of its own at launch, and forgets the "
+                    + "records of projects that are no longer there whatever the window "
+                    + "says.")
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -2116,7 +2120,7 @@ struct ProjectRecordsList: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(t("Project Records")).font(.headline)
             if records.isEmpty {
-                Text("No project has anything recorded yet.")
+                Text(t("No project has anything recorded yet."))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 160)
             } else {
@@ -2135,7 +2139,7 @@ struct ProjectRecordsList: View {
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(
                                 record.missing
-                                    ? "missing" : "\(record.files) files"
+                                    ? t("missing") : t("{} files", record.files)
                             )
                             .foregroundStyle(record.missing ? .red : .secondary)
                             Text(record.updated, style: .date)
@@ -2148,7 +2152,7 @@ struct ProjectRecordsList: View {
                 .frame(minHeight: 220)
             }
             HStack {
-                Button("Forget Selected") {
+                Button(t("Forget Selected")) {
                     for path in chosen { CoreProjectState.forget(recordAt: path) }
                     chosen = []
                     reload()

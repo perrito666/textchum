@@ -55,7 +55,7 @@ final class QuickFinderPanel: NSObject {
     /// query, narrowing by line content or file name.
     private let filtersStack = NSStackView()
     private let addFilterButton = NSButton(
-        title: "＋ Add Filter", target: nil, action: nil)
+        title: t("＋ Add Filter"), target: nil, action: nil)
     private let table = NSTableView()
     /// Says what the last search did, so an empty list is never mute.
     private let statusLabel = NSTextField(labelWithString: "")

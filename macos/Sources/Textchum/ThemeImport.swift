@@ -55,7 +55,7 @@ extension AppDelegate {
         let alert = NSAlert()
         if outcome.written.isEmpty {
             alert.alertStyle = .warning
-            alert.messageText = "Nothing was imported"
+            alert.messageText = t("Nothing was imported")
             alert.informativeText =
                 outcome.errors.first ?? "No \(source.label) theme was found there."
             alert.runModal()

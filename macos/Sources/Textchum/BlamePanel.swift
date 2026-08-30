@@ -96,7 +96,7 @@ final class BlamePanel: NSObject {
 
         // Copying the hash is most of what the answer is for.
         let copy = NSButton(
-            title: "Copy Commit", target: self, action: #selector(copyCommit))
+            title: t("Copy Commit"), target: self, action: #selector(copyCommit))
         copy.translatesAutoresizingMaskIntoConstraints = false
 
         let content = NSView()
