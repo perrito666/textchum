@@ -316,7 +316,7 @@ func runSmokeTest() -> Int32 {
     // after openers in the document's own style, and stays plain when
     // there is nothing to inherit.
     func newline(_ text: String, caret: Int, tabWidth: Int = 4) -> String? {
-        EditorWindowController.autoIndentedNewline(
+        DocumentController.autoIndentedNewline(
             in: text as NSString,
             selection: NSRange(location: caret, length: 0),
             tabWidth: tabWidth)
@@ -466,7 +466,7 @@ func runSmokeTest() -> Int32 {
     }
     let skipped = CoreWorkspace.hugoNonProseRanges(in: post)
     let whole = NSRange(location: 0, length: (post as NSString).length)
-    let prose = EditorWindowController.ranges(of: whole, excluding: skipped)
+    let prose = DocumentController.ranges(of: whole, excluding: skipped)
     let proseText = prose.map { (post as NSString).substring(with: $0) }.joined()
     guard skipped.count == 2, !proseText.contains("harbr"),
         !proseText.contains("{{<"), proseText.contains("Prose with")
@@ -578,22 +578,22 @@ func runSmokeTest() -> Int32 {
     // checked here: adopting a width already held sets two windows
     // answering each other forever, and adopting one while collapsed
     // reopens a navigator the user closed.
-    guard EditorWindowController.shouldAdoptSidebarWidth(320, current: 188, collapsed: false)
+    guard Workbench.shouldAdoptSidebarWidth(320, current: 188, collapsed: false)
     else {
         print("FAIL: a different width from another window should be adopted")
         return 1
     }
-    guard !EditorWindowController.shouldAdoptSidebarWidth(188, current: 188, collapsed: false)
+    guard !Workbench.shouldAdoptSidebarWidth(188, current: 188, collapsed: false)
     else {
         print("FAIL: adopting the width already held is how a feedback loop starts")
         return 1
     }
-    guard !EditorWindowController.shouldAdoptSidebarWidth(188.2, current: 188, collapsed: false)
+    guard !Workbench.shouldAdoptSidebarWidth(188.2, current: 188, collapsed: false)
     else {
         print("FAIL: a sub-point difference is the same width coming back")
         return 1
     }
-    guard !EditorWindowController.shouldAdoptSidebarWidth(320, current: 0, collapsed: true)
+    guard !Workbench.shouldAdoptSidebarWidth(320, current: 0, collapsed: true)
     else {
         print("FAIL: a collapsed navigator must stay collapsed")
         return 1
@@ -604,14 +604,14 @@ func runSmokeTest() -> Int32 {
     // server; the table it consults is a pure decision and is checked
     // here — a snippet that swallowed Return, or missed Shift-Tab,
     // would be a mode with the wrong way out.
-    guard EditorWindowController.snippetKey(for: #selector(NSResponder.insertTab(_:)))
+    guard DocumentController.snippetKey(for: #selector(NSResponder.insertTab(_:)))
             == .nextStop,
-        EditorWindowController.snippetKey(for: #selector(NSResponder.insertBacktab(_:)))
+        DocumentController.snippetKey(for: #selector(NSResponder.insertBacktab(_:)))
             == .previousStop,
-        EditorWindowController.snippetKey(for: #selector(NSResponder.cancelOperation(_:)))
+        DocumentController.snippetKey(for: #selector(NSResponder.cancelOperation(_:)))
             == .cancel,
-        EditorWindowController.snippetKey(for: #selector(NSResponder.insertNewline(_:))) == nil,
-        EditorWindowController.snippetKey(for: #selector(NSResponder.moveDown(_:))) == nil
+        DocumentController.snippetKey(for: #selector(NSResponder.insertNewline(_:))) == nil,
+        DocumentController.snippetKey(for: #selector(NSResponder.moveDown(_:))) == nil
     else {
         print("FAIL: snippet key routing")
         return 1
@@ -823,8 +823,10 @@ func runSmokeTest() -> Int32 {
     // is what it holds — the commands that act on the place clicked —
     // and what it leaves out: Services, Speech, Substitutions and the
     // rest of the general text menu.
-    let contextEditor = EditorWindowController(document: CoreDocument())
-    contextEditor.window?.makeKeyAndOrderFront(nil)
+    let contextBench = Workbench(sidebar: nil)
+    let contextEditor = DocumentController(document: CoreDocument())
+    contextBench.add(contextEditor)
+    contextBench.window?.makeKeyAndOrderFront(nil)
     let contextView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
     contextView.string = "def greet(name):\n    return name\n"
     let clicked = 6
@@ -849,57 +851,104 @@ func runSmokeTest() -> Int32 {
     // Every command carries the character that was clicked, so it can
     // answer about that place rather than about the caret.
     let carried = contextMenu.items.compactMap {
-        ($0.representedObject as? EditorWindowController.ContextCommand)?.index
+        ($0.representedObject as? DocumentController.ContextCommand)?.index
     }
     guard !carried.isEmpty, carried.allSatisfy({ $0 == clicked }) else {
         print("FAIL: context commands do not carry the clicked character")
         return 1
     }
-    contextEditor.window?.close()
+    contextBench.window?.close()
     print("context menu ok (editor commands, AppKit's extras left out, clicked position)")
 
-    // A split shows one document twice. TextKit 2 lets several layout
-    // managers share one content storage, which is what makes the two
-    // views one document; what does not come free is the painting,
+    // A window is a tab bar over panes: a tab is a document open in it,
+    // a pane is a view of one of them, and several panes can show one
+    // tab. TextKit 2 lets several layout managers share one content
+    // storage, which is what makes two panes two views of one document
+    // rather than two copies; what does not come free is the painting,
     // since colour lives on the layout manager.
-    let splitEditor = EditorWindowController(document: CoreDocument())
-    splitEditor.window?.makeKeyAndOrderFront(nil)
-    splitEditor.toggleSplit(nil)
-    guard let secondView = splitEditor.secondaryView else {
-        print("FAIL: splitting made no second view")
+    let bench = Workbench(sidebar: nil)
+    let first = DocumentController(document: CoreDocument())
+    let second = DocumentController(document: CoreDocument())
+    bench.add(first)
+    bench.add(second)
+    bench.window?.makeKeyAndOrderFront(nil)
+    guard bench.documents.count == 2, bench.focusedDocument === second else {
+        print("FAIL: the window did not take both tabs")
         return 1
     }
-    guard let primaryStorage = splitEditor.primaryView?.textLayoutManager?.textContentManager,
+    // Choosing a tab changes what the pane with the keyboard shows.
+    bench.showInFocusedPane(ObjectIdentifier(first))
+    guard bench.focusedDocument === first else {
+        print("FAIL: choosing a tab did not reach the focused pane")
+        return 1
+    }
+    bench.split()
+    guard bench.isSplit, bench.panes.count == 2 else {
+        print("FAIL: the window did not split")
+        return 1
+    }
+    guard first.paintTargetCount == 2, let secondView = first.secondaryView else {
+        print("FAIL: splitting made no second view of the document")
+        return 1
+    }
+    guard let primaryStorage = first.primaryView?.textLayoutManager?.textContentManager,
         secondView.textLayoutManager?.textContentManager === primaryStorage
     else {
         print("FAIL: the two views are not on one document")
         return 1
     }
-    guard splitEditor.paintTargetCount == 2 else {
-        print("FAIL: only \(splitEditor.paintTargetCount) view would be painted")
+    // The other pane takes another tab, and the first one keeps its own.
+    bench.showInFocusedPane(ObjectIdentifier(second))
+    guard bench.document(inPane: 1) === second, bench.document(inPane: 0) === first else {
+        print("FAIL: the panes do not hold a tab each")
+        return 1
+    }
+    guard first.paintTargetCount == 1 else {
+        print("FAIL: the view the pane gave up was not released")
+        return 1
+    }
+    // One file on every side at once.
+    bench.showEverywhere(ObjectIdentifier(first))
+    guard bench.document(inPane: 0) === first, bench.document(inPane: 1) === first,
+        first.paintTargetCount == 2
+    else {
+        print("FAIL: the file did not reach every pane")
         return 1
     }
     // The keyboard crosses the divider and comes back, so reading one
     // half while writing the other does not mean reaching for the
     // mouse every time.
-    splitEditor.window?.makeFirstResponder(splitEditor.primaryView)
-    splitEditor.focusOtherSide(nil)
-    guard splitEditor.window?.firstResponder === secondView else {
+    bench.focus(pane: 0)
+    bench.focusOtherPane()
+    guard bench.focusedPane == 1 else {
         print("FAIL: the focus did not cross to the other side")
         return 1
     }
-    splitEditor.focusOtherSide(nil)
-    guard splitEditor.window?.firstResponder === splitEditor.primaryView else {
+    bench.focusOtherPane()
+    guard bench.focusedPane == 0 else {
         print("FAIL: the focus did not come back")
         return 1
     }
-    splitEditor.closeSplit()
-    guard splitEditor.secondaryView == nil, splitEditor.paintTargetCount == 1 else {
-        print("FAIL: closing the split left the second view behind")
+    // Cycling tabs moves the focused pane through them.
+    bench.cycleTab(forward: true)
+    guard bench.focusedDocument === second else {
+        print("FAIL: cycling did not reach the next tab")
         return 1
     }
-    splitEditor.window?.close()
-    print("split ok (one document in two views, the focus across and back)")
+    bench.closeSplit()
+    guard !bench.isSplit, bench.panes.count == 1 else {
+        print("FAIL: closing the split left the second pane behind")
+        return 1
+    }
+    // Closing a tab closes the document; the pane showing it moves to
+    // what is left.
+    bench.closeTab(ObjectIdentifier(second))
+    guard bench.documents.count == 1, bench.focusedDocument === first else {
+        print("FAIL: closing a tab did not leave the other one showing")
+        return 1
+    }
+    bench.window?.close()
+    print("window ok (tabs over panes, one file on both sides, tab closed)")
 
     // The store holds documents; controllers hold views of them. A
     // path opens once however many views ask for it, and a rename
@@ -1211,22 +1260,22 @@ func runSmokeTest() -> Int32 {
     let painted = NSRange(location: 1_000, length: 20_000)
     guard
         // Nothing painted yet.
-        EditorWindowController.shouldRepaint(
+        DocumentController.shouldRepaint(
             viewport: NSRange(location: 5_000, length: 4_000), painted: nil,
             documentLength: 50_000, paintedLength: nil),
         // Inside what is painted: the whole point of the margin.
-        !EditorWindowController.shouldRepaint(
+        !DocumentController.shouldRepaint(
             viewport: NSRange(location: 5_000, length: 4_000), painted: painted,
             documentLength: 50_000, paintedLength: 50_000),
         // Off the top of it, and off the bottom of it.
-        EditorWindowController.shouldRepaint(
+        DocumentController.shouldRepaint(
             viewport: NSRange(location: 900, length: 4_000), painted: painted,
             documentLength: 50_000, paintedLength: 50_000),
-        EditorWindowController.shouldRepaint(
+        DocumentController.shouldRepaint(
             viewport: NSRange(location: 19_000, length: 4_000), painted: painted,
             documentLength: 50_000, paintedLength: 50_000),
         // A document that changed length: the offsets moved under it.
-        EditorWindowController.shouldRepaint(
+        DocumentController.shouldRepaint(
             viewport: NSRange(location: 5_000, length: 4_000), painted: painted,
             documentLength: 60_000, paintedLength: 50_000)
     else {
@@ -1362,7 +1411,7 @@ func runSmokeTest() -> Int32 {
         let whole = NSRange(location: 0, length: storage.length)
         let wanted = [NSRange(location: 100, length: 50): italic]
 
-        let first = EditorWindowController.applyTraitFonts(
+        let first = DocumentController.applyTraitFonts(
             wanted, over: whole, in: storage, plain: plain)
         guard first == 50 else {
             print("FAIL: the first trait pass wrote \(first) units, wanted 50")
@@ -1370,7 +1419,7 @@ func runSmokeTest() -> Int32 {
         }
         // Nothing changed, so nothing should be written — this is the
         // one that matters.
-        let second = EditorWindowController.applyTraitFonts(
+        let second = DocumentController.applyTraitFonts(
             wanted, over: whole, in: storage, plain: plain)
         guard second == 0 else {
             print("FAIL: an unchanged trait pass wrote \(second) units, wanted 0")
@@ -1379,7 +1428,7 @@ func runSmokeTest() -> Int32 {
         // A span that lost its italic is put back to the plain font,
         // and only over the part that lost it.
         let narrowed = [NSRange(location: 100, length: 40): italic]
-        let third = EditorWindowController.applyTraitFonts(
+        let third = DocumentController.applyTraitFonts(
             narrowed, over: whole, in: storage, plain: plain)
         guard third == 10 else {
             print("FAIL: narrowing a trait wrote \(third) units, wanted 10")
@@ -1445,7 +1494,7 @@ func runSmokeTest() -> Int32 {
         let length = (sweepView.string as NSString).length
         for x in stride(from: -200.0, through: 900.0, by: 37.0) {
             for y in stride(from: -200.0, through: 900.0, by: 37.0) {
-                guard let index = EditorWindowController.characterIndex(
+                guard let index = DocumentController.characterIndex(
                     at: NSPoint(x: x, y: y), in: sweepView)
                 else { continue }
                 guard index >= 0, index < length else {

@@ -7,7 +7,7 @@ import WebKit
 /// Forwards script messages to a weak target, so the web view's user
 /// content controller (which retains its handlers) cannot create a cycle.
 private final class ScriptMessageProxy: NSObject, WKScriptMessageHandler {
-    weak var target: EditorWindowController?
+    weak var target: DocumentController?
 
     func userContentController(
         _ controller: WKUserContentController, didReceive message: WKScriptMessage
@@ -75,7 +75,47 @@ final class WindowSidebarContext: ObservableObject {
     @Published var projectRoot: String?
 }
 
-final class EditorWindowController: NSWindowController {
+/// One view of a document: the text view, the scroll view around it,
+/// the gutter beside it, and the container the three sit in.
+///
+/// A document can have several — the same buffer in two panes — and each
+/// keeps its own place in the file. Colour and marks are rendering
+/// attributes, which live on the layout manager rather than on the text,
+/// so every view has to be painted.
+@MainActor
+final class DocumentView {
+    let container = NSView()
+    let scrollView: NSScrollView
+    let textView: NSTextView
+    let gutter: LineNumberGutterView
+
+    init(scrollView: NSScrollView, textView: NSTextView, gutter: LineNumberGutterView) {
+        self.scrollView = scrollView
+        self.textView = textView
+        self.gutter = gutter
+        container.autoresizingMask = [.width, .height]
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(gutter)
+        container.addSubview(scrollView)
+        NSLayoutConstraint.activate([
+            gutter.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            gutter.topAnchor.constraint(equalTo: container.topAnchor),
+            gutter.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: container.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+        ])
+    }
+}
+
+/// One open document and everything the editor does with it.
+///
+/// It is not a window: a window (`Workbench`) holds tabs and panes, and
+/// asks a document for a view when a pane is to show it. Commands reach
+/// this through the responder chain, which the workbench points at the
+/// document the focused pane is showing.
+final class DocumentController: NSResponder {
     // Named to avoid NSWindowController's own `document` property.
     /// The document this is a view of. The core handle and the
     /// findings live there rather than here, so a second view of the
@@ -84,19 +124,29 @@ final class EditorWindowController: NSWindowController {
     /// says what it is.
     let openDocument: OpenDocument
     var coreDocument: CoreDocument { openDocument.core }
-    /// This window's sidebar state (buffer list scoped to its tab group).
-    let sidebarModel = SidebarModel()
+
     /// The one floating list: references, the outline, the diagnostics.
     /// One at a time, so one panel.
     private let listPanel = ListPanel()
     /// This document's project root (nearest root marker), cached and
     /// refreshed when the path changes.
     private(set) var projectRoot: String?
-    private let sidebarContext = WindowSidebarContext()
+    /// The navigator's folder-tree state, which belongs to the window.
+    private var sidebarContext: WindowSidebarContext? { workbench?.sidebarContext }
     /// The (title, dirty, path) triple last published to the sidebar, to
     /// avoid rebuilding it on every keystroke.
     private var publishedState: (String, Bool, String?) = ("", false, nil)
-    private var textView: NSTextView?
+    /// The window this document is shown in, and the views it has
+    /// there — one per pane showing it.
+    weak var workbench: Workbench?
+    var window: NSWindow? { workbench?.window }
+    private(set) var views: [DocumentView] = []
+    /// The view the commands are about: the one with the keyboard, or
+    /// the first one made.
+    var focusedView: DocumentView? {
+        views.first { $0.textView.window?.firstResponder === $0.textView } ?? views.first
+    }
+    private var textView: NSTextView? { focusedView?.textView }
     /// True while the next selection change is caused by an edit we already
     /// know about, so it should not break undo coalescing.
     private var selectionChangeIsFromEditing = false
@@ -125,28 +175,14 @@ final class EditorWindowController: NSWindowController {
         get { openDocument.diagnostics }
         set { openDocument.diagnostics = newValue }
     }
-    /// The gutter and text view together, and the view they sit in —
-    /// a split swaps what is inside the host.
-    private var editorArea: NSView?
-    private var editorHost: NSView?
-
-    /// The second view of this document, while it is split, and what
-    /// it sits in. One document, so one history and one save — what
-    /// differs is where each view is looking.
-    private var secondaryTextView: NSTextView?
-    private var secondarySplit: NSSplitView?
-
-    /// Every layout manager that has to be painted. Colour and marks
-    /// are rendering attributes, which live on the layout manager
-    /// rather than the text, so a second view starts blank until it is
-    /// painted too.
+    /// Every layout manager that has to be painted, one per view.
     private var paintTargets: [NSTextLayoutManager] {
-        [textView, secondaryTextView].compactMap { $0?.textLayoutManager }
+        views.compactMap { $0.textView.textLayoutManager }
     }
 
-    /// The two views, for the smoke test to look at.
-    var primaryView: NSTextView? { textView }
-    var secondaryView: NSTextView? { secondaryTextView }
+    /// The views, for the smoke test to look at.
+    var primaryView: NSTextView? { views.first?.textView }
+    var secondaryView: NSTextView? { views.count > 1 ? views[1].textView : nil }
     var paintTargetCount: Int { paintTargets.count }
 
     /// The character a context-menu command is about, while one runs.
@@ -163,14 +199,11 @@ final class EditorWindowController: NSWindowController {
     private var hoverTimer: Timer?
     /// The popover currently showing hover content, if any.
     private var hoverPopover: NSPopover?
-    /// The window's split view controller (sidebar · editor · preview).
-    private var splitController: NSSplitViewController?
-    /// True while a broadcast sidebar width is being applied, so
-    /// following a change never looks like making one. Without it two
-    /// windows answer each other forever.
-    private var applyingSidebarWidth = false
-    /// The line-number gutter (a sibling of the scroll view, not a ruler).
-    private var lineRuler: LineNumberGutterView?
+    /// The window's split view controller (sidebar · editor · preview),
+    /// which belongs to the window rather than to this document.
+    private var splitController: NSSplitViewController? { workbench?.splitController }
+    /// The line-number gutter of the view with the keyboard.
+    private var lineRuler: LineNumberGutterView? { focusedView?.gutter }
     /// The Markdown preview pane, present while the preview is shown.
     private var previewItem: NSSplitViewItem?
     private var previewWebView: WKWebView?
@@ -215,22 +248,54 @@ final class EditorWindowController: NSWindowController {
         self.hiddenGlobsProvider = sidebar?.hiddenGlobs ?? { _ in [".*"] }
         self.revealPathInTree = sidebar?.revealInTree ?? { _ in }
         self.followEnabled = sidebar?.followEnabled ?? { true }
+        self.appliedSettings = settings
+        super.init()
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 480),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.center()
-        window.tabbingMode = .automatic
-        window.tabbingIdentifier = "textchum-editor"
-        super.init(window: window)
-        window.delegate = self
+        completionPopup.onAccept = { [weak self] item in
+            self?.accept(completion: item)
+        }
+        startWatchingFile()
+        syncLSPOpenState()
+        appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.refreshDecorations() }
+            }
+        }
+    }
 
-        let scrollView = NSTextView.scrollableTextView()
-        let textView = scrollView.documentView as! NSTextView
-        textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+    /// The settings to dress a new view in, kept so that the second view
+    /// of a document looks like the first.
+    private var appliedSettings: EditorSettings?
+
+    /// A view of this document for a pane to show.
+    ///
+    /// The text views share one content storage, which is what makes
+    /// them views of one document rather than copies of it: an edit in
+    /// either is the same edit, and there is one history and one save.
+    func makeView() -> DocumentView {
+        let scrollView: NSScrollView
+        let textView: NSTextView
+        if let first = views.first,
+            let contentManager = first.textView.textLayoutManager?.textContentManager
+        {
+            let layoutManager = NSTextLayoutManager()
+            contentManager.addTextLayoutManager(layoutManager)
+            let container = NSTextContainer(
+                size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+            container.widthTracksTextView = true
+            layoutManager.textContainer = container
+            textView = NSTextView(frame: .zero, textContainer: container)
+            textView.isVerticallyResizable = true
+            textView.isHorizontallyResizable = false
+            textView.autoresizingMask = [.width]
+            scrollView = NSScrollView()
+            scrollView.hasVerticalScroller = true
+            scrollView.documentView = textView
+        } else {
+            scrollView = NSTextView.scrollableTextView()
+            textView = scrollView.documentView as! NSTextView
+        }
+        textView.font = appliedSettings?.font ?? .monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.isRichText = false
         // The core owns history; AppKit's own undo stack stays out of play.
         textView.allowsUndo = false
@@ -243,31 +308,12 @@ final class EditorWindowController: NSWindowController {
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
         textView.delegate = self
-        self.textView = textView
 
-        // Gutter + scroll view side by side in one container.
         let gutter = LineNumberGutterView(textView: textView)
-        gutter.setVisible(settings?.lineNumbers ?? true)
-        self.lineRuler = gutter
-        let editorContainer = NSView()
-        self.editorArea = editorContainer
-        let editorHost = NSView()
-        self.editorHost = editorHost
-        editorContainer.autoresizingMask = [.width, .height]
-        editorHost.addSubview(editorContainer)
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        editorContainer.addSubview(gutter)
-        editorContainer.addSubview(scrollView)
-        NSLayoutConstraint.activate([
-            gutter.leadingAnchor.constraint(equalTo: editorContainer.leadingAnchor),
-            gutter.topAnchor.constraint(equalTo: editorContainer.topAnchor),
-            gutter.bottomAnchor.constraint(equalTo: editorContainer.bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: editorContainer.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: editorContainer.bottomAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: editorContainer.trailingAnchor),
-        ])
-        // The gutter follows every scroll.
+        gutter.setVisible(appliedSettings?.lineNumbers ?? true)
+        let view = DocumentView(scrollView: scrollView, textView: textView, gutter: gutter)
+
+        // The gutter, the change bar and the preview all follow scrolling.
         let clipView = scrollView.contentView
         clipView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
@@ -276,7 +322,6 @@ final class EditorWindowController: NSWindowController {
             name: NSView.boundsDidChangeNotification,
             object: clipView
         )
-
         // Mouse-move tracking feeds language-server hover.
         textView.addTrackingArea(
             NSTrackingArea(
@@ -286,100 +331,55 @@ final class EditorWindowController: NSWindowController {
                 userInfo: nil
             ))
 
-        textView.string = coreDocument.text
-        // A file opens already differing from its committed self as
-        // often as not, so the marks are wanted on the first paint.
-        DispatchQueue.main.async { [weak self] in
-            MainActor.assumeIsolated { self?.refreshChangeMarks() }
-        }
-
-        if let sidebar {
-            // Sidebar + editor in a split view controller; the sidebar item
-            // brings native collapse behavior and the toggleSidebar action.
-            let editorController = NSViewController()
-            editorController.view = editorHost
-
-            let splitController = NSSplitViewController()
-            let sidebarView = SidebarView(
-                model: sidebarModel,
-                currentDocumentID: ObjectIdentifier(self),
-                context: sidebarContext,
-                treeState: sidebar.treeState,
-                onSelectDocument: sidebar.selectDocument,
-                onShowProperties: sidebar.showProperties,
-                onOpenFile: sidebar.openFile,
-                onSplitGroup: { group in
-                    sidebar.splitGroup(group.documents.map(\.id))
-                },
-                onMergeGroup: { group, target in
-                    sidebar.mergeGroup(group.documents.map(\.id), target)
-                },
-                windowTargets: { [weak self] in
-                    guard let self else { return [] }
-                    return sidebar.windowTargets(ObjectIdentifier(self))
-                },
-                hiddenGlobs: sidebar.hiddenGlobs,
-                onRevealInTree: sidebar.revealInTree
-            )
-            let sidebarHost = NSHostingController(rootView: sidebarView)
-            // Without this, the list inherits a phantom titlebar inset and
-            // its first row starts scrolled out of view.
-            sidebarHost.safeAreaRegions = []
-            let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarHost)
-            sidebarItem.minimumThickness = 180
-            sidebarItem.maximumThickness = 400
-            // Full-height layout slides the list under the title bar and
-            // hides the first section header; keep the sidebar below it.
-            sidebarItem.allowsFullHeightLayout = false
-            splitController.addSplitViewItem(sidebarItem)
-            splitController.addSplitViewItem(NSSplitViewItem(viewController: editorController))
-            // AppKit remembers a divider only for a split view that has
-            // an autosave name, and this one never had one — which is
-            // why the sidebar's width has always reset. The same name in
-            // every window is deliberate: they share one stored
-            // position, so a width set in one is the width the next
-            // window opens with, and the width it has after a relaunch.
-            splitController.splitView.autosaveName = "TextchumEditorSidebar"
-            splitController.splitView.identifier =
-                NSUserInterfaceItemIdentifier("TextchumEditorSidebar")
-            self.observeSidebarWidth(of: splitController)
-            window.contentViewController = splitController
-            // Screenshot hook: a fixed content size makes documentation
-            // captures reproducible (TEXTCHUM_DEBUG_WINDOW=1200x760).
-            var contentSize = NSSize(width: 920, height: 480)
-            if let spec = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_WINDOW"] {
-                let parts = spec.split(separator: "x").compactMap { Double($0) }
-                if parts.count == 2 {
-                    contentSize = NSSize(width: parts[0], height: parts[1])
-                }
+        let isFirst = views.isEmpty
+        views.append(view)
+        if isFirst {
+            textView.string = coreDocument.text
+            // A file opens already differing from its committed self as
+            // often as not, so the marks are wanted on the first paint.
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated { self?.refreshChangeMarks() }
             }
-            window.setContentSize(contentSize)
-            window.center()
-            self.splitController = splitController
-        } else {
-            window.contentView = editorHost
         }
-
-        if let settings {
-            apply(settings: settings)
+        if let appliedSettings {
+            apply(settings: appliedSettings)
         }
-        completionPopup.onAccept = { [weak self] item in
-            self?.accept(completion: item)
-        }
+        // A new view starts unpainted: colour is a rendering attribute,
+        // and it has a layer of those to itself.
+        applyHighlights(force: true)
+        renderMarks()
+        refreshChangeMarks()
         updateChrome()
-        startWatchingFile()
-        refreshDecorations()
-        syncLSPOpenState()
-        // Markdown documents open with the live preview beside them.
+        // Markdown opens with the live preview beside it.
         if coreDocument.languageName == "markdown" {
             showPreview()
         }
-        appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.refreshDecorations() }
-            }
+        return view
+    }
+
+    /// Takes a view back — the pane showing it has gone, or is showing
+    /// another document now.
+    func drop(_ view: DocumentView) {
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSView.boundsDidChangeNotification,
+            object: view.scrollView.contentView)
+        if let layoutManager = view.textView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            views.count > 1
+        {
+            contentManager.removeTextLayoutManager(layoutManager)
+        }
+        views.removeAll { $0 === view }
+    }
+
+    /// The pane showing this document took the keyboard.
+    func didTakeFocus() {
+        if let path = coreDocument.path {
+            followInTree(path)
         }
     }
+
 
     // MARK: Language servers
 
@@ -1033,85 +1033,21 @@ final class EditorWindowController: NSWindowController {
 
     // MARK: Splitting
 
-    /// Shows this document twice, side by side, or closes the second
-    /// view.
-    ///
-    /// Both views share the text, so there is one history and one save
-    /// — what differs is where each is looking. That is the point:
-    /// reading the top of a file while editing the bottom of it.
-    ///
-    /// TextKit 2 is built for this: several layout managers can share
-    /// one content storage. What does not come free is the painting,
-    /// since colour and marks are rendering attributes and those live
-    /// on the layout manager — so both get painted.
+    /// Edit ▸ Split Editor: another pane beside this one, showing the
+    /// same file to start with. The panes belong to the window, so what
+    /// each shows is a tab of its own after that.
     @objc func toggleSplit(_ sender: Any?) {
-        if secondaryTextView != nil {
-            closeSplit()
-            return
+        guard let workbench else { return }
+        if workbench.isSplit {
+            workbench.closeSplit()
+        } else {
+            workbench.split()
         }
-        guard let editorHost, let mine = editorArea,
-            let contentManager = textView?.textLayoutManager?.textContentManager
-        else { return }
-
-        let layoutManager = NSTextLayoutManager()
-        contentManager.addTextLayoutManager(layoutManager)
-        let container = NSTextContainer(
-            size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
-        container.widthTracksTextView = true
-        layoutManager.textContainer = container
-
-        let second = NSTextView(frame: .zero, textContainer: container)
-        second.isRichText = false
-        second.allowsUndo = false
-        second.isAutomaticQuoteSubstitutionEnabled = false
-        second.isAutomaticDashSubstitutionEnabled = false
-        second.isAutomaticTextReplacementEnabled = false
-        second.font = appliedFont
-        second.delegate = self
-        second.isVerticallyResizable = true
-        second.isHorizontallyResizable = false
-        second.autoresizingMask = [.width]
-
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.documentView = second
-        // Repaint when this one scrolls too: the painted stretch is
-        // what either view can see.
-        scrollView.contentView.postsBoundsChangedNotifications = true
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(editorDidScroll(_:)),
-            name: NSView.boundsDidChangeNotification,
-            object: scrollView.contentView)
-
-        let split = NSSplitView(frame: editorHost.bounds)
-        split.isVertical = true
-        split.dividerStyle = .thin
-        split.autoresizingMask = [.width, .height]
-        mine.removeFromSuperview()
-        split.addArrangedSubview(mine)
-        split.addArrangedSubview(scrollView)
-        editorHost.addSubview(split)
-        // Neither side gets to collapse to the width of its gutter, and
-        // the divider is placed after a layout pass — before one, the
-        // split has no width to halve.
-        split.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
-        split.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 1)
-        editorHost.layoutSubtreeIfNeeded()
-        split.setPosition(editorHost.bounds.width / 2, ofDividerAt: 0)
-
-        secondaryTextView = second
-        secondarySplit = split
-        // The new view starts unpainted: colour is a rendering
-        // attribute, and it has its own layer of those.
-        applyHighlights(force: true)
-        renderMarks()
-        window?.makeFirstResponder(second)
     }
 
     /// Edit ▸ Close Split.
     @objc func closeSplitCommand(_ sender: Any?) {
-        closeSplit()
+        workbench?.closeSplit()
     }
 
     /// Edit ▸ Other Side: the keyboard crosses the divider.
@@ -1120,51 +1056,41 @@ final class EditorWindowController: NSWindowController {
     /// back and forth, and reaching for the mouse every time is what
     /// makes a split not worth opening.
     @objc func focusOtherSide(_ sender: Any?) {
-        guard let second = secondaryTextView, let first = textView else { return }
-        let goingTo = window?.firstResponder === second ? first : second
-        window?.makeFirstResponder(goingTo)
-        // The caret is where it was left, and it should be in sight.
-        goingTo.scrollRangeToVisible(goingTo.selectedRange())
+        workbench?.focusOtherPane()
     }
 
-    /// Takes the second view away.
-    func closeSplit() {
-        guard let editorHost, let mine = editorArea, let split = secondarySplit else {
-            return
-        }
-        if let second = secondaryTextView {
-            NotificationCenter.default.removeObserver(
-                self,
-                name: NSView.boundsDidChangeNotification,
-                object: second.enclosingScrollView?.contentView)
-            if let layoutManager = second.textLayoutManager,
-                let contentManager = layoutManager.textContentManager
-            {
-                contentManager.removeTextLayoutManager(layoutManager)
-            }
-        }
-        mine.removeFromSuperview()
-        split.removeFromSuperview()
-        secondarySplit = nil
-        secondaryTextView = nil
-        restore(area: mine, into: editorHost)
-        window?.makeFirstResponder(textView)
+    /// File ▸ Close (⌘W): the tab, not the window. Closing the last
+    /// tab closes the window with it.
+    @objc func closeTab(_ sender: Any?) {
+        guard let workbench else { return }
+        workbench.closeTab(ObjectIdentifier(self))
     }
 
-    /// Puts an editor area back into a host view.
-    ///
-    /// `NSSplitView.addArrangedSubview` turns off
-    /// `translatesAutoresizingMaskIntoConstraints`, so a view that has
-    /// been in a split comes out laid out by constraints it no longer
-    /// has — which is a view with no size. Turning it back on is what
-    /// makes the frame count again.
-    private func restore(area: NSView, into host: NSView) {
-        area.isHidden = false
-        area.translatesAutoresizingMaskIntoConstraints = true
-        area.frame = host.bounds
-        area.autoresizingMask = [.width, .height]
-        host.addSubview(area)
-        host.layoutSubtreeIfNeeded()
+    /// Window ▸ Move Tab to New Window.
+    @objc func moveTabToNewWindow(_ sender: Any?) {
+        guard let workbench, workbench.documents.count > 1,
+            let delegate = NSApp.delegate as? AppDelegate
+        else { return }
+        workbench.detach(self)
+        let fresh = delegate.makeWorkbench()
+        fresh.add(self)
+        fresh.showWindow(nil)
+        fresh.window?.makeKeyAndOrderFront(nil)
+        NotificationCenter.default.post(name: .textchumDocumentsChanged, object: nil)
+    }
+
+    /// Window ▸ Next/Previous Tab, in the pane with the keyboard.
+    @objc func selectNextTab(_ sender: Any?) {
+        workbench?.cycleTab(forward: true)
+    }
+
+    @objc func selectPreviousTab(_ sender: Any?) {
+        workbench?.cycleTab(forward: false)
+    }
+
+    /// View ▸ Same File on Both Sides.
+    @objc func showInEveryPane(_ sender: Any?) {
+        workbench?.showEverywhere(ObjectIdentifier(self))
     }
 
     // MARK: Code actions
@@ -2586,6 +2512,7 @@ final class EditorWindowController: NSWindowController {
     /// Applies configuration-derived settings to the view: the font, and
     /// tab stops sized to the configured width in that font.
     func apply(settings: EditorSettings) {
+        appliedSettings = settings
         appliedFont = settings.font
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
@@ -2635,7 +2562,7 @@ final class EditorWindowController: NSWindowController {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
-        fatalError("EditorWindowController is created in code")
+        fatalError("DocumentController is created in code")
     }
 
     /// Title shown when the bare filename collides with another open
@@ -2654,15 +2581,15 @@ final class EditorWindowController: NSWindowController {
 
     /// Refreshes everything the window shows about the document: title,
     /// edited marker, represented file, and the encoding/size subtitle.
-    private func updateChrome() {
-        guard let window else { return }
-        if let path = coreDocument.path {
-            window.representedURL = URL(fileURLWithPath: path)
-            window.title = displayTitle ?? URL(fileURLWithPath: path).lastPathComponent
-        } else {
-            window.representedURL = nil
-            window.title = "Untitled"
-        }
+    /// What this document is called on the tab and, while it has the
+    /// keyboard, in the title bar.
+    var chromeTitle: String {
+        guard let path = coreDocument.path else { return "Untitled" }
+        return displayTitle ?? URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    /// The document's facts, for the window's subtitle.
+    var chromeSubtitle: String {
         var subtitle = "\(coreDocument.encodingName) · \(coreDocument.lengthInBytes) bytes"
         if let language = coreDocument.languageName {
             subtitle += " · \(language)"
@@ -2675,19 +2602,22 @@ final class EditorWindowController: NSWindowController {
             if others > 0 { parts.append("\(others) warning\(others == 1 ? "" : "s")") }
             subtitle += " · " + parts.joined(separator: ", ")
         }
-        window.subtitle = subtitle
-        window.isDocumentEdited = coreDocument.isDirty
+        return subtitle
+    }
+
+    func updateChrome() {
+        workbench?.refreshChrome(for: self)
         publishSidebarState()
     }
 
     /// Publishes title/dirty/path changes to the sidebar — but only actual
     /// changes, so per-keystroke chrome updates stay cheap.
     private func publishSidebarState() {
-        let state = (window?.title ?? "Untitled", coreDocument.isDirty, coreDocument.path)
+        let state = (chromeTitle, coreDocument.isDirty, coreDocument.path)
         guard state != publishedState else { return }
         if state.2 != publishedState.2 {
             projectRoot = state.2.flatMap(resolveProjectRoot)
-            sidebarContext.projectRoot = projectRoot
+            sidebarContext?.projectRoot = projectRoot
         }
         publishedState = state
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
@@ -2697,7 +2627,7 @@ final class EditorWindowController: NSWindowController {
     /// (called when those settings change).
     func refreshProjectRoot() {
         projectRoot = coreDocument.path.flatMap(resolveProjectRoot)
-        sidebarContext.projectRoot = projectRoot
+        sidebarContext?.projectRoot = projectRoot
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
     }
 
@@ -3184,7 +3114,7 @@ final class EditorWindowController: NSWindowController {
 
 // MARK: - Preview navigation
 
-extension EditorWindowController: WKNavigationDelegate {
+extension DocumentController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         // The template page is ready; push the first render.
         updatePreview()
@@ -3193,8 +3123,9 @@ extension EditorWindowController: WKNavigationDelegate {
 
 // MARK: - Window lifecycle
 
-extension EditorWindowController: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
+extension DocumentController {
+    /// The tab is closing: nothing is left running behind it.
+    func willClose() {
         completionPopup.dismiss()
         completionTimer?.invalidate()
         lspChangeTimer?.invalidate()
@@ -3202,95 +3133,7 @@ extension EditorWindowController: NSWindowDelegate {
             lspApp?.lspDidClose(path: path)
             lspOpenPath = nil
         }
-    }
-
-    func windowDidBecomeKey(_ notification: Notification) {
-        // Tab membership may have changed (drags, merges); the per-window
-        // buffer lists rebuild from it.
-        NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
-        // Follow the file: the tree reveals whoever holds focus now
-        // (the app checks the setting before expanding anything).
-        if let path = coreDocument.path {
-            followInTree(path)
-        }
-    }
-
-    // MARK: One sidebar width for the whole application
-
-    /// Watches this window's divider and keeps every other window's in
-    /// step. The autosave name makes the width outlive a launch; this
-    /// makes it the same width in windows that are already open, which
-    /// is what "the navigator is this wide" ought to mean.
-    private func observeSidebarWidth(of controller: NSSplitViewController) {
-        NotificationCenter.default.addObserver(
-            forName: NSSplitView.didResizeSubviewsNotification,
-            object: controller.splitView,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, !self.applyingSidebarWidth else { return }
-                let width = self.currentSidebarWidth
-                // A collapsed sidebar is a different setting — hiding
-                // the navigator in one window should not hide it
-                // everywhere.
-                guard width > 1 else { return }
-                NotificationCenter.default.post(
-                    name: .textchumSidebarWidthChanged,
-                    object: self,
-                    userInfo: ["width": width]
-                )
-            }
-        }
-        NotificationCenter.default.addObserver(
-            forName: .textchumSidebarWidthChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            MainActor.assumeIsolated {
-                guard let self,
-                    note.object as? EditorWindowController !== self,
-                    let width = note.userInfo?["width"] as? CGFloat
-                else { return }
-                self.applySidebarWidth(width)
-            }
-        }
-    }
-
-    private var currentSidebarWidth: CGFloat {
-        splitController?.splitViewItems.first?.viewController.view.frame.width ?? 0
-    }
-
-    private func applySidebarWidth(_ width: CGFloat) {
-        guard let splitView = splitController?.splitView,
-            Self.shouldAdoptSidebarWidth(
-                width,
-                current: currentSidebarWidth,
-                collapsed: splitController?.splitViewItems.first?.isCollapsed ?? true
-            )
-        else { return }
-        applyingSidebarWidth = true
-        splitView.setPosition(width, ofDividerAt: 0)
-        applyingSidebarWidth = false
-    }
-
-    /// Whether a width broadcast by another window is worth adopting.
-    ///
-    /// Separated out because the two ways this goes wrong are not
-    /// visible in a screenshot: adopting a width already held starts
-    /// two windows answering each other, and adopting anything while
-    /// collapsed silently reopens a navigator the user closed. Hiding
-    /// the sidebar in one window is a different decision from choosing
-    /// how wide it is, and only the second one travels.
-    static func shouldAdoptSidebarWidth(
-        _ width: CGFloat,
-        current: CGFloat,
-        collapsed: Bool
-    ) -> Bool {
-        guard !collapsed else { return false }
-        guard width > 1 else { return false }
-        // Sub-point differences are the same width arriving back; acting
-        // on them costs a layout pass and risks a loop.
-        return abs(current - width) > 0.5
+        for view in views { drop(view) }
     }
 
     /// View → Reveal in Tree: expand the navigator to this document.
@@ -3368,7 +3211,7 @@ extension EditorWindowController: NSWindowDelegate {
 
     /// The follow-the-file half: same reveal, but never uncollapses a
     /// sidebar the user closed.
-    private func followInTree(_ path: String) {
+    func followInTree(_ path: String) {
         guard followEnabled(),
             splitController?.splitViewItems.first?.isCollapsed == false
         else { return }
@@ -3376,14 +3219,16 @@ extension EditorWindowController: NSWindowDelegate {
     }
 
     /// Standard dirty-document close flow: Save / Cancel / Don't Save.
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
+    /// Whether this document is willing to close, asking about changes
+    /// that were never saved.
+    func mayClose() -> Bool {
         // Files set to outlive their windows go aside as they are, and
         // are settled when the editor itself closes.
         if appliedKeepBuffers { return true }
         guard coreDocument.isDirty else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Do you want to save the changes made to “\(sender.title)”?"
+        alert.messageText = "Do you want to save the changes made to “\(chromeTitle)”?"
         alert.informativeText = "Your changes will be lost if you don’t save them."
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
@@ -3401,7 +3246,7 @@ extension EditorWindowController: NSWindowDelegate {
 
 // MARK: - Text view synchronization
 
-extension EditorWindowController: NSTextViewDelegate {
+extension DocumentController: NSTextViewDelegate {
     /// The editor's own context menu.
     ///
     /// AppKit's is about text in general — Speech, Substitutions,
@@ -3799,6 +3644,11 @@ extension EditorWindowController: NSTextViewDelegate {
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
+        // Clicking in a pane is how you say which one you mean: the
+        // caret moved there, so that pane has the keyboard now.
+        if let textView = notification.object as? NSTextView {
+            workbench?.noteFocus(on: textView)
+        }
         // A caret move that is not part of an edit (click, arrow keys) ends
         // the current typing run for undo purposes.
         if selectionChangeIsFromEditing {
@@ -3820,7 +3670,7 @@ extension EditorWindowController: NSTextViewDelegate {
 
 // MARK: - Menu validation
 
-extension EditorWindowController: NSMenuItemValidation {
+extension DocumentController: NSMenuItemValidation {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(performUndo(_:)):
@@ -3833,8 +3683,9 @@ extension EditorWindowController: NSMenuItemValidation {
             #selector(formatDocument(_:)), #selector(showDocumentOutline(_:)),
             #selector(showCodeActions(_:)):
             return lspOpenPath != nil
-        case #selector(closeSplitCommand(_:)), #selector(focusOtherSide(_:)):
-            return secondaryTextView != nil
+        case #selector(closeSplitCommand(_:)), #selector(focusOtherSide(_:)),
+            #selector(showInEveryPane(_:)):
+            return workbench?.isSplit == true
         case #selector(goToBlockStart(_:)), #selector(goToBlockEnd(_:)):
             return coreDocument.languageName != nil
         case #selector(togglePreview(_:)):
@@ -3853,7 +3704,7 @@ extension EditorWindowController: NSMenuItemValidation {
 
 // MARK: - Copy path actions (File → Copy Path, acting on the front tab)
 
-extension EditorWindowController {
+extension DocumentController {
     @objc func copyFileName(_ sender: Any?) {
         guard let path = coreDocument.path else { return }
         PathActions.copy((path as NSString).lastPathComponent)
