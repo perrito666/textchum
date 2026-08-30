@@ -205,7 +205,12 @@ final class DocumentController: NSResponder {
     /// The line-number gutter of the view with the keyboard.
     private var lineRuler: LineNumberGutterView? { focusedView?.gutter }
     /// The Markdown preview pane, present while the preview is shown.
-    private var previewItem: NSSplitViewItem?
+    /// The Markdown preview beside the text, while this document shows
+    /// one. It belongs to the document — the HTML is this file's — and
+    /// the window puts it on screen for whichever document has the
+    /// keyboard, so switching tabs does not leave one file's preview
+    /// beside another file's text.
+    private(set) var previewItem: NSSplitViewItem?
     private var previewWebView: WKWebView?
     private var previewUpdateTimer: Timer?
     /// Suppresses scroll-sync echo: which side drove the last sync, when.
@@ -1725,9 +1730,7 @@ final class DocumentController: NSResponder {
     }
 
     private func showPreview() {
-        guard previewItem == nil, let splitController,
-            coreDocument.languageName == "markdown"
-        else { return }
+        guard previewItem == nil, coreDocument.languageName == "markdown" else { return }
 
         let proxy = ScriptMessageProxy()
         proxy.target = self
@@ -1745,14 +1748,9 @@ final class DocumentController: NSResponder {
         // The editor must never be squeezed out: it keeps its space
         // (higher holding priority, real minimum); the preview yields.
         item.holdingPriority = NSLayoutConstraint.Priority(240)
-        if splitController.splitViewItems.count > 1 {
-            let editorItem = splitController.splitViewItems[1]
-            editorItem.minimumThickness = 340
-            editorItem.holdingPriority = NSLayoutConstraint.Priority(260)
-        }
-        splitController.addSplitViewItem(item)
         previewItem = item
         previewWebView = webView
+        workbench?.refreshPreview()
         // Editor scrolling drives the preview via the scroll observer
         // registered at init (shared with the line-number gutter).
 
@@ -1769,10 +1767,10 @@ final class DocumentController: NSResponder {
     }
 
     private func hidePreview() {
-        guard let previewItem, let splitController else { return }
-        splitController.removeSplitViewItem(previewItem)
-        self.previewItem = nil
+        guard previewItem != nil else { return }
+        previewItem = nil
         previewWebView = nil
+        workbench?.refreshPreview()
     }
 
     /// Pushes the rendered document into the page (no reload: the DOM is

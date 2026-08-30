@@ -42,6 +42,7 @@ final class Workbench: NSWindowController, NSWindowDelegate {
 
     /// One pane: a container in the split, the document it shows, and
     /// the view that document vended for it.
+    @MainActor
     final class Pane {
         let container = NSView()
         weak var document: DocumentController?
@@ -394,10 +395,38 @@ final class Workbench: NSWindowController, NSWindowDelegate {
 
     // MARK: Chrome
 
+    /// Puts the focused document's Markdown preview beside the text,
+    /// and takes away whichever one was there.
+    ///
+    /// The preview belongs to the document whose HTML it shows; the
+    /// window is where it goes. Without this, switching tabs left one
+    /// file's preview open beside another file's text.
+    func refreshPreview() {
+        guard let splitController else { return }
+        let wanted = focusedDocument?.previewItem
+        // The sidebar and the editor come first; anything after them is
+        // a preview that a document put there.
+        for item in splitController.splitViewItems.dropFirst(2) where item !== wanted {
+            splitController.removeSplitViewItem(item)
+        }
+        guard let wanted else { return }
+        if !splitController.splitViewItems.contains(wanted) {
+            // The editor must never be squeezed out: it keeps its space
+            // (higher holding priority, real minimum); the preview yields.
+            if splitController.splitViewItems.count > 1 {
+                let editorItem = splitController.splitViewItems[1]
+                editorItem.minimumThickness = 340
+                editorItem.holdingPriority = NSLayoutConstraint.Priority(260)
+            }
+            splitController.addSplitViewItem(wanted)
+        }
+    }
+
     /// The window wears the focused document's facts, and the tab bar
     /// its name and dirty mark.
     func refreshChrome(for document: DocumentController) {
         refreshTabs()
+        refreshPreview()
         guard focusedDocument === document, let window else { return }
         if let path = document.coreDocument.path {
             window.representedURL = URL(fileURLWithPath: path)
