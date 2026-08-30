@@ -318,6 +318,16 @@ impl Config {
             .unwrap_or_else(|| "{}".into())
     }
 
+    /// The `languages` section, as the grammar loader wants it: the
+    /// whole document would do, and this is the part of it that says
+    /// which grammars to open.
+    pub fn grammars_json(&self) -> String {
+        match self.root.get("languages") {
+            Some(section) => format!("{{\"languages\":{section}}}"),
+            None => "{}".into(),
+        }
+    }
+
     /// Sets (or, with `None`, removes) the server command line for a
     /// language — under `lsp.projects.<root>` when `root` is given,
     /// under `lsp.defaults` otherwise. Empty sections are pruned.

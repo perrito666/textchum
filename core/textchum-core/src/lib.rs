@@ -20,6 +20,7 @@ mod config;
 mod document;
 mod fsutil;
 pub mod goto;
+pub mod grammar;
 mod history;
 pub mod hugo;
 pub mod icons;

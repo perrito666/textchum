@@ -25,6 +25,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let config = CoreConfig(path: Self.configPath)
         self.config = config
+        // Grammars the build does not carry, named in the
+        // configuration. One that cannot be opened costs that language
+        // and nothing else, so the rest of the launch carries on.
+        let grammarProblems = config.loadGrammars()
+        for problem in grammarProblems {
+            NSLog("languages: \(problem)")
+        }
+        self.grammarProblems = grammarProblems
         // The session belongs to the configuration's profile: a scratch
         // --config run must never write over the real session.
         SessionStore.useProfile(ofConfigAt: Self.configPath)
@@ -136,6 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if self.editors.isEmpty {
                     self.newDocument(nil)
                 }
+                self.announceGrammarProblems()
             }
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -351,6 +360,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Files opened from Finder (double-click, Open With, drag to icon)
     /// and `textchum://` URLs from the `chum` command.
+    /// Says once what the configured grammars could not do.
+    private func announceGrammarProblems() {
+        guard !grammarProblems.isEmpty else { return }
+        let problems = grammarProblems
+        grammarProblems = []
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText =
+            problems.count == 1
+            ? "A configured grammar could not be loaded"
+            : "\(problems.count) configured grammars could not be loaded"
+        alert.informativeText = problems.joined(separator: "\n")
+        alert.runModal()
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             if url.scheme == "textchum" {
@@ -411,6 +435,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// during termination, and each close would otherwise schedule a
     /// session save over an emptying list — the authoritative save
     /// already happened at the top of `applicationShouldTerminate`.
+    /// What the configured grammars could not do, said once when the
+    /// first window is up: a grammar that fails silently looks like a
+    /// language with no colour, which says nothing about why.
+    private var grammarProblems: [String] = []
     private var isTerminating = false
 
     func applicationWillTerminate(_ notification: Notification) {
