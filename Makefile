@@ -13,7 +13,7 @@ DOCS_VENV     := .docs-venv
 
 # `linux` MUST stay in this list: a directory of that name exists, and
 # without .PHONY make declares it up to date and builds nothing.
-.PHONY: all build core run test smoke header-check check app playground docs docs-serve clean install-cli linux install-linux deb rpm
+.PHONY: all build core run test smoke header-check i18n-check check app playground docs docs-serve clean install-cli linux install-linux deb rpm
 
 all: build
 
@@ -43,8 +43,12 @@ smoke: build
 header-check: core
 	git diff --exit-code macos/Sources/CTextchum/include/textchum.h
 
+## Fail when the catalogues are behind the sources. Needs GNU gettext.
+i18n-check:
+	scripts/i18n.sh --check
+
 ## Everything CI runs.
-check: test smoke header-check
+check: test smoke header-check i18n-check
 
 APP_BUNDLE := dist/Textchum.app
 

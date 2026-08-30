@@ -910,6 +910,20 @@ void tc_i18n_set_catalogue_dir(const char *dir, uintptr_t dir_len);
 char *tc_i18n_catalogue(void);
 
 /**
+ * One or many, by the catalogue's own rule: the count decides which
+ * form its language wants, which a single string cannot. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * The pointers and lengths must describe valid UTF-8.
+ */
+char *tc_i18n_ngettext(const char *one,
+                       uintptr_t one_len,
+                       const char *many,
+                       uintptr_t many_len,
+                       uint64_t count);
+
+/**
  * The language in use, as a two-letter tag. Release with
  * [`tc_string_free`].
  */

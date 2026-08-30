@@ -538,26 +538,33 @@ L'interface parle anglais, espagnol ou français ; **Interface
 language** dans les Préférences en choisit une, et *System* suit celle
 de la machine. Le changement s'applique au démarrage suivant.
 
-Les catalogues appartiennent au cœur : les deux shells disent donc les
-mêmes choses avec les mêmes mots, et une phrase sans traduction se lit
-telle qu'elle est écrite en anglais plutôt que comme une clé manquante.
-Un catalogue à soi, dans le profil, est lu par-dessus celui de la
-compilation, phrase par phrase :
+Les catalogues sont ceux de gettext et vivent dans le cœur : les deux
+shells et le cœur disent donc les mêmes choses avec les mêmes mots. La
+source est `core/textchum-core/i18n/<langue>.po` — le format que
+parlent les traducteurs et leurs outils — et la compilation en tire le
+`.mo` que lit l'éditeur. Une phrase sans traduction se lit telle
+qu'elle est écrite en anglais plutôt que comme une clé manquante.
 
-```json
-{
-  "Close Tab": "Fermer l'onglet",
-  "New Column": "Nouvelle colonne"
-}
+Un catalogue à soi se met dans le profil, et est lu à la place de celui
+de la compilation :
+
+```bash
+msgfmt -o ~/.config/textchum/translations/fr.mo mon-fr.po
 ```
 
-- `~/Library/Application Support/Textchum/translations/fr.json`
-- `~/.config/textchum/translations/fr.json`
+- `~/Library/Application Support/Textchum/translations/<langue>.mo`
+- `~/.config/textchum/translations/<langue>.mo`
 
-Corriger une ligne, c'est écrire une ligne : le reste vient toujours du
-catalogue d'origine. Un fichier nommé d'après une langue que la
-compilation ne porte pas se lit de la même façon : une quatrième langue
-est un fichier, pas une version.
+Un fichier nommé d'après une langue que la compilation ne porte pas se
+lit de la même façon : une quatrième langue est un catalogue, pas une
+version.
+
+Pour travailler les traductions du dépôt, `scripts/i18n.sh` extrait les
+chaînes et les fusionne dans chaque catalogue comme gettext l'entend :
+`xgettext` les trouve, `msgmerge` reporte l'existant et marque comme
+douteux ce dont l'anglais a changé, et `msgfmt` vérifie le résultat.
+`make check` lance `scripts/i18n.sh --check` : une chaîne ajoutée sans
+traduction casse la compilation au lieu de sortir en anglais.
 
 ## Registres de projet
 

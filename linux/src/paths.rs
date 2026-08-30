@@ -80,8 +80,8 @@ pub fn icons_dir() -> PathBuf {
     }
 }
 
-/// User translation catalogues, one JSON file per language, read over
-/// the ones the build carries.
+/// Translation catalogues of one's own: `<language>.mo`, compiled from
+/// a `.po` with msgfmt, read instead of the one the build carries.
 pub fn translations_dir() -> PathBuf {
     match data_dir() {
         Some(dir) => dir.join("translations"),

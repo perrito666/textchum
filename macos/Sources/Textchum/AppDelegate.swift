@@ -653,14 +653,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if unsaved.isEmpty { return true }
         let names = unsaved.map { document in
             (document.path ?? document.core.path)
-                .map { ($0 as NSString).lastPathComponent } ?? "Untitled"
+                .map { ($0 as NSString).lastPathComponent } ?? n_("Untitled")
         }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText =
             names.count == 1
             ? t("Do you want to save the changes made to {}?", names[0])
-            : t("Do you want to save the changes made to {} files?", names.count)
+            : tn(
+                "Do you want to save the changes made to {} file?",
+                "Do you want to save the changes made to {} files?", names.count)
         alert.informativeText = names.joined(separator: ", ")
         alert.addButton(withTitle: t("Save All"))
         alert.addButton(withTitle: t("Cancel"))
@@ -1564,7 +1566,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let isHost = ObjectIdentifier(workbench) == host
             let title =
                 isHost
-                ? "This Window"
+                ? t("This Window")
                 : (workbench.focusedDocument?.chromeTitle ?? "Window") + extra
             let target = WindowTarget(id: ObjectIdentifier(workbench), title: title)
             if isHost {
@@ -2014,28 +2016,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu(title: t("Transform"))
         let groups: [[(String, String)]] = [
             [
-                ("Upper Case", "upper"),
-                ("Lower Case", "lower"),
-                ("Title Case", "title"),
-                ("Invert Case", "invert"),
+                (n_("Upper Case"), "upper"),
+                (n_("Lower Case"), "lower"),
+                (n_("Title Case"), "title"),
+                (n_("Invert Case"), "invert"),
             ],
             [
-                ("Sort Lines", "sort"),
-                ("Sort Lines Reversed", "sort-reversed"),
-                ("Remove Duplicate Lines", "dedupe"),
-                ("Join Lines", "join"),
-                ("Trim Trailing Whitespace", "trim"),
+                (n_("Sort Lines"), "sort"),
+                (n_("Sort Lines Reversed"), "sort-reversed"),
+                (n_("Remove Duplicate Lines"), "dedupe"),
+                (n_("Join Lines"), "join"),
+                (n_("Trim Trailing Whitespace"), "trim"),
             ],
             [
-                ("Convert to Unix Line Endings (LF)", "lf"),
-                ("Convert to Windows Line Endings (CRLF)", "crlf"),
+                (n_("Convert to Unix Line Endings (LF)"), "lf"),
+                (n_("Convert to Windows Line Endings (CRLF)"), "crlf"),
             ],
         ]
         for (at, group) in groups.enumerated() {
             if at > 0 { menu.addItem(.separator()) }
             for (title, kind) in group {
                 let item = NSMenuItem(
-                    title: title,
+                    title: t(title),
                     action: #selector(DocumentController.transformText(_:)),
                     keyEquivalent: "")
                 item.representedObject = kind

@@ -1416,6 +1416,28 @@ pub extern "C" fn tc_i18n_catalogue() -> *mut c_char {
     owned_c_string(textchum_core::i18n::catalogue_json())
 }
 
+/// One or many, by the catalogue's own rule: the count decides which
+/// form its language wants, which a single string cannot. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// The pointers and lengths must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_i18n_ngettext(
+    one: *const c_char,
+    one_len: usize,
+    many: *const c_char,
+    many_len: usize,
+    count: u64,
+) -> *mut c_char {
+    let (Some(one), Some(many)) =
+        (unsafe { (str_from_raw(one, one_len), str_from_raw(many, many_len)) })
+    else {
+        return owned_c_string(String::new());
+    };
+    owned_c_string(textchum_core::i18n::tr_n(one, many, count as usize))
+}
+
 /// The language in use, as a two-letter tag. Release with
 /// [`tc_string_free`].
 #[no_mangle]

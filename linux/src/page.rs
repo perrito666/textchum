@@ -23,6 +23,7 @@ use webkit6::prelude::*;
 
 use crate::shell::{PageHandles, Shell};
 use textchum_core::t;
+use textchum_core::i18n::{fill, tr};
 
 pub struct State {
     pub document: Document,
@@ -1985,8 +1986,8 @@ pub fn context_menu(
         }
         menu.append_section(None, &replacements);
         let dictionary = gtk::gio::Menu::new();
-        dictionary.append(Some(&t!("Add to Dictionary")), Some("win.spell-add"));
-        dictionary.append(Some(&t!("Ignore While This Runs")), Some("win.spell-ignore"));
+        dictionary.append(Some(&tr("Add to Dictionary")), Some("win.spell-add"));
+        dictionary.append(Some(&tr("Ignore While This Runs")), Some("win.spell-ignore"));
         menu.append_section(None, &dictionary);
     }
     if has_selection {
@@ -1996,8 +1997,8 @@ pub fn context_menu(
         let case = gtk::gio::Menu::new();
         case.append(Some("All Upper Case"), Some("source.change-case('upper')"));
         case.append(Some("All Lower Case"), Some("source.change-case('lower')"));
-        case.append(Some(&t!("Invert Case")), Some("source.change-case('toggle')"));
-        case.append(Some(&t!("Title Case")), Some("source.change-case('title')"));
+        case.append(Some(&tr("Invert Case")), Some("source.change-case('toggle')"));
+        case.append(Some(&tr("Title Case")), Some("source.change-case('title')"));
         let holder = gtk::gio::Menu::new();
         holder.append_submenu(Some("Change Case"), &case);
         menu.append_section(None, &holder);
