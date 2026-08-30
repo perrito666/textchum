@@ -42,18 +42,28 @@ pub fn bundled_by_id(id: &str) -> Option<&'static Profile> {
 }
 
 static BUNDLED: &[Profile] = &[
+    // Taken from Visual Studio Code's own printable reference for
+    // macOS: ⇧⌘P palette, ⌘P go to file, ⌃G go to line, ⇧⌘O go to
+    // symbol, ⇧⌘M problems, F12 definition, ⇧F12 references, F2
+    // rename, ⇧⌥F format, ⌘B side bar, ⌥⌘[ and ⌥⌘] fold and unfold,
+    // ⌥← and ⌥→ back and forward, ⇧⌘T reopen, ⌃Space suggestions,
+    // ⌘G and ⇧⌘G find next and previous, ⌘\ split.
     Profile {
         id: "vscode",
         name: "Visual Studio Code",
         bindings: &[
+            ("new", "cmd+n"),
             ("openQuickly", "cmd+p"),
             ("commandPalette", "cmd+shift+p"),
             ("find", "cmd+f"),
+            ("findNext", "cmd+g"),
+            ("findPrevious", "cmd+shift+g"),
             ("findAndReplace", "cmd+alt+f"),
             ("findInProject", "cmd+shift+f"),
             ("jumpToDefinition", "f12"),
             ("findReferences", "shift+f12"),
             ("renameSymbol", "f2"),
+            ("codeActions", "cmd+period"),
             ("formatDocument", "shift+alt+f"),
             ("goToLine", "ctrl+g"),
             ("toggleNavigator", "cmd+b"),
@@ -62,27 +72,43 @@ static BUNDLED: &[Profile] = &[
             ("revealInTree", "cmd+shift+e"),
             ("goBack", "alt+left"),
             ("goForward", "alt+right"),
+            ("fold", "cmd+alt+bracketleft"),
+            ("unfoldAll", "cmd+alt+bracketright"),
             ("reopenClosed", "cmd+shift+t"),
+            ("newColumn", "cmd+backslash"),
             ("complete", "ctrl+space"),
         ],
     },
+    // Sublime Text's documented defaults: ⌘P goto anything, ⇧⌘P
+    // palette, ⌘F find, ⇧⌘F find in files, ⌃G goto line, ⌘R goto
+    // symbol, ⇧⌘T reopen, ⌥⌘[ and ⌥⌘] fold and unfold. Sublime has no
+    // language-server commands of its own, so definition, references
+    // and rename keep the shortcuts Textchum gives them.
     Profile {
         id: "sublime",
         name: "Sublime Text",
         bindings: &[
+            ("new", "cmd+n"),
             ("openQuickly", "cmd+p"),
             ("commandPalette", "cmd+shift+p"),
             ("find", "cmd+f"),
             ("findNext", "cmd+g"),
             ("findPrevious", "cmd+shift+g"),
+            ("findAndReplace", "cmd+alt+f"),
             ("findInProject", "cmd+shift+f"),
             ("goToLine", "ctrl+g"),
             ("documentOutline", "cmd+r"),
-            ("jumpToDefinition", "f12"),
+            ("fold", "cmd+alt+bracketleft"),
+            ("unfoldAll", "cmd+alt+bracketright"),
             ("reopenClosed", "cmd+shift+t"),
             ("complete", "ctrl+space"),
         ],
     },
+    // IntelliJ IDEA's macOS keymap: ⇧⌘O go to file, ⇧⌘A find action,
+    // ⌘B declaration, ⌥F7 find usages, ⇧F6 rename, ⌥⌘L reformat, ⌘L
+    // go to line, ⌘F find, ⌘G and ⇧⌘G next and previous, ⇧⌘F find in
+    // path, ⌘F12 file structure, ⌘[ and ⌘] back and forward, ⌘1 the
+    // project window, ⌃Space basic completion.
     Profile {
         id: "intellij",
         name: "IntelliJ IDEA",
@@ -92,15 +118,19 @@ static BUNDLED: &[Profile] = &[
             ("jumpToDefinition", "cmd+b"),
             ("findReferences", "alt+f7"),
             ("renameSymbol", "shift+f6"),
+            ("codeActions", "alt+enter"),
             ("formatDocument", "cmd+alt+l"),
             ("goToLine", "cmd+l"),
             ("find", "cmd+f"),
             ("findNext", "cmd+g"),
             ("findPrevious", "cmd+shift+g"),
+            ("findAndReplace", "cmd+r"),
             ("findInProject", "cmd+shift+f"),
             ("documentOutline", "cmd+f12"),
-            ("goBack", "cmd+alt+left"),
-            ("goForward", "cmd+alt+right"),
+            ("toggleNavigator", "cmd+1"),
+            ("goBack", "cmd+bracketleft"),
+            ("goForward", "cmd+bracketright"),
+            ("reopenClosed", "cmd+shift+t"),
             ("complete", "ctrl+space"),
         ],
     },

@@ -353,6 +353,11 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.new", "<Ctrl>n"),
     ("win.find", "<Ctrl>f"),
     ("win.find-in-project", "<Ctrl><Shift>f"),
+    ("win.find-next", "<Ctrl>g"),
+    ("win.find-previous", "<Ctrl><Shift>g"),
+    ("win.find-replace", "<Ctrl>h"),
+    ("win.reveal-in-tree", "<Ctrl><Shift>e"),
+    ("win.complete", "<Ctrl>space"),
     ("win.quick-open", "<Ctrl>p"),
     ("win.definition", "F12"),
     ("win.sidebar", "F9"),
@@ -474,6 +479,31 @@ fn accel_from_spec(spec: &str) -> Option<String> {
                 key = Some(other.to_uppercase())
             }
             other if other.chars().count() == 1 => key = Some(other.to_owned()),
+            // Punctuation by name, as GDK spells it: a profile written
+            // for another editor says `cmd+period`, not `cmd+.`.
+            other
+                if matches!(
+                    other,
+                    "period"
+                        | "comma"
+                        | "semicolon"
+                        | "slash"
+                        | "backslash"
+                        | "bracketleft"
+                        | "bracketright"
+                        | "grave"
+                        | "minus"
+                        | "equal"
+                        | "apostrophe"
+                        | "backspace"
+                        | "home"
+                        | "end"
+                        | "page_up"
+                        | "page_down"
+                ) =>
+            {
+                key = Some(other.to_owned())
+            }
             _ => return None,
         }
     }
@@ -1344,6 +1374,64 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                     return 1;
                 }
                 println!("interface language ok (catalogue, arguments, fallback)");
+
+                // A keyboard profile reaches the accelerators: what it
+                // names moves, what it does not keeps what it had.
+                {
+                    let shell = shell::Shell::instance();
+                    shell.config.borrow_mut().set_keys_profile(Some("sublime"));
+                    apply_key_overrides(app);
+                    let outline = app.accels_for_action("win.outline");
+                    if outline.iter().all(|accel| accel != "<Control>r") {
+                        eprintln!("FAIL: the profile did not move Document Outline: {outline:?}");
+                        return 1;
+                    }
+                    let save = app.accels_for_action("win.save");
+                    if save.iter().all(|accel| accel != "<Control>s") {
+                        eprintln!("FAIL: an action the profile says nothing about moved: {save:?}");
+                        return 1;
+                    }
+                    shell.config.borrow_mut().set_keys_profile(None);
+                    apply_key_overrides(app);
+                    let outline = app.accels_for_action("win.outline");
+                    if outline.iter().all(|accel| accel != "<Shift><Control>o") {
+                        eprintln!(
+                            "FAIL: leaving the profile did not give the shortcut back: {outline:?}"
+                        );
+                        return 1;
+                    }
+                    // Every profile names commands this platform has,
+                    // and moves shortcuts the editor's own defaults do
+                    // not already give: a profile that changes nothing
+                    // is a profile nobody can tell they chose.
+                    for profile in textchum_core::keys::bundled() {
+                        let mut moved = 0;
+                        for (name, spec) in profile.bindings {
+                            let Some(action) = crate::keyboard::gtk_action(name) else {
+                                eprintln!(
+                                    "FAIL: profile {} names {name}, which is no command here",
+                                    profile.id
+                                );
+                                return 1;
+                            };
+                            let Some(accel) = accel_from_spec(spec) else {
+                                eprintln!("FAIL: profile {} has unparseable {spec}", profile.id);
+                                return 1;
+                            };
+                            if crate::default_accel(action) != Some(accel.as_str()) {
+                                moved += 1;
+                            }
+                        }
+                        if moved < 4 {
+                            eprintln!(
+                                "FAIL: profile {} moves only {moved} shortcuts",
+                                profile.id
+                            );
+                            return 1;
+                        }
+                    }
+                    println!("keyboard profiles ok (applied, left alone, given back)");
+                }
             }
 
             // Closing the last view keeps the document in the cache, so

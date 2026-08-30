@@ -1195,6 +1195,34 @@ impl Workbench {
         true
     }
 
+    /// Moves the selection to the next match of what the find bar
+    /// holds, or the previous one. Find Next with nothing searched for
+    /// opens the bar instead of doing nothing quietly.
+    pub fn step_match(self: &Rc<Self>, forward: bool) {
+        let Some(page) = self.selected() else { return };
+        if self.search_entry.text().is_empty() {
+            self.search_bar.set_search_mode(true);
+            self.search_entry.grab_focus();
+            return;
+        }
+        let buffer = &page.buffer;
+        let (start, end) = (
+            buffer.iter_at_mark(&buffer.selection_bound()),
+            buffer.iter_at_mark(&buffer.get_insert()),
+        );
+        let found = if forward {
+            page.search_context.forward(&start.max(end))
+        } else {
+            page.search_context.backward(&start.min(end))
+        };
+        let Some((mut from, to, _)) = found else {
+            self.toast(&t!("No more matches."));
+            return;
+        };
+        buffer.select_range(&to, &from);
+        page.view.scroll_to_iter(&mut from, 0.1, false, 0.0, 0.0);
+    }
+
     /// The page a tab holds, if this window holds it.
     fn page_of(&self, tab_page: &adw::TabPage) -> Option<Rc<Page>> {
         self.pages
@@ -2186,6 +2214,34 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 }
             }
         });
+    });
+    add("find-next", workbench, |workbench, _| {
+        workbench.step_match(true);
+    });
+    add("find-previous", workbench, |workbench, _| {
+        workbench.step_match(false);
+    });
+    add("find-replace", workbench, |workbench, _| {
+        // The find bar carries the replace row; this is the same bar
+        // with the caret in the second field.
+        workbench.search_bar.set_search_mode(true);
+        workbench.replace_entry.grab_focus();
+    });
+    add("reveal-in-tree", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        let Some(path) = page.path().borrow().clone() else {
+            workbench.toast(&t!("Save the file first — an untitled document has no path."));
+            return;
+        };
+        let _ = path;
+        // The navigator shows the tree of the selected page's project,
+        // so revealing is opening it and letting it rebuild.
+        workbench.split.set_show_sidebar(true);
+        workbench.refresh_sidebar();
+    });
+    add("complete", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        crate::page::complete_now(&page);
     });
     add("find-in-project", workbench, |workbench, _| {
         let root = workbench
@@ -6468,6 +6524,7 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
             shell.config.borrow_mut().set_keys_profile(name);
             shell.save_config();
             reapply_keys();
+            refresh_shortcut_fields();
         });
     }
     profile_group.add(&profile_row);
@@ -6537,9 +6594,10 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
             &config.keys_json(),
         )
     };
+    let mut rows: Vec<(&'static str, adw::EntryRow)> = Vec::new();
     for (action, title) in crate::keyboard::commands() {
         let row = adw::EntryRow::new();
-        row.set_title(title);
+        row.set_title(&t!(title));
         row.set_text(
             bindings
                 .get(action)
@@ -6560,9 +6618,50 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
             reapply_keys();
         });
         commands.add(&row);
+        rows.push((action, row));
     }
+    // Choosing a profile moves the shortcuts; the fields have to say so,
+    // or picking one looks like it did nothing.
+    let refresh: Rc<dyn Fn()> = {
+        let shell = Rc::clone(shell);
+        Rc::new(move || {
+            let bindings = {
+                let config = shell.config.borrow();
+                textchum_core::keys::effective(
+                    &config.keys_profile(),
+                    &config.key_profiles_json(),
+                    &config.keys_json(),
+                )
+            };
+            for (action, row) in &rows {
+                row.set_text(
+                    bindings
+                        .get(*action)
+                        .cloned()
+                        .or_else(|| crate::keyboard::default_spec(action))
+                        .unwrap_or_default()
+                        .as_str(),
+                );
+            }
+        })
+    };
+    SHORTCUT_FIELDS.with(|slot| *slot.borrow_mut() = Some(Rc::clone(&refresh)));
     page.add(&commands);
     page
+}
+
+thread_local! {
+    /// The open Keyboard tab's fields, so that choosing a profile can
+    /// put the shortcuts it moved on screen.
+    static SHORTCUT_FIELDS: RefCell<Option<Rc<dyn Fn()>>> = const { RefCell::new(None) };
+}
+
+/// Puts the shortcuts in force back into the Keyboard tab's fields.
+fn refresh_shortcut_fields() {
+    let refresh = SHORTCUT_FIELDS.with(|slot| slot.borrow().clone());
+    if let Some(refresh) = refresh {
+        refresh();
+    }
 }
 
 /// One line saying whether a configured server command would start,

@@ -1227,6 +1227,12 @@ fn word_before_caret(buffer: &sourceview5::Buffer) -> (i32, String) {
     (start.offset(), buffer.text(&start, &caret, true).to_string())
 }
 
+/// Asks the server for completions now, for the command that does it
+/// deliberately — typing asks on its own after a rest.
+pub fn complete_now(page: &Rc<Page>) {
+    request_completion(page);
+}
+
 fn request_completion(page: &Rc<Page>) {
     let Some(path) = page.path().borrow().clone() else { return };
     let (line, character) = lsp_caret(&page.buffer);

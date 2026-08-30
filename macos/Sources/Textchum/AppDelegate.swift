@@ -51,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // save's echo as an external edit.
             self.lastOwnConfigSave = Date()
             self.applyKeyOverrides()
+            // Choosing a profile moves the shortcuts; the fields have to
+            // say so, or picking one looks like it did nothing.
+            self.refreshShortcutCatalog()
             self.applyAppearanceChoice()
             self.applyThemeChoice()
             self.applyIconPack()
@@ -1239,6 +1242,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     key = String(scalar)
                     continue
                 }
+                // Punctuation by name, the way a keymap from another
+                // editor spells it: `cmd+period`, not `cmd+.`.
+                let named: [String: String] = [
+                    "period": ".", "comma": ",", "semicolon": ";", "slash": "/",
+                    "backslash": "\\", "bracketleft": "[", "bracketright": "]",
+                    "grave": "`", "minus": "-", "equal": "=", "apostrophe": "'",
+                ]
+                if let punctuation = named[token] {
+                    key = punctuation
+                    continue
+                }
                 guard token.count == 1 else { return nil }
                 key = token
             }
@@ -1749,15 +1763,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Settings
 
-    @objc func showSettings(_ sender: Any?) {
+    /// Puts the shortcuts in force into the Keyboard tab. Only the app
+    /// knows which actions exist and what they are called on screen,
+    /// and the menu items carry whatever the profile last set.
+    func refreshShortcutCatalog() {
         guard let settingsModel else { return }
-        // The Projects tab offers the open projects to add; only the
-        // app knows what they are, and only now does it matter.
-        settingsModel.openProjectRoots = Array(
-            Set(editors.compactMap(\.projectRoot))
-        ).sorted()
-        // Only the app knows which actions exist and what they are
-        // called on screen.
         settingsModel.shortcutCatalog = menuActions
             .map { action, item in
                 SettingsModel.Shortcut(
@@ -1768,6 +1778,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         modifiers: item.keyEquivalentModifierMask))
             }
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
+
+    @objc func showSettings(_ sender: Any?) {
+        guard let settingsModel else { return }
+        // The Projects tab offers the open projects to add; only the
+        // app knows what they are, and only now does it matter.
+        settingsModel.openProjectRoots = Array(
+            Set(editors.compactMap(\.projectRoot))
+        ).sorted()
+        refreshShortcutCatalog()
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(model: settingsModel)
             settingsWindowController?.window?.center()
