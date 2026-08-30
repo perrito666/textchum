@@ -38,9 +38,16 @@ pub fn save() {
             windows.push(json!({"path": path, "caret": caret, "scroll": 0.0}));
         }
     });
+    // The shape of each window as well as its files: the columns, what
+    // each was showing, and how many views of it were stacked.
+    let mut layout = Vec::new();
+    Workbench::for_each(|workbench| {
+        layout.push(json!({"columns": workbench.column_state()}));
+    });
     let state = json!({
         "version": 1,
         "windows": windows,
+        "layout": layout,
         "frontmost": frontmost,
     });
     let path = session_path();
@@ -85,6 +92,26 @@ pub fn restore(workbench: &std::rc::Rc<Workbench>) -> usize {
                     .scroll_to_iter(&mut target.clone(), 0.1, false, 0.0, 0.0);
             }
         }
+    }
+    // The columns come back: what each was showing, and the views it
+    // had stacked. Everything opened above is in the first column, so
+    // the rest are made here and pointed at their files.
+    if let Some(columns) = state["layout"][0]["columns"].as_array() {
+        for (index, column) in columns.iter().enumerate() {
+            let file = column["file"].as_str().unwrap_or_default();
+            if index > 0 {
+                if !std::path::Path::new(file).is_file() {
+                    continue;
+                }
+                workbench.new_column();
+                workbench.open(Some(PathBuf::from(file)), None);
+            }
+            let views = column["views"].as_u64().unwrap_or(1);
+            for _ in 1..views {
+                workbench.add_view();
+            }
+        }
+        workbench.focus_pane(0, 0);
     }
     if let Some(front) = frontmost_path {
         if let Some(handles) = Shell::instance().pages.borrow().get(&front) {

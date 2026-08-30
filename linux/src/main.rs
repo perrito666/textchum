@@ -366,9 +366,11 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.fold", "<Ctrl>bracketleft"),
     ("win.fold-all", "<Ctrl><Alt>bracketleft"),
     ("win.unfold-all", "<Ctrl>bracketright"),
-    ("win.split", "<Ctrl>backslash"),
-    ("win.unsplit", "<Ctrl><Shift>backslash"),
-    ("win.focus-other-group", "<Alt><Ctrl>backslash"),
+    ("win.new-column", "<Ctrl>backslash"),
+    ("win.close-column", "<Ctrl><Shift>backslash"),
+    ("win.add-view", "<Alt><Ctrl>backslash"),
+    ("win.close-view", "<Alt><Ctrl><Shift>backslash"),
+    ("win.focus-other-group", "<Alt><Ctrl>grave"),
     ("win.reopen-tab", "<Ctrl><Shift>t"),
     ("window.close", "<Ctrl><Shift>w"),
     ("app.quit", "<Ctrl>q"),
@@ -1145,17 +1147,16 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
             println!("documents ok (one per path, renamed without a second)");
 
-            // Splitting: a second view of the same document, in the
-            // group beside it. One buffer, so a change in either is
-            // the same change, and closing one half leaves the file
-            // open in the other.
-            workbench.split();
+            // Columns: a window is a row of them, a column shows one
+            // file and holds one or more views of it. One buffer, so a
+            // change in any view is the same change.
+            workbench.new_column();
             if page.document.views().len() != 2 {
-                eprintln!("FAIL: splitting did not make a second view");
+                eprintln!("FAIL: a new column made no second view");
                 return 1;
             }
             if !workbench.is_split() {
-                eprintln!("FAIL: the window did not split");
+                eprintln!("FAIL: the window did not take a second column");
                 return 1;
             }
             let views = page.document.views();
@@ -1164,47 +1165,66 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 return 1;
             }
             if shell.document_count() != opened {
-                eprintln!("FAIL: a split opened a second document");
+                eprintln!("FAIL: a column opened a second document");
                 return 1;
             }
-            // The command has a shortcut, and it names an action the
-            // window actually has: a menu item with neither is a
-            // command nobody can reach from the keyboard.
-            let accels = app.accels_for_action("win.focus-other-group");
-            if accels.is_empty() {
-                eprintln!("FAIL: Other Side has no shortcut");
+            // A view stacked under the column's tab group: the same
+            // file again, in the same column.
+            workbench.add_view();
+            if page.document.views().len() != 3 {
+                eprintln!("FAIL: the column did not take a stacked view");
                 return 1;
             }
-            if crate::keyboard::gtk_action("otherSide") != Some("win.focus-other-group") {
-                eprintln!("FAIL: Other Side is not in the command list");
+            workbench.close_view();
+            if page.document.views().len() != 2 {
+                eprintln!("FAIL: closing a stacked view left it behind");
                 return 1;
             }
-            // The keyboard crosses to the other group and comes back.
+            // Every command has a shortcut and names an action the
+            // window has: a menu item with neither is a command nobody
+            // can reach from the keyboard.
+            for (name, action) in [
+                ("newColumn", "win.new-column"),
+                ("closeColumn", "win.close-column"),
+                ("secondView", "win.add-view"),
+                ("closeView", "win.close-view"),
+                ("nextPane", "win.focus-other-group"),
+            ] {
+                if crate::keyboard::gtk_action(name) != Some(action) {
+                    eprintln!("FAIL: {name} is not in the command list");
+                    return 1;
+                }
+                if app.accels_for_action(action).is_empty() {
+                    eprintln!("FAIL: {name} has no shortcut");
+                    return 1;
+                }
+            }
+            // The keyboard moves to the next pane and comes back round.
             let first = workbench.active_view();
             workbench.focus_other_group();
             if workbench.active_view() == first {
-                eprintln!("FAIL: the focus did not cross to the other side");
+                eprintln!("FAIL: the focus did not move to the next pane");
                 return 1;
             }
             workbench.focus_other_group();
             if workbench.active_view() != first {
-                eprintln!("FAIL: the focus did not come back");
+                eprintln!("FAIL: the focus did not come back round");
                 return 1;
             }
-            workbench.unsplit();
+            workbench.close_column();
             if workbench.is_split() {
-                eprintln!("FAIL: the window stayed split");
+                eprintln!("FAIL: the window kept the second column");
                 return 1;
             }
             if page.document.views().len() != 1 {
-                eprintln!("FAIL: the second view outlived the split");
+                eprintln!("FAIL: a view outlived its column");
                 return 1;
             }
             if shell.document(page.document.id).is_none() {
-                eprintln!("FAIL: closing a view closed the file");
+                eprintln!("FAIL: closing a column closed the file");
                 return 1;
             }
-            println!("splitting ok (two views of one document, closed back to one)");
+            println!("columns ok (a column of views, tabs across columns)");
 
             // Closing the last view keeps the document in the cache, so
             // opening the file again is taking the closing back rather

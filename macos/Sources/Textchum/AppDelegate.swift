@@ -489,7 +489,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         state.layout = Workbench.all.map { workbench in
             SessionState.Layout(
                 tabs: workbench.documents.compactMap { $0.coreDocument.path },
-                panes: workbench.panes.compactMap { $0.document?.coreDocument.path }
+                columns: workbench.columns.compactMap { column in
+                    guard let file = column.document?.coreDocument.path else { return nil }
+                    return SessionState.ColumnLayout(
+                        file: file,
+                        views: column.views.count,
+                        dividers: column.dividerFractions)
+                }
             )
         }
         state.frontmost =
@@ -571,18 +577,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     frontmostEditor = editor
                 }
             }
-            // The second pane comes back showing what it was showing.
-            if let workbench, group.panes.count > 1 {
-                workbench.split()
-                for (index, path) in group.panes.enumerated() {
+            // The columns come back showing what they were showing,
+            // each with the views it had. A session written before
+            // windows held columns names one file per pane.
+            let saved =
+                group.columns
+                ?? group.panes.map { SessionState.ColumnLayout(file: $0) }
+            if let workbench, saved.count > 1 {
+                for (index, column) in saved.enumerated() {
+                    if index > 0 { workbench.newColumn() }
                     guard
                         let editor = workbench.documents.first(where: {
-                            $0.coreDocument.path == path
+                            $0.coreDocument.path == column.file
                         })
                     else { continue }
-                    workbench.show(editor, in: index)
+                    workbench.show(editor, inColumn: index)
+                    workbench.restore(
+                        column: index, views: column.views, dividers: column.dividers)
                 }
-                workbench.focus(pane: 0)
+                workbench.focus(column: 0)
+            } else if let workbench, let only = saved.first {
+                workbench.restore(column: 0, views: only.views, dividers: only.dividers)
             }
         }
         frontmostEditor?.workbench?.window?.makeKeyAndOrderFront(nil)
@@ -1087,16 +1102,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(goForward(_:)): "goForward",
             #selector(DocumentController.findReferences(_:)): "findReferences",
             #selector(DocumentController.showCodeActions(_:)): "codeActions",
-            #selector(DocumentController.toggleSplit(_:)): "splitEditor",
-            #selector(DocumentController.closeSplitCommand(_:)): "closeSplit",
-            #selector(DocumentController.focusOtherSide(_:)): "otherSide",
+            #selector(DocumentController.newColumn(_:)): "newColumn",
+            #selector(DocumentController.closeColumn(_:)): "closeColumn",
+            #selector(DocumentController.addView(_:)): "secondView",
+            #selector(DocumentController.closeView(_:)): "closeView",
+            #selector(DocumentController.focusOtherSide(_:)): "nextPane",
             #selector(DocumentController.closeTab(_:)): "close",
             #selector(DocumentController.toggleFold(_:)): "fold",
             #selector(DocumentController.foldAll(_:)): "foldAll",
             #selector(DocumentController.unfoldAll(_:)): "unfoldAll",
             #selector(DocumentController.selectNextTab(_:)): "nextTab",
             #selector(DocumentController.selectPreviousTab(_:)): "previousTab",
-            #selector(DocumentController.showInEveryPane(_:)): "sameFileBothSides",
+            #selector(DocumentController.showInEveryPane(_:)): "sameFileEveryColumn",
             #selector(DocumentController.moveTabToNewWindow(_:)): "moveTabToNewWindow",
             #selector(DocumentController.renameSymbol(_:)): "renameSymbol",
             #selector(DocumentController.formatDocument(_:)): "formatDocument",
@@ -1942,7 +1959,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         workbench.add(editor)
         workbench.showWindow(nil)
         workbench.window?.makeKeyAndOrderFront(nil)
-        workbench.focus(pane: workbench.focusedPane)
+        workbench.focus(column: workbench.focusedColumn, view: workbench.focusedView)
         // No direct rebuild here: the controller publishes its state (via
         // updateChrome) and the deferred notification handler rebuilds —
         // rebuilding synchronously mid-presentation trips NSTableView.
@@ -2307,24 +2324,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         unfoldItem.keyEquivalentModifierMask = [.command]
         editMenu.addItem(unfoldItem)
         editMenu.addItem(.separator())
-        let splitItem = NSMenuItem(
-            title: "Split Editor",
-            action: #selector(DocumentController.toggleSplit(_:)),
+        let columnItem = NSMenuItem(
+            title: "New Column",
+            action: #selector(DocumentController.newColumn(_:)),
             keyEquivalent: "\\")
-        splitItem.keyEquivalentModifierMask = [.command]
-        editMenu.addItem(splitItem)
-        let closeSplitItem = NSMenuItem(
-            title: "Close Split",
-            action: #selector(DocumentController.closeSplitCommand(_:)),
+        columnItem.keyEquivalentModifierMask = [.command]
+        editMenu.addItem(columnItem)
+        let closeColumnItem = NSMenuItem(
+            title: "Close Column",
+            action: #selector(DocumentController.closeColumn(_:)),
             keyEquivalent: "\\")
-        closeSplitItem.keyEquivalentModifierMask = [.command, .shift]
-        editMenu.addItem(closeSplitItem)
-        let otherSideItem = NSMenuItem(
-            title: "Other Side",
+        closeColumnItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(closeColumnItem)
+        let viewItem = NSMenuItem(
+            title: "Second View",
+            action: #selector(DocumentController.addView(_:)),
+            keyEquivalent: "\\")
+        viewItem.keyEquivalentModifierMask = [.command, .option]
+        editMenu.addItem(viewItem)
+        let closeViewItem = NSMenuItem(
+            title: "Close View",
+            action: #selector(DocumentController.closeView(_:)),
+            keyEquivalent: "\\")
+        closeViewItem.keyEquivalentModifierMask = [.command, .option, .shift]
+        editMenu.addItem(closeViewItem)
+        let nextPaneItem = NSMenuItem(
+            title: "Next Pane",
             action: #selector(DocumentController.focusOtherSide(_:)),
-            keyEquivalent: "\\")
-        otherSideItem.keyEquivalentModifierMask = [.command, .option]
-        editMenu.addItem(otherSideItem)
+            keyEquivalent: "`")
+        nextPaneItem.keyEquivalentModifierMask = [.command, .option]
+        editMenu.addItem(nextPaneItem)
         editMenu.addItem(.separator())
         editMenu.addItem(makeTransformMenuItem())
 
@@ -2473,7 +2502,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         windowMenu.addItem(.separator())
         windowMenu.addItem(
-            withTitle: "Same File on Both Sides",
+            withTitle: "This File in Every Column",
             action: #selector(DocumentController.showInEveryPane(_:)),
             keyEquivalent: "")
         windowMenu.addItem(

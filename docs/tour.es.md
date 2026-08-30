@@ -57,13 +57,22 @@ Los bloques salen del mismo árbol que usa el coloreado, y los pliegues
 son del documento: cerrar una función en una vista la cierra en todas
 las vistas de ese archivo.
 
-## Divisiones
+## Columnas
 
-**Split Editor** (⌘\\, Ctrl+\\ en Linux) muestra el documento dos
-veces, lado a lado; **Close Split** (⇧⌘\\) quita la segunda vista y
-**Other Side** (⌥⌘\\, Ctrl+Alt+\\ en Linux) pasa el teclado al otro lado
-de la división. Cada lado se desplaza por su cuenta, que es de lo que se
-trata: leer el principio de un archivo mientras se edita el final.
+Una ventana es una fila de columnas. Una columna muestra un archivo a
+la vez y sostiene una o más vistas de él, apiladas.
+
+**New Column** (⌘\\, Ctrl+\\ en Linux) pone una columna al lado de
+esta, mostrando el mismo archivo hasta que se le dé otro; **Close
+Column** (⇧⌘\\, Ctrl+Shift+\\) la quita. **Second View** (⌥⌘\\,
+Ctrl+Alt+\\) apila otra vista del archivo de la columna bajo la
+primera, y **Close View** (⇧⌥⌘\\, Ctrl+Alt+Shift+\\) la retira. **Next
+Pane** (⌥⌘`, Ctrl+Alt+`) mueve el teclado entre ellas.
+
+Cada vista se desplaza por su cuenta, que es de lo que se trata: leer
+el principio de un archivo mientras se edita el final. La columna es
+dueña del archivo que muestra, así que cambiar su pestaña lleva todas
+sus vistas al archivo nuevo.
 
 Los dos lados son un solo documento. Hay una historia y un guardado,
 así que una edición en cualquiera de los dos es la misma edición y

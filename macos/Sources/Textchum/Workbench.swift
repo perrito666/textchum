@@ -2,17 +2,20 @@ import AppKit
 import SwiftUI
 import TextchumKit
 
-/// One window: a tab bar over one or more panes.
+/// One window: a tab bar over a row of columns.
 ///
-/// A tab is a document open in this window. A pane is a view of one of
-/// those documents, and several panes can show the same one — the same
-/// buffer, two places to read it. Which tab is highlighted follows the
-/// pane with the keyboard, so going to a pane is going to its tab, and
-/// choosing a tab changes what that pane shows.
+/// A tab is a document open in this window. A column shows one of them
+/// at a time and holds one or more views of it, stacked — the same
+/// buffer, two places to look at it. The column owns the document; the
+/// views are places to look at it, so when a column's tab changes every
+/// view in it follows.
 ///
-/// The tabs are drawn here rather than by AppKit. `NSWindow` tabs are
-/// separate windows with one visible at a time, which cannot be what a
-/// pane shows.
+/// The tab bar highlights what the focused column shows, so going to a
+/// pane is going to its tab, and choosing a tab changes what that
+/// column shows.
+///
+/// The tabs are drawn here. `NSWindow` tabs are separate windows with
+/// one visible at a time, which cannot be what a column shows.
 @MainActor
 final class Workbench: NSWindowController, NSWindowDelegate {
     /// Every window, in the order they were made.
@@ -20,10 +23,11 @@ final class Workbench: NSWindowController, NSWindowDelegate {
 
     /// The documents this window holds, left to right on the tab bar.
     private(set) var documents: [DocumentController] = []
-    /// The panes, left to right (or top to bottom).
-    private(set) var panes: [Pane] = []
-    /// Which pane has the keyboard.
-    private(set) var focusedPane = 0
+    /// The columns, left to right.
+    private(set) var columns: [Column] = []
+    /// Which column has the keyboard, and which of its views.
+    private(set) var focusedColumn = 0
+    private(set) var focusedView = 0
 
     /// The navigator: one buffer list per window, and a folder tree that
     /// follows the focused document's project.
@@ -34,23 +38,37 @@ final class Workbench: NSWindowController, NSWindowDelegate {
     private(set) var splitController: NSSplitViewController?
 
     private let tabModel = TabBarModel()
-    private var paneSplit = NSSplitView()
+    /// The row of columns.
+    private var columnSplit = NSSplitView()
     private var applyingSidebarWidth = false
     /// Set while this window closes after asking about unsaved files, so
     /// the close it starts again goes straight through.
     private var closingSettled = false
 
-    /// One pane: a container in the split, the document it shows, and
-    /// the view that document vended for it.
+    /// One column: the file it shows, and the views of that file
+    /// stacked in it.
     @MainActor
-    final class Pane {
-        let container = NSView()
+    final class Column {
+        /// The column's place in the row, and the split the views are
+        /// stacked in.
+        let split = NSSplitView()
         weak var document: DocumentController?
-        var view: DocumentView?
+        var views: [DocumentView] = []
 
         init() {
-            container.translatesAutoresizingMaskIntoConstraints = true
-            container.autoresizingMask = [.width, .height]
+            split.isVertical = false
+            split.dividerStyle = .thin
+            split.translatesAutoresizingMaskIntoConstraints = true
+            split.autoresizingMask = [.width, .height]
+        }
+
+        /// Where each view sits in the column, as fractions of its
+        /// height — what #102 remembers per file.
+        var dividerFractions: [Double] {
+            guard views.count > 1, split.bounds.height > 1 else { return [] }
+            return views.dropLast().map { view in
+                Double(view.container.frame.maxY / split.bounds.height)
+            }
         }
     }
 
@@ -70,10 +88,10 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         window.delegate = self
         window.center()
 
-        paneSplit = NSSplitView()
-        paneSplit.isVertical = true
-        paneSplit.dividerStyle = .thin
-        paneSplit.translatesAutoresizingMaskIntoConstraints = false
+        columnSplit = NSSplitView()
+        columnSplit.isVertical = true
+        columnSplit.dividerStyle = .thin
+        columnSplit.translatesAutoresizingMaskIntoConstraints = false
 
         let tabHost = NSHostingView(rootView: TabBarView(model: tabModel))
         tabHost.translatesAutoresizingMaskIntoConstraints = false
@@ -83,16 +101,16 @@ final class Workbench: NSWindowController, NSWindowDelegate {
 
         let editorSide = NSView()
         editorSide.addSubview(tabHost)
-        editorSide.addSubview(paneSplit)
+        editorSide.addSubview(columnSplit)
         NSLayoutConstraint.activate([
             tabHost.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
             tabHost.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
             tabHost.topAnchor.constraint(equalTo: editorSide.topAnchor),
             tabHost.heightAnchor.constraint(equalToConstant: 30),
-            paneSplit.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
-            paneSplit.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
-            paneSplit.topAnchor.constraint(equalTo: tabHost.bottomAnchor),
-            paneSplit.bottomAnchor.constraint(equalTo: editorSide.bottomAnchor),
+            columnSplit.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
+            columnSplit.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
+            columnSplit.topAnchor.constraint(equalTo: tabHost.bottomAnchor),
+            columnSplit.bottomAnchor.constraint(equalTo: editorSide.bottomAnchor),
         ])
 
         let editorController = NSViewController()
@@ -158,10 +176,10 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         window.setContentSize(contentSize)
         window.center()
 
-        // One pane to start with; splitting adds the second.
-        let pane = Pane()
-        panes = [pane]
-        paneSplit.addArrangedSubview(pane.container)
+        // One column to start with; New Column adds the next.
+        let column = Column()
+        columns = [column]
+        columnSplit.addArrangedSubview(column.split)
         Self.all.append(self)
     }
 
@@ -182,7 +200,8 @@ final class Workbench: NSWindowController, NSWindowDelegate {
 
     // MARK: Tabs
 
-    /// Adds a document to this window and shows it in the focused pane.
+    /// Adds a document to this window and shows it in the focused
+    /// column.
     func add(_ document: DocumentController, at index: Int? = nil) {
         document.workbench = self
         if let index, index <= documents.count {
@@ -190,7 +209,7 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         } else {
             documents.append(document)
         }
-        show(document, in: focusedPane)
+        show(document, inColumn: focusedColumn)
         refreshTabs()
     }
 
@@ -198,21 +217,22 @@ final class Workbench: NSWindowController, NSWindowDelegate {
     /// moving to another window.
     func detach(_ document: DocumentController) {
         documents.removeAll { $0 === document }
-        for (index, pane) in panes.enumerated() where pane.document === document {
-            release(pane)
-            // A pane whose document left shows the next one along, and
-            // an empty window keeps its pane empty rather than closing:
-            // the caller is mid-move.
+        for (index, column) in columns.enumerated() where column.document === document {
+            // A column whose file left shows the next one along, and an
+            // empty window keeps its column empty: the caller is
+            // mid-move.
             if let next = documents.first {
-                show(next, in: index)
+                show(next, inColumn: index)
+            } else {
+                release(column)
             }
         }
         if document.workbench === self { document.workbench = nil }
         refreshTabs()
     }
 
-    /// Closes a tab: the document goes if it agrees to, and every pane
-    /// showing it moves to another.
+    /// Closes a tab: the document goes if it agrees to, and every
+    /// column showing it moves to another.
     @discardableResult
     func closeTab(_ id: ObjectIdentifier) -> Bool {
         guard let document = documents.first(where: { ObjectIdentifier($0) == id }) else {
@@ -220,10 +240,11 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         }
         guard document.mayClose() else { return false }
         documents.removeAll { $0 === document }
-        for (index, pane) in panes.enumerated() where pane.document === document {
-            release(pane)
+        for (index, column) in columns.enumerated() where column.document === document {
             if let next = documents.first {
-                show(next, in: index)
+                show(next, inColumn: index)
+            } else {
+                release(column)
             }
         }
         document.willClose()
@@ -242,155 +263,268 @@ final class Workbench: NSWindowController, NSWindowDelegate {
     /// document and remember it for Reopen Closed Tab.
     var onDocumentClosed: ((DocumentController) -> Void)?
 
-    /// The document a pane shows.
-    func document(inPane index: Int) -> DocumentController? {
-        panes.indices.contains(index) ? panes[index].document : nil
+    /// The document a column shows.
+    func document(inColumn index: Int) -> DocumentController? {
+        columns.indices.contains(index) ? columns[index].document : nil
     }
 
     /// The document with the keyboard — what the menu commands and the
     /// window's chrome are about.
-    var focusedDocument: DocumentController? { document(inPane: focusedPane) }
+    var focusedDocument: DocumentController? { document(inColumn: focusedColumn) }
 
-    /// Shows a document in a pane, making it a view of its own.
-    func show(_ document: DocumentController, in paneIndex: Int) {
-        guard panes.indices.contains(paneIndex) else { return }
-        let pane = panes[paneIndex]
-        if pane.document === document { return }
-        release(pane)
-        let view = document.makeView()
-        pane.document = document
-        pane.view = view
-        view.container.frame = pane.container.bounds
-        view.container.autoresizingMask = [.width, .height]
-        view.container.translatesAutoresizingMaskIntoConstraints = true
-        pane.container.addSubview(view.container)
+    /// Shows a document in a column, in as many views as the column had.
+    ///
+    /// The column owns the file; the views are places to look at it. A
+    /// column reading one file in two views goes on reading two views
+    /// of whatever it is switched to.
+    func show(_ document: DocumentController, inColumn index: Int) {
+        guard columns.indices.contains(index) else { return }
+        let column = columns[index]
+        if column.document === document { return }
+        let wanted = max(1, column.views.count)
+        release(column)
+        column.document = document
+        for _ in 0..<wanted {
+            addView(to: column)
+        }
+        placeDividers(of: column)
         refreshTabs()
         refreshChrome(for: document)
     }
 
-    /// Takes whatever a pane is showing out of it.
-    private func release(_ pane: Pane) {
-        if let view = pane.view {
-            view.container.removeFromSuperview()
-            pane.document?.drop(view)
+    /// One more view of what the column shows, stacked under the rest.
+    @discardableResult
+    private func addView(to column: Column) -> DocumentView? {
+        guard let document = column.document else { return nil }
+        let view = document.makeView()
+        column.views.append(view)
+        column.split.addArrangedSubview(view.container)
+        for index in column.views.indices {
+            column.split.setHoldingPriority(
+                NSLayoutConstraint.Priority(250), forSubviewAt: index)
         }
-        pane.view = nil
-        pane.document = nil
+        return view
     }
 
-    /// Tab ▸ chosen: the focused pane shows it.
+    /// Everything a column is showing, given up.
+    private func release(_ column: Column) {
+        for view in column.views {
+            view.container.removeFromSuperview()
+            column.document?.drop(view)
+        }
+        column.views = []
+        column.document = nil
+    }
+
+    /// Shares a column's height between its views.
+    private func placeDividers(of column: Column, at fractions: [Double] = []) {
+        guard column.views.count > 1 else { return }
+        column.split.layoutSubtreeIfNeeded()
+        let height = column.split.bounds.height
+        guard height > 1 else { return }
+        for divider in 0..<(column.views.count - 1) {
+            let fraction =
+                divider < fractions.count
+                ? fractions[divider]
+                : Double(divider + 1) / Double(column.views.count)
+            column.split.setPosition(height * CGFloat(fraction), ofDividerAt: divider)
+        }
+    }
+
+    /// Tab ▸ chosen: the focused column shows it.
     func showInFocusedPane(_ id: ObjectIdentifier) {
         guard let document = documents.first(where: { ObjectIdentifier($0) == id }) else {
             return
         }
-        show(document, in: focusedPane)
-        focus(pane: focusedPane)
+        show(document, inColumn: focusedColumn)
+        focus(column: focusedColumn, view: 0)
     }
 
-    /// One file on every side at once — reading two places in it without
-    /// choosing the tab twice.
+    /// One file in every column at once.
     func showEverywhere(_ id: ObjectIdentifier) {
         guard let document = documents.first(where: { ObjectIdentifier($0) == id }) else {
             return
         }
-        for index in panes.indices {
-            show(document, in: index)
+        for index in columns.indices {
+            show(document, inColumn: index)
         }
-        focus(pane: focusedPane)
+        focus(column: focusedColumn, view: focusedView)
     }
 
-    /// The next (or previous) tab, in the pane with the keyboard.
+    /// The next (or previous) tab, in the column with the keyboard.
     func cycleTab(forward: Bool) {
         guard documents.count > 1, let current = focusedDocument,
             let at = documents.firstIndex(where: { $0 === current })
         else { return }
         let next = (at + (forward ? 1 : documents.count - 1)) % documents.count
-        show(documents[next], in: focusedPane)
-        focus(pane: focusedPane)
+        show(documents[next], inColumn: focusedColumn)
+        focus(column: focusedColumn, view: 0)
     }
 
     /// Tab i, counting from one — ⌘1…⌘9.
     func selectTab(number: Int) {
         guard number >= 1, number <= documents.count else { return }
-        show(documents[number - 1], in: focusedPane)
-        focus(pane: focusedPane)
+        show(documents[number - 1], inColumn: focusedColumn)
+        focus(column: focusedColumn, view: 0)
     }
 
-    // MARK: Panes
+    // MARK: Columns and views
 
-    var isSplit: Bool { panes.count > 1 }
-
-    /// Puts a second pane beside the first, showing the same document —
-    /// one buffer, two places to read it. It can be pointed at another
-    /// tab afterwards.
-    func split() {
-        guard panes.count < 2, let showing = focusedDocument else { return }
-        let pane = Pane()
-        panes.append(pane)
-        paneSplit.addArrangedSubview(pane.container)
-        // Neither side collapses, and the divider is placed after a
-        // layout pass — before one the split has no width to halve.
-        paneSplit.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
-        paneSplit.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 1)
-        paneSplit.layoutSubtreeIfNeeded()
-        paneSplit.setPosition(paneSplit.bounds.width / 2, ofDividerAt: 0)
-        show(showing, in: panes.count - 1)
-        focus(pane: panes.count - 1)
+    var isSplit: Bool { columns.count > 1 }
+    /// Whether there is more than one place for the keyboard to be.
+    var hasSeveralPanes: Bool {
+        columns.count > 1 || columns.contains { $0.views.count > 1 }
+    }
+    var canCloseColumn: Bool { columns.count > 1 }
+    var canCloseView: Bool {
+        columns.indices.contains(focusedColumn) && columns[focusedColumn].views.count > 1
     }
 
-    /// Takes the second pane away; the first keeps the whole area.
-    func closeSplit() {
-        guard panes.count > 1 else { return }
-        let pane = panes.removeLast()
-        release(pane)
-        pane.container.removeFromSuperview()
-        // NSSplitView.addArrangedSubview turns off the autoresizing
-        // mask; the pane that stays needs it back or it comes out of
-        // the split laid out by constraints it no longer has.
-        if let first = panes.first {
-            first.container.translatesAutoresizingMaskIntoConstraints = true
-            first.container.autoresizingMask = [.width, .height]
-            first.container.frame = paneSplit.bounds
+    /// A column beside this one, showing the same file to start with.
+    /// It takes any tab afterwards.
+    func newColumn() {
+        guard let showing = focusedDocument else { return }
+        let column = Column()
+        columns.append(column)
+        columnSplit.addArrangedSubview(column.split)
+        // No column collapses to nothing, and the dividers are placed
+        // after a layout pass — before one the row has no width to
+        // share out.
+        for index in columns.indices {
+            columnSplit.setHoldingPriority(
+                NSLayoutConstraint.Priority(250), forSubviewAt: index)
         }
-        paneSplit.adjustSubviews()
-        focus(pane: 0)
+        column.document = showing
+        addView(to: column)
+        spreadColumns()
+        focus(column: columns.count - 1, view: 0)
         refreshTabs()
     }
 
-    /// The keyboard crosses the divider.
-    func focusOtherPane() {
-        guard panes.count > 1 else { return }
-        focus(pane: (focusedPane + 1) % panes.count)
+    /// Takes the focused column away; the rest share its width.
+    func closeColumn() {
+        guard columns.count > 1 else { return }
+        let column = columns.remove(at: min(focusedColumn, columns.count - 1))
+        release(column)
+        column.split.removeFromSuperview()
+        // NSSplitView.addArrangedSubview turns the autoresizing mask
+        // off; a column that comes back out of the row needs it on, or
+        // it is laid out by constraints it no longer has.
+        for other in columns {
+            other.split.translatesAutoresizingMaskIntoConstraints = true
+            other.split.autoresizingMask = [.width, .height]
+        }
+        columnSplit.adjustSubviews()
+        spreadColumns()
+        focus(column: min(focusedColumn, columns.count - 1), view: 0)
+        refreshTabs()
     }
 
-    /// Gives a pane the keyboard, and the window's chrome with it.
-    func focus(pane index: Int) {
-        guard panes.indices.contains(index) else { return }
-        focusedPane = index
-        if let textView = panes[index].view?.textView {
+    /// Another view of this column's file, under the one that has the
+    /// keyboard: the top of a function while its end is being written.
+    func addViewToFocusedColumn() {
+        guard columns.indices.contains(focusedColumn) else { return }
+        let column = columns[focusedColumn]
+        guard column.document != nil else { return }
+        addView(to: column)
+        placeDividers(of: column)
+        focus(column: focusedColumn, view: column.views.count - 1)
+    }
+
+    /// Takes the focused view out of its column, leaving the others.
+    func closeFocusedView() {
+        guard columns.indices.contains(focusedColumn) else { return }
+        let column = columns[focusedColumn]
+        guard column.views.count > 1, column.views.indices.contains(focusedView) else {
+            return
+        }
+        let view = column.views.remove(at: focusedView)
+        view.container.removeFromSuperview()
+        column.document?.drop(view)
+        for other in column.views {
+            other.container.translatesAutoresizingMaskIntoConstraints = true
+            other.container.autoresizingMask = [.width, .height]
+        }
+        column.split.adjustSubviews()
+        placeDividers(of: column)
+        focus(column: focusedColumn, view: min(focusedView, column.views.count - 1))
+    }
+
+    /// Puts a column back the way a session recorded it: the views it
+    /// held, and where the dividers between them sat.
+    func restore(column index: Int, views: Int, dividers: [Double]) {
+        guard columns.indices.contains(index) else { return }
+        let column = columns[index]
+        while column.views.count < max(1, views) {
+            guard addView(to: column) != nil else { break }
+        }
+        placeDividers(of: column, at: dividers)
+    }
+
+    /// Shares the row's width between the columns.
+    private func spreadColumns() {
+        guard columns.count > 1 else { return }
+        columnSplit.layoutSubtreeIfNeeded()
+        let width = columnSplit.bounds.width
+        guard width > 1 else { return }
+        for divider in 0..<(columns.count - 1) {
+            columnSplit.setPosition(
+                width * CGFloat(divider + 1) / CGFloat(columns.count), ofDividerAt: divider)
+        }
+    }
+
+    /// The keyboard moves to the next place there is one: the next view
+    /// down this column, then the next column along.
+    func focusOtherPane() {
+        let places = panePlaces()
+        guard places.count > 1 else { return }
+        let at =
+            places.firstIndex { $0 == (focusedColumn, focusedView) }
+            ?? 0
+        let next = places[(at + 1) % places.count]
+        focus(column: next.0, view: next.1)
+    }
+
+    /// Every (column, view) pair, in reading order.
+    private func panePlaces() -> [(Int, Int)] {
+        columns.enumerated().flatMap { column, holder in
+            holder.views.indices.map { (column, $0) }
+        }
+    }
+
+    /// Gives a view the keyboard, and the window's chrome with it.
+    func focus(column: Int, view: Int = 0) {
+        guard columns.indices.contains(column) else { return }
+        focusedColumn = column
+        let holder = columns[column]
+        focusedView = holder.views.indices.contains(view) ? view : 0
+        if let textView = holder.views[safe: focusedView]?.textView {
             window?.makeFirstResponder(textView)
             textView.scrollRangeToVisible(textView.selectedRange())
         }
-        if let document = panes[index].document {
+        if let document = holder.document {
             refreshChrome(for: document)
             document.didTakeFocus()
         }
         refreshTabs()
     }
 
-    /// The pane a text view belongs to has the keyboard now — clicking
+    /// The view a text view belongs to has the keyboard now — clicking
     /// in a pane is how you say which one you mean.
     func noteFocus(on textView: NSTextView) {
-        guard
-            let index = panes.firstIndex(where: { $0.view?.textView === textView }),
-            index != focusedPane
-        else { return }
-        focusedPane = index
-        if let document = panes[index].document {
-            refreshChrome(for: document)
-            document.didTakeFocus()
+        for (column, holder) in columns.enumerated() {
+            guard let view = holder.views.firstIndex(where: { $0.textView === textView })
+            else { continue }
+            guard column != focusedColumn || view != focusedView else { return }
+            focusedColumn = column
+            focusedView = view
+            if let document = holder.document {
+                refreshChrome(for: document)
+                document.didTakeFocus()
+            }
+            refreshTabs()
+            return
         }
-        refreshTabs()
     }
 
     // MARK: Chrome
@@ -438,15 +572,17 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         window.isDocumentEdited = document.coreDocument.isDirty
     }
 
-    /// Rebuilds the tab bar from the documents and the focused pane.
+    /// Rebuilds the tab bar from the documents and the focused column.
     func refreshTabs() {
         tabModel.tabs = documents.map { document in
             TabBarModel.Tab(
                 id: ObjectIdentifier(document),
                 title: document.chromeTitle,
                 isDirty: document.coreDocument.isDirty,
-                shownElsewhere: panes.contains {
-                    $0.document === document && $0 !== panes[safe: focusedPane]
+                // Shown in a column other than the focused one, so the
+                // bar can say a file is on screen twice.
+                shownElsewhere: columns.enumerated().contains {
+                    $0.element.document === document && $0.offset != focusedColumn
                 }
             )
         }
@@ -475,7 +611,7 @@ final class Workbench: NSWindowController, NSWindowDelegate {
             onDocumentClosed?(document)
         }
         documents = []
-        for pane in panes { release(pane) }
+        for column in columns { release(column) }
         Self.all.removeAll { $0 === self }
     }
 
