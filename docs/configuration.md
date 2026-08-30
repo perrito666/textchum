@@ -500,6 +500,33 @@ cc -O2 -fPIC -shared -I src -o libtree-sitter-NAME.dylib src/parser.c src/scanne
 An entry that cannot be loaded costs that one language: the editor says
 what went wrong and carries on.
 
+## The interface's language
+
+The interface speaks English, Spanish or French; **Interface language**
+in Preferences picks one, and *System* follows the machine. The change
+applies at the next launch.
+
+The catalogues belong to the core, so both shells say the same things
+in the same words, and a phrase with no translation reads as what it
+says in English rather than as a missing key. A catalogue of your own
+in the profile is read over the one the build carries, phrase by
+phrase:
+
+```json
+{
+  "Close Tab": "Cerrar pestaña",
+  "New Column": "Nueva columna"
+}
+```
+
+- `~/Library/Application Support/Textchum/translations/es.json`
+- `~/.config/textchum/translations/es.json`
+
+Correcting one line means writing one line: the rest still comes from
+the built-in catalogue. A file named for a language the build does not
+carry is read the same way, so a fourth language is a file rather than
+a release.
+
 ## Project records
 
 A file remembers how it is split, where each view was looking, what is

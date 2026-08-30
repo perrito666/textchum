@@ -926,7 +926,7 @@ final class DocumentController: NSResponder {
             .item(String(repeating: "  ", count: symbol.depth) + symbol.name)
         }
         listPanel.show(
-            rows: rows, over: window, title: "Document Outline", placeholder: "symbol…"
+            rows: rows, over: window, title: t("Document Outline"), placeholder: "symbol…"
         ) { [weak self] index in
             guard let self, let path = self.coreDocument.path,
                 symbols.indices.contains(index)
@@ -1016,7 +1016,7 @@ final class DocumentController: NSResponder {
         field.stringValue = current
         alert.accessoryView = field
         alert.addButton(withTitle: "Rename")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: t("Cancel"))
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let newName = field.stringValue.trimmingCharacters(in: .whitespaces)
@@ -1518,8 +1518,8 @@ final class DocumentController: NSResponder {
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
         field.placeholderString = "412 or 412:8"
         alert.accessoryView = field
-        alert.addButton(withTitle: "Go")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: t("Go"))
+        alert.addButton(withTitle: t("Cancel"))
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         guard let target = CoreDocument.parseGoTo(field.stringValue) else {
@@ -2638,7 +2638,7 @@ final class DocumentController: NSResponder {
                 "Your unsaved changes will be replaced by the file on disk "
                 + "(one Undo brings them back)."
             alert.addButton(withTitle: "Revert")
-            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: t("Cancel"))
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
         reloadFromDisk()
@@ -3184,7 +3184,7 @@ final class DocumentController: NSResponder {
             alert.messageText = "Save preprocessor failed: \(failure.command)"
             alert.informativeText = failure.details
             alert.addButton(withTitle: "Save Without Preprocessing")
-            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: t("Cancel"))
             return alert.runModal() == .alertFirstButtonReturn
         }
     }
@@ -3480,11 +3480,11 @@ extension DocumentController {
         guard coreDocument.isDirty else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Do you want to save the changes made to “\(chromeTitle)”?"
-        alert.informativeText = "Your changes will be lost if you don’t save them."
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Don’t Save")
+        alert.messageText = t("Do you want to save the changes made to {}?", chromeTitle)
+        alert.informativeText = t("Your changes will be lost if you don’t save them.")
+        alert.addButton(withTitle: t("Save"))
+        alert.addButton(withTitle: t("Cancel"))
+        alert.addButton(withTitle: t("Don’t Save"))
         switch alert.runModal() {
         case .alertFirstButtonReturn:
             return saveInteractively()

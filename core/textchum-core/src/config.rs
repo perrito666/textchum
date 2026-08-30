@@ -955,6 +955,22 @@ impl Config {
             .insert("occurrences_whole_word".into(), Value::Bool(enabled));
     }
 
+    /// The language the interface speaks: `system` follows the
+    /// machine's own, and a tag names one of the languages the build
+    /// carries.
+    pub fn interface_language(&self) -> String {
+        self.editor()
+            .get("interface_language")
+            .and_then(Value::as_str)
+            .unwrap_or("system")
+            .to_string()
+    }
+
+    pub fn set_interface_language(&mut self, tag: &str) {
+        self.editor_mut()
+            .insert("interface_language".into(), Value::String(tag.to_owned()));
+    }
+
     /// Whether a project's record lives with the checkout
     /// (`<root>/.tchum`) instead of in the profile. Global on purpose:
     /// a per-project answer would have to be kept centrally to be

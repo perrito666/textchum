@@ -9,7 +9,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{blame, goto, icons, references, theme_import, workspace, Appearance};
+use textchum_core::{blame, goto, icons, references, t, theme_import, workspace, Appearance};
 
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
@@ -250,10 +250,10 @@ impl Workbench {
                 Some(&format!("win.new-with-format('{name}')")),
             );
         }
-        file_section.append(Some("New with Format…"), Some("win.new-format-picker"));
+        file_section.append(Some(&t!("New with Format…")), Some("win.new-format-picker"));
         file_section.append_submenu(Some("New with Format"), &formats_menu);
-        file_section.append(Some("New Window"), Some("win.new"));
-        file_section.append(Some("Open…"), Some("win.open"));
+        file_section.append(Some(&t!("New Window")), Some("win.new"));
+        file_section.append(Some(&t!("Open…")), Some("win.open"));
         // The desktop's shared recent-files list, newest first — and
         // only the part of it this editor can open. The list belongs to
         // the whole session, so a photo viewer's PNGs are in it too, and
@@ -285,25 +285,25 @@ impl Workbench {
             recent_menu.append_item(&empty);
         }
         file_section.append_submenu(Some("Open Recent"), &recent_menu);
-        file_section.append(Some("Open Quickly…"), Some("win.quick-open"));
-        file_section.append(Some("Save"), Some("win.save"));
-        file_section.append(Some("Save As…"), Some("win.save-as"));
-        file_section.append(Some("Revert to Saved"), Some("win.revert"));
+        file_section.append(Some(&t!("Open Quickly…")), Some("win.quick-open"));
+        file_section.append(Some(&t!("Save")), Some("win.save"));
+        file_section.append(Some(&t!("Save As…")), Some("win.save-as"));
+        file_section.append(Some(&t!("Revert to Saved")), Some("win.revert"));
         let edit_section = gtk::gio::Menu::new();
-        edit_section.append(Some("Undo"), Some("win.undo"));
-        edit_section.append(Some("Redo"), Some("win.redo"));
+        edit_section.append(Some(&t!("Undo")), Some("win.undo"));
+        edit_section.append(Some(&t!("Redo")), Some("win.redo"));
         edit_section.append(Some("Find…"), Some("win.find"));
-        edit_section.append(Some("Find in Project…"), Some("win.find-in-project"));
-        edit_section.append(Some("Run Save Preprocessors"), Some("win.preprocess"));
-        edit_section.append(Some("Redraw"), Some("win.redraw"));
-        edit_section.append(Some("Fold"), Some("win.fold"));
-        edit_section.append(Some("Fold All"), Some("win.fold-all"));
-        edit_section.append(Some("Unfold All"), Some("win.unfold-all"));
-        edit_section.append(Some("New Column"), Some("win.new-column"));
-        edit_section.append(Some("Close Column"), Some("win.close-column"));
-        edit_section.append(Some("Second View"), Some("win.add-view"));
-        edit_section.append(Some("Close View"), Some("win.close-view"));
-        edit_section.append(Some("Next Pane"), Some("win.focus-other-group"));
+        edit_section.append(Some(&t!("Find in Project…")), Some("win.find-in-project"));
+        edit_section.append(Some(&t!("Run Save Preprocessors")), Some("win.preprocess"));
+        edit_section.append(Some(&t!("Redraw")), Some("win.redraw"));
+        edit_section.append(Some(&t!("Fold")), Some("win.fold"));
+        edit_section.append(Some(&t!("Fold All")), Some("win.fold-all"));
+        edit_section.append(Some(&t!("Unfold All")), Some("win.unfold-all"));
+        edit_section.append(Some(&t!("New Column")), Some("win.new-column"));
+        edit_section.append(Some(&t!("Close Column")), Some("win.close-column"));
+        edit_section.append(Some(&t!("Second View")), Some("win.add-view"));
+        edit_section.append(Some(&t!("Close View")), Some("win.close-view"));
+        edit_section.append(Some(&t!("Next Pane")), Some("win.focus-other-group"));
         {
             // What to do to the selection, or to the whole document
             // when nothing is selected. GtkSourceView has Change Case
@@ -324,21 +324,21 @@ impl Workbench {
             edit_section.append_submenu(Some("Transform"), &transforms);
         }
         let go_section = gtk::gio::Menu::new();
-        go_section.append(Some("Jump to Definition"), Some("win.definition"));
-        go_section.append(Some("Go Back"), Some("win.back"));
-        go_section.append(Some("Go Forward"), Some("win.forward"));
-        go_section.append(Some("Find References"), Some("win.references"));
+        go_section.append(Some(&t!("Jump to Definition")), Some("win.definition"));
+        go_section.append(Some(&t!("Go Back")), Some("win.back"));
+        go_section.append(Some(&t!("Go Forward")), Some("win.forward"));
+        go_section.append(Some(&t!("Find References")), Some("win.references"));
         go_section.append(Some("Code Actions…"), Some("win.code-actions"));
         go_section.append(Some("Rename Symbol…"), Some("win.rename"));
-        go_section.append(Some("Format Document"), Some("win.format"));
+        go_section.append(Some(&t!("Format Document")), Some("win.format"));
         go_section.append(Some("Document Outline…"), Some("win.outline"));
-        go_section.append(Some("Show Documentation for Symbol"), Some("win.hover"));
-        go_section.append(Some("Go to Line…"), Some("win.goto-line"));
+        go_section.append(Some(&t!("Show Documentation for Symbol")), Some("win.hover"));
+        go_section.append(Some(&t!("Go to Line…")), Some("win.goto-line"));
         go_section.append(Some("Blame Line…"), Some("win.blame"));
-        go_section.append(Some("Show Diagnostic for Line"), Some("win.diagnostic"));
+        go_section.append(Some(&t!("Show Diagnostic for Line")), Some("win.diagnostic"));
         go_section.append(Some("Diagnostics…"), Some("win.diagnostic-list"));
-        go_section.append(Some("Go to Block Start"), Some("win.block-start"));
-        go_section.append(Some("Go to Block End"), Some("win.block-end"));
+        go_section.append(Some(&t!("Go to Block Start")), Some("win.block-start"));
+        go_section.append(Some(&t!("Go to Block End")), Some("win.block-end"));
         go_section.append(Some("Command Palette…"), Some("win.palette"));
         go_section.append(Some("Language Server Status"), Some("win.server-status"));
         go_section.append(Some("File Properties…"), Some("win.file-properties"));
@@ -351,11 +351,11 @@ impl Workbench {
         import_theme.append(Some("From VS Code…"), Some("win.import-theme-vscode"));
         import_theme.append(Some("From TextMate…"), Some("win.import-theme-textmate"));
         app_section.append_submenu(Some("Import Theme"), &import_theme);
-        app_section.append(Some("About Textchum"), Some("win.about"));
-        app_section.append(Some("Close Tab"), Some("win.close-tab"));
-        app_section.append(Some("Reopen Closed Tab"), Some("win.reopen-tab"));
-        app_section.append(Some("Close Window"), Some("window.close"));
-        app_section.append(Some("Quit"), Some("app.quit"));
+        app_section.append(Some(&t!("About Textchum")), Some("win.about"));
+        app_section.append(Some(&t!("Close Tab")), Some("win.close-tab"));
+        app_section.append(Some(&t!("Reopen Closed Tab")), Some("win.reopen-tab"));
+        app_section.append(Some(&t!("Close Window")), Some("window.close"));
+        app_section.append(Some(&t!("Quit")), Some("app.quit"));
         let menu = gtk::gio::Menu::new();
         menu.append_section(None, &file_section);
         menu.append_section(None, &edit_section);
@@ -5073,9 +5073,9 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     general.set_icon_name(Some("preferences-system-symbolic"));
 
     let appearance_group = adw::PreferencesGroup::new();
-    appearance_group.set_title("Appearance");
+    appearance_group.set_title(&t!("Appearance"));
     let appearance_row = adw::ComboRow::new();
-    appearance_row.set_title("Appearance");
+    appearance_row.set_title(&t!("Appearance"));
     let appearance_model = gtk::StringList::new(&["System", "Light", "Dark"]);
     appearance_row.set_model(Some(&appearance_model));
     appearance_row.set_selected(match shell.config.borrow().appearance() {
@@ -5100,7 +5100,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     appearance_group.add(&appearance_row);
 
     let theme_row = adw::ComboRow::new();
-    theme_row.set_title("Theme");
+    theme_row.set_title(&t!("Theme"));
     let names: Vec<String> = crate::shell::theme_names();
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let theme_model = gtk::StringList::new(&name_refs);
@@ -5127,10 +5127,10 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     // into Textchum's own folder, where moving or deleting the original
     // cannot take it away.
     let icons_row = adw::ComboRow::new();
-    icons_row.set_title("File icons");
+    icons_row.set_title(&t!("File icons"));
     let import = gtk::Button::with_label("Import…");
     import.set_valign(gtk::Align::Center);
-    let open = gtk::Button::with_label("Open…");
+    let open = gtk::Button::with_label(&t!("Open…"));
     open.set_valign(gtk::Align::Center);
     let delete = gtk::Button::with_label("Delete");
     delete.set_valign(gtk::Align::Center);
@@ -5304,7 +5304,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     general.add(&appearance_group);
 
     let editor_group = adw::PreferencesGroup::new();
-    editor_group.set_title("Editor");
+    editor_group.set_title(&t!("Editor"));
     let font_row = adw::SpinRow::with_range(6.0, 72.0, 1.0);
     font_row.set_title("Font size");
     font_row.set_value(shell.config.borrow().font_size());
@@ -5330,7 +5330,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&tab_row);
     let lines_row = adw::SwitchRow::new();
-    lines_row.set_title("Show line numbers");
+    lines_row.set_title(&t!("Show line numbers"));
     lines_row.set_active(shell.config.borrow().line_numbers());
     {
         let shell = Rc::clone(&shell);
@@ -5342,7 +5342,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&lines_row);
     let keep_row = adw::SwitchRow::new();
-    keep_row.set_title("Keep files open when their window closes");
+    keep_row.set_title(&t!("Keep files open when their window closes"));
     keep_row.set_subtitle(
         "Closing a window puts its files aside with anything unsaved, to \
          reopen or settle when the editor closes",
@@ -5357,7 +5357,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&keep_row);
     let in_project_row = adw::SwitchRow::new();
-    in_project_row.set_title("Keep each project's state with the checkout");
+    in_project_row.set_title(&t!("Keep each project's state with the checkout"));
     in_project_row.set_subtitle(
         "A file remembers how it is split, what is folded and what it was told it is. \
          With this on that goes to .tchum in the project; otherwise it is kept here, \
@@ -5376,8 +5376,44 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&in_project_row);
 
+    let language_row = adw::ComboRow::new();
+    language_row.set_title(&t!("Interface language"));
+    language_row.set_subtitle(&t!("Restart to apply"));
+    let language_names = gtk::StringList::new(&[]);
+    language_names.append(&t!("System"));
+    for (_, name) in textchum_core::i18n::LANGUAGES {
+        language_names.append(name);
+    }
+    language_row.set_model(Some(&language_names));
+    let current = shell.config.borrow().interface_language();
+    let selected = if current == "system" {
+        0
+    } else {
+        textchum_core::i18n::LANGUAGES
+            .iter()
+            .position(|(tag, _)| *tag == current)
+            .map(|at| at + 1)
+            .unwrap_or(0)
+    };
+    language_row.set_selected(selected as u32);
+    {
+        let shell = Rc::clone(&shell);
+        language_row.connect_selected_notify(move |row| {
+            let tag = match row.selected() {
+                0 => "system".to_string(),
+                index => textchum_core::i18n::LANGUAGES
+                    .get(index as usize - 1)
+                    .map(|(tag, _)| (*tag).to_string())
+                    .unwrap_or_else(|| "system".to_string()),
+            };
+            shell.config.borrow_mut().set_interface_language(&tag);
+            shell.save_config();
+        });
+    }
+    editor_group.add(&language_row);
+
     let records_row = adw::EntryRow::new();
-    records_row.set_title("Records folder");
+    records_row.set_title(&t!("Records folder"));
     records_row.set_text(
         &shell
             .config
@@ -5395,7 +5431,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             shell.save_config();
         });
     }
-    let manage = gtk::Button::with_label("Manage…");
+    let manage = gtk::Button::with_label(&t!("Manage…"));
     manage.set_valign(gtk::Align::Center);
     {
         let window = window.clone();
@@ -5405,7 +5441,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     editor_group.add(&records_row);
 
     let sweep_row = adw::SwitchRow::new();
-    sweep_row.set_title("Forget records at launch");
+    sweep_row.set_title(&t!("Forget records at launch"));
     sweep_row.set_subtitle(
         "On a thread of its own, and the records of projects that are no longer there \
          go whatever the window says",
@@ -5424,7 +5460,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     editor_group.add(&sweep_row);
 
     let keep_days_row = adw::SpinRow::with_range(0.0, 3650.0, 30.0);
-    keep_days_row.set_title("Keep records for");
+    keep_days_row.set_title(&t!("Keep records for"));
     keep_days_row.set_subtitle("Days since a record was last written; zero keeps them");
     keep_days_row.set_value(shell.config.borrow().project_state_keep_days() as f64);
     {
@@ -5439,7 +5475,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&keep_days_row);
     let hover_row = adw::SwitchRow::new();
-    hover_row.set_title("Hover documentation");
+    hover_row.set_title(&t!("Hover documentation"));
     hover_row.set_subtitle("Show server documentation when the mouse rests on a symbol");
     hover_row.set_active(shell.config.borrow().hover_docs());
     {
@@ -5456,11 +5492,11 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     occurrences_row.set_subtitle("Selecting a whole word marks its other occurrences on screen");
     occurrences_row.set_active(shell.config.borrow().mark_occurrences());
     let occurrences_case = adw::SwitchRow::new();
-    occurrences_case.set_title("Match case");
+    occurrences_case.set_title(&t!("Match case"));
     occurrences_case.set_active(shell.config.borrow().occurrence_options().case_sensitive);
     occurrences_case.set_sensitive(occurrences_row.is_active());
     let occurrences_word = adw::SwitchRow::new();
-    occurrences_word.set_title("Whole words only");
+    occurrences_word.set_title(&t!("Whole words only"));
     occurrences_word.set_subtitle("Off marks `item` inside `items` too");
     occurrences_word.set_active(shell.config.borrow().occurrence_options().whole_word);
     occurrences_word.set_sensitive(occurrences_row.is_active());
@@ -5632,7 +5668,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     // macOS Settings edit — language → command line, applied to the
     // pool for servers started afterwards.
     let servers = adw::PreferencesPage::new();
-    servers.set_title("Language Servers");
+    servers.set_title(&t!("Language Servers"));
     servers.set_icon_name(Some("network-workgroup-symbolic"));
     let servers_group = adw::PreferencesGroup::new();
     servers_group.set_title("Default server commands");
@@ -5952,7 +5988,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     // Projects: how roots are detected, defaults plus per-root
     // overrides — the same workspace section the macOS Settings edit.
     let projects_page = adw::PreferencesPage::new();
-    projects_page.set_title("Projects");
+    projects_page.set_title(&t!("Projects"));
     projects_page.set_icon_name(Some("folder-symbolic"));
     let workspace_defaults = adw::PreferencesGroup::new();
     workspace_defaults.set_title("Defaults (all projects)");
@@ -6224,7 +6260,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             format!("{} configured projects no longer exist on disk", stale.len())
         });
         row.set_subtitle(&stale.join(", "));
-        let button = gtk::Button::with_label("Remove missing");
+        let button = gtk::Button::with_label(&t!("Remove missing"));
         button.set_valign(gtk::Align::Center);
         {
             let shell = Rc::clone(&shell);
@@ -6392,7 +6428,7 @@ fn reapply_keys() {
 /// makes it a profile of its own.
 fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
     let page = adw::PreferencesPage::new();
-    page.set_title("Keyboard");
+    page.set_title(&t!("Keyboard"));
     page.set_icon_name(Some("preferences-desktop-keyboard-symbolic"));
 
     let profile_group = adw::PreferencesGroup::new();
@@ -6789,13 +6825,13 @@ fn show_project_records(parent: &adw::PreferencesWindow) {
     toolbar.add_top_bar(&adw::HeaderBar::new());
     let page = adw::PreferencesPage::new();
     let group = adw::PreferencesGroup::new();
-    group.set_title("Records");
+    group.set_title(&t!("Records"));
 
     let dir = crate::shell::project_state_dir();
     let records = textchum_core::project_state::records(&dir);
     if records.is_empty() {
         let empty = adw::ActionRow::new();
-        empty.set_title("No project has anything recorded yet");
+        empty.set_title(&t!("No project has anything recorded yet"));
         group.add(&empty);
     }
     for record in &records {
@@ -6841,7 +6877,7 @@ fn show_project_records(parent: &adw::PreferencesWindow) {
         format!("Forget records older than {days} days")
     };
     sweep_row.set_title(&sweep_title);
-    let sweep = gtk::Button::with_label("Forget");
+    let sweep = gtk::Button::with_label(&t!("Forget"));
     sweep.set_valign(gtk::Align::Center);
     sweep.add_css_class("destructive-action");
     {

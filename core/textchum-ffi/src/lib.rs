@@ -1372,6 +1372,94 @@ pub unsafe extern "C" fn tc_config_set_project_state_keep_days(config: *mut TcCo
     }
 }
 
+// MARK: - Interface language
+
+/// Chooses the language the interface speaks. `system` follows the
+/// locale given in `locale`; anything the build does not carry reads as
+/// English.
+///
+/// # Safety
+/// The pointers and lengths must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_i18n_set_language(
+    tag: *const c_char,
+    tag_len: usize,
+    locale: *const c_char,
+    locale_len: usize,
+) {
+    let tag = unsafe { str_from_raw(tag, tag_len) }.unwrap_or("system");
+    let locale = unsafe { str_from_raw(locale, locale_len) }.unwrap_or("");
+    let language = if tag == "system" {
+        textchum_core::i18n::language_from_locale(locale)
+    } else {
+        tag.to_string()
+    };
+    textchum_core::i18n::set_language(&language);
+}
+
+/// Reads user catalogues from `dir`, over the built-in ones.
+///
+/// # Safety
+/// The pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_i18n_set_catalogue_dir(dir: *const c_char, dir_len: usize) {
+    let Some(dir) = (unsafe { str_from_raw(dir, dir_len) }) else { return };
+    textchum_core::i18n::set_catalogue_dir(std::path::Path::new(dir));
+}
+
+/// The catalogue in use, as a JSON object of `{english: translation}`.
+/// Read once and looked up in the shell afterwards, so that a label
+/// does not cross the bridge to be drawn. Release with
+/// [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_i18n_catalogue() -> *mut c_char {
+    owned_c_string(textchum_core::i18n::catalogue_json())
+}
+
+/// The language in use, as a two-letter tag. Release with
+/// [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_i18n_language() -> *mut c_char {
+    owned_c_string(textchum_core::i18n::language())
+}
+
+/// The languages the build carries, as a JSON array of `[tag, name]`
+/// pairs. Release with [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_i18n_languages() -> *mut c_char {
+    let listed: Vec<serde_json::Value> = textchum_core::i18n::LANGUAGES
+        .iter()
+        .map(|(tag, name)| serde_json::json!([tag, name]))
+        .collect();
+    owned_c_string(serde_json::Value::Array(listed).to_string())
+}
+
+/// Whether the interface follows the machine's language, or one named.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_interface_language(config: *const TcConfig) -> *mut c_char {
+    let tag = unsafe { config.as_ref() }
+        .map(|c| c.inner.interface_language())
+        .unwrap_or_else(|| "system".into());
+    owned_c_string(tag)
+}
+
+/// # Safety
+/// `config` must be live, and the pointer and length describe UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_interface_language(
+    config: *mut TcConfig,
+    tag: *const c_char,
+    tag_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else { return };
+    let Some(tag) = (unsafe { str_from_raw(tag, tag_len) }) else { return };
+    config.inner.set_interface_language(tag);
+}
+
 // MARK: - Project state
 
 /// What a file remembers about itself, as JSON: how many views it is

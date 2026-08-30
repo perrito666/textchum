@@ -23,6 +23,7 @@ pub mod goto;
 pub mod grammar;
 mod history;
 pub mod hugo;
+pub mod i18n;
 pub mod icons;
 pub mod indent;
 pub mod keys;

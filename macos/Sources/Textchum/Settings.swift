@@ -126,6 +126,9 @@ final class SettingsModel: ObservableObject {
     @Published var keepBuffers: Bool {
         didSet { persist { $0.keepBuffers = keepBuffers } }
     }
+    @Published var interfaceLanguage: String {
+        didSet { persist { $0.interfaceLanguage = interfaceLanguage } }
+    }
     @Published var projectStateInProject: Bool {
         didSet { persist { $0.projectStateInProject = projectStateInProject } }
     }
@@ -295,6 +298,7 @@ final class SettingsModel: ObservableObject {
         lineNumbers = config.lineNumbers
         hoverDocs = config.hoverDocs
         keepBuffers = config.keepBuffers
+        interfaceLanguage = config.interfaceLanguage
         projectStateInProject = config.projectStateInProject
         projectStateDirectory = config.projectStateDirectory
         projectStateSweep = config.projectStateSweep
@@ -327,6 +331,7 @@ final class SettingsModel: ObservableObject {
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
         self.keepBuffers = config.keepBuffers
+        self.interfaceLanguage = config.interfaceLanguage
         self.projectStateInProject = config.projectStateInProject
         self.projectStateDirectory = config.projectStateDirectory
         self.projectStateSweep = config.projectStateSweep
@@ -893,9 +898,9 @@ struct GeneralSettingsTab: View {
     private var form: some View {
         Form {
             Picker("Appearance:", selection: $model.appearance) {
-                Text("System").tag(CoreAppearance.system)
-                Text("Light").tag(CoreAppearance.light)
-                Text("Dark").tag(CoreAppearance.dark)
+                Text(t("System")).tag(CoreAppearance.system)
+                Text(t("Light")).tag(CoreAppearance.light)
+                Text(t("Dark")).tag(CoreAppearance.dark)
             }
             .pickerStyle(.segmented)
             Picker("Theme:", selection: $model.theme) {
@@ -911,18 +916,18 @@ struct GeneralSettingsTab: View {
             LabeledContent("File icons:") {
                 HStack(spacing: 8) {
                     Picker("", selection: iconPackSelection) {
-                        Text("System icons").tag("")
+                        Text(t("System icons")).tag("")
                         let imported = model.iconPacks.filter(\.imported)
                         let elsewhere = model.iconPacks.filter { !$0.imported }
                         if !imported.isEmpty {
-                            Section("Imported") {
+                            Section(t("Imported")) {
                                 ForEach(imported, id: \.path) { pack in
                                     Text(pack.name).tag(pack.path)
                                 }
                             }
                         }
                         if !elsewhere.isEmpty {
-                            Section("Elsewhere") {
+                            Section(t("Elsewhere")) {
                                 ForEach(elsewhere, id: \.path) { pack in
                                     Text(pack.name).tag(pack.path)
                                 }
@@ -931,13 +936,13 @@ struct GeneralSettingsTab: View {
                     }
                     .labelsHidden()
                     .frame(width: 220)
-                    Button("Import…") { chooseIconPack(copying: true) }
-                    Button("Open…") { chooseIconPack(copying: false) }
+                    Button(t("Import…")) { chooseIconPack(copying: true) }
+                    Button(t("Open…")) { chooseIconPack(copying: false) }
                     if !model.iconPack.isEmpty,
                         model.iconPacks.first(where: { $0.path == model.iconPack })?.imported
                             == true
                     {
-                        Button("Delete") { model.removeIconPack(path: model.iconPack) }
+                        Button(t("Delete")) { model.removeIconPack(path: model.iconPack) }
                     }
                 }
             }
@@ -947,16 +952,16 @@ struct GeneralSettingsTab: View {
                     .foregroundStyle(.secondary)
             }
             Picker("Open files in:", selection: $model.openTarget) {
-                Text("Tabs").tag(CoreOpenTarget.tab)
-                Text("Windows").tag(CoreOpenTarget.window)
+                Text(t("Tabs")).tag(CoreOpenTarget.tab)
+                Text(t("Windows")).tag(CoreOpenTarget.window)
             }
             Picker("New files in:", selection: $model.newFileTarget) {
-                Text("Tabs").tag(CoreOpenTarget.tab)
-                Text("Windows").tag(CoreOpenTarget.window)
+                Text(t("Tabs")).tag(CoreOpenTarget.tab)
+                Text(t("Windows")).tag(CoreOpenTarget.window)
             }
             .pickerStyle(.segmented)
             Picker("Font:", selection: $model.fontFamily) {
-                Text("System Monospaced").tag("")
+                Text(t("System Monospaced")).tag("")
                 Divider()
                 ForEach(monospacedFamilies, id: \.self) { family in
                     Text(family).tag(family)
@@ -968,12 +973,21 @@ struct GeneralSettingsTab: View {
             Stepper(value: $model.tabWidth, in: 1...16) {
                 Text("Tab width: \(model.tabWidth) columns")
             }
-            Toggle("Show line numbers", isOn: $model.lineNumbers)
-            Toggle("Hover documentation", isOn: $model.hoverDocs)
-            Toggle("Keep files open when their window closes", isOn: $model.keepBuffers)
+            Toggle(t("Show line numbers"), isOn: $model.lineNumbers)
+            Toggle(t("Hover documentation"), isOn: $model.hoverDocs)
+            Toggle(t("Keep files open when their window closes"), isOn: $model.keepBuffers)
+            Picker(t("Interface language"), selection: $model.interfaceLanguage) {
+                Text(t("System")).tag("system")
+                ForEach(CoreI18n.languages, id: \.tag) { language in
+                    Text(language.name).tag(language.tag)
+                }
+            }
+            Text(t("Restart to apply"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
             ProjectRecordsSettings(model: model)
-            Toggle("Reveal the current file in the tree", isOn: $model.followFile)
-            Toggle("Mark the selected word elsewhere on screen", isOn: $model.markOccurrences)
+            Toggle(t("Reveal the current file in the tree"), isOn: $model.followFile)
+            Toggle(t("Mark the selected word elsewhere on screen"), isOn: $model.markOccurrences)
             Toggle("  Match case", isOn: $model.occurrencesCaseSensitive)
                 .disabled(!model.markOccurrences)
             Toggle("  Whole words only", isOn: $model.occurrencesWholeWord)
@@ -981,10 +995,10 @@ struct GeneralSettingsTab: View {
             // Not a Picker: several dictionaries can apply at once, and
             // a picker can only say one thing. Each language is a toggle
             // that adds itself to the list.
-            LabeledContent("Spell check prose") {
+            LabeledContent(t("Spell check prose")) {
                 Menu(spellSummary) {
-                    Button("Off") { model.spellLanguage = "" }
-                    Button("Automatic by content") { model.spellLanguage = "auto" }
+                    Button(t("Off")) { model.spellLanguage = "" }
+                    Button(t("Automatic by content")) { model.spellLanguage = "auto" }
                     Divider()
                     ForEach(spellLanguages, id: \.self) { language in
                         Toggle(
@@ -1006,10 +1020,10 @@ struct GeneralSettingsTab: View {
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-            LabeledContent("Dictionary") {
+            LabeledContent(t("Dictionary")) {
                 VStack(alignment: .leading, spacing: 4) {
                     CommandsEditor(placeholder: "SBX\nTextchum", text: $model.spellWords)
-                    Text("Words to accept whatever the dictionaries say, one per line.")
+                    Text(t("Words to accept whatever the dictionaries say, one per line."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1091,7 +1105,7 @@ private struct PresetsTab: View {
                     TextField("New preset name", text: $newName)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 200)
-                    Button("Add") {
+                    Button(t("Add")) {
                         // A fresh preset starts with a placeholder pattern:
                         // an empty one would remove itself immediately.
                         model.setHidePreset(name: newName, globs: newName.lowercased())
@@ -1099,7 +1113,7 @@ private struct PresetsTab: View {
                     }
                     .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                     Spacer()
-                    Button("Restore Built-ins") {
+                    Button(t("Restore Built-ins")) {
                         model.resetHidePresets()
                     }
                 }
@@ -1159,7 +1173,7 @@ struct GlobEditor: View {
                 }
                 .fixedSize()
                 Spacer()
-                Text("Glob patterns: * and ? match; names only, not paths.")
+                Text(t("Glob patterns: * and ? match; names only, not paths."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1204,7 +1218,7 @@ struct GlobEditorButton: View {
                     .frame(width: 320)
                 HStack {
                     Spacer()
-                    Button("Done") {
+                    Button(t("Done")) {
                         commit(
                             text.split(whereSeparator: \.isNewline)
                                 .map(String.init).joined(separator: " "))
@@ -1317,7 +1331,7 @@ private struct KeyboardTab: View {
                         }
                     }
                     .frame(width: 320)
-                    Button("Reset changes") { model.clearKeyBindings() }
+                    Button(t("Reset changes")) { model.clearKeyBindings() }
                         .disabled(model.keyOverrides.isEmpty)
                     Spacer()
                 }
@@ -1325,7 +1339,7 @@ private struct KeyboardTab: View {
                 HStack(spacing: 8) {
                     TextField("Save as profile…", text: $newProfileName)
                         .frame(width: 200)
-                    Button("Save as profile") {
+                    Button(t("Save as profile")) {
                         model.saveKeyProfile(named: newProfileName)
                         newProfileName = ""
                     }
@@ -1609,7 +1623,7 @@ private struct ProjectsTab: View {
                                 }
                             }
                             .frame(width: 150)
-                            Button("Add") {
+                            Button(t("Add")) {
                                 model.addWorkspaceEntry(
                                     scope: newScope,
                                     copyingFrom: copyFrom.isEmpty ? nil : copyFrom)
@@ -1649,7 +1663,7 @@ private struct ProjectsTab: View {
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        Button("Remove missing") { model.removeStaleProjects() }
+                        Button(t("Remove missing")) { model.removeStaleProjects() }
                             .controlSize(.small)
                         Spacer()
                     }
@@ -1801,7 +1815,7 @@ private struct LanguageServersTab: View {
                             TextField(
                                 "Server command (e.g. pyright-langserver --stdio)",
                                 text: $newCommand)
-                            Button("Add") {
+                            Button(t("Add")) {
                                 model.addLSPEntry(
                                     scope: newScope, language: newLanguage, command: newCommand)
                                 newScope = ""
@@ -1903,7 +1917,7 @@ private struct PreprocessorsTab: View {
                             CommandsEditor(
                                 placeholder: "Commands, one per line — Return adds a line",
                                 text: $newCommands)
-                            Button("Add") {
+                            Button(t("Add")) {
                                 model.addPreprocessorEntry(
                                     scope: newScope,
                                     language: newLanguage,
@@ -2035,7 +2049,7 @@ struct ProjectRecordsSettings: View {
     @State private var showingRecords = false
 
     var body: some View {
-        Toggle("Keep each project's state with the checkout", isOn: $model.projectStateInProject)
+        Toggle(t("Keep each project's state with the checkout"), isOn: $model.projectStateInProject)
         Text(
             "A file remembers how it is split, where each view was looking, what is "
                 + "folded, and what it was told it is. With this on, that is written to "
@@ -2045,7 +2059,7 @@ struct ProjectRecordsSettings: View {
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
 
-        LabeledContent("Records folder") {
+        LabeledContent(t("Records folder")) {
             HStack(spacing: 6) {
                 TextField(
                     ProjectState.directory.path, text: $model.projectStateDirectory,
@@ -2053,12 +2067,12 @@ struct ProjectRecordsSettings: View {
                 )
                 .textFieldStyle(.roundedBorder)
                 Button("Choose…") { chooseFolder() }
-                Button("Manage…") { showingRecords = true }
+                Button(t("Manage…")) { showingRecords = true }
             }
         }
         .disabled(model.projectStateInProject)
 
-        Toggle("Forget records at launch", isOn: $model.projectStateSweep)
+        Toggle(t("Forget records at launch"), isOn: $model.projectStateSweep)
         Stepper(value: $model.projectStateKeepDays, in: 0...3650, step: 30) {
             Text(
                 model.projectStateKeepDays == 0
@@ -2100,7 +2114,7 @@ struct ProjectRecordsList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Project Records").font(.headline)
+            Text(t("Project Records")).font(.headline)
             if records.isEmpty {
                 Text("No project has anything recorded yet.")
                     .foregroundStyle(.secondary)
@@ -2146,7 +2160,7 @@ struct ProjectRecordsList: View {
                     reload()
                 }
                 Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button(t("Done")) { dismiss() }.keyboardShortcut(.defaultAction)
             }
         }
         .padding(16)

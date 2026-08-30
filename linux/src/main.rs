@@ -1317,6 +1317,32 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 }
                 let _ = std::fs::remove_dir_all(&scratch);
                 println!("project records ok (written, read back, swept)");
+
+                // The interface in another language. The catalogues are
+                // shared with the macOS shell, so both say the same
+                // things in the same words.
+                use textchum_core::i18n;
+                i18n::set_language("es");
+                if i18n::tr("Close Tab") != "Cerrar pestaña" {
+                    eprintln!("FAIL: the catalogue did not answer in Spanish");
+                    return 1;
+                }
+                if textchum_core::t!("Save changes to {}?", "main.rs")
+                    != "¿Guardar los cambios en main.rs?"
+                {
+                    eprintln!("FAIL: the argument did not land");
+                    return 1;
+                }
+                if i18n::tr("A phrase nobody has translated") != "A phrase nobody has translated" {
+                    eprintln!("FAIL: an untranslated phrase should read as itself");
+                    return 1;
+                }
+                i18n::set_language("en");
+                if i18n::tr("Close Tab") != "Close Tab" {
+                    eprintln!("FAIL: English is the text in the source");
+                    return 1;
+                }
+                println!("interface language ok (catalogue, arguments, fallback)");
             }
 
             // Closing the last view keeps the document in the cache, so

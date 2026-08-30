@@ -1064,6 +1064,29 @@ func runSmokeTest() -> Int32 {
     try? FileManager.default.removeItem(atPath: recordScratch)
     print("project records ok (written, read back, swept)")
 
+    // The interface in another language. The catalogues are the core's,
+    // so both shells say the same things in the same words; what is
+    // checked here is the bridge and the fallback.
+    CoreI18n.use("es")
+    guard t("Close Tab") == "Cerrar pestaña" else {
+        print("FAIL: the catalogue did not answer in Spanish: \(t("Close Tab"))")
+        return 1
+    }
+    guard t("Save changes to {}?", "main.rs") == "¿Guardar los cambios en main.rs?" else {
+        print("FAIL: the argument did not land: \(t("Save changes to {}?", "main.rs"))")
+        return 1
+    }
+    guard t("A phrase nobody has translated") == "A phrase nobody has translated" else {
+        print("FAIL: an untranslated phrase should read as itself")
+        return 1
+    }
+    CoreI18n.use("en")
+    guard t("Close Tab") == "Close Tab", CoreI18n.languages.count >= 3 else {
+        print("FAIL: English is the text in the source")
+        return 1
+    }
+    print("interface language ok (catalogue, arguments, fallback)")
+
     // The store holds documents; controllers hold views of them. A
     // path opens once however many views ask for it, and a rename
     // follows the document rather than making a second one.

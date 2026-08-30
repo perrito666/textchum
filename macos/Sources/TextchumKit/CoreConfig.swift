@@ -153,6 +153,21 @@ public final class CoreConfig {
         return text.isEmpty ? [] : text.components(separatedBy: "\n")
     }
 
+    /// The language the interface speaks: `system` follows the
+    /// machine's own, or a tag names one the build carries.
+    public var interfaceLanguage: String {
+        get {
+            guard let cString = tc_config_interface_language(handle) else { return "system" }
+            defer { tc_string_free(cString) }
+            return String(cString: cString)
+        }
+        set {
+            newValue.withCString { pointer in
+                tc_config_set_interface_language(handle, pointer, UInt(strlen(pointer)))
+            }
+        }
+    }
+
     /// Whether a project's record lives with the checkout
     /// (`<root>/.tchum`) instead of in the profile.
     public var projectStateInProject: Bool {

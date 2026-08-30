@@ -325,6 +325,20 @@ impl Shell {
             for problem in &grammar_problems {
                 eprintln!("textchum: languages: {problem}");
             }
+            // The interface language, before anything is drawn.
+            let tag = config.interface_language();
+            let language = if tag == "system" {
+                let locale = std::env::var("LC_ALL")
+                    .or_else(|_| std::env::var("LC_MESSAGES"))
+                    .or_else(|_| std::env::var("LANG"))
+                    .unwrap_or_default();
+                textchum_core::i18n::language_from_locale(&locale)
+            } else {
+                tag
+            };
+            textchum_core::i18n::set_language(&language);
+            textchum_core::i18n::set_catalogue_dir(&crate::paths::translations_dir());
+
             // Records for roots that are gone, and those past their
             // keep window, on a thread of their own: a machine that has
             // seen a thousand checkouts should not keep a thousand
