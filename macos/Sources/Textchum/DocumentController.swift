@@ -1164,30 +1164,33 @@ final class DocumentController: NSResponder {
         return cachedFoldSpans
     }
 
-    // MARK: Splitting
+    // MARK: Columns and views
 
-    /// Edit ▸ Split Editor: another pane beside this one, showing the
-    /// same file to start with. The panes belong to the window, so what
-    /// each shows is a tab of its own after that.
-    @objc func toggleSplit(_ sender: Any?) {
-        guard let workbench else { return }
-        if workbench.isSplit {
-            workbench.closeSplit()
-        } else {
-            workbench.split()
-        }
+    /// Edit ▸ New Column: another column beside this one, showing the
+    /// same file to start with. It takes any tab afterwards.
+    @objc func newColumn(_ sender: Any?) {
+        workbench?.newColumn()
     }
 
-    /// Edit ▸ Close Split.
-    @objc func closeSplitCommand(_ sender: Any?) {
-        workbench?.closeSplit()
+    /// Edit ▸ Close Column.
+    @objc func closeColumn(_ sender: Any?) {
+        workbench?.closeColumn()
     }
 
-    /// Edit ▸ Other Side: the keyboard crosses the divider.
-    ///
-    /// Reading one half of a file while writing the other means going
-    /// back and forth, and reaching for the mouse every time is what
-    /// makes a split not worth opening.
+    /// Edit ▸ Second View: this file again, under the view that has the
+    /// keyboard. One buffer, two places to look at it — the top of a
+    /// function while its end is being written.
+    @objc func addView(_ sender: Any?) {
+        workbench?.addViewToFocusedColumn()
+    }
+
+    /// Edit ▸ Close View.
+    @objc func closeView(_ sender: Any?) {
+        workbench?.closeFocusedView()
+    }
+
+    /// Edit ▸ Next Pane: the keyboard moves to the next view down this
+    /// column, then to the next column along.
     @objc func focusOtherSide(_ sender: Any?) {
         workbench?.focusOtherPane()
     }
@@ -1221,7 +1224,7 @@ final class DocumentController: NSResponder {
         workbench?.cycleTab(forward: false)
     }
 
-    /// View ▸ Same File on Both Sides.
+    /// Window ▸ This File in Every Column.
     @objc func showInEveryPane(_ sender: Any?) {
         workbench?.showEverywhere(ObjectIdentifier(self))
     }
@@ -3858,9 +3861,12 @@ extension DocumentController: NSMenuItemValidation {
             #selector(formatDocument(_:)), #selector(showDocumentOutline(_:)),
             #selector(showCodeActions(_:)):
             return lspOpenPath != nil
-        case #selector(closeSplitCommand(_:)), #selector(focusOtherSide(_:)),
-            #selector(showInEveryPane(_:)):
-            return workbench?.isSplit == true
+        case #selector(closeColumn(_:)), #selector(showInEveryPane(_:)):
+            return workbench?.canCloseColumn == true
+        case #selector(closeView(_:)):
+            return workbench?.canCloseView == true
+        case #selector(focusOtherSide(_:)):
+            return workbench?.hasSeveralPanes == true
         case #selector(goToBlockStart(_:)), #selector(goToBlockEnd(_:)):
             return coreDocument.languageName != nil
         case #selector(togglePreview(_:)):

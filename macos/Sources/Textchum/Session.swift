@@ -17,11 +17,20 @@ struct SessionState: Codable {
         let scroll: Double
     }
 
-    /// One window: the files it held as tabs, and what each of its
-    /// panes was showing.
+    /// One window: the files it held as tabs, and its columns.
     struct Layout: Codable {
         var tabs: [String] = []
+        /// One entry per pane, from before windows held columns.
         var panes: [String] = []
+        var columns: [ColumnLayout]?
+    }
+
+    /// One column: the file it showed, how many views of it were
+    /// stacked, and where the dividers between them sat.
+    struct ColumnLayout: Codable {
+        var file: String
+        var views: Int = 1
+        var dividers: [Double] = []
     }
 
     var version = 1

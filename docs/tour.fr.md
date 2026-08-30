@@ -57,13 +57,23 @@ Les blocs viennent de l'arbre qui sert à la coloration, et les replis
 appartiennent au document : refermer une fonction dans une vue la
 referme dans toutes les vues de ce fichier.
 
-## Divisions
+## Colonnes
 
-**Split Editor** (⌘\\, Ctrl+\\ sous Linux) montre le document deux
-fois, côte à côte ; **Close Split** (⇧⌘\\) retire la seconde vue et
-**Other Side** (⌥⌘\\, Ctrl+Alt+\\ sous Linux) fait passer le clavier de
-l'autre côté. Chaque côté défile de son côté, et c'est bien le but :
-lire le haut d'un fichier en modifiant le bas.
+Une fenêtre est une rangée de colonnes. Une colonne montre un fichier à
+la fois et tient une ou plusieurs vues de celui-ci, empilées.
+
+**New Column** (⌘\\, Ctrl+\\ sous Linux) place une colonne à côté de
+celle-ci, montrant le même fichier jusqu'à ce qu'on lui en donne un
+autre ; **Close Column** (⇧⌘\\, Ctrl+Shift+\\) la retire. **Second
+View** (⌥⌘\\, Ctrl+Alt+\\) empile une autre vue du fichier de la
+colonne sous la première, et **Close View** (⇧⌥⌘\\,
+Ctrl+Alt+Shift+\\) l'enlève. **Next Pane** (⌥⌘`, Ctrl+Alt+`) déplace le
+clavier de l'une à l'autre.
+
+Chaque vue défile de son côté, et c'est bien le but : lire le haut d'un
+fichier en modifiant le bas. La colonne possède le fichier qu'elle
+montre : changer son onglet emmène toutes ses vues vers le nouveau
+fichier.
 
 Les deux côtés sont un seul document. Il y a une histoire et un
 enregistrement : une modification d'un côté est la même modification,

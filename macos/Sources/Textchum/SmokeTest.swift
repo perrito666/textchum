@@ -860,12 +860,11 @@ func runSmokeTest() -> Int32 {
     contextBench.window?.close()
     print("context menu ok (editor commands, AppKit's extras left out, clicked position)")
 
-    // A window is a tab bar over panes: a tab is a document open in it,
-    // a pane is a view of one of them, and several panes can show one
-    // tab. TextKit 2 lets several layout managers share one content
-    // storage, which is what makes two panes two views of one document
-    // rather than two copies; what does not come free is the painting,
-    // since colour lives on the layout manager.
+    // A window is a tab bar over a row of columns. A column shows one
+    // file and holds one or more views of it, stacked. TextKit 2 lets
+    // several layout managers share one content storage, which is what
+    // makes two views two views of one document; what does not come
+    // free is the painting, since colour lives on the layout manager.
     let bench = Workbench(sidebar: nil)
     let first = DocumentController(document: CoreDocument())
     let second = DocumentController(document: CoreDocument())
@@ -876,71 +875,80 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the window did not take both tabs")
         return 1
     }
-    // Choosing a tab changes what the pane with the keyboard shows.
+    // Choosing a tab changes what the column with the keyboard shows.
     bench.showInFocusedPane(ObjectIdentifier(first))
     guard bench.focusedDocument === first else {
-        print("FAIL: choosing a tab did not reach the focused pane")
+        print("FAIL: choosing a tab did not reach the focused column")
         return 1
     }
-    bench.split()
-    guard bench.isSplit, bench.panes.count == 2 else {
-        print("FAIL: the window did not split")
+    // Columns: three of them, each taking a tab of its own.
+    bench.newColumn()
+    bench.newColumn()
+    guard bench.columns.count == 3, bench.focusedColumn == 2 else {
+        print("FAIL: the window has \(bench.columns.count) columns")
         return 1
     }
-    guard first.paintTargetCount == 2, let secondView = first.secondaryView else {
-        print("FAIL: splitting made no second view of the document")
+    bench.showInFocusedPane(ObjectIdentifier(second))
+    guard bench.document(inColumn: 2) === second, bench.document(inColumn: 0) === first
+    else {
+        print("FAIL: the columns do not hold a tab each")
         return 1
     }
-    guard let primaryStorage = first.primaryView?.textLayoutManager?.textContentManager,
-        secondView.textLayoutManager?.textContentManager === primaryStorage
+    // Views: the same file twice in one column, and the two views are
+    // of one document rather than two copies of it.
+    bench.addViewToFocusedColumn()
+    guard bench.columns[2].views.count == 2, second.paintTargetCount == 2 else {
+        print("FAIL: the column did not take a second view")
+        return 1
+    }
+    guard let firstStorage = second.primaryView?.textLayoutManager?.textContentManager,
+        second.secondaryView?.textLayoutManager?.textContentManager === firstStorage
     else {
         print("FAIL: the two views are not on one document")
         return 1
     }
-    // The other pane takes another tab, and the first one keeps its own.
-    bench.showInFocusedPane(ObjectIdentifier(second))
-    guard bench.document(inPane: 1) === second, bench.document(inPane: 0) === first else {
-        print("FAIL: the panes do not hold a tab each")
-        return 1
-    }
-    guard first.paintTargetCount == 1 else {
-        print("FAIL: the view the pane gave up was not released")
-        return 1
-    }
-    // One file on every side at once.
-    bench.showEverywhere(ObjectIdentifier(first))
-    guard bench.document(inPane: 0) === first, bench.document(inPane: 1) === first,
-        first.paintTargetCount == 2
+    // A column's views are views of whatever it shows: switching the
+    // tab keeps the shape and moves every view to the new file.
+    bench.showInFocusedPane(ObjectIdentifier(first))
+    // first is in all three columns now: one view each in the first
+    // two, two in the third.
+    guard bench.columns[2].views.count == 2, first.paintTargetCount == 4,
+        second.paintTargetCount == 0
     else {
-        print("FAIL: the file did not reach every pane")
+        print("FAIL: the views did not follow the column's tab")
         return 1
     }
-    // The keyboard crosses the divider and comes back, so reading one
-    // half while writing the other does not mean reaching for the
-    // mouse every time.
-    bench.focus(pane: 0)
+    bench.closeFocusedView()
+    guard bench.columns[2].views.count == 1, first.paintTargetCount == 3 else {
+        print("FAIL: closing a view left it behind")
+        return 1
+    }
+    // One file in every column at once.
+    bench.showEverywhere(ObjectIdentifier(first))
+    guard bench.columns.allSatisfy({ $0.document === first }) else {
+        print("FAIL: the file did not reach every column")
+        return 1
+    }
+    // The keyboard moves through the panes and comes back round.
+    bench.focus(column: 0)
     bench.focusOtherPane()
-    guard bench.focusedPane == 1 else {
-        print("FAIL: the focus did not cross to the other side")
+    guard bench.focusedColumn == 1 else {
+        print("FAIL: the focus did not move to the next pane")
         return 1
     }
     bench.focusOtherPane()
-    guard bench.focusedPane == 0 else {
-        print("FAIL: the focus did not come back")
+    bench.focusOtherPane()
+    guard bench.focusedColumn == 0 else {
+        print("FAIL: the focus did not come back round")
         return 1
     }
-    // Cycling tabs moves the focused pane through them.
-    bench.cycleTab(forward: true)
-    guard bench.focusedDocument === second else {
-        print("FAIL: cycling did not reach the next tab")
+    bench.closeColumn()
+    bench.closeColumn()
+    guard bench.columns.count == 1, !bench.isSplit else {
+        print("FAIL: closing the columns left \(bench.columns.count) behind")
         return 1
     }
-    bench.closeSplit()
-    guard !bench.isSplit, bench.panes.count == 1 else {
-        print("FAIL: closing the split left the second pane behind")
-        return 1
-    }
-    // Closing a tab closes the document; the pane showing it moves to
+    // Closing a tab closes the document; the column showing it moves to
     // what is left.
     bench.closeTab(ObjectIdentifier(second))
     guard bench.documents.count == 1, bench.focusedDocument === first else {
@@ -948,7 +956,7 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     bench.window?.close()
-    print("window ok (tabs over panes, one file on both sides, tab closed)")
+    print("window ok (columns, views of one file, tabs across them)")
 
     // Folding hides the lines after the one that opens a block. TextKit
     // 2 lays out what the content storage offers, so what is checked

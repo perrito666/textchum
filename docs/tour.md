@@ -55,13 +55,21 @@ The blocks come from the same tree the colouring uses, and the folds
 belong to the document: closing a function in one view closes it in
 every view of that file.
 
-## Splits
+## Columns
 
-**Split Editor** (⌘\\, Ctrl+\\ on Linux) shows the document twice,
-side by side; **Close Split** (⇧⌘\\) takes the second view away, and
-**Other Side** (⌥⌘\\, Ctrl+Alt+\\ on Linux) puts the keyboard across the
-divider. Each side scrolls on its own, which is the point: reading the
-top of a file while editing the bottom of it.
+A window is a row of columns. A column shows one file at a time and
+holds one or more views of it, stacked.
+
+**New Column** (⌘\\, Ctrl+\\ on Linux) puts a column beside this one,
+showing the same file until it is given another; **Close Column**
+(⇧⌘\\, Ctrl+Shift+\\) takes one away. **Second View** (⌥⌘\\,
+Ctrl+Alt+\\) stacks another view of the column's file under the first,
+and **Close View** (⇧⌥⌘\\, Ctrl+Alt+Shift+\\) removes it. **Next Pane**
+(⌥⌘`, Ctrl+Alt+`) moves the keyboard through them.
+
+Each view scrolls on its own, which is the point: reading the top of a
+file while editing the bottom of it. A column owns the file it shows,
+so changing its tab moves every view in it to the new file.
 
 Both sides are one document. There is one history and one save, so an
 edit on either side is the same edit, and neither view can be a stale

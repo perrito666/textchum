@@ -14,19 +14,120 @@ use textchum_core::{blame, goto, icons, references, theme_import, workspace, App
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
 
+/// One column: a tab group, and the views of that group's file
+/// stacked under it.
+///
+/// The column owns the file; the views are places to look at it. View 0
+/// is the tab group itself, which is why `views` holds only the ones
+/// under it.
+struct Column {
+    tab_view: adw::TabView,
+    /// Bar and stack together, which is what sits in the row.
+    root: gtk::Box,
+    /// The views under the tab group, top to bottom.
+    views: RefCell<Vec<Rc<Page>>>,
+}
+
+impl Column {
+    fn new(tab_view: &adw::TabView) -> Column {
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let bar = adw::TabBar::new();
+        bar.set_view(Some(tab_view));
+        root.append(&bar);
+        Column {
+            tab_view: tab_view.clone(),
+            root,
+            views: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// Puts the column's stack back together: the tab group on top, the
+    /// extra views under it.
+    fn rebuild(&self) {
+        // Everything below the bar comes out first.
+        while let Some(child) = self.root.last_child() {
+            if child.downcast_ref::<adw::TabBar>().is_some() {
+                break;
+            }
+            self.root.remove(&child);
+        }
+        let mut widgets: Vec<gtk::Widget> = vec![self.tab_view.clone().upcast()];
+        widgets.extend(
+            self.views
+                .borrow()
+                .iter()
+                .map(|page| page.root.clone().upcast::<gtk::Widget>()),
+        );
+        if let Some(stack) = nest(gtk::Orientation::Vertical, &widgets) {
+            stack.set_vexpand(true);
+            self.root.append(&stack);
+        }
+    }
+
+    /// Gives up every view this column holds — the column is going.
+    fn release_views(&self, workbench: &Rc<Workbench>) {
+        for page in self.views.borrow().iter() {
+            workbench.forget_view(page);
+        }
+        self.views.borrow_mut().clear();
+    }
+}
+
+/// Takes a widget out of whatever is holding it.
+fn detach(widget: &gtk::Widget) {
+    let Some(parent) = widget.parent() else { return };
+    if let Some(paned) = parent.downcast_ref::<gtk::Paned>() {
+        if paned.start_child().as_ref() == Some(widget) {
+            paned.set_start_child(None::<&gtk::Widget>);
+        }
+        if paned.end_child().as_ref() == Some(widget) {
+            paned.set_end_child(None::<&gtk::Widget>);
+        }
+    } else if let Some(holder) = parent.downcast_ref::<gtk::Box>() {
+        holder.remove(widget);
+    } else {
+        widget.unparent();
+    }
+}
+
+/// Nests paneds so that `widgets` share the space, each resizable.
+/// GTK's paned holds exactly two children, so N widgets are N−1 of
+/// them. None when there is nothing to nest.
+fn nest(orientation: gtk::Orientation, widgets: &[gtk::Widget]) -> Option<gtk::Widget> {
+    let (first, rest) = widgets.split_first()?;
+    // The chain is built afresh every time it changes, so a widget
+    // arrives here still held by the paned it was in. A widget with a
+    // parent cannot be given another, and the attempt shows as an empty
+    // editor area.
+    detach(first);
+    let Some(tail) = nest(orientation, rest) else {
+        return Some(first.clone());
+    };
+    let paned = gtk::Paned::new(orientation);
+    paned.set_shrink_start_child(false);
+    paned.set_shrink_end_child(false);
+    paned.set_resize_start_child(true);
+    paned.set_resize_end_child(true);
+    paned.set_start_child(Some(first));
+    paned.set_end_child(Some(&tail));
+    Some(paned.upcast())
+}
+
 pub struct Workbench {
     pub window: adw::ApplicationWindow,
-    /// The primary editor group. A window has one; splitting gives it a
-    /// second, and the two hold different documents — never two views
-    /// of one, which would be two carets over two histories of the same
-    /// file.
+    /// The first column's tab group. Every window has one, and the
+    /// commands that speak of "the tabs" without saying which column
+    /// mean the focused one — see [`Workbench::active_view`].
     pub tab_view: adw::TabView,
-    /// The paned the groups sit in.
-    editor_paned: gtk::Paned,
-    /// The second group, while there is one.
-    secondary: RefCell<Option<adw::TabView>>,
-    /// Whether the second group is the one commands act on.
-    secondary_focused: Cell<bool>,
+    /// The columns, left to right. A column shows one file at a time
+    /// and holds one or more views of it, stacked.
+    columns: RefCell<Vec<Column>>,
+    /// Which column has the keyboard, and which view inside it: view 0
+    /// is the tab group itself, the rest are stacked under it.
+    focused_column: Cell<usize>,
+    focused_view: Cell<usize>,
+    /// Where the row of columns is put.
+    columns_host: gtk::Box,
     /// Set while a window closes that has already asked about its
     /// unsaved files, so the close it starts again goes straight
     /// through.
@@ -119,8 +220,6 @@ thread_local! {
 impl Workbench {
     pub fn new(app: &adw::Application) -> Rc<Workbench> {
         let tab_view = adw::TabView::new();
-        let tab_bar = adw::TabBar::new();
-        tab_bar.set_view(Some(&tab_view));
 
         let title = adw::WindowTitle::new("Textchum", "");
         let header = adw::HeaderBar::new();
@@ -195,9 +294,11 @@ impl Workbench {
         edit_section.append(Some("Fold"), Some("win.fold"));
         edit_section.append(Some("Fold All"), Some("win.fold-all"));
         edit_section.append(Some("Unfold All"), Some("win.unfold-all"));
-        edit_section.append(Some("Split Editor"), Some("win.split"));
-        edit_section.append(Some("Close Split"), Some("win.unsplit"));
-        edit_section.append(Some("Other Side"), Some("win.focus-other-group"));
+        edit_section.append(Some("New Column"), Some("win.new-column"));
+        edit_section.append(Some("Close Column"), Some("win.close-column"));
+        edit_section.append(Some("Second View"), Some("win.add-view"));
+        edit_section.append(Some("Close View"), Some("win.close-view"));
+        edit_section.append(Some("Next Pane"), Some("win.focus-other-group"));
         {
             // What to do to the selection, or to the whole document
             // when nothing is selected. GtkSourceView has Change Case
@@ -299,16 +400,11 @@ impl Workbench {
         search_bar.connect_entry(&search_entry);
 
         let content_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        content_box.append(&tab_bar);
-        // The editor area is a paned so a second group can appear
-        // beside the first. Until one does, the paned holds only the
-        // primary group and looks like nothing at all.
-        let editor_paned = gtk::Paned::new(gtk::Orientation::Horizontal);
-        editor_paned.set_vexpand(true);
-        editor_paned.set_shrink_start_child(false);
-        editor_paned.set_shrink_end_child(false);
-        editor_paned.set_start_child(Some(&tab_view));
-        content_box.append(&editor_paned);
+        // Every column carries its own tab bar, so the row of columns
+        // is the whole editor area.
+        let columns_host = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        columns_host.set_vexpand(true);
+        content_box.append(&columns_host);
         tab_view.set_vexpand(true);
 
         // Sidebar: open buffers grouped by project, over the selected
@@ -362,9 +458,10 @@ impl Workbench {
         let workbench = Rc::new(Workbench {
             window: window.clone(),
             tab_view: tab_view.clone(),
-            editor_paned: editor_paned.clone(),
-            secondary: RefCell::new(None),
-            secondary_focused: Cell::new(false),
+            columns: RefCell::new(vec![Column::new(&tab_view)]),
+            focused_column: Cell::new(0),
+            focused_view: Cell::new(0),
+            columns_host: columns_host.clone(),
             closing_settled: Cell::new(false),
             title,
             toasts,
@@ -390,6 +487,7 @@ impl Workbench {
         WORKBENCHES.with(|list| list.borrow_mut().push(Rc::clone(&workbench)));
 
         workbench.install_group(&tab_view);
+        workbench.rebuild_columns();
         {
             // Closing a window is closing what it shows, unless the
             // files are set to outlive their windows.
@@ -599,19 +697,13 @@ impl Workbench {
                         return glib::Propagation::Stop;
                     }
                     workbench.forget(tab_page);
-                    // A group emptied by its last tab closing is a
+                    // A column emptied by its last tab closing is a
                     // divider with nothing on one side of it.
                     if view.n_pages() <= 1 && workbench.is_split() {
                         let weak = Rc::downgrade(&workbench);
                         glib::idle_add_local_once(move || {
                             if let Some(workbench) = weak.upgrade() {
-                                if workbench
-                                    .all_views()
-                                    .iter()
-                                    .any(|view| view.n_pages() == 0)
-                                {
-                                    workbench.unsplit();
-                                }
+                                workbench.close_empty_columns();
                             }
                         });
                     }
@@ -629,40 +721,42 @@ impl Workbench {
                 let Some(view) = controller.widget().and_downcast::<adw::TabView>() else {
                     return;
                 };
-                let secondary = workbench
-                    .secondary
-                    .borrow()
-                    .as_ref()
-                    .is_some_and(|second| *second == view);
-                if workbench.secondary_focused.get() != secondary {
-                    workbench.secondary_focused.set(secondary);
-                    workbench.refresh_chrome();
-                    workbench.refresh_sidebar();
+                let at = workbench
+                    .all_views()
+                    .iter()
+                    .position(|other| *other == view);
+                if let Some(at) = at {
+                    if workbench.focused_column.get() != at
+                        || workbench.focused_view.get() != 0
+                    {
+                        workbench.focused_column.set(at);
+                        workbench.focused_view.set(0);
+                        workbench.refresh_chrome();
+                        workbench.refresh_sidebar();
+                    }
                 }
             });
             view.add_controller(controller);
         }
     }
 
-    /// The group commands act on: the second when it has the focus,
-    /// the first otherwise.
+    /// The tab group commands act on: the focused column's.
     pub fn active_view(&self) -> adw::TabView {
-        if self.secondary_focused.get() {
-            if let Some(view) = self.secondary.borrow().clone() {
-                return view;
-            }
-        }
-        self.tab_view.clone()
+        let columns = self.columns.borrow();
+        columns
+            .get(self.focused_column.get())
+            .map(|column| column.tab_view.clone())
+            .unwrap_or_else(|| self.tab_view.clone())
     }
 
     /// Every group, for the commands that are about all the open
     /// documents rather than the current one.
     pub fn all_views(&self) -> Vec<adw::TabView> {
-        let mut views = vec![self.tab_view.clone()];
-        if let Some(second) = self.secondary.borrow().clone() {
-            views.push(second);
-        }
-        views
+        self.columns
+            .borrow()
+            .iter()
+            .map(|column| column.tab_view.clone())
+            .collect()
     }
 
     /// The group a page is in.
@@ -672,227 +766,239 @@ impl Workbench {
             .find(|view| tab_page_of(view, page).is_some())
     }
 
-    /// Puts a second view of the current document on the other side.
-    /// One buffer under two views: type in either and both show it,
-    /// and each keeps its own place in the file, so the top of a
-    /// function can be read while its end is being written.
-    ///
-    /// The other side is a tab group like the first, so any file can
-    /// be opened there afterwards, and tabs drag between the two.
-    pub fn split(self: &Rc<Self>) {
-        let Some(page) = self.selected() else { return };
-        // Taken first: the borrow would still be alive inside the arms,
-        // and the arm that makes a group writes to it.
-        let existing = self.secondary.borrow().clone();
-        let into = match existing {
-            Some(view) if !self.secondary_focused.get() => view,
-            Some(_) => self.tab_view.clone(),
-            None => {
-                let view = adw::TabView::new();
-                view.set_vexpand(true);
-                let bar = adw::TabBar::new();
-                bar.set_view(Some(&view));
-                let side = gtk::Box::new(gtk::Orientation::Vertical, 0);
-                side.append(&bar);
-                side.append(&view);
-                self.editor_paned.set_end_child(Some(&side));
-                self.editor_paned
-                    .set_position(self.editor_paned.width().max(2) / 2);
-                self.install_group(&view);
-                *self.secondary.borrow_mut() = Some(view.clone());
-                view
-            }
-        };
-        let second = Page::view_of(&page.document);
-        let tab_page = into.append(&second.root);
-        tab_page.set_title(&second.display_name());
-        self.pages.borrow_mut().push(Rc::clone(&second));
-        into.set_selected_page(&tab_page);
-        self.secondary_focused.set(into != self.tab_view);
-        self.refresh_chrome();
-    }
-
-    /// Puts the second group's documents back with the first and takes
-    /// the group away.
-    pub fn unsplit(self: &Rc<Self>) {
-        let Some(second) = self.secondary.borrow_mut().take() else {
-            return;
-        };
-        while second.n_pages() > 0 {
-            let tab_page = second.nth_page(0);
-            // A second view of a file that is open in the first group
-            // would come back as a duplicate tab, so it closes; a file
-            // only open on this side keeps its tab and moves.
-            let duplicate = self
-                .pages
-                .borrow()
-                .iter()
-                .find(|page| page.root == tab_page.child())
-                .is_some_and(|page| page.document.views().len() > 1);
-            if duplicate {
-                second.close_page(&tab_page);
-            } else {
-                second.transfer_page(&tab_page, &self.tab_view, self.tab_view.n_pages());
-            }
-        }
-        self.editor_paned.set_end_child(None::<&gtk::Widget>);
-        self.secondary_focused.set(false);
-        self.refresh_chrome();
-    }
-
-    /// Whether this window is split, for the commands that only make
-    /// sense when it is.
-    pub fn is_split(&self) -> bool {
-        self.secondary.borrow().is_some()
-    }
-
-    /// Moves the focus to the other group.
-    pub fn focus_other_group(self: &Rc<Self>) {
-        if !self.is_split() {
-            return;
-        }
-        self.secondary_focused.set(!self.secondary_focused.get());
+    /// A column beside this one, showing the same file to start with.
+    /// It takes any tab afterwards, and tabs drag between columns.
+    pub fn new_column(self: &Rc<Self>) {
+        let view = adw::TabView::new();
+        view.set_vexpand(true);
+        let column = Column::new(&view);
+        self.install_group(&view);
+        self.columns.borrow_mut().push(column);
+        self.rebuild_columns();
+        // The new column starts on the file the old one was showing.
         if let Some(page) = self.selected() {
-            page.view.grab_focus();
+            let copy = Page::view_of(&page.document);
+            let tab_page = view.append(&copy.root);
+            tab_page.set_title(&copy.display_name());
+            self.pages.borrow_mut().push(Rc::clone(&copy));
+            view.set_selected_page(&tab_page);
         }
-        self.refresh_chrome();
+        let last = self.columns.borrow().len() - 1;
+        self.focus_pane(last, 0);
     }
 
-    pub fn selected(&self) -> Option<Rc<Page>> {
-        let view = self.active_view();
-        let selected = view.selected_page()?;
-        let child = selected.child();
-        self.pages
+    /// Takes the focused column away; its files move to the column
+    /// beside it, and views that were only a second look at a file
+    /// already open there close.
+    pub fn close_column(self: &Rc<Self>) {
+        if self.columns.borrow().len() < 2 {
+            return;
+        }
+        let at = self.focused_column.get().min(self.columns.borrow().len() - 1);
+        let column = self.columns.borrow_mut().remove(at);
+        let keep = self
+            .columns
             .borrow()
-            .iter()
-            .find(|page| page.root == child)
-            .cloned()
+            .get(at.saturating_sub(1))
+            .map(|other| other.tab_view.clone());
+        if let Some(keep) = keep {
+            while column.tab_view.n_pages() > 0 {
+                let tab_page = column.tab_view.nth_page(0);
+                // A second view of a file that is open where it is
+                // going would arrive as a duplicate tab.
+                let duplicate = self
+                    .pages
+                    .borrow()
+                    .iter()
+                    .find(|page| page.root == tab_page.child())
+                    .is_some_and(|page| page.document.views().len() > 1);
+                if duplicate {
+                    column.tab_view.close_page(&tab_page);
+                } else {
+                    column
+                        .tab_view
+                        .transfer_page(&tab_page, &keep, keep.n_pages());
+                }
+            }
+        }
+        column.release_views(self);
+        self.rebuild_columns();
+        self.focus_pane(at.saturating_sub(1), 0);
     }
 
-    /// Opens `path` as a tab (or focuses the tab already showing it,
-    /// anywhere), then optionally reveals a position.
-    pub fn open(self: &Rc<Self>, path: Option<PathBuf>, at: Option<(i32, usize)>) {
-        // Navigations to a position (definitions, search results,
-        // outline picks) leave a trail; plain opens do not, and
-        // neither does retracing the trail itself.
-        if at.is_some() && !self.retracing.get() {
-            self.note_jump();
+    /// Another view of this column's file, under the one with the
+    /// keyboard.
+    pub fn add_view(self: &Rc<Self>) {
+        let Some(page) = self.selected() else { return };
+        let at = self.focused_column.get();
+        let view = Page::view_of(&page.document);
+        self.pages.borrow_mut().push(Rc::clone(&view));
+        {
+            let columns = self.columns.borrow();
+            let Some(column) = columns.get(at) else { return };
+            column.views.borrow_mut().push(Rc::clone(&view));
         }
-        if let Some(path) = &path {
-            let key = path.to_string_lossy().into_owned();
-            let existing = Shell::instance().pages.borrow().get(&key).cloned();
-            if let Some(handles) = existing {
-                handles.tab_view.set_selected_page(&handles.tab_page);
-                handles.window.present();
-                if let Some((line, character)) = at {
-                    page::reveal(&handles, line, character);
-                }
+        self.rebuild_columns();
+        let count = self.columns.borrow()[at].views.borrow().len();
+        self.focus_pane(at, count);
+    }
+
+    /// Takes the focused view out of its column, leaving the rest.
+    pub fn close_view(self: &Rc<Self>) {
+        let at = self.focused_column.get();
+        let which = self.focused_view.get();
+        // View 0 is the tab group; it goes with the column.
+        if which == 0 {
+            return;
+        }
+        let gone = {
+            let columns = self.columns.borrow();
+            let Some(column) = columns.get(at) else { return };
+            let mut views = column.views.borrow_mut();
+            if which > views.len() {
                 return;
             }
-        }
-        let page = Page::new(path);
-        let view = self.active_view();
-        let tab_page = view.append(&page.root);
-        tab_page.set_title(&page.display_name());
-        self.pages.borrow_mut().push(Rc::clone(&page));
-        if let Some(path) = page.path().borrow().clone() {
-            let handles = Rc::new(PageHandles {
-                window: self.window.clone(),
-                tab_view: view.clone(),
-                tab_page: tab_page.clone(),
-                document: Rc::clone(&page.document),
-                view: page.view.clone(),
-                toasts: self.toasts.clone(),
-                title: self.title.clone(),
-                language: RefCell::new(
-                    page.state
-                        .borrow()
-                        .document
-                        .language_name()
-                        .unwrap_or("")
-                        .to_string(),
-                ),
-                problems: RefCell::new(String::new()),
-                detail: RefCell::new(String::new()),
-            });
-            Shell::instance().pages.borrow_mut().insert(path, handles);
-        }
-        view.set_selected_page(&tab_page);
-        if let Some((line, character)) = at {
-            if let Some(path) = page.path().borrow().clone() {
-                if let Some(handles) = Shell::instance().pages.borrow().get(&path).cloned() {
-                    page::reveal(&handles, line, character);
-                }
-            }
-        }
-        // A document told what it is stays told: reopening a .txt that
-        // holds SQL should not find it plain text again.
-        if let Some(path) = page.path().borrow().clone() {
-            let stored = Shell::instance().config.borrow().file_override(&path);
-            if !stored.is_empty() {
-                apply_file_properties(
-                    self,
-                    &page,
-                    stored.language.as_deref(),
-                    stored.tab_width,
-                );
-            }
-        }
-        self.refresh_chrome();
-        self.refresh_sidebar();
-        // The desktop's shared recent-files list learns about it too.
-        if let Some(path) = self.selected().and_then(|page| page.path().borrow().clone()) {
-            let uri = gtk::gio::File::for_path(&path).uri();
-            let _ = gtk::RecentManager::default().add_item(&uri);
-        }
-        crate::session::save();
+            views.remove(which - 1)
+        };
+        self.forget_view(&gone);
+        self.rebuild_columns();
+        self.focus_pane(at, which.saturating_sub(1));
     }
 
-    /// Puts a view of a document that is already open in the group
-    /// with the focus, and selects it.
-    pub fn show(self: &Rc<Self>, document: &Rc<crate::shell::OpenDocument>, at: Option<(i32, usize)>) {
-        let page = Page::view_of(document);
-        let view = self.active_view();
-        let tab_page = view.append(&page.root);
-        tab_page.set_title(&page.display_name());
-        self.pages.borrow_mut().push(Rc::clone(&page));
-        if let Some(path) = document.path.borrow().clone() {
-            let handles = Rc::new(PageHandles {
-                window: self.window.clone(),
-                tab_view: view.clone(),
-                tab_page: tab_page.clone(),
-                document: Rc::clone(document),
-                view: page.view.clone(),
-                toasts: self.toasts.clone(),
-                title: self.title.clone(),
-                language: RefCell::new(
-                    page.state
-                        .borrow()
-                        .document
-                        .language_name()
-                        .unwrap_or("")
-                        .to_string(),
-                ),
-                problems: RefCell::new(String::new()),
-                detail: RefCell::new(String::new()),
-            });
-            Shell::instance().pages.borrow_mut().insert(path.clone(), Rc::clone(&handles));
-            if let Some((line, character)) = at {
-                page::reveal(&handles, line, character);
+    /// Drops a view that is going away: it stops being one of the
+    /// window's pages, and the document stops counting it.
+    fn forget_view(&self, page: &Rc<Page>) {
+        page.document.drop_view(page);
+        self.pages.borrow_mut().retain(|other| !Rc::ptr_eq(other, page));
+    }
+
+    /// Whether this window has more than one column.
+    pub fn is_split(&self) -> bool {
+        self.columns.borrow().len() > 1
+    }
+
+    /// Whether there is more than one place for the keyboard to be.
+    pub fn has_several_panes(&self) -> bool {
+        self.columns.borrow().len() > 1
+            || self
+                .columns
+                .borrow()
+                .iter()
+                .any(|column| !column.views.borrow().is_empty())
+    }
+
+    /// What each column is showing and how many views it has, for the
+    /// session to write down.
+    pub fn column_state(&self) -> Vec<serde_json::Value> {
+        self.columns
+            .borrow()
+            .iter()
+            .map(|column| {
+                let file = column
+                    .tab_view
+                    .selected_page()
+                    .and_then(|tab_page| self.page_of(&tab_page))
+                    .and_then(|page| page.path().borrow().clone())
+                    .unwrap_or_default();
+                serde_json::json!({
+                    "file": file,
+                    "views": column.views.borrow().len() + 1,
+                })
+            })
+            .collect()
+    }
+
+    /// Takes away any column whose last tab has closed: a divider with
+    /// nothing on one side of it is not a column.
+    pub fn close_empty_columns(self: &Rc<Self>) {
+        loop {
+            let empty = self
+                .columns
+                .borrow()
+                .iter()
+                .position(|column| column.tab_view.n_pages() == 0);
+            let Some(at) = empty else { break };
+            if self.columns.borrow().len() < 2 {
+                break;
             }
-            // The server hears about it again: it was told the file
-            // closed when the last view went.
-            if let Some(language) = page.state.borrow().document.language_name() {
-                let text = page.state.borrow().document.text();
-                Shell::instance()
-                    .pool
-                    .borrow_mut()
-                    .did_open(Path::new(&path), language, &text);
+            let column = self.columns.borrow_mut().remove(at);
+            column.release_views(self);
+            self.rebuild_columns();
+            let focused = self.focused_column.get();
+            self.focus_pane(focused.min(self.columns.borrow().len() - 1), 0);
+        }
+    }
+
+    /// The keyboard moves to the next place there is one: the next view
+    /// down this column, then the next column along.
+    pub fn focus_other_group(self: &Rc<Self>) {
+        let places: Vec<(usize, usize)> = self
+            .columns
+            .borrow()
+            .iter()
+            .enumerate()
+            .flat_map(|(index, column)| {
+                let extra = column.views.borrow().len();
+                (0..=extra).map(move |view| (index, view))
+            })
+            .collect();
+        if places.len() < 2 {
+            return;
+        }
+        let here = (self.focused_column.get(), self.focused_view.get());
+        let at = places.iter().position(|place| *place == here).unwrap_or(0);
+        let (column, view) = places[(at + 1) % places.len()];
+        self.focus_pane(column, view);
+    }
+
+    /// Gives a pane the keyboard: view 0 is the column's tab group,
+    /// the rest are the views stacked under it.
+    pub fn focus_pane(self: &Rc<Self>, column: usize, view: usize) {
+        {
+            let columns = self.columns.borrow();
+            let Some(holder) = columns.get(column) else { return };
+            let extra = holder.views.borrow().len();
+            let view = view.min(extra);
+            self.focused_column.set(column);
+            self.focused_view.set(view);
+            if view == 0 {
+                if let Some(page) = holder
+                    .tab_view
+                    .selected_page()
+                    .and_then(|tab_page| self.page_of(&tab_page))
+                {
+                    page.view.grab_focus();
+                }
+            } else if let Some(page) = holder.views.borrow().get(view - 1) {
+                page.view.grab_focus();
             }
         }
-        view.set_selected_page(&tab_page);
         self.refresh_chrome();
         self.refresh_sidebar();
+    }
+
+    /// Puts the row of columns back together after one is added or
+    /// taken away, and each column's stack of views with it.
+    ///
+    /// GTK's paned holds exactly two children, so a row of N columns is
+    /// N−1 of them nested. Rebuilding the chain is what keeps that
+    /// bookkeeping in one place.
+    fn rebuild_columns(&self) {
+        while let Some(child) = self.columns_host.first_child() {
+            self.columns_host.remove(&child);
+        }
+        let columns = self.columns.borrow();
+        let sides: Vec<gtk::Widget> = columns
+            .iter()
+            .map(|column| {
+                column.rebuild();
+                column.root.clone().upcast::<gtk::Widget>()
+            })
+            .collect();
+        if let Some(row) = nest(gtk::Orientation::Horizontal, &sides) {
+            row.set_vexpand(true);
+            self.columns_host.append(&row);
+        }
     }
 
     /// The documents this window is the last place to see, with
@@ -1134,6 +1240,143 @@ impl Workbench {
         crate::session::save();
     }
 
+    pub fn selected(&self) -> Option<Rc<Page>> {
+        let view = self.active_view();
+        let selected = view.selected_page()?;
+        let child = selected.child();
+        self.pages
+            .borrow()
+            .iter()
+            .find(|page| page.root == child)
+            .cloned()
+    }
+
+    /// Opens `path` as a tab (or focuses the tab already showing it,
+    /// anywhere), then optionally reveals a position.
+    pub fn open(self: &Rc<Self>, path: Option<PathBuf>, at: Option<(i32, usize)>) {
+        // Navigations to a position (definitions, search results,
+        // outline picks) leave a trail; plain opens do not, and
+        // neither does retracing the trail itself.
+        if at.is_some() && !self.retracing.get() {
+            self.note_jump();
+        }
+        if let Some(path) = &path {
+            let key = path.to_string_lossy().into_owned();
+            let existing = Shell::instance().pages.borrow().get(&key).cloned();
+            if let Some(handles) = existing {
+                handles.tab_view.set_selected_page(&handles.tab_page);
+                handles.window.present();
+                if let Some((line, character)) = at {
+                    page::reveal(&handles, line, character);
+                }
+                return;
+            }
+        }
+        let page = Page::new(path);
+        let view = self.active_view();
+        let tab_page = view.append(&page.root);
+        tab_page.set_title(&page.display_name());
+        self.pages.borrow_mut().push(Rc::clone(&page));
+        if let Some(path) = page.path().borrow().clone() {
+            let handles = Rc::new(PageHandles {
+                window: self.window.clone(),
+                tab_view: view.clone(),
+                tab_page: tab_page.clone(),
+                document: Rc::clone(&page.document),
+                view: page.view.clone(),
+                toasts: self.toasts.clone(),
+                title: self.title.clone(),
+                language: RefCell::new(
+                    page.state
+                        .borrow()
+                        .document
+                        .language_name()
+                        .unwrap_or("")
+                        .to_string(),
+                ),
+                problems: RefCell::new(String::new()),
+                detail: RefCell::new(String::new()),
+            });
+            Shell::instance().pages.borrow_mut().insert(path, handles);
+        }
+        view.set_selected_page(&tab_page);
+        if let Some((line, character)) = at {
+            if let Some(path) = page.path().borrow().clone() {
+                if let Some(handles) = Shell::instance().pages.borrow().get(&path).cloned() {
+                    page::reveal(&handles, line, character);
+                }
+            }
+        }
+        // A document told what it is stays told: reopening a .txt that
+        // holds SQL should not find it plain text again.
+        if let Some(path) = page.path().borrow().clone() {
+            let stored = Shell::instance().config.borrow().file_override(&path);
+            if !stored.is_empty() {
+                apply_file_properties(
+                    self,
+                    &page,
+                    stored.language.as_deref(),
+                    stored.tab_width,
+                );
+            }
+        }
+        self.refresh_chrome();
+        self.refresh_sidebar();
+        // The desktop's shared recent-files list learns about it too.
+        if let Some(path) = self.selected().and_then(|page| page.path().borrow().clone()) {
+            let uri = gtk::gio::File::for_path(&path).uri();
+            let _ = gtk::RecentManager::default().add_item(&uri);
+        }
+        crate::session::save();
+    }
+
+    /// Puts a view of a document that is already open in the group
+    /// with the focus, and selects it.
+    pub fn show(self: &Rc<Self>, document: &Rc<crate::shell::OpenDocument>, at: Option<(i32, usize)>) {
+        let page = Page::view_of(document);
+        let view = self.active_view();
+        let tab_page = view.append(&page.root);
+        tab_page.set_title(&page.display_name());
+        self.pages.borrow_mut().push(Rc::clone(&page));
+        if let Some(path) = document.path.borrow().clone() {
+            let handles = Rc::new(PageHandles {
+                window: self.window.clone(),
+                tab_view: view.clone(),
+                tab_page: tab_page.clone(),
+                document: Rc::clone(document),
+                view: page.view.clone(),
+                toasts: self.toasts.clone(),
+                title: self.title.clone(),
+                language: RefCell::new(
+                    page.state
+                        .borrow()
+                        .document
+                        .language_name()
+                        .unwrap_or("")
+                        .to_string(),
+                ),
+                problems: RefCell::new(String::new()),
+                detail: RefCell::new(String::new()),
+            });
+            Shell::instance().pages.borrow_mut().insert(path.clone(), Rc::clone(&handles));
+            if let Some((line, character)) = at {
+                page::reveal(&handles, line, character);
+            }
+            // The server hears about it again: it was told the file
+            // closed when the last view went.
+            if let Some(language) = page.state.borrow().document.language_name() {
+                let text = page.state.borrow().document.text();
+                Shell::instance()
+                    .pool
+                    .borrow_mut()
+                    .did_open(Path::new(&path), language, &text);
+            }
+        }
+        view.set_selected_page(&tab_page);
+        self.refresh_chrome();
+        self.refresh_sidebar();
+    }
+
     // MARK: Chrome
 
     /// The page's display name, with enough parent path to tell it
@@ -1313,7 +1556,12 @@ impl Workbench {
                 if let Some(page) = page {
                     if let Some(view) = workbench.view_holding(&page) {
                         let Some(tab_page) = tab_page_of(&view, &page) else { return };
-                        workbench.secondary_focused.set(view != workbench.tab_view);
+                        if let Some(at) =
+                            workbench.all_views().iter().position(|other| *other == view)
+                        {
+                            workbench.focused_column.set(at);
+                            workbench.focused_view.set(0);
+                        }
                         view.set_selected_page(&tab_page);
                     }
                 }
@@ -1766,19 +2014,25 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.toast("Nothing is folded.");
         }
     });
-    add("split", workbench, |workbench, _| {
-        workbench.split();
+    add("new-column", workbench, |workbench, _| {
+        workbench.new_column();
     });
-    add("unsplit", workbench, |workbench, _| {
+    add("close-column", workbench, |workbench, _| {
         if !workbench.is_split() {
-            workbench.toast("This window is not split.");
+            workbench.toast("This window has one column.");
             return;
         }
-        workbench.unsplit();
+        workbench.close_column();
+    });
+    add("add-view", workbench, |workbench, _| {
+        workbench.add_view();
+    });
+    add("close-view", workbench, |workbench, _| {
+        workbench.close_view();
     });
     add("focus-other-group", workbench, |workbench, _| {
-        if !workbench.is_split() {
-            workbench.toast("This window is not split.");
+        if !workbench.has_several_panes() {
+            workbench.toast("There is one pane in this window.");
             return;
         }
         workbench.focus_other_group();
