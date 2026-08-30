@@ -126,6 +126,18 @@ final class SettingsModel: ObservableObject {
     @Published var keepBuffers: Bool {
         didSet { persist { $0.keepBuffers = keepBuffers } }
     }
+    @Published var projectStateInProject: Bool {
+        didSet { persist { $0.projectStateInProject = projectStateInProject } }
+    }
+    @Published var projectStateDirectory: String {
+        didSet { persist { $0.projectStateDirectory = projectStateDirectory } }
+    }
+    @Published var projectStateSweep: Bool {
+        didSet { persist { $0.projectStateSweep = projectStateSweep } }
+    }
+    @Published var projectStateKeepDays: Int {
+        didSet { persist { $0.projectStateKeepDays = projectStateKeepDays } }
+    }
     @Published var followFile: Bool {
         didSet { persist { $0.followFile = followFile } }
     }
@@ -283,6 +295,10 @@ final class SettingsModel: ObservableObject {
         lineNumbers = config.lineNumbers
         hoverDocs = config.hoverDocs
         keepBuffers = config.keepBuffers
+        projectStateInProject = config.projectStateInProject
+        projectStateDirectory = config.projectStateDirectory
+        projectStateSweep = config.projectStateSweep
+        projectStateKeepDays = config.projectStateKeepDays
         keysProfile = config.keysProfile
         markOccurrences = config.markOccurrences
         occurrencesCaseSensitive = config.occurrencesCaseSensitive
@@ -311,6 +327,10 @@ final class SettingsModel: ObservableObject {
         self.lineNumbers = config.lineNumbers
         self.hoverDocs = config.hoverDocs
         self.keepBuffers = config.keepBuffers
+        self.projectStateInProject = config.projectStateInProject
+        self.projectStateDirectory = config.projectStateDirectory
+        self.projectStateSweep = config.projectStateSweep
+        self.projectStateKeepDays = config.projectStateKeepDays
         self.followFile = config.followFile
         self.spellLanguage = config.spellLanguage ?? ""
         self.spellWords = config.spellWords.joined(separator: "\n")
@@ -951,6 +971,7 @@ struct GeneralSettingsTab: View {
             Toggle("Show line numbers", isOn: $model.lineNumbers)
             Toggle("Hover documentation", isOn: $model.hoverDocs)
             Toggle("Keep files open when their window closes", isOn: $model.keepBuffers)
+            ProjectRecordsSettings(model: model)
             Toggle("Reveal the current file in the tree", isOn: $model.followFile)
             Toggle("Mark the selected word elsewhere on screen", isOn: $model.markOccurrences)
             Toggle("  Match case", isOn: $model.occurrencesCaseSensitive)
@@ -1998,5 +2019,142 @@ final class SettingsWindowController: NSWindowController {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("SettingsWindowController is created in code")
+    }
+}
+
+// MARK: - Project records
+
+/// Where each project's record is kept, and what becomes of the ones
+/// nobody opens any more.
+///
+/// A record holds what the files of a project remember about
+/// themselves: how each is split, where its views were looking, what is
+/// folded, what it was told it is.
+struct ProjectRecordsSettings: View {
+    @ObservedObject var model: SettingsModel
+    @State private var showingRecords = false
+
+    var body: some View {
+        Toggle("Keep each project's state with the checkout", isOn: $model.projectStateInProject)
+        Text(
+            "A file remembers how it is split, where each view was looking, what is "
+                + "folded, and what it was told it is. With this on, that is written to "
+                + ".tchum in the project; otherwise it is kept here, one record per project."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+        LabeledContent("Records folder") {
+            HStack(spacing: 6) {
+                TextField(
+                    ProjectState.directory.path, text: $model.projectStateDirectory,
+                    prompt: Text(ProjectState.directory.path)
+                )
+                .textFieldStyle(.roundedBorder)
+                Button("Choose…") { chooseFolder() }
+                Button("Manage…") { showingRecords = true }
+            }
+        }
+        .disabled(model.projectStateInProject)
+
+        Toggle("Forget records at launch", isOn: $model.projectStateSweep)
+        Stepper(value: $model.projectStateKeepDays, in: 0...3650, step: 30) {
+            Text(
+                model.projectStateKeepDays == 0
+                    ? "Keep records until they are forgotten by hand"
+                    : "Keep records for \(model.projectStateKeepDays) days"
+            )
+        }
+        .disabled(!model.projectStateSweep)
+        Text(
+            "The sweep runs on a thread of its own at launch, and forgets the records "
+                + "of projects that are no longer there whatever the window says."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .sheet(isPresented: $showingRecords) {
+            ProjectRecordsList(days: model.projectStateKeepDays)
+        }
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.projectStateDirectory = url.path
+    }
+}
+
+/// The records that exist, with what they are about and when they were
+/// last written — and the two ways to be rid of them.
+struct ProjectRecordsList: View {
+    let days: Int
+    @Environment(\.dismiss) private var dismiss
+    @State private var records: [CoreProjectState.Record] = []
+    @State private var chosen: Set<String> = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Project Records").font(.headline)
+            if records.isEmpty {
+                Text("No project has anything recorded yet.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 160)
+            } else {
+                List(records, selection: $chosen) { record in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text((record.root as NSString).lastPathComponent)
+                                .fontWeight(.medium)
+                            Text(record.root)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.head)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(
+                                record.missing
+                                    ? "missing" : "\(record.files) files"
+                            )
+                            .foregroundStyle(record.missing ? .red : .secondary)
+                            Text(record.updated, style: .date)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .tag(record.id)
+                }
+                .frame(minHeight: 220)
+            }
+            HStack {
+                Button("Forget Selected") {
+                    for path in chosen { CoreProjectState.forget(recordAt: path) }
+                    chosen = []
+                    reload()
+                }
+                .disabled(chosen.isEmpty)
+                Button(days == 0 ? "Forget Missing" : "Forget Older Than \(days) Days") {
+                    CoreProjectState.sweep(
+                        directory: ProjectState.directory.path, keepDays: UInt64(max(0, days)))
+                    reload()
+                }
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 520)
+        .onAppear(perform: reload)
+    }
+
+    private func reload() {
+        records = CoreProjectState.records(directory: ProjectState.directory.path)
     }
 }

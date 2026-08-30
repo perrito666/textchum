@@ -532,6 +532,45 @@ cc -O2 -fPIC -shared -I src -o libtree-sitter-NOM.dylib src/parser.c src/scanner
 pas.) Une entrée qui ne charge pas coûte ce langage et rien d'autre :
 l'éditeur dit ce qui s'est passé et continue.
 
+## Registres de projet
+
+Un fichier se souvient de la façon dont il est divisé, de l'endroit que
+chaque vue regardait, de ce qui est replié et de ce qu'on lui a dit
+qu'il était quand son nom ne le dit pas. Ce sont des données du
+fichier : elles vivent avec le projet plutôt que dans `config.json`, un
+registre par racine de projet, en JSON comme le reste.
+
+```json
+{
+  "version": 1,
+  "root": "/work/engine",
+  "files": {
+    "src/parser.rs": {
+      "views": 2,
+      "dividers": [0.45],
+      "folds": [[12, 48]],
+      "language": "rust",
+      "places": [{"caret": 812, "scroll": 240.0}]
+    }
+  }
+}
+```
+
+Les registres sont gardés dans le profil, à côté de la session et des
+thèmes : une exécution pointée sur un profil d'essai écrit les siens.
+**Keep each project's state with the checkout** place le registre dans
+`<root>/.tchum`, pour une disposition qui voyage avec le clone ; le
+choix est global, car une réponse par projet devrait de toute façon
+être notée quelque part de central pour être retrouvée.
+
+Le balayage se fait au démarrage, sur un fil à lui : il oublie les
+registres des projets qui ne sont plus là et ceux qui n'ont pas été
+écrits depuis plus longtemps que la fenêtre (90 jours par défaut ; zéro
+les garde jusqu'à ce qu'on les efface). **Forget records at launch**
+l'arrête, et **Manage…** à côté du dossier des registres liste ce qui
+existe, ce dont chacun parle et quand il a été écrit, pour les oublier
+un par un ou d'un coup.
+
 ## Pas encore là
 
 - Rien pour le moment — notez la prochaine gêne quand elle se

@@ -580,6 +580,7 @@ fn fold(page: &Rc<Page>, start: i32, end: i32) -> bool {
     }
     buffer.apply_tag_by_name(FOLD_TAG, &from, &to);
     page.folded().borrow_mut().push((start, end));
+    page.document.record_project_state();
     true
 }
 
@@ -632,6 +633,7 @@ pub fn unfold_all(page: &Rc<Page>) -> bool {
     let buffer = &page.buffer;
     buffer.remove_tag_by_name(FOLD_TAG, &buffer.start_iter(), &buffer.end_iter());
     page.folded().borrow_mut().clear();
+    page.document.record_project_state();
     true
 }
 

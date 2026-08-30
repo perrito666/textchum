@@ -1268,6 +1268,57 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
             println!("columns ok (a column of views, tabs across columns)");
 
+            // What a file remembers about itself, kept per project: the
+            // shape it is shown in, what is folded, and the language it
+            // was told it is. The record is the core's; what is checked
+            // here is that a file adopts one and writes one back.
+            {
+                use textchum_core::project_state as records;
+                let scratch = std::env::temp_dir()
+                    .join(format!("textchum-records-{}", std::process::id()));
+                let root = scratch.join("engine");
+                let _ = std::fs::create_dir_all(&root);
+                let file = root.join("src/parser.rs");
+                let mut state = records::load(&root, &scratch, false);
+                state.set_file(
+                    &root,
+                    &file,
+                    records::FileState {
+                        views: 2,
+                        dividers: vec![0.4],
+                        folds: vec![(12, 48)],
+                        language: Some("rust".into()),
+                        places: Vec::new(),
+                    },
+                );
+                if records::save(&state, &root, &scratch, false).is_err() {
+                    eprintln!("FAIL: the record could not be written");
+                    return 1;
+                }
+                let read = records::load(&root, &scratch, false);
+                let Some(entry) = read.file(&root, &file) else {
+                    eprintln!("FAIL: the file did not remember itself");
+                    return 1;
+                };
+                if entry.views != 2 || entry.folds != vec![(12, 48)] {
+                    eprintln!("FAIL: the record came back wrong: {entry:?}");
+                    return 1;
+                }
+                if records::records(&scratch).len() != 1 {
+                    eprintln!("FAIL: the record is not listed");
+                    return 1;
+                }
+                // A record whose root is gone is swept; the keep window
+                // has nothing to do with it.
+                let _ = std::fs::remove_dir_all(&root);
+                if records::sweep(&scratch, 90) != 1 || !records::records(&scratch).is_empty() {
+                    eprintln!("FAIL: the sweep did not forget a record for a root that is gone");
+                    return 1;
+                }
+                let _ = std::fs::remove_dir_all(&scratch);
+                println!("project records ok (written, read back, swept)");
+            }
+
             // Closing the last view keeps the document in the cache, so
             // opening the file again is taking the closing back rather
             // than reading the file: what was typed and never saved is

@@ -28,6 +28,7 @@ pub mod indent;
 pub mod keys;
 pub mod markdown;
 pub mod occurrences;
+pub mod project_state;
 pub mod references;
 pub mod search;
 pub mod snippet;

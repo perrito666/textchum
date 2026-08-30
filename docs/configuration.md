@@ -500,6 +500,44 @@ cc -O2 -fPIC -shared -I src -o libtree-sitter-NAME.dylib src/parser.c src/scanne
 An entry that cannot be loaded costs that one language: the editor says
 what went wrong and carries on.
 
+## Project records
+
+A file remembers how it is split, where each view was looking, what is
+folded, and what it was told it is when its name does not say. That is
+data about the file, so it lives with the project instead of in
+`config.json`: one record per project root, JSON like everything else.
+
+```json
+{
+  "version": 1,
+  "root": "/work/engine",
+  "files": {
+    "src/parser.rs": {
+      "views": 2,
+      "dividers": [0.45],
+      "folds": [[12, 48]],
+      "language": "rust",
+      "places": [{"caret": 812, "scroll": 240.0}]
+    }
+  }
+}
+```
+
+Records are kept in the profile, beside the session and the themes, so
+a run pointed at a scratch profile writes its own. **Keep each
+project's state with the checkout** puts the record at
+`<root>/.tchum` instead, for a layout that travels with the clone —
+the choice is global, since a per-project answer would have to be
+recorded centrally to be found.
+
+The sweep runs at launch on a thread of its own: it forgets the records
+of projects that are no longer there, and those not written for longer
+than the keep window (90 days by default; zero keeps them until they
+are forgotten by hand). **Forget records at launch** turns it off, and
+**Manage…** beside the records folder lists what exists, with what each
+record is about and when it was last written, to be forgotten one at a
+time or in a sweep.
+
 ## Not there yet
 
 - Nothing at the moment — file an itch when one appears.

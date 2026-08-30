@@ -522,6 +522,44 @@ cc -O2 -fPIC -shared -I src -o libtree-sitter-NOMBRE.dylib src/parser.c src/scan
 Una entrada que no se puede cargar cuesta ese lenguaje y nada más: el
 editor dice qué pasó y sigue.
 
+## Registros de proyecto
+
+Un archivo recuerda cómo está dividido, dónde miraba cada vista, qué
+está plegado y qué se le dijo que era cuando su nombre no lo dice. Eso
+son datos del archivo, así que viven con el proyecto en lugar de en
+`config.json`: un registro por raíz de proyecto, JSON como todo lo
+demás.
+
+```json
+{
+  "version": 1,
+  "root": "/work/engine",
+  "files": {
+    "src/parser.rs": {
+      "views": 2,
+      "dividers": [0.45],
+      "folds": [[12, 48]],
+      "language": "rust",
+      "places": [{"caret": 812, "scroll": 240.0}]
+    }
+  }
+}
+```
+
+Los registros se guardan en el perfil, junto a la sesión y los temas,
+así que una ejecución apuntada a un perfil de prueba escribe los suyos.
+**Keep each project's state with the checkout** pone el registro en
+`<root>/.tchum`, para una disposición que viaje con el clon; la opción
+es global, porque una respuesta por proyecto tendría que anotarse
+centralmente para poder encontrarse.
+
+La limpieza corre al arrancar en un hilo propio: olvida los registros
+de proyectos que ya no están y los que no se escriben desde hace más
+que la ventana (90 días por defecto; cero los conserva hasta que se
+borren a mano). **Forget records at launch** la apaga, y **Manage…**
+junto a la carpeta de registros lista lo que hay, de qué trata cada
+uno y cuándo se escribió, para olvidarlos de a uno o de una pasada.
+
 ## Aún no está
 
 - Nada por el momento — apunta la próxima molestia cuando aparezca.
