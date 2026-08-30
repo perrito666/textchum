@@ -15,6 +15,9 @@ Preview** (⌥⌘P) lo oculta y lo muestra.
   sitio — sin recargas, sin parpadeo, sin perder la posición de
   desplazamiento.
 - Desplazar cualquiera de los dos paneles arrastra al otro.
+- Un enlace se abre en el navegador al pulsarlo; el panel se queda en
+  el documento. Un enlace al propio documento desplaza la vista previa
+  hasta él.
 - El renderizado admite CommonMark más tablas, tachado, listas de tareas
   y notas al pie, y sus estilos siguen la apariencia del sistema (o la
   configurada).

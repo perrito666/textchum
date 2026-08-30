@@ -156,6 +156,13 @@ c'est la position qui décide, pas un mode, et c'est ce qui les empêche
 de surprendre. Une ligne indentée avec des tabulations est laissée à
 son propre caractère, déjà d'une frappe par niveau.
 
+Avec du texte sélectionné, taper un délimiteur ouvrant — `(`, `[`, `{`,
+`'`, `"`, `` ` `` — entoure la sélection de la paire au lieu de la
+remplacer. Ce qui vient d'être entouré reste sélectionné, si bien qu'en
+taper un autre l'entoure à son tour : `[`, `(` puis `{` sur `hello`
+donnent `[({hello})]`. Taper autre chose remplace la sélection comme
+avant.
+
 La complétion apparaît à la frappe après les caractères d'identifiant
 et `.` ; ↑/↓ choisissent, ⏎ ou ⇥ acceptent, ⎋ ferme. Un snippet arrive
 avec son premier marqueur sélectionné, donc taper le remplace ; ⇥ passe

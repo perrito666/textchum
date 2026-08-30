@@ -154,6 +154,12 @@ posición y no un modo, que es lo que evita que sorprendan. Una línea
 con tabuladores se deja a su propio carácter, que ya es una pulsación
 por nivel.
 
+Con texto seleccionado, escribir un delimitador de apertura —`(`, `[`,
+`{`, `'`, `"`, `` ` ``— envuelve la selección en el par en vez de
+reemplazarla. Lo envuelto sigue seleccionado, así que pulsar otro lo
+envuelve a su vez: `[`, `(` y `{` sobre `hello` dan `[({hello})]`.
+Escribir cualquier otra cosa reemplaza la selección como siempre.
+
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
 primer marcador seleccionado, así que escribir lo reemplaza; ⇥ pasa al

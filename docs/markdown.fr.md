@@ -15,6 +15,9 @@ et l'affiche.
   rechargement, pas de scintillement, pas de position de défilement
   perdue.
 - Faire défiler l'un des volets entraîne l'autre.
+- Un lien s'ouvre dans le navigateur quand on clique dessus ; le volet
+  reste sur le document. Un lien vers le document lui-même y fait
+  défiler l'aperçu.
 - Le rendu prend en charge CommonMark plus les tableaux, le barré, les
   listes de tâches et les notes de bas de page, et ses styles suivent
   l'apparence du système (ou celle configurée).

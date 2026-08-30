@@ -1014,6 +1014,87 @@ func runSmokeTest() -> Int32 {
     bench.window?.close()
     print("window ok (columns, views of one file, tabs across them)")
 
+    // Typing a delimiter over a selection wraps it, and the selection
+    // stays on what was wrapped, so the next one nests: [({"hello"})].
+    let wrapBench = Workbench(sidebar: nil)
+    let wrapDocument = DocumentController(document: CoreDocument())
+    wrapBench.add(wrapDocument)
+    wrapBench.window?.makeKeyAndOrderFront(nil)
+    guard let wrapView = wrapDocument.primaryView else {
+        print("FAIL: no view to type into")
+        return 1
+    }
+    wrapView.string = "hello"
+    wrapDocument.noteTextReplaced()
+    // What AppKit does when a character is typed: ask the delegate
+    // about the selected range, and apply it only if allowed. Typing
+    // goes through the many-ranges door, so the test does too.
+    func type(_ characters: String) {
+        let range = wrapView.selectedRange()
+        let allowed = wrapDocument.textView(
+            wrapView,
+            shouldChangeTextInRanges: [NSValue(range: range)],
+            replacementStrings: [characters])
+        if allowed {
+            wrapView.textStorage?.replaceCharacters(in: range, with: characters)
+            wrapView.setSelectedRange(
+                NSRange(location: range.location + (characters as NSString).length, length: 0))
+        }
+    }
+    for delimiter in ["[", "(", "{", "\""] {
+        type(delimiter)
+    }
+    guard wrapView.string == "[({\"hello\"})]" else {
+        print("FAIL: wrapping gave \(wrapView.string)")
+        return 1
+    }
+    let selected = (wrapView.string as NSString).substring(with: wrapView.selectedRange())
+    guard selected == "hello" else {
+        print("FAIL: the selection moved off what was wrapped: \(selected)")
+        return 1
+    }
+    // Anything that is not a delimiter replaces, as before.
+    type("x")
+    guard wrapView.string == "[({\"x\"})]" else {
+        print("FAIL: a letter should replace, not wrap: \(wrapView.string)")
+        return 1
+    }
+    guard wrapDocument.coreDocument.text == "[({\"x\"})]" else {
+        print("FAIL: the core did not follow: \(wrapDocument.coreDocument.text)")
+        return 1
+    }
+    wrapBench.window?.close()
+    print("wrapping ok (delimiters nest, letters do not wrap)")
+
+    // A link clicked in the Markdown preview goes to the browser and
+    // leaves the pane where it was. Which links count as a place in the
+    // page is the core's rule, tested there; this is about the preview
+    // asking at all.
+    let previewBench = Workbench(sidebar: nil)
+    let previewDocument = DocumentController(document: CoreDocument())
+    _ = previewDocument.coreDocument.setLanguage("markdown")
+    previewBench.add(previewDocument)
+    previewBench.window?.makeKeyAndOrderFront(nil)
+    if previewDocument.previewWebViewForTest == nil {
+        previewDocument.togglePreview(nil)
+    }
+    guard let previewWeb = previewDocument.previewWebViewForTest else {
+        print("FAIL: no Markdown preview")
+        return 1
+    }
+    guard previewWeb.navigationDelegate === previewDocument else {
+        print("FAIL: the preview decides navigation on its own")
+        return 1
+    }
+    guard !CorePreview.isPlaceInPage(here: "about:blank", target: "https://example.com/"),
+        CorePreview.isPlaceInPage(here: "about:blank", target: "about:blank#notes")
+    else {
+        print("FAIL: the preview link rule is not the core's")
+        return 1
+    }
+    previewBench.window?.close()
+    print("preview links ok (the browser gets them, anchors stay)")
+
     // Folding hides the lines after the one that opens a block. TextKit
     // 2 lays out what the content storage offers, so what is checked
     // here is the layout itself: the folded lines have to take no room.
