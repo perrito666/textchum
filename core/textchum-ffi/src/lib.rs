@@ -1288,6 +1288,211 @@ pub unsafe extern "C" fn tc_config_set_line_numbers(config: *mut TcConfig, shown
     }
 }
 
+/// Whether a project's record lives with the checkout.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_project_state_in_project(config: *const TcConfig) -> bool {
+    unsafe { config.as_ref() }.is_some_and(|c| c.inner.project_state_in_project())
+}
+
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_project_state_in_project(
+    config: *mut TcConfig,
+    in_project: bool,
+) {
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_project_state_in_project(in_project);
+    }
+}
+
+/// Where project records are kept; empty for the profile's own folder.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_project_state_dir(config: *const TcConfig) -> *mut c_char {
+    let dir = unsafe { config.as_ref() }
+        .and_then(|c| c.inner.project_state_dir())
+        .unwrap_or_default();
+    owned_c_string(dir)
+}
+
+/// # Safety
+/// `config` must be live, and the pointer and length describe UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_project_state_dir(
+    config: *mut TcConfig,
+    dir: *const c_char,
+    dir_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else { return };
+    let dir = unsafe { str_from_raw(dir, dir_len) };
+    config.inner.set_project_state_dir(dir);
+}
+
+/// Whether the sweep runs at launch (default true).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_project_state_sweep(config: *const TcConfig) -> bool {
+    unsafe { config.as_ref() }.map_or(true, |c| c.inner.project_state_sweep())
+}
+
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_project_state_sweep(config: *mut TcConfig, sweep: bool) {
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_project_state_sweep(sweep);
+    }
+}
+
+/// How long a record is kept after the last time it was written
+/// (default 90 days; zero keeps them until they are forgotten by hand).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_project_state_keep_days(config: *const TcConfig) -> u32 {
+    unsafe { config.as_ref() }.map_or(90, |c| c.inner.project_state_keep_days())
+}
+
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_project_state_keep_days(config: *mut TcConfig, days: u32) {
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_project_state_keep_days(days);
+    }
+}
+
+// MARK: - Project state
+
+/// What a file remembers about itself, as JSON: how many views it is
+/// shown in, the dividers between them, what is folded, what language
+/// it was told it is, and where each view was looking. `{}` when the
+/// project has nothing to say about it. Release with [`tc_string_free`].
+///
+/// # Safety
+/// Each pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_project_file_state(
+    root: *const c_char,
+    root_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+    in_project: bool,
+    path: *const c_char,
+    path_len: usize,
+) -> *mut c_char {
+    let (Some(root), Some(dir), Some(path)) = (unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(dir, dir_len),
+            str_from_raw(path, path_len),
+        )
+    }) else {
+        return owned_c_string("{}".into());
+    };
+    let root = std::path::Path::new(root);
+    let state = textchum_core::project_state::load(root, std::path::Path::new(dir), in_project);
+    let entry = state
+        .file(root, std::path::Path::new(path))
+        .map(|file| file.to_json())
+        .unwrap_or_else(|| serde_json::Value::Object(Default::default()));
+    owned_c_string(entry.to_string())
+}
+
+/// Writes down what a file remembers. `state_json` is the shape
+/// [`tc_project_file_state`] answers with; an entry with nothing in it
+/// is removed instead of written.
+///
+/// # Safety
+/// Each pointer and length must describe valid UTF-8.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn tc_project_set_file_state(
+    root: *const c_char,
+    root_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+    in_project: bool,
+    path: *const c_char,
+    path_len: usize,
+    state_json: *const c_char,
+    state_len: usize,
+) -> bool {
+    let (Some(root), Some(dir), Some(path), Some(entry)) = (unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(dir, dir_len),
+            str_from_raw(path, path_len),
+            str_from_raw(state_json, state_len),
+        )
+    }) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(entry) else {
+        return false;
+    };
+    let root = std::path::Path::new(root);
+    let dir = std::path::Path::new(dir);
+    let mut state = textchum_core::project_state::load(root, dir, in_project);
+    state.set_file(
+        root,
+        std::path::Path::new(path),
+        textchum_core::project_state::FileState::from_json(&value),
+    );
+    textchum_core::project_state::save(&state, root, dir, in_project).is_ok()
+}
+
+/// Every record kept in `dir`, as a JSON array of
+/// `{root, path, bytes, updated, missing, files}`, newest first.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// The pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_project_records(dir: *const c_char, dir_len: usize) -> *mut c_char {
+    let Some(dir) = (unsafe { str_from_raw(dir, dir_len) }) else {
+        return owned_c_string("[]".into());
+    };
+    owned_c_string(textchum_core::project_state::records_json(
+        std::path::Path::new(dir),
+    ))
+}
+
+/// Forgets the records for roots that are gone, and those not written
+/// for longer than `keep_days`. Answers how many were forgotten.
+///
+/// # Safety
+/// The pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_project_sweep(
+    dir: *const c_char,
+    dir_len: usize,
+    keep_days: u64,
+) -> u32 {
+    let Some(dir) = (unsafe { str_from_raw(dir, dir_len) }) else { return 0 };
+    textchum_core::project_state::sweep(std::path::Path::new(dir), keep_days) as u32
+}
+
+/// Forgets one record, by the path [`tc_project_records`] gave for it.
+///
+/// # Safety
+/// The pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_project_forget(path: *const c_char, path_len: usize) -> bool {
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else { return false };
+    textchum_core::project_state::forget(std::path::Path::new(path))
+}
+
 /// Opens the grammars named in the configuration's `languages`
 /// section, and answers with what could not be opened — one line per
 /// entry, empty when every one of them loaded (or none were named).

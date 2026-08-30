@@ -7,7 +7,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
@@ -56,6 +56,15 @@ pub struct OpenDocument {
     /// well as underlined. An underline nobody can read is a
     /// notification with the message taken out.
     pub diagnostics: RefCell<Vec<Diagnostic>>,
+    /// The project this file belongs to, and the language it was told
+    /// it is — both written down with the project rather than with the
+    /// settings, since they are data about the file.
+    pub project_root: RefCell<Option<String>>,
+    pub language_override: RefCell<Option<String>>,
+    /// Whether the project record has been read for this file, so that
+    /// writing one back never invents a record for a file nobody has
+    /// said anything about.
+    pub adopted_state: std::cell::Cell<bool>,
     /// How this file is shown: how many views a column stacks of it,
     /// and where the dividers between them sit as fractions of the
     /// column's height. It belongs to the file, so a column switched to
@@ -66,7 +75,100 @@ pub struct OpenDocument {
     pub views: RefCell<Vec<std::rc::Weak<crate::page::Page>>>,
 }
 
+/// Where project records are kept, and whether they go with the
+/// checkout. Both come from the configuration; the folder falls back to
+/// the profile's own, beside the session.
+pub fn project_state_dir() -> PathBuf {
+    match Shell::instance().config.borrow().project_state_dir() {
+        Some(dir) => PathBuf::from(shellexpand_home(&dir)),
+        None => crate::paths::projects_dir(),
+    }
+}
+
+pub fn project_state_in_project() -> bool {
+    Shell::instance().config.borrow().project_state_in_project()
+}
+
+/// `~` is what a configuration shared between machines can say.
+fn shellexpand_home(path: &str) -> String {
+    match path.strip_prefix("~/") {
+        Some(rest) => glib::home_dir().join(rest).to_string_lossy().into_owned(),
+        None => path.to_string(),
+    }
+}
+
 impl OpenDocument {
+    /// Takes on what the project record says about this file: how it is
+    /// shown, what is folded, and the language it was told it is.
+    pub fn adopt_project_state(&self) {
+        let (Some(path), Some(root)) = (
+            self.path.borrow().clone(),
+            self.project_root.borrow().clone(),
+        ) else {
+            return;
+        };
+        let state = textchum_core::project_state::load(
+            Path::new(&root),
+            &project_state_dir(),
+            project_state_in_project(),
+        );
+        let Some(file) = state.file(Path::new(&root), Path::new(&path)) else {
+            return;
+        };
+        if let Some(language) = &file.language {
+            *self.language_override.borrow_mut() = Some(language.clone());
+        }
+        *self.folded.borrow_mut() = file
+            .folds
+            .iter()
+            .map(|(start, end)| (*start as i32, *end as i32))
+            .collect();
+        *self.layout.borrow_mut() = DocumentLayout {
+            views: file.views.max(1),
+            dividers: file.dividers.clone(),
+        };
+        self.adopted_state.set(true);
+    }
+
+    /// Writes down what this file remembers.
+    pub fn record_project_state(&self) {
+        if !self.adopted_state.get()
+            && self.folded.borrow().is_empty()
+            && self.language_override.borrow().is_none()
+            && self.layout.borrow().views <= 1
+        {
+            return;
+        }
+        let (Some(path), Some(root)) = (
+            self.path.borrow().clone(),
+            self.project_root.borrow().clone(),
+        ) else {
+            return;
+        };
+        let dir = project_state_dir();
+        let in_project = project_state_in_project();
+        let root_path = PathBuf::from(&root);
+        let mut state = textchum_core::project_state::load(&root_path, &dir, in_project);
+        let layout = self.layout.borrow();
+        state.set_file(
+            &root_path,
+            Path::new(&path),
+            textchum_core::project_state::FileState {
+                views: layout.views.max(1),
+                dividers: layout.dividers.clone(),
+                folds: self
+                    .folded
+                    .borrow()
+                    .iter()
+                    .map(|(start, end)| (*start as usize, *end as usize))
+                    .collect(),
+                language: self.language_override.borrow().clone(),
+                places: Vec::new(),
+            },
+        );
+        let _ = textchum_core::project_state::save(&state, &root_path, &dir, in_project);
+    }
+
     /// Takes a view off the list — its tab closed.
     pub fn drop_view(&self, page: &Rc<crate::page::Page>) {
         self.views.borrow_mut().retain(|other| {
@@ -223,6 +325,24 @@ impl Shell {
             for problem in &grammar_problems {
                 eprintln!("textchum: languages: {problem}");
             }
+            // Records for roots that are gone, and those past their
+            // keep window, on a thread of their own: a machine that has
+            // seen a thousand checkouts should not keep a thousand
+            // records, and the editor should not wait while they are
+            // counted.
+            if config.project_state_sweep() {
+                let dir = match config.project_state_dir() {
+                    Some(dir) => PathBuf::from(shellexpand_home(&dir)),
+                    None => crate::paths::projects_dir(),
+                };
+                let days = config.project_state_keep_days() as u64;
+                std::thread::spawn(move || {
+                    let gone = textchum_core::project_state::sweep(&dir, days);
+                    if gone > 0 {
+                        eprintln!("textchum: project records: forgot {gone}");
+                    }
+                });
+            }
             // The same debug log the macOS shell keeps, at the Linux
             // conventional spot.
             let log_path = crate::paths::lsp_log_path();
@@ -297,6 +417,9 @@ impl Shell {
             monitor: RefCell::new(None),
             folded: RefCell::new(Vec::new()),
             diagnostics: RefCell::new(Vec::new()),
+            project_root: RefCell::new(None),
+            language_override: RefCell::new(None),
+            adopted_state: std::cell::Cell::new(false),
             layout: RefCell::new(DocumentLayout {
                 views: 1,
                 dividers: Vec::new(),

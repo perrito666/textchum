@@ -823,6 +823,126 @@ bool tc_config_line_numbers(const struct TcConfig *config);
 void tc_config_set_line_numbers(struct TcConfig *config, bool shown);
 
 /**
+ * Whether a project's record lives with the checkout.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_project_state_in_project(const struct TcConfig *config);
+
+/**
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_project_state_in_project(struct TcConfig *config, bool in_project);
+
+/**
+ * Where project records are kept; empty for the profile's own folder.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_project_state_dir(const struct TcConfig *config);
+
+/**
+ * # Safety
+ * `config` must be live, and the pointer and length describe UTF-8.
+ */
+void tc_config_set_project_state_dir(struct TcConfig *config, const char *dir, uintptr_t dir_len);
+
+/**
+ * Whether the sweep runs at launch (default true).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_project_state_sweep(const struct TcConfig *config);
+
+/**
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_project_state_sweep(struct TcConfig *config, bool sweep);
+
+/**
+ * How long a record is kept after the last time it was written
+ * (default 90 days; zero keeps them until they are forgotten by hand).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+uint32_t tc_config_project_state_keep_days(const struct TcConfig *config);
+
+/**
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_project_state_keep_days(struct TcConfig *config, uint32_t days);
+
+/**
+ * What a file remembers about itself, as JSON: how many views it is
+ * shown in, the dividers between them, what is folded, what language
+ * it was told it is, and where each view was looking. `{}` when the
+ * project has nothing to say about it. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * Each pointer and length must describe valid UTF-8.
+ */
+char *tc_project_file_state(const char *root,
+                            uintptr_t root_len,
+                            const char *dir,
+                            uintptr_t dir_len,
+                            bool in_project,
+                            const char *path,
+                            uintptr_t path_len);
+
+/**
+ * Writes down what a file remembers. `state_json` is the shape
+ * [`tc_project_file_state`] answers with; an entry with nothing in it
+ * is removed instead of written.
+ *
+ * # Safety
+ * Each pointer and length must describe valid UTF-8.
+ */
+bool tc_project_set_file_state(const char *root,
+                               uintptr_t root_len,
+                               const char *dir,
+                               uintptr_t dir_len,
+                               bool in_project,
+                               const char *path,
+                               uintptr_t path_len,
+                               const char *state_json,
+                               uintptr_t state_len);
+
+/**
+ * Every record kept in `dir`, as a JSON array of
+ * `{root, path, bytes, updated, missing, files}`, newest first.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * The pointer and length must describe valid UTF-8.
+ */
+char *tc_project_records(const char *dir, uintptr_t dir_len);
+
+/**
+ * Forgets the records for roots that are gone, and those not written
+ * for longer than `keep_days`. Answers how many were forgotten.
+ *
+ * # Safety
+ * The pointer and length must describe valid UTF-8.
+ */
+uint32_t tc_project_sweep(const char *dir, uintptr_t dir_len, uint64_t keep_days);
+
+/**
+ * Forgets one record, by the path [`tc_project_records`] gave for it.
+ *
+ * # Safety
+ * The pointer and length must describe valid UTF-8.
+ */
+bool tc_project_forget(const char *path, uintptr_t path_len);
+
+/**
  * Opens the grammars named in the configuration's `languages`
  * section, and answers with what could not be opened — one line per
  * entry, empty when every one of them loaded (or none were named).

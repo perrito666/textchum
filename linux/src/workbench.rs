@@ -986,6 +986,9 @@ impl Workbench {
             views,
             dividers: Vec::new(),
         };
+        // The file is what remembers, and the project is where that is
+        // written down.
+        document.record_project_state();
     }
 
     /// Takes away any column whose last tab has closed: a divider with
@@ -1388,10 +1391,23 @@ impl Workbench {
             }
         }
         // A document told what it is stays told: reopening a .txt that
-        // holds SQL should not find it plain text again.
+        // holds SQL should not find it plain text again. What it was
+        // told is data about the file, so it comes from the project
+        // record; the configuration is where it used to live, and is
+        // still read for files recorded before there was a record.
         if let Some(path) = page.path().borrow().clone() {
+            *page.document.project_root.borrow_mut() =
+                textchum_core::workspace::project_root_for(Path::new(&path))
+                    .map(|root| root.to_string_lossy().into_owned());
+            page.document.adopt_project_state();
+            let recorded = page.document.language_override.borrow().clone();
             let stored = Shell::instance().config.borrow().file_override(&path);
-            if !stored.is_empty() {
+            if recorded.is_some() {
+                apply_file_properties(self, &page, recorded.as_deref(), stored.tab_width);
+            } else if !stored.is_empty() {
+                if let Some(language) = &stored.language {
+                    *page.document.language_override.borrow_mut() = Some(language.clone());
+                }
                 apply_file_properties(
                     self,
                     &page,
@@ -3253,10 +3269,16 @@ fn show_file_properties(workbench: &Rc<Workbench>) {
                 _ => None,
             };
             let shell = Shell::instance();
+            // What a file is, when its name does not say, is data about
+            // the file: it goes with the project record. The rest of
+            // the override stays in the configuration.
+            *page.document.language_override.borrow_mut() = language.clone();
+            page.document.adopted_state.set(true);
+            page.document.record_project_state();
             shell.config.borrow_mut().set_file_override(
                 &path,
                 &textchum_core::FileOverride {
-                    language: language.clone(),
+                    language: None,
                     tab_width,
                     spaces,
                 },
@@ -5334,6 +5356,88 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
     }
     editor_group.add(&keep_row);
+    let in_project_row = adw::SwitchRow::new();
+    in_project_row.set_title("Keep each project's state with the checkout");
+    in_project_row.set_subtitle(
+        "A file remembers how it is split, what is folded and what it was told it is. \
+         With this on that goes to .tchum in the project; otherwise it is kept here, \
+         one record per project",
+    );
+    in_project_row.set_active(shell.config.borrow().project_state_in_project());
+    {
+        let shell = Rc::clone(&shell);
+        in_project_row.connect_active_notify(move |row| {
+            shell
+                .config
+                .borrow_mut()
+                .set_project_state_in_project(row.is_active());
+            shell.save_config();
+        });
+    }
+    editor_group.add(&in_project_row);
+
+    let records_row = adw::EntryRow::new();
+    records_row.set_title("Records folder");
+    records_row.set_text(
+        &shell
+            .config
+            .borrow()
+            .project_state_dir()
+            .unwrap_or_else(|| crate::paths::projects_dir().to_string_lossy().into_owned()),
+    );
+    {
+        let shell = Rc::clone(&shell);
+        records_row.connect_apply(move |row| {
+            let text = row.text().to_string();
+            let default = crate::paths::projects_dir().to_string_lossy().into_owned();
+            let value = if text == default { None } else { Some(text.as_str()) };
+            shell.config.borrow_mut().set_project_state_dir(value);
+            shell.save_config();
+        });
+    }
+    let manage = gtk::Button::with_label("Manage…");
+    manage.set_valign(gtk::Align::Center);
+    {
+        let window = window.clone();
+        manage.connect_clicked(move |_| show_project_records(&window));
+    }
+    records_row.add_suffix(&manage);
+    editor_group.add(&records_row);
+
+    let sweep_row = adw::SwitchRow::new();
+    sweep_row.set_title("Forget records at launch");
+    sweep_row.set_subtitle(
+        "On a thread of its own, and the records of projects that are no longer there \
+         go whatever the window says",
+    );
+    sweep_row.set_active(shell.config.borrow().project_state_sweep());
+    {
+        let shell = Rc::clone(&shell);
+        sweep_row.connect_active_notify(move |row| {
+            shell
+                .config
+                .borrow_mut()
+                .set_project_state_sweep(row.is_active());
+            shell.save_config();
+        });
+    }
+    editor_group.add(&sweep_row);
+
+    let keep_days_row = adw::SpinRow::with_range(0.0, 3650.0, 30.0);
+    keep_days_row.set_title("Keep records for");
+    keep_days_row.set_subtitle("Days since a record was last written; zero keeps them");
+    keep_days_row.set_value(shell.config.borrow().project_state_keep_days() as f64);
+    {
+        let shell = Rc::clone(&shell);
+        keep_days_row.connect_value_notify(move |row| {
+            shell
+                .config
+                .borrow_mut()
+                .set_project_state_keep_days(row.value() as u32);
+            shell.save_config();
+        });
+    }
+    editor_group.add(&keep_days_row);
     let hover_row = adw::SwitchRow::new();
     hover_row.set_title("Hover documentation");
     hover_row.set_subtitle("Show server documentation when the mouse rests on a symbol");
@@ -6666,4 +6770,112 @@ fn attach_language_choices(row: &adw::EntryRow) {
     }
 
     row.add_suffix(&button);
+}
+
+/// The records that exist, with what they are about and when they were
+/// last written — and the two ways to be rid of them.
+///
+/// A record holds what the files of a project remember about
+/// themselves: how each is split, what is folded, what it was told it
+/// is.
+fn show_project_records(parent: &adw::PreferencesWindow) {
+    let window = adw::Window::new();
+    window.set_title(Some("Project Records"));
+    window.set_default_size(560, 420);
+    window.set_transient_for(Some(parent));
+    window.set_modal(true);
+
+    let toolbar = adw::ToolbarView::new();
+    toolbar.add_top_bar(&adw::HeaderBar::new());
+    let page = adw::PreferencesPage::new();
+    let group = adw::PreferencesGroup::new();
+    group.set_title("Records");
+
+    let dir = crate::shell::project_state_dir();
+    let records = textchum_core::project_state::records(&dir);
+    if records.is_empty() {
+        let empty = adw::ActionRow::new();
+        empty.set_title("No project has anything recorded yet");
+        group.add(&empty);
+    }
+    for record in &records {
+        let row = adw::ActionRow::new();
+        let name = std::path::Path::new(&record.root)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| record.root.clone());
+        row.set_title(&menu_label(&name));
+        let when = when_written(record.updated);
+        row.set_subtitle(&menu_label(&format!(
+            "{}{} · {} files · {}",
+            record.root,
+            if record.missing { " (missing)" } else { "" },
+            record.files,
+            when
+        )));
+        let forget = gtk::Button::from_icon_name("user-trash-symbolic");
+        forget.set_valign(gtk::Align::Center);
+        forget.set_tooltip_text(Some("Forget this record"));
+        forget.add_css_class("flat");
+        {
+            let path = record.path.clone();
+            let row = row.clone();
+            forget.connect_clicked(move |button| {
+                if textchum_core::project_state::forget(std::path::Path::new(&path)) {
+                    row.set_sensitive(false);
+                    button.set_sensitive(false);
+                }
+            });
+        }
+        row.add_suffix(&forget);
+        group.add(&row);
+    }
+    page.add(&group);
+
+    let actions = adw::PreferencesGroup::new();
+    let sweep_row = adw::ActionRow::new();
+    let days = Shell::instance().config.borrow().project_state_keep_days();
+    let sweep_title = if days == 0 {
+        "Forget the records of projects that are gone".to_string()
+    } else {
+        format!("Forget records older than {days} days")
+    };
+    sweep_row.set_title(&sweep_title);
+    let sweep = gtk::Button::with_label("Forget");
+    sweep.set_valign(gtk::Align::Center);
+    sweep.add_css_class("destructive-action");
+    {
+        let window = window.clone();
+        let parent = parent.clone();
+        sweep.connect_clicked(move |_| {
+            let gone = textchum_core::project_state::sweep(
+                &crate::shell::project_state_dir(),
+                days as u64,
+            );
+            let _ = gone;
+            window.close();
+            show_project_records(&parent);
+        });
+    }
+    sweep_row.add_suffix(&sweep);
+    actions.add(&sweep_row);
+    page.add(&actions);
+
+    toolbar.set_content(Some(&page));
+    window.set_content(Some(&toolbar));
+    window.present();
+}
+
+/// "3 days ago", for a record's own time.
+fn when_written(updated: u64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs())
+        .unwrap_or(0);
+    let days = now.saturating_sub(updated) / (24 * 60 * 60);
+    match days {
+        0 => "today".to_string(),
+        1 => "yesterday".to_string(),
+        _ => format!("{days} days ago"),
+    }
 }

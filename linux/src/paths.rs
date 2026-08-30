@@ -80,6 +80,15 @@ pub fn icons_dir() -> PathBuf {
     }
 }
 
+/// Project records: what each file remembers about itself. State, like
+/// the session, and one file per project root.
+pub fn projects_dir() -> PathBuf {
+    match data_dir() {
+        Some(dir) => dir.join("projects"),
+        None => state_dir().join("textchum/projects"),
+    }
+}
+
 /// The session: not config (this is not configuration) and not cache
 /// (losing it loses real state).
 pub fn session_path() -> PathBuf {

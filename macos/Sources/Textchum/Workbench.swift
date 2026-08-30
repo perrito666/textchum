@@ -310,6 +310,9 @@ final class Workbench: NSWindowController, NSWindowDelegate {
                     caret: view.textView.selectedRange().location,
                     scroll: Double(view.scrollView.contentView.bounds.origin.y))
             })
+        // The file is what remembers, and the project is where that is
+        // written down.
+        document.recordProjectState()
     }
 
     /// Records every column, for the session and for a file that is

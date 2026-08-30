@@ -153,6 +153,40 @@ public final class CoreConfig {
         return text.isEmpty ? [] : text.components(separatedBy: "\n")
     }
 
+    /// Whether a project's record lives with the checkout
+    /// (`<root>/.tchum`) instead of in the profile.
+    public var projectStateInProject: Bool {
+        get { tc_config_project_state_in_project(handle) }
+        set { tc_config_set_project_state_in_project(handle, newValue) }
+    }
+
+    /// Where records are kept when they are not with the checkout;
+    /// empty for the profile's own folder.
+    public var projectStateDirectory: String {
+        get {
+            guard let cString = tc_config_project_state_dir(handle) else { return "" }
+            defer { tc_string_free(cString) }
+            return String(cString: cString)
+        }
+        set {
+            newValue.withCString { pointer in
+                tc_config_set_project_state_dir(handle, pointer, UInt(strlen(pointer)))
+            }
+        }
+    }
+
+    /// Whether the sweep runs at launch, and how long a record is kept
+    /// after the last time it was written.
+    public var projectStateSweep: Bool {
+        get { tc_config_project_state_sweep(handle) }
+        set { tc_config_set_project_state_sweep(handle, newValue) }
+    }
+
+    public var projectStateKeepDays: Int {
+        get { Int(tc_config_project_state_keep_days(handle)) }
+        set { tc_config_set_project_state_keep_days(handle, UInt32(max(0, newValue))) }
+    }
+
     /// Whether a file stays open when the window showing it closes,
     /// with anything unsaved, to be settled when the editor closes.
     public var keepBuffers: Bool {
@@ -178,7 +212,7 @@ public final class CoreConfig {
     /// ones opened from elsewhere that are still there.
     public func iconPacks(in directory: String) -> [IconPackEntry] {
         let raw = directory.withCString { pointer in
-            tc_config_icon_packs(handle, pointer, UInt(strlen(pointer)))
+            tc_config_icon_packs(handle, pointer, UInt(UInt(strlen(pointer))))
         }
         guard let raw else { return [] }
         defer { tc_string_free(raw) }
@@ -202,8 +236,8 @@ public final class CoreConfig {
             directory.withCString { directoryPointer in
                 tc_config_import_icon_pack(
                     handle,
-                    sourcePointer, UInt(strlen(sourcePointer)),
-                    directoryPointer, UInt(strlen(directoryPointer)),
+                    sourcePointer, UInt(UInt(strlen(sourcePointer))),
+                    directoryPointer, UInt(UInt(strlen(directoryPointer))),
                     &error)
             }
         }
@@ -224,8 +258,8 @@ public final class CoreConfig {
             directory.withCString { directoryPointer in
                 tc_config_remove_icon_pack(
                     handle,
-                    pathPointer, UInt(strlen(pathPointer)),
-                    directoryPointer, UInt(strlen(directoryPointer)))
+                    pathPointer, UInt(UInt(strlen(pathPointer))),
+                    directoryPointer, UInt(UInt(strlen(directoryPointer))))
             }
         }
     }
@@ -233,7 +267,7 @@ public final class CoreConfig {
     /// Remembers a pack opened from outside Textchum's folder.
     public func rememberIconPack(path: String) {
         path.withCString { pointer in
-            tc_config_remember_icon_pack(handle, pointer, UInt(strlen(pointer)))
+            tc_config_remember_icon_pack(handle, pointer, UInt(UInt(strlen(pointer))))
         }
     }
 
@@ -247,7 +281,7 @@ public final class CoreConfig {
         }
         set {
             newValue.withCString { pointer in
-                tc_config_set_keys_profile(handle, pointer, UInt(strlen(pointer)))
+                tc_config_set_keys_profile(handle, pointer, UInt(UInt(strlen(pointer))))
             }
         }
     }
@@ -287,13 +321,13 @@ public final class CoreConfig {
     public func setKeyProfile(name: String, bindingsJSON: String?) {
         name.withCString { namePointer in
             guard let bindingsJSON else {
-                tc_config_set_key_profile(handle, namePointer, UInt(strlen(namePointer)), nil, 0)
+                tc_config_set_key_profile(handle, namePointer, UInt(UInt(strlen(namePointer))), nil, 0)
                 return
             }
             bindingsJSON.withCString { bindingsPointer in
                 tc_config_set_key_profile(
-                    handle, namePointer, UInt(strlen(namePointer)),
-                    bindingsPointer, UInt(strlen(bindingsPointer)))
+                    handle, namePointer, UInt(UInt(strlen(namePointer))),
+                    bindingsPointer, UInt(UInt(strlen(bindingsPointer))))
             }
         }
     }
@@ -302,13 +336,13 @@ public final class CoreConfig {
     public func setKeyBinding(action: String, spec: String?) {
         action.withCString { actionPointer in
             guard let spec, !spec.isEmpty else {
-                tc_config_set_key_binding(handle, actionPointer, UInt(strlen(actionPointer)), nil, 0)
+                tc_config_set_key_binding(handle, actionPointer, UInt(UInt(strlen(actionPointer))), nil, 0)
                 return
             }
             spec.withCString { specPointer in
                 tc_config_set_key_binding(
-                    handle, actionPointer, UInt(strlen(actionPointer)),
-                    specPointer, UInt(strlen(specPointer)))
+                    handle, actionPointer, UInt(UInt(strlen(actionPointer))),
+                    specPointer, UInt(UInt(strlen(specPointer))))
             }
         }
     }
@@ -330,7 +364,7 @@ public final class CoreConfig {
     /// hidden globs, servers and save commands.
     public func removeProject(root: String) {
         root.withCString { pointer in
-            tc_config_remove_project(handle, pointer, UInt(strlen(pointer)))
+            tc_config_remove_project(handle, pointer, UInt(UInt(strlen(pointer))))
         }
     }
 
@@ -345,8 +379,8 @@ public final class CoreConfig {
             to.withCString { toPointer in
                 tc_config_copy_project(
                     handle,
-                    fromPointer, UInt(strlen(fromPointer)),
-                    toPointer, UInt(strlen(toPointer)),
+                    fromPointer, UInt(UInt(strlen(fromPointer))),
+                    toPointer, UInt(UInt(strlen(toPointer))),
                     workspace, servers, preprocessors)
             }
         }

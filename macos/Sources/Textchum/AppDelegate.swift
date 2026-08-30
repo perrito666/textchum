@@ -6,7 +6,7 @@ import TextchumKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var coreApp: CoreApp?
-    private var config: CoreConfig?
+    private(set) var config: CoreConfig?
     private var settingsModel: SettingsModel?
     private var settingsWindowController: SettingsWindowController?
     /// Strong references to open editors; windows do not retain their
@@ -145,6 +145,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.newDocument(nil)
                 }
                 self.announceGrammarProblems()
+                // Records for roots that are gone, and those past their
+                // keep window, on a thread of their own.
+                ProjectState.sweepAtLaunch()
             }
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -475,6 +478,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Called eagerly on document changes and window closes, and at quit
     /// (which captures the freshest caret positions).
     private func saveSession() {
+        for workbench in Workbench.all {
+            workbench.recordLayouts()
+        }
         var state = SessionState()
         for editor in editors {
             guard let path = editor.coreDocument.path else { continue }

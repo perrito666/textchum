@@ -1018,6 +1018,52 @@ func runSmokeTest() -> Int32 {
     foldBench.window?.close()
     print("folding ok (folded lines take no height, given back on unfold)")
 
+    // What a file remembers about itself, kept per project: the shape
+    // it is shown in, what is folded, and the language it was told it
+    // is. The record is the core's; what is checked here is the round
+    // trip through the bridge and the sweep.
+    let recordScratch = NSTemporaryDirectory() + "textchum-records-\(getpid())"
+    let recordRoot = recordScratch + "/engine"
+    try? FileManager.default.createDirectory(
+        atPath: recordRoot, withIntermediateDirectories: true)
+    let recorded = CoreProjectState.FileState(
+        views: 2,
+        dividers: [0.4],
+        folds: [(start: 12, end: 48)],
+        language: "rust",
+        places: [.init(caret: 90, scroll: 12), .init()])
+    guard
+        CoreProjectState.setFileState(
+            recorded, root: recordRoot, directory: recordScratch, inProject: false,
+            path: recordRoot + "/src/parser.rs")
+    else {
+        print("FAIL: the record could not be written")
+        return 1
+    }
+    guard
+        let readBack = CoreProjectState.fileState(
+            root: recordRoot, directory: recordScratch, inProject: false,
+            path: recordRoot + "/src/parser.rs"), readBack == recorded
+    else {
+        print("FAIL: the file did not remember itself")
+        return 1
+    }
+    guard CoreProjectState.records(directory: recordScratch).count == 1 else {
+        print("FAIL: the record is not listed")
+        return 1
+    }
+    // A record for a root that is gone is swept; one whose root is
+    // there stays, whatever the keep window says.
+    try? FileManager.default.removeItem(atPath: recordRoot)
+    guard CoreProjectState.sweep(directory: recordScratch, keepDays: 90) == 1,
+        CoreProjectState.records(directory: recordScratch).isEmpty
+    else {
+        print("FAIL: the sweep did not forget a record for a root that is gone")
+        return 1
+    }
+    try? FileManager.default.removeItem(atPath: recordScratch)
+    print("project records ok (written, read back, swept)")
+
     // The store holds documents; controllers hold views of them. A
     // path opens once however many views ask for it, and a rename
     // follows the document rather than making a second one.

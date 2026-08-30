@@ -259,6 +259,10 @@ final class DocumentController: NSResponder {
         completionPopup.onAccept = { [weak self] item in
             self?.accept(completion: item)
         }
+        projectRoot = coreDocument.path.flatMap { self.resolveProjectRoot($0) }
+        // Before any view is made: how this file is shown is what the
+        // first column asks for.
+        adoptProjectState()
         startWatchingFile()
         syncLSPOpenState()
         appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
@@ -384,6 +388,65 @@ final class DocumentController: NSResponder {
             contentManager.removeTextLayoutManager(layoutManager)
         }
         views.removeAll { $0 === view }
+    }
+
+    // MARK: What the file remembers
+
+    /// Takes on what the project record says about this file: how it is
+    /// shown, what is folded, and the language it was told it is.
+    ///
+    /// Called once the file's project is known, which is the first time
+    /// there is anywhere to look.
+    func adoptProjectState() {
+        guard let path = coreDocument.path, let root = projectRoot else { return }
+        guard let state = ProjectState.state(forPath: path, projectRoot: root) else {
+            // Nothing recorded for it. A language chosen before records
+            // existed still lives in the configuration; it moves the
+            // next time this file is written down.
+            adoptLegacyLanguage(path: path)
+            return
+        }
+        if let language = state.language {
+            languageOverride = language
+            _ = coreDocument.setLanguage(language)
+        } else {
+            adoptLegacyLanguage(path: path)
+        }
+        openDocument.folds = state.folds.map { (start: $0.start, end: $0.end) }
+        openDocument.layout = DocumentLayout(
+            views: max(1, state.views),
+            dividers: state.dividers,
+            places: state.places.map {
+                DocumentLayout.Place(caret: $0.caret, scroll: $0.scroll)
+            })
+        adoptedProjectState = true
+    }
+
+    /// The language override as it was kept before records existed:
+    /// `files.<path>.language` in the configuration.
+    private func adoptLegacyLanguage(path: String) {
+        let stored = (NSApp.delegate as? AppDelegate)?.fileOverride(path: path)
+        guard let language = stored?.language else { return }
+        languageOverride = language
+        _ = coreDocument.setLanguage(language)
+    }
+
+    /// Writes down what this file remembers. Cheap enough to call
+    /// whenever something it covers changes.
+    func recordProjectState() {
+        guard adoptedProjectState || !openDocument.folds.isEmpty || languageOverride != nil,
+            let path = coreDocument.path, let root = projectRoot
+        else { return }
+        let layout = openDocument.layout
+        let state = CoreProjectState.FileState(
+            views: max(1, layout.views),
+            dividers: layout.dividers,
+            folds: openDocument.folds.map { (start: $0.start, end: $0.end) },
+            language: languageOverride,
+            places: layout.places.map {
+                CoreProjectState.FileState.Place(caret: $0.caret, scroll: $0.scroll)
+            })
+        ProjectState.record(state, forPath: path, projectRoot: root)
     }
 
     /// The pane showing this document took the keyboard.
@@ -1119,6 +1182,7 @@ final class DocumentController: NSResponder {
     /// Rebuilds what the folds hide and lays the views out again.
     func refreshFolds() {
         foldSpansAreStale = true
+        recordProjectState()
         for view in views {
             guard let content = view.textView.textLayoutManager?.textContentManager
                 as? NSTextContentStorage
@@ -2631,6 +2695,13 @@ final class DocumentController: NSResponder {
     private var appliedHoverDocs = true
     /// Whether a file stays open when the window showing it closes.
     private var appliedKeepBuffers = false
+    /// The language this file was told it is, when its name does not
+    /// say. Recorded with the project rather than with the settings.
+    private(set) var languageOverride: String?
+    /// Whether the project record has been read for this file, so that
+    /// writing one back does not invent a record for a file nobody has
+    /// said anything about.
+    private var adoptedProjectState = false
 
     /// Whether selecting a word marks its other occurrences, and how
     /// those are matched.
@@ -3301,6 +3372,7 @@ extension DocumentController: WKNavigationDelegate {
 extension DocumentController {
     /// The tab is closing: nothing is left running behind it.
     func willClose() {
+        recordProjectState()
         completionPopup.dismiss()
         completionTimer?.invalidate()
         lspChangeTimer?.invalidate()
@@ -3357,6 +3429,11 @@ extension DocumentController {
         let language = properties.language
             ?? coreDocument.path.flatMap { CoreLanguages.detected(forPath: $0) }
         _ = coreDocument.setLanguage(language)
+        // What a file is, when its name does not say, is data about the
+        // file: it goes with the project record.
+        languageOverride = properties.language
+        adoptedProjectState = true
+        recordProjectState()
         if let width = properties.tabWidth, let textView {
             appliedTabWidth = Int(width)
             let style = NSMutableParagraphStyle()

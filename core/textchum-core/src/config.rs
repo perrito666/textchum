@@ -955,6 +955,71 @@ impl Config {
             .insert("occurrences_whole_word".into(), Value::Bool(enabled));
     }
 
+    /// Whether a project's record lives with the checkout
+    /// (`<root>/.tchum`) instead of in the profile. Global on purpose:
+    /// a per-project answer would have to be kept centrally to be
+    /// found, which is the thing it was trying to avoid.
+    pub fn project_state_in_project(&self) -> bool {
+        self.editor()
+            .get("project_state_in_project")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    pub fn set_project_state_in_project(&mut self, in_project: bool) {
+        self.editor_mut()
+            .insert("project_state_in_project".into(), Value::Bool(in_project));
+    }
+
+    /// Where the records are kept when they are not with the checkout.
+    /// None means the profile's own folder.
+    pub fn project_state_dir(&self) -> Option<String> {
+        self.editor()
+            .get("project_state_dir")
+            .and_then(Value::as_str)
+            .filter(|path| !path.is_empty())
+            .map(str::to_owned)
+    }
+
+    pub fn set_project_state_dir(&mut self, dir: Option<&str>) {
+        match dir.filter(|path| !path.is_empty()) {
+            Some(path) => {
+                self.editor_mut()
+                    .insert("project_state_dir".into(), Value::String(path.to_owned()));
+            }
+            None => {
+                self.editor_mut().remove("project_state_dir");
+            }
+        }
+    }
+
+    /// Whether the sweep runs at launch, and how long a record is kept
+    /// after the last time it was written. Zero days keeps them until
+    /// they are forgotten by hand; the roots that are gone still go.
+    pub fn project_state_sweep(&self) -> bool {
+        self.editor()
+            .get("project_state_sweep")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
+
+    pub fn set_project_state_sweep(&mut self, sweep: bool) {
+        self.editor_mut()
+            .insert("project_state_sweep".into(), Value::Bool(sweep));
+    }
+
+    pub fn project_state_keep_days(&self) -> u32 {
+        self.editor()
+            .get("project_state_keep_days")
+            .and_then(Value::as_u64)
+            .unwrap_or(90) as u32
+    }
+
+    pub fn set_project_state_keep_days(&mut self, days: u32) {
+        self.editor_mut()
+            .insert("project_state_keep_days".into(), Value::Number(days.into()));
+    }
+
     /// Whether a file stays open, whole, when the window showing it
     /// closes — the text that was never saved with it. What becomes of
     /// those files is settled when the editor itself closes.
