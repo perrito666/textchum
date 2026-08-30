@@ -3375,6 +3375,39 @@ extension DocumentController: WKNavigationDelegate {
         // The template page is ready; push the first render.
         updatePreview()
     }
+
+    /// The preview shows this document and never anything else.
+    ///
+    /// A link clicked in it used to navigate the pane, which has no
+    /// back button, no history and no address bar: the document was
+    /// gone until it was edited or the pane was closed and reopened.
+    /// A link goes to the browser, which is where a link a reader wants
+    /// to follow belongs.
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        guard navigationAction.navigationType == .linkActivated else {
+            // The template and the rendered document arrive as content,
+            // not as a click.
+            decisionHandler(.allow)
+            return
+        }
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.cancel)
+            return
+        }
+        // A link into the document itself is a place in this page; the
+        // page scrolls to it and stays. The core decides, so both
+        // previews treat the same links the same way.
+        if CorePreview.isPlaceInPage(here: webView.url?.absoluteString ?? "", target: url.absoluteString) {
+            decisionHandler(.allow)
+            return
+        }
+        decisionHandler(.cancel)
+        NSWorkspace.shared.open(url)
+    }
 }
 
 // MARK: - Window lifecycle
@@ -3646,6 +3679,11 @@ extension DocumentController: NSTextViewDelegate {
     ) -> Bool {
         // A nil replacement is an attribute-only change; no text moves.
         guard let replacementString else { return true }
+        if wrapSelection(in: textView, range: affectedCharRange, typed: replacementString) {
+            // The wrap did the edit itself, with the selection kept on
+            // what was wrapped so the next delimiter nests inside it.
+            return false
+        }
         do {
             try coreDocument.replace(utf16Range: affectedCharRange, with: replacementString)
             selectionChangeIsFromEditing = true
@@ -3658,6 +3696,60 @@ extension DocumentController: NSTextViewDelegate {
             NSLog("edit rejected by core: \(error)")
             return false
         }
+    }
+
+    /// Wraps the selection in a pair when an opening delimiter is typed
+    /// over it: `hello` and `[` give `[hello]`, and the selection stays
+    /// on `hello`, so `[({` in a row gives `[({hello})]`.
+    ///
+    /// Answers whether it handled the edit. The text view is told to
+    /// refuse the original change, since this replaced it.
+    private func wrapSelection(in textView: NSTextView, range: NSRange, typed: String) -> Bool {
+        guard range.length > 0, let closing = CorePairs.closing(of: typed) else {
+            return false
+        }
+        let text = textView.string as NSString
+        guard NSMaxRange(range) <= text.length else { return false }
+        let selected = text.substring(with: range)
+        let wrapped = typed + selected + closing
+        // Through the same door as any other edit: the core first, the
+        // view second, one undo step for the pair.
+        coreDocument.beginEditGroup()
+        do {
+            try coreDocument.replace(utf16Range: range, with: wrapped)
+        } catch {
+            coreDocument.endEditGroup()
+            NSSound.beep()
+            NSLog("wrap rejected by core: \(error)")
+            return false
+        }
+        coreDocument.endEditGroup()
+        selectionChangeIsFromEditing = true
+        textView.textStorage?.replaceCharacters(in: range, with: wrapped)
+        let inner = NSRange(
+            location: range.location + (typed as NSString).length, length: range.length)
+        textView.setSelectedRange(inner)
+        lastTypedText = typed
+        textDidChangeFromWrap()
+        return true
+    }
+
+    /// The preview, for the smoke test to look at.
+    var previewWebViewForTest: WKWebView? { previewWebView }
+
+    /// The text view was filled directly; tell the core what it says.
+    func noteTextReplaced() {
+        guard let textView else { return }
+        try? coreDocument.replace(
+            utf16Range: NSRange(location: 0, length: coreDocument.lengthInUTF16),
+            with: textView.string)
+        textView.setSelectedRange(
+            NSRange(location: 0, length: (textView.string as NSString).length))
+    }
+
+    /// The bookkeeping an edit through the delegate would have done.
+    private func textDidChangeFromWrap() {
+        NotificationCenter.default.post(name: NSText.didChangeNotification, object: textView)
     }
 
     /// Multi-range variant, used by the find bar's Replace All (and any
@@ -3673,6 +3765,15 @@ extension DocumentController: NSTextViewDelegate {
     ) -> Bool {
         guard let replacementStrings else { return true }
         guard affectedRanges.count == replacementStrings.count else { return false }
+        // AppKit prefers this method over the single-range one whenever
+        // a delegate has both, so ordinary typing arrives here with one
+        // range. Hand that case over so it goes through one door.
+        if affectedRanges.count == 1 {
+            return self.textView(
+                textView,
+                shouldChangeTextIn: affectedRanges[0].rangeValue,
+                replacementString: replacementStrings[0])
+        }
         // Pre-validate so the group below cannot fail halfway through.
         let length = coreDocument.lengthInUTF16
         let pairs = zip(affectedRanges.map(\.rangeValue), replacementStrings)

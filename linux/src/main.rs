@@ -1301,6 +1301,82 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 workbench.close_view();
                 context.iteration(false);
             }
+            // Typing a delimiter over a selection wraps it, and the
+            // selection stays on what was wrapped, so the next one
+            // nests: [({hello})].
+            {
+                let buffer = &page.buffer;
+                buffer.set_text("hello");
+                context.iteration(false);
+                buffer.select_range(&buffer.start_iter(), &buffer.end_iter());
+                for delimiter in ["bracketleft", "parenleft", "braceleft"] {
+                    let key = gtk::gdk::Key::from_name(delimiter).expect("a key");
+                    crate::page::wrap_selection_for_test(&page, key);
+                }
+                let wrapped = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+                if wrapped != "[({hello})]" {
+                    eprintln!("FAIL: wrapping gave {wrapped}");
+                    return 1;
+                }
+                let Some((start, end)) = buffer.selection_bounds() else {
+                    eprintln!("FAIL: the wrap did not keep the selection");
+                    return 1;
+                };
+                if buffer.text(&start, &end, true) != "hello" {
+                    eprintln!("FAIL: the selection moved off what was wrapped");
+                    return 1;
+                }
+                // Anything that is not a delimiter replaces, as before.
+                crate::page::wrap_selection_for_test(&page, gtk::gdk::Key::from_name("x").unwrap());
+                context.iteration(false);
+                if buffer.text(&buffer.start_iter(), &buffer.end_iter(), true) != "[({hello})]" {
+                    eprintln!("FAIL: a letter should not wrap");
+                    return 1;
+                }
+                println!("wrapping ok (delimiters nest, letters do not wrap)");
+
+            // A link clicked in the Markdown preview goes to the
+            // browser and leaves the pane where it was. Which links
+            // count as a place in the page is the core's rule, tested
+            // there; this is about the click.
+            {
+                use webkit6::prelude::*;
+                let web = webkit6::WebView::new();
+                crate::page::install_preview_link_policy(&web);
+                let here = "file:///tmp/textchum-preview.html";
+                web.load_html("<a id=\"away\" href=\"https://example.com/\">away</a>", Some(here));
+                let mut settled = false;
+                for _ in 0..2000 {
+                    context.iteration(false);
+                    if !web.is_loading() && web.uri().as_deref() == Some(here) {
+                        settled = true;
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(2));
+                }
+                if !settled {
+                    eprintln!("FAIL: the preview never finished loading");
+                    return 1;
+                }
+                web.evaluate_javascript(
+                    "document.getElementById('away').click()",
+                    None,
+                    None,
+                    gtk::gio::Cancellable::NONE,
+                    |_| {},
+                );
+                for _ in 0..1500 {
+                    context.iteration(false);
+                    std::thread::sleep(std::time::Duration::from_millis(2));
+                }
+                let after = web.uri().unwrap_or_default().to_string();
+                if after != here {
+                    eprintln!("FAIL: the preview navigated from {here} to {after}");
+                    return 1;
+                }
+                println!("preview links ok (the pane stays where it was)");
+            }
+            }
             println!("columns ok (a column of views, tabs across columns)");
 
             // What a file remembers about itself, kept per project: the

@@ -13,6 +13,8 @@ shows it.
 - The preview updates as you type, patched in place — no reload, no
   flicker, no lost scroll position.
 - Scrolling either pane follows in the other.
+- A link goes to your browser when clicked; the pane stays on the
+  document. A link into the document itself scrolls the preview to it.
 - Rendering supports CommonMark plus tables, strikethrough, task lists,
   and footnotes, and its styles follow the system (or configured)
   appearance.

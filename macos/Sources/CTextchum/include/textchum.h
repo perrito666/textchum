@@ -881,6 +881,27 @@ uint32_t tc_config_project_state_keep_days(const struct TcConfig *config);
 void tc_config_set_project_state_keep_days(struct TcConfig *config, uint32_t days);
 
 /**
+ * The closing half of a delimiter that wraps a selection, or an empty
+ * string when the text is not one. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * The pointer and length must describe valid UTF-8.
+ */
+char *tc_pair_closing(const char *open, uintptr_t open_len);
+
+/**
+ * Whether a link the preview was asked to follow names a place in the
+ * page already on screen.
+ *
+ * # Safety
+ * Both pointers must be valid for their given lengths.
+ */
+bool tc_preview_is_place_in_page(const char *current,
+                                 uintptr_t current_len,
+                                 const char *target,
+                                 uintptr_t target_len);
+
+/**
  * Chooses the language the interface speaks. `system` follows the
  * locale given in `locale`; anything the build does not carry reads as
  * English.

@@ -151,6 +151,12 @@ position that decides, not a mode, which is what keeps them from
 surprising anyone. A tab-indented line is left to its tab character,
 which is already one press per level.
 
+With text selected, typing an opening bracket or quote — `(`, `[`, `{`,
+`'`, `"`, `` ` `` — wraps the selection in the pair instead of replacing
+it. What was wrapped stays selected, so pressing another one wraps that
+in turn: `[`, `(` and `{` over `hello` give `[({hello})]`. Typing
+anything else replaces the selection as it always did.
+
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
 first placeholder selected, so typing replaces it; ⇥ moves to the next

@@ -77,6 +77,45 @@ struct CompletionState {
     word_start: Cell<i32>,
 }
 
+/// The preview shows this document and never anything else.
+///
+/// A link clicked in it used to navigate the pane, which has no back
+/// button, no history and no address bar: the document was gone until
+/// it was edited or the pane was closed and reopened. A link goes to
+/// the browser, which is where a link a reader wants to follow belongs.
+pub fn install_preview_link_policy(web: &webkit6::WebView) {
+    web.connect_decide_policy(|web, decision, kind| {
+        if kind != webkit6::PolicyDecisionType::NavigationAction {
+            return false;
+        }
+        let Some(decision) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() else {
+            return false;
+        };
+        let Some(mut action) = decision.navigation_action() else { return false };
+        // The template and the rendered document arrive as content, not
+        // as a click.
+        if action.navigation_type() != webkit6::NavigationType::LinkClicked {
+            return false;
+        }
+        let Some(request) = action.request() else { return false };
+        let Some(uri) = request.uri() else { return false };
+        // A link into the document itself is a place in this page; the
+        // page scrolls to it and stays.
+        let here = web.uri().unwrap_or_default();
+        if textchum_core::preview::is_place_in_page(&here, &uri) {
+            return false;
+        }
+        decision.ignore();
+        let launcher = gtk::UriLauncher::new(&uri);
+        launcher.launch(None::<&gtk::Window>, None::<&gtk::gio::Cancellable>, |result| {
+            if let Err(error) = result {
+                eprintln!("textchum: could not open {error}");
+            }
+        });
+        true
+    });
+}
+
 impl Page {
     /// Opens a file — or nothing, for an untitled document — and
     /// returns the first view of it.
@@ -212,6 +251,7 @@ impl Page {
             let web = webkit6::WebView::new();
             web.set_hexpand(true);
             web.set_vexpand(true);
+            install_preview_link_policy(&web);
             let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
             paned.set_start_child(Some(&editor_row));
             paned.set_end_child(Some(&web));
@@ -283,6 +323,7 @@ impl Page {
         install_snippet_keys(&page);
         install_change_bar(&page);
         install_indent_keys(&page);
+        install_wrap_keys(&page);
         // A file opens already differing from its committed self as
         // often as not, so the marks are wanted on the first paint.
         {
@@ -1538,6 +1579,74 @@ fn install_snippet_keys(page: &Rc<Page>) {
 /// above, and goes one level deeper once it is already level. Anywhere
 /// else in the line both keys are themselves, which is what keeps the
 /// behaviour from surprising anyone: it is the position that decides.
+/// Typing an opening delimiter over a selection wraps it in the pair
+/// instead of replacing it: `hello` and `[` give `[hello]`, with the
+/// selection kept on `hello`, so `[({` in a row gives `[({hello})]`.
+///
+/// The table of pairs is the core's, so both shells wrap the same
+/// things. Nothing selected types the delimiter as it always did.
+fn install_wrap_keys(page: &Rc<Page>) {
+    let controller = gtk::EventControllerKey::new();
+    controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let weak = Rc::downgrade(page);
+    controller.connect_key_pressed(move |_, key, _, modifiers| {
+        let Some(page) = weak.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
+        // A shortcut is not typing, and the popups own their keys.
+        if page.completion.popover.is_visible()
+            || page.state.borrow().document.snippet_active()
+            || modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK)
+            || modifiers.contains(gtk::gdk::ModifierType::ALT_MASK)
+            || modifiers.contains(gtk::gdk::ModifierType::META_MASK)
+        {
+            return glib::Propagation::Proceed;
+        }
+        if wrap_selection(&page, key) {
+            glib::Propagation::Stop
+        } else {
+            glib::Propagation::Proceed
+        }
+    });
+    page.view.add_controller(controller);
+}
+
+/// Wraps the selection when `key` is an opening delimiter, and answers
+/// whether it did.
+fn wrap_selection(page: &Rc<Page>, key: gtk::gdk::Key) -> bool {
+    let Some(typed) = key.to_unicode() else { return false };
+    let mut encoded = [0u8; 4];
+    let typed = typed.encode_utf8(&mut encoded);
+    let Some((open, close)) = textchum_core::pairs::wraps(typed) else {
+        return false;
+    };
+    let buffer = &page.buffer;
+    let Some((start, end)) = buffer.selection_bounds() else { return false };
+    let selected = buffer.text(&start, &end, true).to_string();
+    if selected.is_empty() {
+        return false;
+    }
+    // One undo step for the pair, through the same door as any other
+    // edit: the buffer, which the choke point mirrors into the core.
+    buffer.begin_user_action();
+    let start_offset = start.offset();
+    buffer.delete(&mut start.clone(), &mut end.clone());
+    let mut at = buffer.iter_at_offset(start_offset);
+    buffer.insert(&mut at, &format!("{open}{selected}{close}"));
+    buffer.end_user_action();
+    // The selection stays on what was wrapped, so the next delimiter
+    // nests inside this one.
+    let inner_start = buffer.iter_at_offset(start_offset + 1);
+    let inner_end = buffer.iter_at_offset(start_offset + 1 + selected.chars().count() as i32);
+    buffer.select_range(&inner_end, &inner_start);
+    true
+}
+
+/// The wrap, for the smoke test to drive without a key event.
+pub fn wrap_selection_for_test(page: &Rc<Page>, key: gtk::gdk::Key) -> bool {
+    wrap_selection(page, key)
+}
+
 fn install_indent_keys(page: &Rc<Page>) {
     let controller = gtk::EventControllerKey::new();
     controller.set_propagation_phase(gtk::PropagationPhase::Capture);

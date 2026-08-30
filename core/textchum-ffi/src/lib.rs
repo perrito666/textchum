@@ -1372,6 +1372,43 @@ pub unsafe extern "C" fn tc_config_set_project_state_keep_days(config: *mut TcCo
     }
 }
 
+/// The closing half of a delimiter that wraps a selection, or an empty
+/// string when the text is not one. Release with [`tc_string_free`].
+///
+/// # Safety
+/// The pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_pair_closing(open: *const c_char, open_len: usize) -> *mut c_char {
+    let Some(open) = (unsafe { str_from_raw(open, open_len) }) else {
+        return owned_c_string(String::new());
+    };
+    let closing = textchum_core::pairs::wraps(open)
+        .map(|(_, close)| close.to_string())
+        .unwrap_or_default();
+    owned_c_string(closing)
+}
+
+/// Whether a link the preview was asked to follow names a place in the
+/// page already on screen.
+///
+/// # Safety
+/// Both pointers must be valid for their given lengths.
+#[no_mangle]
+pub unsafe extern "C" fn tc_preview_is_place_in_page(
+    current: *const c_char,
+    current_len: usize,
+    target: *const c_char,
+    target_len: usize,
+) -> bool {
+    let Some(current) = (unsafe { str_from_raw(current, current_len) }) else {
+        return false;
+    };
+    let Some(target) = (unsafe { str_from_raw(target, target_len) }) else {
+        return false;
+    };
+    textchum_core::preview::is_place_in_page(current, target)
+}
+
 // MARK: - Interface language
 
 /// Chooses the language the interface speaks. `system` follows the
