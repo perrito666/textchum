@@ -43,6 +43,18 @@ leaves where it was. What the document has no use for is not there —
 no server running means no Find References, no findings means no
 diagnostics rows.
 
+## Folding
+
+**Fold** (⌘[, Ctrl+[ on Linux) closes the block that opens on the
+caret's line; **Fold All** (⌥⌘[, Ctrl+Alt+[) closes every block that is
+not inside one already closed, and **Unfold All** (⌘], Ctrl+]) opens
+them again. A closed block shows its opening line with an ellipsis
+after it.
+
+The blocks come from the same tree the colouring uses, and the folds
+belong to the document: closing a function in one view closes it in
+every view of that file.
+
 ## Splits
 
 **Split Editor** (⌘\\, Ctrl+\\ on Linux) shows the document twice,
