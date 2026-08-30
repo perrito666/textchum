@@ -17,8 +17,19 @@ struct SessionState: Codable {
         let scroll: Double
     }
 
+    /// One window: the files it held as tabs, and what each of its
+    /// panes was showing.
+    struct Layout: Codable {
+        var tabs: [String] = []
+        var panes: [String] = []
+    }
+
     var version = 1
     var windows: [Window] = []
+    /// The windows, their tabs and their panes. Absent in sessions
+    /// written before windows were recorded, which come back as one
+    /// window holding everything.
+    var layout: [Layout]?
     /// Path of the frontmost document, if any.
     var frontmost: String?
     /// The sidebar's buffer-list/file-tree divider, as a fraction of the

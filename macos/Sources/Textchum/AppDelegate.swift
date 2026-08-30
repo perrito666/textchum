@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindowController: SettingsWindowController?
     /// Strong references to open editors; windows do not retain their
     /// controllers. Entries are removed as their windows close.
-    private var editors: [EditorWindowController] = []
+    private var editors: [DocumentController] = []
 
     /// `~/Library/Application Support/Textchum/config.json` — GUI-managed,
     /// hand-editable JSON. `--config <path>` points at another file and
@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NotificationCenter.default.addObserver(
             forName: .textchumDocumentsChanged, object: nil, queue: .main
         ) { [weak self] notification in
-            let changedEditor = notification.object as? EditorWindowController
+            let changedEditor = notification.object as? DocumentController
             // Deferred a runloop turn: the notification can fire while
             // AppKit is mid-layout (e.g. from a window-title update), and
             // rebuilding the list reentrantly trips NSTableView.
@@ -401,7 +401,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// keyed by the editor whose window close releases them.
     private var chumWaitSentinels: [ObjectIdentifier: String] = [:]
 
-    private func releaseChumWait(for editor: EditorWindowController) {
+    private func releaseChumWait(for editor: DocumentController) {
         if let sentinel = chumWaitSentinels.removeValue(forKey: ObjectIdentifier(editor)) {
             try? FileManager.default.removeItem(atPath: sentinel)
         }
@@ -455,8 +455,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 SessionState.Window(
                     path: path, caret: position.caret, scroll: position.scroll))
         }
+        // Which window held what, and what each pane was showing: a
+        // session that comes back as one window of everything is not
+        // the session that was left.
+        state.layout = Workbench.all.map { workbench in
+            SessionState.Layout(
+                tabs: workbench.documents.compactMap { $0.coreDocument.path },
+                panes: workbench.panes.compactMap { $0.document?.coreDocument.path }
+            )
+        }
         state.frontmost =
-            editors.first { $0.window?.isKeyWindow == true }?.coreDocument.path
+            Workbench.all.first { $0.window?.isKeyWindow == true }?
+            .focusedDocument?.coreDocument.path
             ?? state.windows.last?.path
         state.sidebarSplit = fileTreeState.splitFraction
         SessionStore.save(state)
@@ -477,7 +487,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Remembers a closing window so ⇧⌘T can bring it back, and hands
     /// the document to the store's cache: what comes back is the file
     /// as it was, unsaved text and all, rather than what is on disk.
-    private func noteClosedEditor(_ editor: EditorWindowController) {
+    private func noteClosedEditor(_ editor: DocumentController) {
         DocumentStore.shared.close(editor.openDocument.id)
         guard let path = editor.coreDocument.path else { return }
         let position = editor.sessionPosition
@@ -510,18 +520,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let split = state.sidebarSplit {
             fileTreeState.splitFraction = min(0.85, max(0.15, split))
         }
-        var frontmostEditor: EditorWindowController?
-        for window in state.windows
-        where FileManager.default.fileExists(atPath: window.path) {
-            open(path: window.path)
-            guard let editor = editors.first(where: { $0.coreDocument.path == window.path })
-            else { continue }
-            editor.restoreSessionPosition(caret: window.caret, scroll: window.scroll)
-            if window.path == state.frontmost {
-                frontmostEditor = editor
+        var frontmostEditor: DocumentController?
+        // Each saved window comes back as a window, with its files as
+        // tabs; a session from before windows were recorded comes back
+        // as one window of everything.
+        let layout =
+            state.layout?.filter { group in
+                group.tabs.contains { FileManager.default.fileExists(atPath: $0) }
+            }
+            ?? [SessionState.Layout(tabs: state.windows.map(\.path), panes: [])]
+        for group in layout {
+            var workbench: Workbench?
+            for path in group.tabs where FileManager.default.fileExists(atPath: path) {
+                open(path: path, target: workbench == nil ? .window : .tab)
+                guard let editor = editors.first(where: { $0.coreDocument.path == path })
+                else { continue }
+                workbench = editor.workbench
+                if let saved = state.windows.first(where: { $0.path == path }) {
+                    editor.restoreSessionPosition(caret: saved.caret, scroll: saved.scroll)
+                }
+                if path == state.frontmost {
+                    frontmostEditor = editor
+                }
+            }
+            // The second pane comes back showing what it was showing.
+            if let workbench, group.panes.count > 1 {
+                workbench.split()
+                for (index, path) in group.panes.enumerated() {
+                    guard
+                        let editor = workbench.documents.first(where: {
+                            $0.coreDocument.path == path
+                        })
+                    else { continue }
+                    workbench.show(editor, in: index)
+                }
+                workbench.focus(pane: 0)
             }
         }
-        frontmostEditor?.window?.makeKeyAndOrderFront(nil)
+        frontmostEditor?.workbench?.window?.makeKeyAndOrderFront(nil)
+        if let frontmostEditor, let workbench = frontmostEditor.workbench {
+            workbench.showInFocusedPane(ObjectIdentifier(frontmostEditor))
+        }
     }
 
     /// Quitting reviews every dirty window through the same save/discard
@@ -531,8 +570,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         saveSession()
         isTerminating = true
         for editor in editors {
-            guard let window = editor.window else { continue }
-            if !editor.windowShouldClose(window) {
+            if !editor.mayClose() {
                 // The user changed their mind; windows stay open and
                 // ordinary saves resume.
                 isTerminating = false
@@ -722,6 +760,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// build version (git-described for local builds, the tag for
     /// releases), the author with their site, the repository, and the
     /// license — all clickable.
+    /// ⌘1…⌘9: the tab by its place on the bar.
+    @objc func selectTabByNumber(_ sender: Any?) {
+        guard let item = sender as? NSMenuItem,
+            let workbench = Workbench.all.first(where: { $0.window?.isKeyWindow == true })
+        else { return }
+        workbench.selectTab(number: item.tag)
+    }
+
     @objc func showAbout(_ sender: Any?) {
         let version =
             Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -1001,42 +1047,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(newDocumentWithFormatPicker(_:)): "newWithFormat",
             #selector(openDocument(_:)): "open",
             #selector(openQuickly(_:)): "openQuickly",
-            #selector(EditorWindowController.saveDocument(_:)): "save",
-            #selector(EditorWindowController.saveDocumentAs(_:)): "saveAs",
-            #selector(EditorWindowController.revertToSaved(_:)): "revertToSaved",
-            #selector(NSWindow.performClose(_:)): "close",
+            #selector(DocumentController.saveDocument(_:)): "save",
+            #selector(DocumentController.saveDocumentAs(_:)): "saveAs",
+            #selector(DocumentController.revertToSaved(_:)): "revertToSaved",
             #selector(reopenClosedDocument(_:)): "reopenClosed",
-            #selector(EditorWindowController.showFileProperties(_:)): "fileProperties",
-            #selector(EditorWindowController.performUndo(_:)): "undo",
-            #selector(EditorWindowController.performRedo(_:)): "redo",
-            #selector(EditorWindowController.jumpToDefinition(_:)): "jumpToDefinition",
+            #selector(DocumentController.showFileProperties(_:)): "fileProperties",
+            #selector(DocumentController.performUndo(_:)): "undo",
+            #selector(DocumentController.performRedo(_:)): "redo",
+            #selector(DocumentController.jumpToDefinition(_:)): "jumpToDefinition",
             #selector(goBack(_:)): "goBack",
             #selector(goForward(_:)): "goForward",
-            #selector(EditorWindowController.findReferences(_:)): "findReferences",
-            #selector(EditorWindowController.showCodeActions(_:)): "codeActions",
-            #selector(EditorWindowController.toggleSplit(_:)): "splitEditor",
-            #selector(EditorWindowController.closeSplitCommand(_:)): "closeSplit",
-            #selector(EditorWindowController.focusOtherSide(_:)): "otherSide",
-            #selector(EditorWindowController.renameSymbol(_:)): "renameSymbol",
-            #selector(EditorWindowController.formatDocument(_:)): "formatDocument",
-            #selector(EditorWindowController.runPreprocessors(_:)): "runPreprocessors",
-            #selector(EditorWindowController.blameLine(_:)): "blameLine",
-            #selector(EditorWindowController.showDiagnosticAtCaret(_:)): "showDiagnostic",
-            #selector(EditorWindowController.showDiagnosticList(_:)): "diagnosticList",
-            #selector(EditorWindowController.goToLine(_:)): "goToLine",
-            #selector(EditorWindowController.goToBlockStart(_:)): "goToBlockStart",
-            #selector(EditorWindowController.goToBlockEnd(_:)): "goToBlockEnd",
-            #selector(EditorWindowController.triggerCompletion(_:)): "complete",
+            #selector(DocumentController.findReferences(_:)): "findReferences",
+            #selector(DocumentController.showCodeActions(_:)): "codeActions",
+            #selector(DocumentController.toggleSplit(_:)): "splitEditor",
+            #selector(DocumentController.closeSplitCommand(_:)): "closeSplit",
+            #selector(DocumentController.focusOtherSide(_:)): "otherSide",
+            #selector(DocumentController.closeTab(_:)): "close",
+            #selector(DocumentController.selectNextTab(_:)): "nextTab",
+            #selector(DocumentController.selectPreviousTab(_:)): "previousTab",
+            #selector(DocumentController.showInEveryPane(_:)): "sameFileBothSides",
+            #selector(DocumentController.moveTabToNewWindow(_:)): "moveTabToNewWindow",
+            #selector(DocumentController.renameSymbol(_:)): "renameSymbol",
+            #selector(DocumentController.formatDocument(_:)): "formatDocument",
+            #selector(DocumentController.runPreprocessors(_:)): "runPreprocessors",
+            #selector(DocumentController.blameLine(_:)): "blameLine",
+            #selector(DocumentController.showDiagnosticAtCaret(_:)): "showDiagnostic",
+            #selector(DocumentController.showDiagnosticList(_:)): "diagnosticList",
+            #selector(DocumentController.goToLine(_:)): "goToLine",
+            #selector(DocumentController.goToBlockStart(_:)): "goToBlockStart",
+            #selector(DocumentController.goToBlockEnd(_:)): "goToBlockEnd",
+            #selector(DocumentController.triggerCompletion(_:)): "complete",
             #selector(findInProject(_:)): "findInProject",
             #selector(NSSplitViewController.toggleSidebar(_:)): "toggleNavigator",
-            #selector(EditorWindowController.togglePreview(_:)): "togglePreview",
+            #selector(DocumentController.togglePreview(_:)): "togglePreview",
             #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
             #selector(toggleHoverDocs(_:)): "toggleHover",
-            #selector(EditorWindowController.showHoverAtCaret(_:)): "showHover",
+            #selector(DocumentController.showHoverAtCaret(_:)): "showHover",
             #selector(togglePathDisplay(_:)): "togglePathDisplay",
-            #selector(EditorWindowController.redrawDocument(_:)): "redraw",
-            #selector(EditorWindowController.showDocumentOutline(_:)): "documentOutline",
-            #selector(EditorWindowController.revealInTree(_:)): "revealInTree",
+            #selector(DocumentController.redrawDocument(_:)): "redraw",
+            #selector(DocumentController.showDocumentOutline(_:)): "documentOutline",
+            #selector(DocumentController.revealInTree(_:)): "revealInTree",
             #selector(showCommandPalette(_:)): "commandPalette",
             #selector(showServerStatus(_:)): "serverStatus",
             #selector(showSettings(_:)): "settings",
@@ -1239,7 +1289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// so telling the model it changed is the whole of it.
     private func refreshFileIcons() {
         for editor in editors {
-            editor.sidebarModel.objectWillChange.send()
+            editor.workbench?.sidebarModel.objectWillChange.send()
         }
     }
 
@@ -1314,27 +1364,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for editor in editors {
             editor.setDisplayTitle(overrides[ObjectIdentifier(editor)])
         }
-        for editor in editors {
-            let group: [NSWindow]
-            if let window = editor.window {
-                group = window.tabGroup?.windows ?? [window]
-            } else {
-                group = []
+        for workbench in Workbench.all {
+            let entries = workbench.documents.map { peer in
+                (
+                    document: SidebarDocument(
+                        id: ObjectIdentifier(peer),
+                        title: peer.chromeTitle,
+                        path: peer.coreDocument.path,
+                        isDirty: peer.coreDocument.isDirty
+                    ),
+                    projectRoot: peer.projectRoot
+                )
             }
-            let entries = editors
-                .filter { peer in peer.window.map(group.contains) ?? false }
-                .map { peer in
-                    (
-                        document: SidebarDocument(
-                            id: ObjectIdentifier(peer),
-                            title: peer.window?.title ?? "Untitled",
-                            path: peer.coreDocument.path,
-                            isDirty: peer.coreDocument.isDirty
-                        ),
-                        projectRoot: peer.projectRoot
-                    )
-                }
-            editor.sidebarModel.rebuild(entries: entries)
+            workbench.sidebarModel.rebuild(entries: entries)
+            workbench.refreshTabs()
         }
     }
 
@@ -1408,69 +1451,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Window arrangement (project group → windows/tabs)
 
-    /// "Split into New Window": pulls the group's windows out of their
-    /// tab groups and gathers them as tabs of a window of their own.
+    /// "Split into New Window": gathers the group's files into a
+    /// window of their own.
     private func splitIntoNewWindow(documentIDs: [ObjectIdentifier]) {
         let members = editors.filter { documentIDs.contains(ObjectIdentifier($0)) }
-        guard let first = members.first, let anchor = first.window else { return }
-        anchor.tabGroup?.removeWindow(anchor)
-        for member in members.dropFirst() {
-            guard let window = member.window else { continue }
-            window.tabGroup?.removeWindow(window)
-            anchor.addTabbedWindow(window, ordered: .above)
+        guard !members.isEmpty else { return }
+        let workbench = makeWorkbench()
+        for member in members {
+            member.workbench?.detach(member)
+            workbench.add(member)
         }
-        anchor.makeKeyAndOrderFront(nil)
+        workbench.showWindow(nil)
+        workbench.window?.makeKeyAndOrderFront(nil)
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: nil)
     }
 
-    /// "Gather Into …": adopts the group's windows into the target
-    /// window's tab group. A window already tabbed with the target is
-    /// left alone — but two standalone windows both have a nil tab
-    /// group, so membership is checked, never group identity.
+    /// "Gather Into …": moves the group's files into the chosen window
+    /// as tabs. A file already there is left where it is.
     private func mergeAsTabs(documentIDs: [ObjectIdentifier], into target: ObjectIdentifier) {
-        guard
-            let targetWindow = editors.first(where: { ObjectIdentifier($0) == target })?
-                .window
+        guard let workbench = Workbench.all.first(where: { ObjectIdentifier($0) == target })
         else { return }
         let members = editors.filter { documentIDs.contains(ObjectIdentifier($0)) }
-        for member in members {
-            guard let window = member.window, window != targetWindow else { continue }
-            if let group = targetWindow.tabGroup, group.windows.contains(window) {
-                continue
-            }
-            window.tabGroup?.removeWindow(window)
-            targetWindow.addTabbedWindow(window, ordered: .above)
+        for member in members where member.workbench !== workbench {
+            member.workbench?.detach(member)
+            workbench.add(member)
         }
-        targetWindow.makeKeyAndOrderFront(nil)
+        workbench.window?.makeKeyAndOrderFront(nil)
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: nil)
     }
 
-    /// One "Gather Into" destination per tab group, the asker's own
-    /// group first as "This Window".
+    /// One "Gather Into" destination per window, the asking window
+    /// first as "This Window".
     private func windowTargets(asking host: ObjectIdentifier) -> [WindowTarget] {
-        let hostGroupKey = editors.first { ObjectIdentifier($0) == host }
-            .flatMap { editor -> ObjectIdentifier? in
-                guard let window = editor.window else { return nil }
-                return window.tabGroup.map(ObjectIdentifier.init) ?? ObjectIdentifier(window)
-            }
-        var seen = Set<ObjectIdentifier>()
         var targets: [WindowTarget] = []
-        for editor in editors {
-            guard let window = editor.window else { continue }
-            let groupKey =
-                window.tabGroup.map(ObjectIdentifier.init) ?? ObjectIdentifier(window)
-            guard !seen.contains(groupKey) else { continue }
-            seen.insert(groupKey)
-            let tabCount = window.tabGroup?.windows.count ?? 1
-            let extra = tabCount > 1 ? " (+\(tabCount - 1))" : ""
-            let title: String
-            if groupKey == hostGroupKey {
-                title = "This Window"
-            } else {
-                title = (window.tabGroup?.selectedWindow ?? window).title + extra
-            }
-            let target = WindowTarget(id: ObjectIdentifier(editor), title: title)
-            if groupKey == hostGroupKey {
+        for workbench in Workbench.all {
+            let extra = workbench.documents.count > 1 ? " (+\(workbench.documents.count - 1))" : ""
+            let isHost = ObjectIdentifier(workbench) == host
+            let title =
+                isHost
+                ? "This Window"
+                : (workbench.focusedDocument?.chromeTitle ?? "Window") + extra
+            let target = WindowTarget(id: ObjectIdentifier(workbench), title: title)
+            if isHost {
                 targets.insert(target, at: 0)
             } else {
                 targets.append(target)
@@ -1554,11 +1576,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// deliberately session-only.
     @objc func togglePathDisplay(_ sender: Any?) {
         let active =
-            editors.first { $0.window == NSApp.keyWindow }?.sidebarModel
-            ?? editors.first?.sidebarModel
+            Workbench.all.first { $0.window == NSApp.keyWindow }?.sidebarModel
+            ?? Workbench.all.first?.sidebarModel
         let newValue = !(active?.showFullPaths ?? false)
-        for editor in editors {
-            editor.sidebarModel.showFullPaths = newValue
+        for workbench in Workbench.all {
+            workbench.sidebarModel.showFullPaths = newValue
         }
     }
 
@@ -1724,7 +1746,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let language {
             _ = document.setLanguage(language)
         }
-        let editor = EditorWindowController(
+        let editor = DocumentController(
             document: document,
             settings: currentSettings,
             sidebar: sidebarConfiguration,
@@ -1778,7 +1800,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 && $0.coreDocument.lengthInBytes == 0
         }
         for editor in untouched {
-            editor.window?.close()
+            editor.workbench?.closeTab(ObjectIdentifier(editor))
         }
     }
 
@@ -1805,7 +1827,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 ?? CoreDocument(contentsOf: path)
             closeUntouchedUntitledWindows()
             noteRecent(path: path)
-            let editor = EditorWindowController(
+            let editor = DocumentController(
                 document: document,
                 settings: currentSettings,
                 sidebar: sidebarConfiguration,
@@ -1834,23 +1856,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Attaches `editor` per the requested (or configured) open target: as
     /// a tab of the key editor window's group, or as its own window.
-    private func place(editor: EditorWindowController, target: CoreOpenTarget?) {
-        guard (target ?? config?.openTarget) == .tab,
-            let newWindow = editor.window,
-            let anchor = editors.first(where: { $0 !== editor && $0.window?.isKeyWindow == true })
-                ?? editors.first(where: { $0 !== editor && $0.window != nil })
-        else { return }
-        anchor.window?.addTabbedWindow(newWindow, ordered: .above)
+    /// A new window, wired to the application's navigator.
+    func makeWorkbench() -> Workbench {
+        let workbench = Workbench(sidebar: sidebarConfiguration)
+        workbench.onDocumentClosed = { [weak self] document in
+            MainActor.assumeIsolated {
+                self?.releaseChumWait(for: document)
+                self?.noteClosedEditor(document)
+                self?.editors.removeAll { $0 === document }
+                self?.rebuildSidebar()
+                if self?.isTerminating != true {
+                    self?.saveSession()
+                }
+            }
+        }
+        return workbench
+    }
+
+    /// The window a newly opened file goes to: the front one when files
+    /// open as tabs, a new one otherwise.
+    private func workbench(for target: CoreOpenTarget?) -> Workbench {
+        let wanted = target ?? config?.openTarget ?? .tab
+        if wanted == .tab {
+            if let key = Workbench.all.first(where: { $0.window?.isKeyWindow == true }) {
+                return key
+            }
+            if let any = Workbench.all.last {
+                return any
+            }
+        }
+        return makeWorkbench()
     }
 
     private func show(
-        editor: EditorWindowController,
+        editor: DocumentController,
         placeAsConfigured: Bool = false,
         target: CoreOpenTarget? = nil
     ) {
-        if placeAsConfigured {
-            place(editor: editor, target: target)
-        }
+        let workbench = placeAsConfigured ? self.workbench(for: target) : self.workbench(for: .tab)
         // A document told what it is stays told: reopening a .txt that
         // holds SQL should not find it plain text again.
         if let path = editor.coreDocument.path {
@@ -1865,34 +1908,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         editors.append(editor)
-        if let window = editor.window {
-            NotificationCenter.default.addObserver(
-                forName: NSWindow.willCloseNotification,
-                object: window,
-                queue: .main
-            ) { [weak self] notification in
-                guard let closing = notification.object as? NSWindow else { return }
-                MainActor.assumeIsolated {
-                    if let editor = self?.editors.first(where: { $0.window === closing }) {
-                        self?.releaseChumWait(for: editor)
-                        self?.noteClosedEditor(editor)
-                    }
-                    self?.editors.removeAll { $0.window === closing }
-                }
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        self?.rebuildSidebar()
-                        // Not while quitting: the windows are closing
-                        // because the app is going away, and the real
-                        // session was recorded before they did.
-                        if self?.isTerminating != true {
-                            self?.saveSession()
-                        }
-                    }
-                }
-            }
-        }
-        editor.showWindow(nil)
+        workbench.add(editor)
+        workbench.showWindow(nil)
+        workbench.window?.makeKeyAndOrderFront(nil)
+        workbench.focus(pane: workbench.focusedPane)
         // No direct rebuild here: the controller publishes its state (via
         // updateChrome) and the deferred notification handler rebuilds —
         // rebuilding synchronously mid-presentation trips NSTableView.
@@ -1936,7 +1955,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             for (title, kind) in group {
                 let item = NSMenuItem(
                     title: title,
-                    action: #selector(EditorWindowController.transformText(_:)),
+                    action: #selector(DocumentController.transformText(_:)),
                     keyEquivalent: "")
                 item.representedObject = kind
                 menu.addItem(item)
@@ -2031,10 +2050,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         fileMenu.addItem(openRecentItem)
         fileMenu.addItem(.separator())
         fileMenu.addItem(
-            withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+            withTitle: "Close Tab",
+            action: #selector(DocumentController.closeTab(_:)),
+            keyEquivalent: "w")
+        let closeWindowItem = NSMenuItem(
+            title: "Close Window",
+            action: #selector(NSWindow.performClose(_:)),
+            keyEquivalent: "w")
+        closeWindowItem.keyEquivalentModifierMask = [.command, .shift]
+        fileMenu.addItem(closeWindowItem)
         let properties = NSMenuItem(
             title: "Get Info",
-            action: #selector(EditorWindowController.showFileProperties(_:)),
+            action: #selector(DocumentController.showFileProperties(_:)),
             keyEquivalent: "i"
         )
         fileMenu.addItem(properties)
@@ -2048,19 +2075,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         fileMenu.addItem(reopen)
         fileMenu.addItem(
             withTitle: "Save",
-            action: #selector(EditorWindowController.saveDocument(_:)),
+            action: #selector(DocumentController.saveDocument(_:)),
             keyEquivalent: "s"
         )
         let saveAs = NSMenuItem(
             title: "Save As…",
-            action: #selector(EditorWindowController.saveDocumentAs(_:)),
+            action: #selector(DocumentController.saveDocumentAs(_:)),
             keyEquivalent: "s"
         )
         saveAs.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(saveAs)
         let revert = NSMenuItem(
             title: "Revert to Saved",
-            action: #selector(EditorWindowController.revertToSaved(_:)),
+            action: #selector(DocumentController.revertToSaved(_:)),
             keyEquivalent: "r"
         )
         revert.keyEquivalentModifierMask = [.command, .option]
@@ -2072,16 +2099,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let copyPath = NSMenu(title: "Copy Path")
         copyPath.addItem(
             withTitle: "File Name",
-            action: #selector(EditorWindowController.copyFileName(_:)), keyEquivalent: "")
+            action: #selector(DocumentController.copyFileName(_:)), keyEquivalent: "")
         copyPath.addItem(
             withTitle: "Relative Path",
-            action: #selector(EditorWindowController.copyRelativePath(_:)), keyEquivalent: "")
+            action: #selector(DocumentController.copyRelativePath(_:)), keyEquivalent: "")
         copyPath.addItem(
             withTitle: "Absolute Path",
-            action: #selector(EditorWindowController.copyAbsolutePath(_:)), keyEquivalent: "")
+            action: #selector(DocumentController.copyAbsolutePath(_:)), keyEquivalent: "")
         copyPath.addItem(
             withTitle: "Forge URL",
-            action: #selector(EditorWindowController.copyForgeURL(_:)), keyEquivalent: "")
+            action: #selector(DocumentController.copyForgeURL(_:)), keyEquivalent: "")
         copyPathItem.submenu = copyPath
         fileMenu.addItem(copyPathItem)
         let fileMenuItem = NSMenuItem()
@@ -2091,13 +2118,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let editMenu = NSMenu(title: "Edit")
         let undo = NSMenuItem(
             title: "Undo",
-            action: #selector(EditorWindowController.performUndo(_:)),
+            action: #selector(DocumentController.performUndo(_:)),
             keyEquivalent: "z"
         )
         editMenu.addItem(undo)
         let redo = NSMenuItem(
             title: "Redo",
-            action: #selector(EditorWindowController.performRedo(_:)),
+            action: #selector(DocumentController.performRedo(_:)),
             keyEquivalent: "Z"
         )
         editMenu.addItem(redo)
@@ -2116,7 +2143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenu.addItem(.separator())
         let jump = NSMenuItem(
             title: "Jump to Definition",
-            action: #selector(EditorWindowController.jumpToDefinition(_:)),
+            action: #selector(DocumentController.jumpToDefinition(_:)),
             keyEquivalent: "j"
         )
         jump.keyEquivalentModifierMask = [.command, .control]
@@ -2137,14 +2164,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenu.addItem(forwardItem)
         let references = NSMenuItem(
             title: "Find References",
-            action: #selector(EditorWindowController.findReferences(_:)),
+            action: #selector(DocumentController.findReferences(_:)),
             keyEquivalent: "r"
         )
         references.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(references)
         let codeActionsItem = NSMenuItem(
             title: "Code Actions…",
-            action: #selector(EditorWindowController.showCodeActions(_:)),
+            action: #selector(DocumentController.showCodeActions(_:)),
             keyEquivalent: "."
         )
         codeActionsItem.keyEquivalentModifierMask = [.command]
@@ -2152,42 +2179,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let rename = NSMenuItem(
             title: "Rename Symbol…",
-            action: #selector(EditorWindowController.renameSymbol(_:)),
+            action: #selector(DocumentController.renameSymbol(_:)),
             keyEquivalent: "r"
         )
         rename.keyEquivalentModifierMask = [.command, .control]
         editMenu.addItem(rename)
         let format = NSMenuItem(
             title: "Format Document",
-            action: #selector(EditorWindowController.formatDocument(_:)),
+            action: #selector(DocumentController.formatDocument(_:)),
             keyEquivalent: "f"
         )
         format.keyEquivalentModifierMask = [.command, .option, .shift]
         editMenu.addItem(format)
         let preprocess = NSMenuItem(
             title: "Run Save Preprocessors",
-            action: #selector(EditorWindowController.runPreprocessors(_:)),
+            action: #selector(DocumentController.runPreprocessors(_:)),
             keyEquivalent: "f"
         )
         preprocess.keyEquivalentModifierMask = [.command, .option, .control]
         editMenu.addItem(preprocess)
         let blockStart = NSMenuItem(
             title: "Go to Block Start",
-            action: #selector(EditorWindowController.goToBlockStart(_:)),
+            action: #selector(DocumentController.goToBlockStart(_:)),
             keyEquivalent: String(UnicodeScalar(NSUpArrowFunctionKey)!)
         )
         blockStart.keyEquivalentModifierMask = [.control, .option]
         editMenu.addItem(blockStart)
         let blockEnd = NSMenuItem(
             title: "Go to Block End",
-            action: #selector(EditorWindowController.goToBlockEnd(_:)),
+            action: #selector(DocumentController.goToBlockEnd(_:)),
             keyEquivalent: String(UnicodeScalar(NSDownArrowFunctionKey)!)
         )
         blockEnd.keyEquivalentModifierMask = [.control, .option]
         editMenu.addItem(blockEnd)
         let complete = NSMenuItem(
             title: "Complete",
-            action: #selector(EditorWindowController.triggerCompletion(_:)),
+            action: #selector(DocumentController.triggerCompletion(_:)),
             keyEquivalent: " "
         )
         complete.keyEquivalentModifierMask = [.control]
@@ -2232,19 +2259,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenu.addItem(.separator())
         let splitItem = NSMenuItem(
             title: "Split Editor",
-            action: #selector(EditorWindowController.toggleSplit(_:)),
+            action: #selector(DocumentController.toggleSplit(_:)),
             keyEquivalent: "\\")
         splitItem.keyEquivalentModifierMask = [.command]
         editMenu.addItem(splitItem)
         let closeSplitItem = NSMenuItem(
             title: "Close Split",
-            action: #selector(EditorWindowController.closeSplitCommand(_:)),
+            action: #selector(DocumentController.closeSplitCommand(_:)),
             keyEquivalent: "\\")
         closeSplitItem.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(closeSplitItem)
         let otherSideItem = NSMenuItem(
             title: "Other Side",
-            action: #selector(EditorWindowController.focusOtherSide(_:)),
+            action: #selector(DocumentController.focusOtherSide(_:)),
             keyEquivalent: "\\")
         otherSideItem.keyEquivalentModifierMask = [.command, .option]
         editMenu.addItem(otherSideItem)
@@ -2264,7 +2291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         viewMenu.addItem(toggleNavigator)
         let togglePreview = NSMenuItem(
             title: "Toggle Markdown Preview",
-            action: #selector(EditorWindowController.togglePreview(_:)),
+            action: #selector(DocumentController.togglePreview(_:)),
             keyEquivalent: "p"
         )
         togglePreview.keyEquivalentModifierMask = [.command, .option]
@@ -2291,7 +2318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         viewMenu.addItem(hoverDocsItem)
         let showHoverItem = NSMenuItem(
             title: "Show Documentation for Symbol",
-            action: #selector(EditorWindowController.showHoverAtCaret(_:)),
+            action: #selector(DocumentController.showHoverAtCaret(_:)),
             keyEquivalent: "h"
         )
         showHoverItem.keyEquivalentModifierMask = [.command, .control]
@@ -2304,49 +2331,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         viewMenu.addItem(serverStatusItem)
         let revealItem = NSMenuItem(
             title: "Reveal in Tree",
-            action: #selector(EditorWindowController.revealInTree(_:)),
+            action: #selector(DocumentController.revealInTree(_:)),
             keyEquivalent: "j"
         )
         revealItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(revealItem)
         let outlineItem = NSMenuItem(
             title: "Document Outline…",
-            action: #selector(EditorWindowController.showDocumentOutline(_:)),
+            action: #selector(DocumentController.showDocumentOutline(_:)),
             keyEquivalent: "o"
         )
         outlineItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(outlineItem)
         let diagnosticListItem = NSMenuItem(
             title: "Diagnostics…",
-            action: #selector(EditorWindowController.showDiagnosticList(_:)),
+            action: #selector(DocumentController.showDiagnosticList(_:)),
             keyEquivalent: "e"
         )
         diagnosticListItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(diagnosticListItem)
         let diagnosticItem = NSMenuItem(
             title: "Show Diagnostic for Line",
-            action: #selector(EditorWindowController.showDiagnosticAtCaret(_:)),
+            action: #selector(DocumentController.showDiagnosticAtCaret(_:)),
             keyEquivalent: "e"
         )
         diagnosticItem.keyEquivalentModifierMask = [.command, .control]
         viewMenu.addItem(diagnosticItem)
         let blameItem = NSMenuItem(
             title: "Blame Line…",
-            action: #selector(EditorWindowController.blameLine(_:)),
+            action: #selector(DocumentController.blameLine(_:)),
             keyEquivalent: "b"
         )
         blameItem.keyEquivalentModifierMask = [.command, .control]
         viewMenu.addItem(blameItem)
         let goToLineItem = NSMenuItem(
             title: "Go to Line…",
-            action: #selector(EditorWindowController.goToLine(_:)),
+            action: #selector(DocumentController.goToLine(_:)),
             keyEquivalent: "l"
         )
         goToLineItem.keyEquivalentModifierMask = [.command]
         viewMenu.addItem(goToLineItem)
         let redrawItem = NSMenuItem(
             title: "Redraw",
-            action: #selector(EditorWindowController.redrawDocument(_:)),
+            action: #selector(DocumentController.redrawDocument(_:)),
             keyEquivalent: "l"
         )
         redrawItem.keyEquivalentModifierMask = [.command, .option]
@@ -2369,6 +2396,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             action: #selector(NSWindow.performMiniaturize(_:)),
             keyEquivalent: "m"
         )
+        windowMenu.addItem(.separator())
+        let nextTab = NSMenuItem(
+            title: "Next Tab",
+            action: #selector(DocumentController.selectNextTab(_:)),
+            keyEquivalent: "\t")
+        nextTab.keyEquivalentModifierMask = [.control]
+        windowMenu.addItem(nextTab)
+        let previousTab = NSMenuItem(
+            title: "Previous Tab",
+            action: #selector(DocumentController.selectPreviousTab(_:)),
+            keyEquivalent: "\t")
+        previousTab.keyEquivalentModifierMask = [.control, .shift]
+        windowMenu.addItem(previousTab)
+        // ⌘1…⌘9: the tab by its place on the bar, in the pane with the
+        // keyboard.
+        for number in 1...9 {
+            let item = NSMenuItem(
+                title: "Tab \(number)",
+                action: #selector(selectTabByNumber(_:)),
+                keyEquivalent: "\(number)")
+            item.tag = number
+            item.isAlternate = false
+            item.isHidden = number > 1
+            windowMenu.addItem(item)
+        }
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(
+            withTitle: "Same File on Both Sides",
+            action: #selector(DocumentController.showInEveryPane(_:)),
+            keyEquivalent: "")
+        windowMenu.addItem(
+            withTitle: "Move Tab to New Window",
+            action: #selector(DocumentController.moveTabToNewWindow(_:)),
+            keyEquivalent: "")
+        windowMenu.addItem(.separator())
         let windowMenuItem = NSMenuItem()
         windowMenuItem.submenu = windowMenu
         mainMenu.addItem(windowMenuItem)
