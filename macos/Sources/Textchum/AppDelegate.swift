@@ -362,7 +362,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let warning = config.loadWarning {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = "Settings file could not be read"
+            alert.messageText = t("Settings file could not be read")
             alert.informativeText = warning
             alert.runModal()
         }
@@ -702,7 +702,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 reportedMissingServers.insert(server)
                 let alert = NSAlert()
                 alert.alertStyle = .informational
-                alert.messageText = "No language server for this project"
+                alert.messageText = t("No language server for this project")
                 alert.informativeText = message
                 alert.runModal()
             }
@@ -724,7 +724,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 reportedMissingServers.insert(server)
                 let alert = NSAlert()
                 alert.alertStyle = .warning
-                alert.messageText = "Language server failed to start"
+                alert.messageText = t("Language server failed to start")
                 alert.informativeText =
                     "\(server) exited during startup"
                     + (message.isEmpty || message == "during initialize"
@@ -1336,7 +1336,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 warnedBrokenIconPack = true
                 let alert = NSAlert()
                 alert.alertStyle = .warning
-                alert.messageText = "The icon pack could not be used"
+                alert.messageText = t("The icon pack could not be used")
                 alert.informativeText =
                     "\(error) — the file tree keeps the system's icons."
                 alert.runModal()
@@ -1836,7 +1836,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         formatPicker.show(
             rows: languages.map { .item($0.name) }, over: NSApp.keyWindow,
-            title: t("New with Format"), placeholder: "language…"
+            title: t("New with Format"), placeholder: t("language…")
         ) { [weak self] index in
             guard languages.indices.contains(index) else { return }
             self?.makeUntitled(language: languages[index].name)
