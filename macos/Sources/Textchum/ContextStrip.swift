@@ -9,8 +9,11 @@ import AppKit
 /// switching it off costs no layout and the text keeps its geometry.
 /// Clicking a row scrolls its line to the top.
 final class ContextStrip: NSView {
-    /// The lines shown, zero-based, outermost first.
+    /// The lines shown, zero-based, outermost first, and what they
+    /// said when last drawn — an edit above moves text under unchanged
+    /// line numbers, and only a real change is worth rebuilding for.
     private(set) var lines: [Int] = []
+    private var shownTexts: [String] = []
     private var rows: [NSTextField] = []
     private lazy var heightConstraint: NSLayoutConstraint = {
         let constraint = heightAnchor.constraint(equalToConstant: 0)
@@ -31,11 +34,16 @@ final class ContextStrip: NSView {
         rows = []
     }
 
-    /// Replaces the rows. `text(line)` renders one line the way the
-    /// editor shows it, colours included.
-    func show(lines: [Int], text: (Int) -> NSAttributedString, rowHeight: CGFloat) {
-        guard lines != self.lines || rows.isEmpty else { return }
+    /// Replaces the rows. `plainTexts` is what each line says, used to
+    /// skip the rebuild when nothing shown moved; `text(line)` renders
+    /// one line the way the editor shows it, colours included.
+    func show(
+        lines: [Int], plainTexts: [String], text: (Int) -> NSAttributedString,
+        rowHeight: CGFloat
+    ) {
+        guard lines != self.lines || plainTexts != shownTexts || rows.isEmpty else { return }
         self.lines = lines
+        self.shownTexts = plainTexts
         rows.forEach { $0.removeFromSuperview() }
         rows = []
         isHidden = lines.isEmpty
