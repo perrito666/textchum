@@ -216,6 +216,50 @@ impl Document {
         ))
     }
 
+    /// The pinned context for a view whose first visible line is
+    /// `top_line`: the first line of each construct enclosing what the
+    /// view shows, outermost first, at most `max_rows` of them
+    /// (innermost kept when there are more).
+    ///
+    /// Each pinned row covers one more line of the view, so the answer
+    /// is computed against the first line still visible below the pins
+    /// — the fixed point of that adjustment.
+    ///
+    /// Empty for plain text, which has no structure to pin.
+    pub fn context_lines(&self, top_line: usize, max_rows: usize) -> Vec<usize> {
+        let Some(syntax) = self.syntax.as_ref() else {
+            return Vec::new();
+        };
+        let last_line = self.buffer.rope().len_lines().saturating_sub(1);
+        let mut count = 0;
+        let mut pinned = Vec::new();
+        for _ in 0..=max_rows {
+            let line = (top_line + count).min(last_line);
+            let mut lines = syntax.context_lines(self.buffer.rope(), line);
+            if lines.len() > max_rows {
+                lines.drain(..lines.len() - max_rows);
+            }
+            if lines.len() == count {
+                return lines;
+            }
+            if lines.len() < count {
+                // The pins reached past the construct they pin; the
+                // larger set stands — a pin held one line long beats a
+                // breadcrumb with a step missing.
+                return pinned;
+            }
+            count = lines.len();
+            pinned = lines;
+        }
+        pinned
+    }
+
+    /// The context as JSON — `[3, 7]` — for shells that reach the core
+    /// through the C ABI.
+    pub fn context_lines_json(&self, top_line: usize, max_rows: usize) -> String {
+        serde_json::Value::from(self.context_lines(top_line, max_rows)).to_string()
+    }
+
     /// Every stretch that can be folded, as `(first line, last line)`
     /// with the lines zero-based: folding hides everything after the
     /// first line, up to and including the last.

@@ -88,6 +88,8 @@ final class DocumentView {
     let scrollView: NSScrollView
     let textView: NSTextView
     let gutter: LineNumberGutterView
+    /// The pinned context, laid over the top of the scroll view.
+    let contextStrip = ContextStrip()
 
     init(scrollView: NSScrollView, textView: NSTextView, gutter: LineNumberGutterView) {
         self.scrollView = scrollView
@@ -95,8 +97,11 @@ final class DocumentView {
         self.gutter = gutter
         container.autoresizingMask = [.width, .height]
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        contextStrip.translatesAutoresizingMaskIntoConstraints = false
+        contextStrip.isHidden = true
         container.addSubview(gutter)
         container.addSubview(scrollView)
+        container.addSubview(contextStrip)
         NSLayoutConstraint.activate([
             gutter.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             gutter.topAnchor.constraint(equalTo: container.topAnchor),
@@ -105,6 +110,11 @@ final class DocumentView {
             scrollView.topAnchor.constraint(equalTo: container.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            // Over the gutter too: the numbers under the pins belong
+            // to hidden lines, and would sit beside the wrong text.
+            contextStrip.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            contextStrip.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            contextStrip.topAnchor.constraint(equalTo: scrollView.topAnchor),
         ])
     }
 }
@@ -334,6 +344,13 @@ final class DocumentController: NSResponder {
             name: NSView.boundsDidChangeNotification,
             object: clipView
         )
+        view.contextStrip.onSelect = { [weak self, weak view] line in
+            guard let self, let view else { return }
+            let offset = view.gutter.lineStart(ofLine: line)
+            view.textView.setSelectedRange(NSRange(location: offset, length: 0))
+            view.textView.scrollRangeToVisible(NSRange(location: offset, length: 0))
+            view.textView.window?.makeFirstResponder(view.textView)
+        }
         // Mouse-move tracking feeds language-server hover.
         textView.addTrackingArea(
             NSTrackingArea(
@@ -370,6 +387,12 @@ final class DocumentController: NSResponder {
         // Markdown opens with the live preview beside it.
         if coreDocument.languageName == "markdown" {
             showPreview()
+        }
+        DispatchQueue.main.async { [weak self, weak view] in
+            MainActor.assumeIsolated {
+                guard let self, let view else { return }
+                self.updateContextStrip(for: view)
+            }
         }
         return view
     }
@@ -1862,7 +1885,52 @@ final class DocumentController: NSResponder {
         }
     }
 
+    /// Recomputes the pinned context for one view from its scroll
+    /// position: at most five rows, rebuilt only when the lines change.
+    func updateContextStrip(for view: DocumentView) {
+        let strip = view.contextStrip
+        guard appliedSettings?.contextLines ?? true, coreDocument.languageName != nil else {
+            strip.show(lines: [], text: { _ in NSAttributedString() }, rowHeight: 0)
+            return
+        }
+        let clip = view.scrollView.contentView.bounds
+        let offset = view.textView.characterIndexForInsertion(
+            at: NSPoint(x: 5, y: clip.minY + 1))
+        let topLine = view.gutter.lineIndex(forOffset: offset)
+        let lines = coreDocument.contextLines(
+            topLine: topLine, maxRows: ContextStrip.maxRows)
+        let font = appliedSettings?.font ?? .monospacedSystemFont(ofSize: 13, weight: .regular)
+        let rowHeight = (font.ascender - font.descender + font.leading).rounded(.up) + 2
+        strip.show(
+            lines: lines,
+            text: { [weak self] line in
+                self?.attributedLine(line, in: view) ?? NSAttributedString()
+            },
+            rowHeight: rowHeight)
+    }
+
+    /// One line the way the editor shows it, colours included, without
+    /// its line break.
+    private func attributedLine(_ line: Int, in view: DocumentView) -> NSAttributedString {
+        guard let storage = view.textView.textStorage else { return NSAttributedString() }
+        let text = storage.string as NSString
+        let start = view.gutter.lineStart(ofLine: line)
+        guard start < text.length else { return NSAttributedString() }
+        var range = text.lineRange(for: NSRange(location: start, length: 0))
+        while range.length > 0,
+            [10, 13].contains(text.character(at: NSMaxRange(range) - 1))
+        {
+            range.length -= 1
+        }
+        return storage.attributedSubstring(from: range)
+    }
+
     @objc private func editorDidScroll(_ notification: Notification) {
+        if let clipView = notification.object as? NSClipView,
+            let view = views.first(where: { $0.scrollView.contentView === clipView })
+        {
+            updateContextStrip(for: view)
+        }
         lineRuler?.needsDisplay = true
         completionPopup.dismiss()
         // Colouring follows the viewport, so scrolling into fresh text
@@ -2711,6 +2779,12 @@ final class DocumentController: NSResponder {
     /// tab stops sized to the configured width in that font.
     func apply(settings: EditorSettings) {
         appliedSettings = settings
+        defer {
+            for view in views {
+                view.contextStrip.invalidateText()
+                updateContextStrip(for: view)
+            }
+        }
         appliedFont = settings.font
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
@@ -2787,6 +2861,33 @@ final class DocumentController: NSResponder {
     }
 
     /// The document's facts, for the window's subtitle.
+    /// What the status bar says about this document right now.
+    var statusInfo: StatusBar.Info {
+        var info = StatusBar.Info()
+        if let view = focusedView {
+            let caret = view.textView.selectedRange().location
+            let line = view.gutter.lineIndex(forOffset: caret)
+            info.line = line + 1
+            info.column = caret - view.gutter.lineStart(ofLine: line) + 1
+        }
+        info.tabWidth = appliedTabWidth
+        let stored = coreDocument.path.map {
+            (NSApp.delegate as? AppDelegate)?.fileOverride(path: $0)
+                ?? CoreConfig.FileOverride()
+        }
+        // The override answers when it says; the file itself otherwise,
+        // the way formatting already reads it.
+        info.usesTabs =
+            stored?.spaces.map { !$0 }
+            ?? {
+                let text = textView?.string ?? ""
+                return text.contains("\n\t") || text.hasPrefix("\t")
+            }()
+        info.language = coreDocument.languageName
+        info.encoding = coreDocument.encodingName
+        return info
+    }
+
     var chromeSubtitle: String {
         var subtitle = "\(coreDocument.encodingName) · \(coreDocument.lengthInBytes) bytes"
         if let language = coreDocument.languageName {
@@ -3493,6 +3594,12 @@ extension DocumentController {
         }
         refreshDecorations()
         updateChrome()
+        // A language change redraws what the pins say, and whether
+        // there are any: plain text pins nothing.
+        for view in views {
+            view.contextStrip.invalidateText()
+            updateContextStrip(for: view)
+        }
     }
 
     @objc func revealInTree(_ sender: Any?) {
@@ -3813,6 +3920,10 @@ extension DocumentController: NSTextViewDelegate {
         lineRuler?.invalidateLineStarts()
         completionAfterTyping()
         scheduleAutosave()
+        for view in views {
+            view.contextStrip.invalidateText()
+            updateContextStrip(for: view)
+        }
         assertInSync()
     }
 
@@ -4015,6 +4126,7 @@ extension DocumentController: NSTextViewDelegate {
         if let textView = notification.object as? NSTextView {
             workbench?.noteFocus(on: textView)
         }
+        workbench?.refreshStatus()
         // A caret move that is not part of an edit (click, arrow keys) ends
         // the current typing run for undo purposes.
         if selectionChangeIsFromEditing {

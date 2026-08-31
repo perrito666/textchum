@@ -102,6 +102,10 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         let editorSide = NSView()
         editorSide.addSubview(tabHost)
         editorSide.addSubview(columnSplit)
+        editorSide.addSubview(statusBar)
+        statusBar.onProperties = { [weak self] in
+            self?.focusedDocument?.showFileProperties(nil)
+        }
         NSLayoutConstraint.activate([
             tabHost.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
             tabHost.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
@@ -110,7 +114,10 @@ final class Workbench: NSWindowController, NSWindowDelegate {
             columnSplit.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
             columnSplit.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
             columnSplit.topAnchor.constraint(equalTo: tabHost.bottomAnchor),
-            columnSplit.bottomAnchor.constraint(equalTo: editorSide.bottomAnchor),
+            columnSplit.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
+            statusBar.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
+            statusBar.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
+            statusBar.bottomAnchor.constraint(equalTo: editorSide.bottomAnchor),
         ])
 
         let editorController = NSViewController()
@@ -600,9 +607,23 @@ final class Workbench: NSWindowController, NSWindowDelegate {
 
     /// The window wears the focused document's facts, and the tab bar
     /// its name and dirty mark.
+    /// The bar under the editor: caret, indentation, language.
+    let statusBar = StatusBar()
+
+    /// Redraws the status bar from the focused document. Cheap: the bar
+    /// only touches its labels when something it says changed.
+    func refreshStatus() {
+        guard let document = focusedDocument else {
+            statusBar.show(StatusBar.Info())
+            return
+        }
+        statusBar.show(document.statusInfo)
+    }
+
     func refreshChrome(for document: DocumentController) {
         refreshTabs()
         refreshPreview()
+        refreshStatus()
         guard focusedDocument === document, let window else { return }
         if let path = document.coreDocument.path {
             window.representedURL = URL(fileURLWithPath: path)

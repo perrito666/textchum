@@ -60,7 +60,10 @@ groupe de la fenêtre frontale (le défaut) ou dans une `"window"` à
 eux. `editor.mark_occurrences` (`true` par défaut) marque les autres
 endroits où apparaît le mot sélectionné ;
 `editor.occurrences_case_sensitive` et `editor.occurrences_whole_word`
-décident de ce qui en est un, tous deux `true` par défaut.
+décident ce qui compte comme tel, tous deux `true` par défaut.
+`editor.context_lines` (`true` par défaut) épingle la première ligne de
+chaque construction englobante en haut de la vue pendant qu'un long
+corps défile ; `false` retire les épingles.
 
 Tout est optionnel — fichier, section ou clé manquants signifient
 simplement la valeur par défaut. Les écritures sont atomiques (fichier

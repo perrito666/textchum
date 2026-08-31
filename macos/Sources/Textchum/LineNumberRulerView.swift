@@ -81,6 +81,18 @@ final class LineNumberGutterView: NSView {
         needsDisplay = true
     }
 
+    /// The zero-based line holding the UTF-16 `offset`. The status bar
+    /// and the pinned context ask; the cache is already here.
+    func lineIndex(forOffset offset: Int) -> Int {
+        lineNumber(forOffset: offset) - 1
+    }
+
+    /// Where the zero-based `line` starts, in UTF-16, clamped to the
+    /// last line.
+    func lineStart(ofLine line: Int) -> Int {
+        lineStarts[max(0, min(line, lineStarts.count - 1))]
+    }
+
     private func lineNumber(forOffset offset: Int) -> Int {
         var low = 0
         var high = lineStarts.count - 1

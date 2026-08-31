@@ -61,6 +61,10 @@ pub struct Page {
     /// A right-click does not move the caret, and the menu is about
     /// what was clicked.
     pub context_offset: Cell<Option<i32>>,
+    /// The pinned-context rows over the top of the view, and the lines
+    /// they currently show.
+    context_strip: gtk::Box,
+    pub context_pins: RefCell<Vec<usize>>,
 
 }
 
@@ -240,9 +244,21 @@ impl Page {
         let change_bar = gtk::DrawingArea::new();
         change_bar.set_content_width(5);
         change_bar.set_vexpand(true);
+        // The pinned context lies over the top of the view: the first
+        // line of each enclosing construct, stacked, while a long
+        // method scrolls. An overlay, so switching it off costs no
+        // layout and the text keeps its geometry.
+        let context_strip = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        context_strip.set_valign(gtk::Align::Start);
+        context_strip.add_css_class("view");
+        context_strip.set_visible(false);
+        let editor_overlay = gtk::Overlay::new();
+        editor_overlay.set_child(Some(&scrolled));
+        editor_overlay.add_overlay(&context_strip);
+        editor_overlay.set_hexpand(true);
         let editor_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         editor_row.append(&change_bar);
-        editor_row.append(&scrolled);
+        editor_row.append(&editor_overlay);
 
         // Markdown gets a live preview pane beside the text — the
         // core's HTML, reloaded shortly after edits settle.
@@ -317,13 +333,25 @@ impl Page {
             change_bar: change_bar.clone(),
             change_marks: RefCell::new(Vec::new()),
             context_offset: Cell::new(None),
+            context_strip,
+            context_pins: RefCell::new(Vec::new()),
         });
         document.views.borrow_mut().push(Rc::downgrade(&page));
+        {
+            // The status bar follows the caret.
+            let weak = Rc::downgrade(&page);
+            buffer.connect_cursor_position_notify(move |_| {
+                if let Some(page) = weak.upgrade() {
+                    crate::workbench::refresh_status_for(&page);
+                }
+            });
+        }
         install_completion_keys(&page);
         install_snippet_keys(&page);
         install_change_bar(&page);
         install_indent_keys(&page);
         install_wrap_keys(&page);
+        install_context_strip(&page);
         // A file opens already differing from its committed self as
         // often as not, so the marks are wanted on the first paint.
         {
@@ -365,6 +393,8 @@ fn install_change_handler(
                 let views = document.views();
                 for view in &views {
                     crate::workbench::refresh_chrome_for(view);
+                    view.context_pins.borrow_mut().clear();
+                    refresh_context_strip(view);
                 }
                 debug_assert_eq!(
                     buffer.text(&buffer.start_iter(), &buffer.end_iter(), true),
@@ -1609,6 +1639,82 @@ fn install_wrap_keys(page: &Rc<Page>) {
         }
     });
     page.view.add_controller(controller);
+}
+
+/// Follows scrolling with the pinned context.
+fn install_context_strip(page: &Rc<Page>) {
+    let weak = Rc::downgrade(page);
+    scrolled_window_of(page).vadjustment().connect_value_changed(move |_| {
+        if let Some(page) = weak.upgrade() {
+            refresh_context_strip(&page);
+        }
+    });
+    let weak = Rc::downgrade(page);
+    glib::idle_add_local_once(move || {
+        if let Some(page) = weak.upgrade() {
+            refresh_context_strip(&page);
+        }
+    });
+}
+
+fn scrolled_window_of(page: &Rc<Page>) -> gtk::ScrolledWindow {
+    page.view
+        .parent()
+        .and_downcast::<gtk::ScrolledWindow>()
+        .expect("the view lives in its scrolled window")
+}
+
+/// Recomputes the pinned context for a page from its scroll position:
+/// at most five rows, rebuilt only when the lines change.
+pub fn refresh_context_strip(page: &Rc<Page>) {
+    let strip = &page.context_strip;
+    let enabled = crate::shell::Shell::instance().config.borrow().context_lines();
+    let state = page.state.borrow();
+    if !enabled || state.document.language_name().is_none() {
+        drop(state);
+        strip.set_visible(false);
+        page.context_pins.borrow_mut().clear();
+        return;
+    }
+    let top = scrolled_window_of(page).vadjustment().value() as i32;
+    let (top_iter, _) = page.view.line_at_y(top);
+    let lines = state.document.context_lines(top_iter.line() as usize, 5);
+    drop(state);
+    if *page.context_pins.borrow() == lines {
+        return;
+    }
+    *page.context_pins.borrow_mut() = lines.clone();
+    while let Some(child) = strip.first_child() {
+        strip.remove(&child);
+    }
+    strip.set_visible(!lines.is_empty());
+    let buffer = &page.buffer;
+    for line in lines {
+        let start = buffer.iter_at_line(line as i32).unwrap_or_else(|| buffer.start_iter());
+        let mut end = start.clone();
+        if !end.ends_line() {
+            end.forward_to_line_end();
+        }
+        let row = gtk::Label::new(Some(&buffer.text(&start, &end, true)));
+        row.add_css_class("monospace");
+        row.set_xalign(0.0);
+        row.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        row.set_margin_start(6);
+        let click = gtk::GestureClick::new();
+        let weak = Rc::downgrade(page);
+        click.connect_pressed(move |_, _, _, _| {
+            let Some(page) = weak.upgrade() else { return };
+            let Some(mut at) = page.buffer.iter_at_line(line as i32) else { return };
+            page.buffer.place_cursor(&at);
+            page.view.scroll_to_iter(&mut at, 0.0, true, 0.0, 0.0);
+            page.view.grab_focus();
+        });
+        row.add_controller(click);
+        strip.append(&row);
+    }
+    // A hairline under the pins, so they read as a shelf and not as
+    // the first lines of the view.
+    strip.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
 }
 
 /// Wraps the selection when `key` is an opening delimiter, and answers
