@@ -277,7 +277,16 @@ final class DocumentController: NSResponder {
         syncLSPOpenState()
         appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.refreshDecorations() }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.refreshDecorations()
+                    // The pins carry their own colours, which just
+                    // changed under them.
+                    for view in self.views {
+                        view.contextStrip.invalidateText()
+                        self.updateContextStrip(for: view)
+                    }
+                }
             }
         }
     }
@@ -355,7 +364,9 @@ final class DocumentController: NSResponder {
         textView.addTrackingArea(
             NSTrackingArea(
                 rect: .zero,
-                options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+                options: [
+                    .mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect,
+                ],
                 owner: self,
                 userInfo: nil
             ))
@@ -572,10 +583,26 @@ final class DocumentController: NSResponder {
 
     /// Tracking-area callback: after the mouse rests for a beat, ask the
     /// server what is under it.
+    override func mouseExited(with event: NSEvent) {
+        // The armed hover would otherwise fire over whatever the mouse
+        // came to rest on outside the text — the status bar, say.
+        hoverTimer?.invalidate()
+        hoverPopover?.close()
+        hoverPopover = nil
+    }
+
     override func mouseMoved(with event: NSEvent) {
         hoverPopover?.close()
         hoverPopover = nil
         guard let textView else { return }
+        // Under the pinned context the text is hidden; documenting it
+        // from there would explain a line nobody is looking at.
+        if let strip = focusedView?.contextStrip, !strip.isHidden,
+            strip.bounds.contains(strip.convert(event.locationInWindow, from: nil))
+        {
+            hoverTimer?.invalidate()
+            return
+        }
         let point = textView.convert(event.locationInWindow, from: nil)
         // A diagnostic is already in hand and needs no server: an
         // underline nobody can read is a notification with the message
@@ -1910,10 +1937,11 @@ final class DocumentController: NSResponder {
     }
 
     /// One line the way the editor shows it, colours included, without
-    /// its line break.
+    /// its line break. The editor's colours are rendering attributes on
+    /// the layout manager, so the pins ask the core's highlighter for
+    /// their own.
     private func attributedLine(_ line: Int, in view: DocumentView) -> NSAttributedString {
-        guard let storage = view.textView.textStorage else { return NSAttributedString() }
-        let text = storage.string as NSString
+        let text = view.textView.string as NSString
         let start = view.gutter.lineStart(ofLine: line)
         guard start < text.length else { return NSAttributedString() }
         var range = text.lineRange(for: NSRange(location: start, length: 0))
@@ -1922,7 +1950,34 @@ final class DocumentController: NSResponder {
         {
             range.length -= 1
         }
-        return storage.attributedSubstring(from: range)
+        let font = appliedFont
+        let painted = NSMutableAttributedString(
+            string: text.substring(with: range),
+            attributes: [.font: font, .foregroundColor: NSColor.textColor])
+        let darkAppearance =
+            (window?.effectiveAppearance ?? NSApp.effectiveAppearance)
+                .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        for span in coreDocument.highlights(in: range) {
+            let local = NSIntersectionRange(
+                NSRange(
+                    location: span.range.location - range.location,
+                    length: span.range.length),
+                NSRange(location: 0, length: painted.length))
+            guard local.length > 0 else { continue }
+            if let color = HighlightPalette.color(
+                forStyle: span.styleIndex, darkAppearance: darkAppearance)
+            {
+                painted.addAttribute(.foregroundColor, value: color, range: local)
+            }
+            let traits = HighlightPalette.traits(forStyle: span.styleIndex)
+            if traits.bold || traits.italic {
+                painted.addAttribute(
+                    .font,
+                    value: Self.font(font, bold: traits.bold, italic: traits.italic),
+                    range: local)
+            }
+        }
+        return painted
     }
 
     @objc private func editorDidScroll(_ notification: Notification) {
