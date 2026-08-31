@@ -1657,8 +1657,32 @@ func runSmokeTest() -> Int32 {
         print("FAIL: an untracked file should carry no marks")
         return 1
     }
+    // Branch mode: work committed on a branch is quiet against HEAD
+    // and loud against the fork point, and the branch's files come
+    // back as an openable list.
+    git(["branch", "-M", "main"])
+    git(["checkout", "-qb", "feature"])
+    try? "one\nTWO\nthree\nfour\n".write(to: tracked, atomically: true, encoding: .utf8)
+    git(["commit", "-qam", "branch work"])
+    let branchText = "one\nTWO\nthree\nfour\n"
+    let quiet = CoreChanges.marks(
+        forPath: tracked.path, text: branchText, baseline: "head", branches: ["main"])
+    let loud = CoreChanges.marks(
+        forPath: tracked.path, text: branchText, baseline: "branch", branches: ["main"])
+    guard quiet.isEmpty, loud.count == 1, loud[0].line == 1 else {
+        print("FAIL: branch marks: quiet \(quiet.count), loud \(loud.count)")
+        return 1
+    }
+    guard let branch = CoreChanges.branchFiles(near: repo.path, branches: ["main"]),
+        branch.files.contains(where: { $0.path == "thing.txt" }),
+        branch.files.contains(where: { $0.path == "never-committed.txt" })
+    else {
+        print("FAIL: the branch's files did not come back")
+        return 1
+    }
     try? FileManager.default.removeItem(at: repo)
     print("git gutter ok (marks what changed, silent without a baseline)")
+    print("branch view ok (the fork point speaks, the files list back)")
 
     // Blame: what git knows about one line, asked with the buffer's
     // text so an unsaved edit cannot shift the answer.

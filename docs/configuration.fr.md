@@ -64,6 +64,13 @@ décident ce qui compte comme tel, tous deux `true` par défaut.
 `editor.context_lines` (`true` par défaut) épingle la première ligne de
 chaque construction englobante en haut de la vue pendant qu'un long
 corps défile ; `false` retire les épingles.
+`editor.git_marks` choisit avec quoi la barre de changements compare :
+`"head"` (le défaut) avec le dernier commit, `"branch"` avec le commit
+d'où la branche est née. `editor.merge_base_branches` est la liste des
+noms de branche essayés, dans l'ordre, quand git ne nomme pas de
+branche par défaut — `["main", "master", "trunk", "develop"]` sinon.
+Les deux clés fonctionnent aussi par projet, comme surcharges `editor`
+d'une entrée du workspace.
 
 Tout est optionnel — fichier, section ou clé manquants signifient
 simplement la valeur par défaut. Les écritures sont atomiques (fichier

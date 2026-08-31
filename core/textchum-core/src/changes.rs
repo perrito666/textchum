@@ -269,6 +269,183 @@ pub fn changes_for(path: &Path, current: &str) -> Vec<LineChange> {
     }
 }
 
+/// The branch names tried, in order, when git does not say which
+/// branch is the default one. Configurable, this is only the answer
+/// when nobody configured one.
+pub const DEFAULT_MERGE_BASE_BRANCHES: &[&str] = &["main", "master", "trunk", "develop"];
+
+/// What the gutter compares against: the last commit, or the commit
+/// this branch grew from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Baseline {
+    Head,
+    Branch,
+}
+
+impl Baseline {
+    /// `"branch"` is the fork point; anything else is the last commit,
+    /// which is also what an unset key means.
+    pub fn parse(name: &str) -> Self {
+        if name == "branch" {
+            Baseline::Branch
+        } else {
+            Baseline::Head
+        }
+    }
+}
+
+/// The commit this branch grew from: the merge base of `HEAD` and the
+/// default branch — `origin/HEAD` when git knows it, else the first
+/// name on `priorities` that exists, locally or on `origin`.
+///
+/// `None` when there is no fork to speak of: outside a repository, or
+/// standing on the default branch itself, where the merge base is
+/// `HEAD` and the branch view would say nothing the plain one does not.
+pub fn fork_point(directory: &Path, priorities: &[String]) -> Option<String> {
+    // An empty list means nobody chose one, the same as the config's
+    // absent key.
+    let default: Vec<String>;
+    let priorities = if priorities.is_empty() {
+        default = DEFAULT_MERGE_BASE_BRANCHES
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+        &default
+    } else {
+        priorities
+    };
+    let head = git(directory, &["rev-parse", "HEAD"])?;
+    let head = head.trim();
+    let mut candidates: Vec<String> = Vec::new();
+    if let Some(default) = git(
+        directory,
+        &["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
+    ) {
+        candidates.push(default.trim().to_string());
+    }
+    for name in priorities {
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        candidates.push(name.to_string());
+        candidates.push(format!("origin/{name}"));
+    }
+    for candidate in candidates {
+        let Some(base) = git(directory, &["merge-base", "HEAD", &candidate]) else {
+            continue;
+        };
+        let base = base.trim();
+        if base == head {
+            continue;
+        }
+        return Some(base.to_string());
+    }
+    None
+}
+
+/// The file's contents at the branch's fork point. `None` for the same
+/// reasons as [`head_baseline`], when there is no fork point, and for a
+/// file the branch added — which, like an untracked file, would mark
+/// every line, and is left to the changed-files list to say.
+pub fn branch_baseline(path: &Path, priorities: &[String]) -> Option<String> {
+    let path = path.canonicalize().ok()?;
+    let directory = path.parent()?;
+    let top = git(directory, &["rev-parse", "--show-toplevel"])?;
+    let relative = path.strip_prefix(top.trim()).ok()?;
+    let base = fork_point(directory, priorities)?;
+    git(
+        directory,
+        &["show", &format!("{base}:{}", relative.to_string_lossy())],
+    )
+}
+
+/// [`changes_for`], against the chosen baseline. Branch mode falls
+/// back to the last commit when there is no fork point to compare
+/// against, so the gutter never goes quieter than it was.
+pub fn changes_against(
+    path: &Path,
+    current: &str,
+    baseline: Baseline,
+    priorities: &[String],
+) -> Vec<LineChange> {
+    let text = match baseline {
+        Baseline::Head => head_baseline(path),
+        Baseline::Branch => {
+            if fork_point_exists(path, priorities) {
+                branch_baseline(path, priorities)
+            } else {
+                head_baseline(path)
+            }
+        }
+    };
+    match text {
+        Some(text) => line_changes(&text, current),
+        None => Vec::new(),
+    }
+}
+
+fn fork_point_exists(path: &Path, priorities: &[String]) -> bool {
+    path.canonicalize()
+        .ok()
+        .and_then(|path| path.parent().map(|d| d.to_path_buf()))
+        .is_some_and(|directory| fork_point(&directory, priorities).is_some())
+}
+
+/// The files this branch touches — committed on it, changed in the
+/// working tree, or not yet tracked: the pull request's files, read
+/// from git alone. Standing on the default branch, the working tree's
+/// own changes. Paths are relative to the returned repository root;
+/// deleted files are left out, there being nothing to open.
+pub fn branch_files(start: &Path, priorities: &[String]) -> Option<(String, Vec<(char, String)>)> {
+    let start = start.canonicalize().ok()?;
+    let directory = if start.is_dir() {
+        start.as_path()
+    } else {
+        start.parent()?
+    };
+    let top = git(directory, &["rev-parse", "--show-toplevel"])?;
+    let top = top.trim().to_string();
+    let against = fork_point(directory, priorities).unwrap_or_else(|| "HEAD".into());
+    let mut files: std::collections::BTreeMap<String, char> = Default::default();
+    if let Some(listed) = git(directory, &["diff", "--name-status", &against]) {
+        for line in listed.lines() {
+            let mut parts = line.split('\t');
+            let Some(status) = parts.next().and_then(|s| s.chars().next()) else {
+                continue;
+            };
+            // A rename lists old then new; the new name is the file.
+            let Some(path) = parts.last() else { continue };
+            if status == 'D' {
+                continue;
+            }
+            files.insert(path.to_string(), status);
+        }
+    }
+    if let Some(untracked) = git(directory, &["ls-files", "--others", "--exclude-standard"]) {
+        for line in untracked.lines() {
+            if !line.is_empty() {
+                files.entry(line.to_string()).or_insert('A');
+            }
+        }
+    }
+    Some((top, files.into_iter().map(|(path, status)| (status, path)).collect()))
+}
+
+/// The list as JSON — `{"root": "...", "files": [{"status": "M",
+/// "path": "src/a.rs"}, …]}` — for shells on the C ABI. `{}` when
+/// there is no repository.
+pub fn branch_files_json(start: &Path, priorities: &[String]) -> String {
+    let Some((root, files)) = branch_files(start, priorities) else {
+        return "{}".into();
+    };
+    let items: Vec<serde_json::Value> = files
+        .iter()
+        .map(|(status, path)| serde_json::json!({"status": status.to_string(), "path": path}))
+        .collect();
+    serde_json::json!({"root": root, "files": items}).to_string()
+}
+
 /// The marks as JSON, which is how they cross the FFI.
 pub fn to_json(changes: &[LineChange]) -> String {
     let items: Vec<serde_json::Value> = changes
@@ -427,6 +604,59 @@ mod tests {
                 LineChange { line: 1, kind: ChangeKind::Modified },
                 LineChange { line: 3, kind: ChangeKind::Added },
             ]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_branch_compares_against_where_it_forked() {
+        let dir = std::env::temp_dir().join(format!("textchum-branch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let run = |arguments: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(arguments)
+                .output()
+                .expect("git runs")
+        };
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "user.email", "test@example.invalid"]);
+        run(&["config", "user.name", "Test"]);
+        let path = dir.join("thing.txt");
+        std::fs::write(&path, "one\ntwo\nthree\n").unwrap();
+        run(&["add", "thing.txt"]);
+        run(&["commit", "-qm", "first"]);
+        run(&["checkout", "-qb", "feature"]);
+        std::fs::write(&path, "one\nTWO\nthree\n").unwrap();
+        run(&["commit", "-qam", "branch work"]);
+
+        let priorities: Vec<String> = vec!["main".into()];
+        // Committed on the branch: quiet against HEAD, loud against the
+        // fork point.
+        assert!(changes_against(&path, "one\nTWO\nthree\n", Baseline::Head, &priorities)
+            .is_empty());
+        assert_eq!(
+            changes_against(&path, "one\nTWO\nthree\n", Baseline::Branch, &priorities),
+            vec![LineChange { line: 1, kind: ChangeKind::Modified }]
+        );
+        // The list of touched files: the committed edit plus a file not
+        // yet tracked, the deleted one left out.
+        std::fs::write(dir.join("fresh.txt"), "new\n").unwrap();
+        let (root, files) = branch_files(&dir, &priorities).expect("a repository");
+        assert!(root.ends_with(&dir.file_name().unwrap().to_string_lossy().to_string()));
+        assert_eq!(
+            files,
+            vec![('A', "fresh.txt".into()), ('M', "thing.txt".into())]
+        );
+        // Standing on the default branch there is no fork point, and
+        // the branch view says what the plain one says.
+        run(&["checkout", "-q", "main"]);
+        assert!(fork_point(&dir, &priorities).is_none());
+        assert_eq!(
+            changes_against(&path, "one\nTWO\nthree\n", Baseline::Branch, &priorities),
+            changes_against(&path, "one\nTWO\nthree\n", Baseline::Head, &priorities),
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -135,6 +135,17 @@ avant l'enregistrement, et se recalcule quand la frappe s'arrête. Un
 fichier sans version validée, ou hors d'un dépôt, ne porte aucune
 marque plutôt que de voir toutes ses lignes déclarées nouvelles.
 
+La barre compare avec le dernier commit, sauf indication contraire. Au
+fond d'une branche cette réponse se tait — tout ce qui est validé sur
+la branche compte comme inchangé — alors `editor.git_marks: "branch"`
+compare avec le commit d'où la branche est née, et la barre montre tout
+ce que la branche touche. Quand git ne nomme pas de branche par défaut,
+`editor.merge_base_branches` liste les noms à essayer, le plus probable
+d'abord ; les deux réglages peuvent être remplacés par projet.
+**Aller → Modifié dans la branche** (⌃⌘T, Ctrl+Alt+P sous Linux) liste
+les fichiers de la branche — ceux de la pull request, lus depuis git
+seul — derrière le même filtre flou qu'Ouvrir rapidement.
+
 **Attribuer la ligne** (⌃⌘B, Ctrl+Alt+B sous Linux) demande à git qui a
 touché en dernier la ligne sous le curseur : le commit, l'auteur et la
 date où il l'a écrite, le sujet et le corps du message — où se trouve

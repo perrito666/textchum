@@ -126,6 +126,21 @@ final class SettingsModel: ObservableObject {
     @Published var contextLines: Bool {
         didSet { persist { $0.contextLines = contextLines } }
     }
+    /// "head" or "branch": what the gutter compares against.
+    @Published var gitMarks: String {
+        didSet { persist { $0.gitMarks = gitMarks } }
+    }
+    /// One branch name per line; empty restores the default list.
+    @Published var mergeBaseBranches: String {
+        didSet {
+            persist {
+                $0.mergeBaseBranches = mergeBaseBranches
+                    .split(whereSeparator: \.isNewline)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+            }
+        }
+    }
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
     }
@@ -195,6 +210,10 @@ final class SettingsModel: ObservableObject {
         var tabWidth: String = ""
         /// Space-separated hidden-name globs; empty = inherit defaults.
         var hideGlobs: String = ""
+        /// "" inherits; "head" or "branch" overrides the gutter's baseline.
+        var gitMarks: String = ""
+        /// Newline-joined branch priorities; "" inherits.
+        var mergeBaseBranches: String = ""
         var id: String { scope }
         var scopeLabel: String { (scope as NSString).lastPathComponent }
     }
@@ -303,6 +322,8 @@ final class SettingsModel: ObservableObject {
         tabWidth = config.tabWidth
         lineNumbers = config.lineNumbers
         contextLines = config.contextLines
+        gitMarks = config.gitMarks
+        mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         hoverDocs = config.hoverDocs
         keepBuffers = config.keepBuffers
         interfaceLanguage = config.interfaceLanguage
@@ -337,6 +358,8 @@ final class SettingsModel: ObservableObject {
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
+        self.gitMarks = config.gitMarks
+        self.mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         self.hoverDocs = config.hoverDocs
         self.keepBuffers = config.keepBuffers
         self.interfaceLanguage = config.interfaceLanguage
@@ -390,7 +413,10 @@ final class SettingsModel: ObservableObject {
                             size == size.rounded() ? String(Int(size)) : String(size)
                         } ?? "",
                         tabWidth: (editor["tab_width"] as? Int).map(String.init) ?? "",
-                        hideGlobs: hide
+                        hideGlobs: hide,
+                        gitMarks: editor["git_marks"] as? String ?? "",
+                        mergeBaseBranches: (editor["merge_base_branches"] as? [String])?
+                            .joined(separator: "\n") ?? ""
                     ))
             }
         }
@@ -983,6 +1009,22 @@ struct GeneralSettingsTab: View {
             }
             Toggle(t("Show line numbers"), isOn: $model.lineNumbers)
             Toggle(t("Pin enclosing context lines"), isOn: $model.contextLines)
+            Picker(t("Gutter marks compare against"), selection: $model.gitMarks) {
+                Text(t("The last commit")).tag("head")
+                Text(t("Where the branch forked")).tag("branch")
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(t("Merge-base branches, most likely first"))
+                Text(t("Tried in order when git does not name a default branch."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $model.mergeBaseBranches)
+                    .font(.body.monospaced())
+                    .frame(height: 64)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.secondary.opacity(0.3)))
+            }
             Toggle(t("Hover documentation"), isOn: $model.hoverDocs)
             Toggle(t("Keep files open when their window closes"), isOn: $model.keepBuffers)
             Picker(t("Interface language"), selection: $model.interfaceLanguage) {
@@ -1588,6 +1630,33 @@ private struct ProjectsTab: View {
                                     model.setEditorOverride(
                                         scope: entry.scope, key: "tab_width",
                                         valueJSON: Int(text).map(String.init))
+                                }
+                                OverrideField(
+                                    placeholder: t("marks: {}", model.gitMarks),
+                                    width: 96,
+                                    initial: entry.gitMarks
+                                ) { text in
+                                    model.setEditorOverride(
+                                        scope: entry.scope, key: "git_marks",
+                                        valueJSON: ["head", "branch"].contains(text)
+                                            ? "\"\(text)\"" : nil)
+                                }
+                                OverrideField(
+                                    placeholder: t("merge-base branches"),
+                                    width: 150,
+                                    initial: entry.mergeBaseBranches
+                                        .replacingOccurrences(of: "\n", with: " ")
+                                ) { text in
+                                    let names = text
+                                        .split(separator: " ")
+                                        .map(String.init)
+                                        .filter { !$0.isEmpty }
+                                    let json =
+                                        (try? JSONSerialization.data(withJSONObject: names))
+                                        .flatMap { String(data: $0, encoding: .utf8) }
+                                    model.setEditorOverride(
+                                        scope: entry.scope, key: "merge_base_branches",
+                                        valueJSON: names.isEmpty ? nil : json)
                                 }
                                 GlobEditorButton(
                                     title: "Hidden in \(entry.scopeLabel)",

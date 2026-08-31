@@ -1108,6 +1108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(newDocumentWithFormatPicker(_:)): "newWithFormat",
             #selector(openDocument(_:)): "open",
             #selector(openQuickly(_:)): "openQuickly",
+            #selector(openChangedFiles(_:)): "changedFiles",
             #selector(DocumentController.saveDocument(_:)): "save",
             #selector(DocumentController.saveDocumentAs(_:)): "saveAs",
             #selector(DocumentController.revertToSaved(_:)): "revertToSaved",
@@ -1707,6 +1708,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showQuickFinder(mode: .grep)
     }
 
+    /// Go → Changed in Branch: the files the work in progress touches,
+    /// behind the same fuzzy filter as Open Quickly.
+    @objc func openChangedFiles(_ sender: Any?) {
+        let document = (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument
+            ?? editors.first
+        quickFinder.mergeBaseBranches = document?.gitMarksSettings.branches
+            ?? config?.mergeBaseBranches ?? []
+        showQuickFinder(mode: .changed)
+    }
+
     // MARK: Recent files
 
     /// The Open Recent submenu; rebuilt from NSDocumentController's
@@ -2125,6 +2136,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             withTitle: t("Open…"), action: #selector(openDocument(_:)), keyEquivalent: "o")
         fileMenu.addItem(
             withTitle: t("Open Quickly…"), action: #selector(openQuickly(_:)), keyEquivalent: "t")
+        let changedFiles = NSMenuItem(
+            title: t("Changed in Branch…"),
+            action: #selector(openChangedFiles(_:)),
+            keyEquivalent: "t"
+        )
+        changedFiles.keyEquivalentModifierMask = [.command, .control]
+        changedFiles.target = self
+        fileMenu.addItem(changedFiles)
         let openRecentItem = NSMenuItem(title: t("Open Recent"), action: nil, keyEquivalent: "")
         let openRecent = NSMenu(title: t("Open Recent"))
         openRecent.delegate = self

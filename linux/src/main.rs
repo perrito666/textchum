@@ -363,6 +363,7 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.reveal-in-tree", "<Ctrl><Shift>e"),
     ("win.complete", "<Ctrl>space"),
     ("win.quick-open", "<Ctrl>p"),
+    ("win.changed-files", "<Ctrl><Alt>p"),
     ("win.definition", "F12"),
     ("win.sidebar", "F9"),
     ("win.preview", "<Ctrl><Alt>p"),
@@ -843,7 +844,42 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             eprintln!("FAIL: an untracked file should carry no marks");
             return 1;
         }
+        // Branch mode: work committed on a branch is quiet against
+        // HEAD and loud against the fork point, and the branch's files
+        // come back as an openable list.
+        use textchum_core::changes::{branch_files, changes_against, Baseline};
+        git(&["branch", "-M", "main"]);
+        git(&["checkout", "-qb", "feature"]);
+        let _ = std::fs::write(&tracked, "one\nTWO\nthree\nfour\n");
+        git(&["commit", "-qam", "branch work"]);
+        let priorities: Vec<String> = vec!["main".into()];
+        let quiet = changes_against(
+            &tracked,
+            "one\nTWO\nthree\nfour\n",
+            Baseline::Head,
+            &priorities,
+        );
+        let loud = changes_against(
+            &tracked,
+            "one\nTWO\nthree\nfour\n",
+            Baseline::Branch,
+            &priorities,
+        );
+        if !quiet.is_empty() || loud.len() != 1 {
+            eprintln!("FAIL: branch marks: quiet {quiet:?}, loud {loud:?}");
+            return 1;
+        }
+        let Some((_, files)) = branch_files(&repo, &priorities) else {
+            eprintln!("FAIL: the branch's files did not come back");
+            return 1;
+        };
+        let names: Vec<&str> = files.iter().map(|(_, path)| path.as_str()).collect();
+        if !names.contains(&"thing.txt") || !names.contains(&"never-committed.txt") {
+            eprintln!("FAIL: the branch's files: {names:?}");
+            return 1;
+        }
         println!("git gutter ok (marks what changed, silent without a baseline)");
+        println!("branch view ok (the fork point speaks, the files list back)");
     }
 
     // Blame: what git knows about one line, asked with the buffer's
