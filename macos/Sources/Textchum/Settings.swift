@@ -1231,6 +1231,81 @@ struct GlobEditor: View {
 
 /// The button + popover pair the hide rows use: the list stays out of
 /// the way until asked for, and edits commit when the popover closes.
+/// The per-project gutter-baseline choice, spelled out: inherit, the
+/// last commit, or where the branch forked — a menu, not a word to
+/// remember and type.
+struct GitMarksOverridePicker: View {
+    let initial: String
+    let commit: (String) -> Void
+    @State private var choice = ""
+    @State private var loaded = false
+
+    var body: some View {
+        Picker(t("Gutter marks"), selection: $choice) {
+            Text(t("Inherit")).tag("")
+            Text(t("The last commit")).tag("head")
+            Text(t("Where the branch forked")).tag("branch")
+        }
+        .frame(width: 220)
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            choice = initial
+        }
+        .onChange(of: choice) { _, chosen in
+            guard loaded else { return }
+            commit(chosen)
+        }
+    }
+}
+
+/// A button opening the merge-base list for one project: one branch
+/// name per line, empty inherits the global list.
+struct BranchListButton: View {
+    let title: String
+    /// Newline-joined on the way in; the editor works in lines too.
+    let initial: String
+    let commit: ([String]) -> Void
+
+    @State private var showing = false
+    @State private var text = ""
+
+    var body: some View {
+        Button(
+            initial.isEmpty
+                ? t("Merge-base branches: inherited")
+                : t("Merge-base branches: {}", initial.replacingOccurrences(of: "\n", with: ", "))
+        ) {
+            text = initial
+            showing = true
+        }
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(title)
+                    .font(.headline)
+                Text(t("One branch name per line, most likely first; empty inherits."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $text)
+                    .font(.body.monospaced())
+                    .frame(width: 260, height: 96)
+                HStack {
+                    Spacer()
+                    Button(t("Done")) {
+                        commit(
+                            text.split(whereSeparator: \.isNewline)
+                                .map { $0.trimmingCharacters(in: .whitespaces) }
+                                .filter { !$0.isEmpty })
+                        showing = false
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(14)
+        }
+    }
+}
+
 struct GlobEditorButton: View {
     let title: String
     let presets: [(name: String, globs: [String])]
@@ -1631,26 +1706,15 @@ private struct ProjectsTab: View {
                                         scope: entry.scope, key: "tab_width",
                                         valueJSON: Int(text).map(String.init))
                                 }
-                                OverrideField(
-                                    placeholder: t("marks: {}", model.gitMarks),
-                                    width: 96,
-                                    initial: entry.gitMarks
-                                ) { text in
+                                GitMarksOverridePicker(initial: entry.gitMarks) { choice in
                                     model.setEditorOverride(
                                         scope: entry.scope, key: "git_marks",
-                                        valueJSON: ["head", "branch"].contains(text)
-                                            ? "\"\(text)\"" : nil)
+                                        valueJSON: choice.isEmpty ? nil : "\"\(choice)\"")
                                 }
-                                OverrideField(
-                                    placeholder: t("merge-base branches"),
-                                    width: 150,
+                                BranchListButton(
+                                    title: t("Merge-base branches in {}", entry.scopeLabel),
                                     initial: entry.mergeBaseBranches
-                                        .replacingOccurrences(of: "\n", with: " ")
-                                ) { text in
-                                    let names = text
-                                        .split(separator: " ")
-                                        .map(String.init)
-                                        .filter { !$0.isEmpty }
+                                ) { names in
                                     let json =
                                         (try? JSONSerialization.data(withJSONObject: names))
                                         .flatMap { String(data: $0, encoding: .utf8) }
