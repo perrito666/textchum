@@ -344,8 +344,8 @@ final class DocumentController: NSResponder {
             name: NSView.boundsDidChangeNotification,
             object: clipView
         )
-        view.contextStrip.onSelect = { [weak self, weak view] line in
-            guard let self, let view else { return }
+        view.contextStrip.onSelect = { [weak view] line in
+            guard let view else { return }
             let offset = view.gutter.lineStart(ofLine: line)
             view.textView.setSelectedRange(NSRange(location: offset, length: 0))
             view.textView.scrollRangeToVisible(NSRange(location: offset, length: 0))
