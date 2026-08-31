@@ -2067,6 +2067,9 @@ final class DocumentController: NSResponder {
         {
             updateContextStrip(for: view)
         }
+        // Spelling is scoped to what is painted; what scrolls in gets
+        // its turn once the scroll settles.
+        scheduleSpellCheck()
         lineRuler?.needsDisplay = true
         completionPopup.dismiss()
         // Colouring follows the viewport, so scrolling into fresh text
@@ -2174,18 +2177,22 @@ final class DocumentController: NSResponder {
     /// comments for code — spell checking identifiers helps no one.
     private func proseRanges(in text: NSString) -> [NSRange] {
         let language = coreDocument.languageName
+        // Scoped to the painted stretch, like the colours and the
+        // marks: spell-checking a whole large file on the main thread
+        // is a second of freeze, paid shortly after every edit. What
+        // scrolls in is re-checked when the scroll settles.
+        let whole = NSRange(location: 0, length: text.length)
+        let scope = paintedRange.map { NSIntersectionRange($0, whole) } ?? whole
         if language == nil || language == "markdown" || language == "gitcommit" {
-            let whole = NSRange(location: 0, length: text.length)
-            guard language == "markdown" else { return [whole] }
+            guard language == "markdown" else { return [scope] }
             // Hugo posts carry structured data and template calls in
             // among the prose; a slug is not a misspelling.
             let skip = CoreWorkspace.hugoNonProseRanges(in: text as String)
-            return skip.isEmpty ? [whole] : Self.ranges(of: whole, excluding: skip)
+            return skip.isEmpty ? [scope] : Self.ranges(of: scope, excluding: skip)
         }
-        guard text.length <= Self.highlightSizeCap else { return [] }
         // Asked by name: style ids are positions in an alphabetical
         // table and move whenever a capture is added.
-        return coreDocument.highlights(in: NSRange(location: 0, length: text.length))
+        return coreDocument.highlights(in: scope)
             .filter { span in
                 CoreTheme.commentStyleID.map { span.styleIndex == $0 } ?? false
             }
@@ -2209,8 +2216,12 @@ final class DocumentController: NSResponder {
     }
 
     private func runSpellPass() {
+        timed("spell") { runSpellPassInner() }
+    }
+
+    private func runSpellPassInner() {
         guard let textView, !appliedSpellLanguages.isEmpty else { return }
-        let text = textView.string as NSString
+        let text: NSString = textView.textStorage?.mutableString ?? (textView.string as NSString)
         let prose = proseRanges(in: text).filter { $0.length > 0 }
 
         // Each dictionary gets its own pass, and only a word that every

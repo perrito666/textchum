@@ -20,12 +20,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let jumps = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_JUMP"] {
-            let lines = jumps.split(separator: ",").compactMap { Int($0) }
-            for (index, line) in lines.enumerated() {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 4 + Double(index) * 1.5) {
+            for (index, token) in jumps.split(separator: ",").enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4 + Double(index) * 2.0) {
                     MainActor.assumeIsolated {
-                        NSLog("TIMER jump-start \(line)")
-                        self.editors.first?.reveal(line: line, character: 0)
+                        NSLog("TIMER jump-start \(token)")
+                        let editor = self.editors.first
+                        // "end"/"start" go through the same door as
+                        // ⌘↓/⌘↑, which is not the goto path.
+                        if token == "end" {
+                            editor?.primaryView?.moveToEndOfDocument(nil)
+                        } else if token == "start" {
+                            editor?.primaryView?.moveToBeginningOfDocument(nil)
+                        } else if let line = Int(token) {
+                            editor?.reveal(line: line, character: 0)
+                        }
                         NSLog("TIMER jump-returned")
                     }
                 }
