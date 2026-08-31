@@ -9,6 +9,8 @@ struct EditorSettings {
     let font: NSFont
     let tabWidth: Int
     let lineNumbers: Bool
+    /// Whether the enclosing constructs' first lines pin at the top.
+    let contextLines: Bool
     let hoverDocs: Bool
     /// Whether a file stays open when the window showing it closes.
     let keepBuffers: Bool
@@ -51,6 +53,7 @@ struct EditorSettings {
         }
         self.tabWidth = tabWidth
         self.lineNumbers = config.lineNumbers
+        self.contextLines = config.contextLines
         self.hoverDocs = config.hoverDocs
         self.keepBuffers = config.keepBuffers
         self.markOccurrences = config.markOccurrences
@@ -119,6 +122,9 @@ final class SettingsModel: ObservableObject {
     }
     @Published var lineNumbers: Bool {
         didSet { persist { $0.lineNumbers = lineNumbers } }
+    }
+    @Published var contextLines: Bool {
+        didSet { persist { $0.contextLines = contextLines } }
     }
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
@@ -296,6 +302,7 @@ final class SettingsModel: ObservableObject {
         fontSize = config.fontSize
         tabWidth = config.tabWidth
         lineNumbers = config.lineNumbers
+        contextLines = config.contextLines
         hoverDocs = config.hoverDocs
         keepBuffers = config.keepBuffers
         interfaceLanguage = config.interfaceLanguage
@@ -329,6 +336,7 @@ final class SettingsModel: ObservableObject {
         self.fontSize = config.fontSize
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
+        self.contextLines = config.contextLines
         self.hoverDocs = config.hoverDocs
         self.keepBuffers = config.keepBuffers
         self.interfaceLanguage = config.interfaceLanguage
@@ -974,6 +982,7 @@ struct GeneralSettingsTab: View {
                 Text(t("Tab width: {} columns", model.tabWidth))
             }
             Toggle(t("Show line numbers"), isOn: $model.lineNumbers)
+            Toggle(t("Pin enclosing context lines"), isOn: $model.contextLines)
             Toggle(t("Hover documentation"), isOn: $model.hoverDocs)
             Toggle(t("Keep files open when their window closes"), isOn: $model.keepBuffers)
             Picker(t("Interface language"), selection: $model.interfaceLanguage) {

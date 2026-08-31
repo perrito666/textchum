@@ -157,6 +157,18 @@ it. What was wrapped stays selected, so pressing another one wraps that
 in turn: `[`, `(` and `{` over `hello` give `[({hello})]`. Typing
 anything else replaces the selection as it always did.
 
+The thin bar under the editor answers what a look at the text cannot:
+where the caret is, whether the file indents with tabs or spaces and by
+how much, what language it is treated as, and its encoding. The
+indentation and the language are clickable and open File Properties,
+where those choices are made.
+
+Scrolled deep into a long body, the first line of each enclosing
+construct stays pinned at the top of the view — the `class` line and
+the `def` line while a Python method scrolls — and clicking a pin goes
+to it. The pins cost rows, so `editor.context_lines: false` (or the
+switch in Settings) turns them off.
+
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
 first placeholder selected, so typing replaces it; ⇥ moves to the next

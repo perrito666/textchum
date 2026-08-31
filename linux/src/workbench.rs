@@ -147,6 +147,10 @@ pub struct Workbench {
     buffer_rows: RefCell<Vec<Option<Rc<Page>>>>,
     /// (title, dirty, selected) per page — rebuild only on real change.
     buffer_signature: RefCell<Vec<(String, bool, bool)>>,
+    status_position: gtk::Label,
+    status_indent: gtk::Button,
+    status_language: gtk::Button,
+    status_encoding: gtk::Label,
     search_bar: gtk::SearchBar,
     search_entry: gtk::SearchEntry,
     replace_entry: gtk::Entry,
@@ -411,6 +415,36 @@ impl Workbench {
         let columns_host = gtk::Box::new(gtk::Orientation::Vertical, 0);
         columns_host.set_vexpand(true);
         content_box.append(&columns_host);
+
+        // The bar under the editor: where the caret is, how the file is
+        // indented, what it is treated as. The parts that name a
+        // per-file choice open File Properties, where it is made.
+        let status_position = gtk::Label::new(None);
+        let status_indent = gtk::Button::with_label("");
+        let status_language = gtk::Button::with_label("");
+        let status_encoding = gtk::Label::new(None);
+        status_indent.set_tooltip_text(Some(&tr(
+            "How this file is indented — click to change it",
+        )));
+        status_language.set_tooltip_text(Some(&tr(
+            "What this file is treated as — click to change it",
+        )));
+        for button in [&status_indent, &status_language] {
+            button.add_css_class("flat");
+            button.set_action_name(Some("win.file-properties"));
+        }
+        let status_bar = gtk::Box::new(gtk::Orientation::Horizontal, 14);
+        status_bar.add_css_class("dim-label");
+        status_bar.set_margin_start(12);
+        status_bar.set_margin_end(12);
+        status_bar.set_margin_top(2);
+        status_bar.set_margin_bottom(2);
+        status_bar.append(&status_position);
+        status_bar.append(&status_indent);
+        status_bar.append(&status_language);
+        status_bar.append(&status_encoding);
+        content_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+        content_box.append(&status_bar);
         tab_view.set_vexpand(true);
 
         // Sidebar: open buffers grouped by project, over the selected
@@ -476,6 +510,10 @@ impl Workbench {
             tree_box,
             buffer_rows: RefCell::new(Vec::new()),
             buffer_signature: RefCell::new(Vec::new()),
+            status_position: status_position.clone(),
+            status_indent: status_indent.clone(),
+            status_language: status_language.clone(),
+            status_encoding: status_encoding.clone(),
             search_bar,
             search_entry: search_entry.clone(),
             replace_entry: replace_entry.clone(),
@@ -1532,7 +1570,61 @@ impl Workbench {
             .unwrap_or(name)
     }
 
+    /// Redraws the status bar from the selected page.
+    pub fn refresh_status(&self) {
+        let Some(page) = self.selected() else {
+            self.status_position.set_text("");
+            self.status_indent.set_label("");
+            self.status_language.set_label("");
+            self.status_encoding.set_text("");
+            return;
+        };
+        let buffer = &page.buffer;
+        let at = buffer.iter_at_mark(&buffer.get_insert());
+        self.status_position.set_text(&fill(
+            &tr("Ln {}, Col {}"),
+            &[&(at.line() + 1).to_string(), &(at.line_offset() + 1).to_string()],
+        ));
+        let width = page.view.tab_width();
+        // The override answers when it says; the file itself otherwise,
+        // the way formatting already reads it.
+        let stored = page
+            .path()
+            .borrow()
+            .as_ref()
+            .map(|path| Shell::instance().config.borrow().file_override(path));
+        let uses_tabs = stored.and_then(|s| s.spaces.map(|spaces| !spaces)).unwrap_or_else(|| {
+            let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+            text.contains("\n\t") || text.starts_with('\t')
+        });
+        self.status_indent.set_label(&if uses_tabs {
+            fill(&tr("Tabs: {}"), &[&width.to_string()])
+        } else {
+            fill(&tr("Spaces: {}"), &[&width.to_string()])
+        });
+        let state = page.state.borrow();
+        let language = state
+            .document
+            .language_name()
+            .map(str::to_string)
+            .unwrap_or_else(|| tr("Plain Text"));
+        self.status_language.set_label(&language);
+        self.status_encoding.set_text(state.document.encoding().name());
+    }
+
+    /// The bar's four parts as one line, for the smoke test to read.
+    pub fn status_summary(&self) -> String {
+        format!(
+            "{} | {} | {} | {}",
+            self.status_position.text(),
+            self.status_indent.label().unwrap_or_default(),
+            self.status_language.label().unwrap_or_default(),
+            self.status_encoding.text(),
+        )
+    }
+
     pub fn refresh_chrome(&self) {
+        self.refresh_status();
         let Some(page) = self.selected() else {
             self.title.set_title("Textchum");
             self.title.set_subtitle("");
@@ -1777,6 +1869,30 @@ impl Workbench {
 }
 
 /// Selected-page chrome refresh, callable from page signal handlers.
+/// The caret moved in `page`: the bar of whichever window shows it.
+/// The pinned-context switch moved: every view redraws its strip.
+pub fn refresh_all_context_strips() {
+    WORKBENCHES.with(|list| {
+        for workbench in list.borrow().iter() {
+            for page in workbench.pages.borrow().iter() {
+                page::refresh_context_strip(page);
+            }
+        }
+    });
+}
+
+pub fn refresh_status_for(page: &Rc<Page>) {
+    WORKBENCHES.with(|list| {
+        for workbench in list.borrow().iter() {
+            if let Some(selected) = workbench.selected() {
+                if Rc::ptr_eq(&selected, page) {
+                    workbench.refresh_status();
+                }
+            }
+        }
+    });
+}
+
 pub fn refresh_chrome_for(page: &Rc<Page>) {
     WORKBENCHES.with(|list| {
         for workbench in list.borrow().iter() {
@@ -5401,6 +5517,18 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
     }
     editor_group.add(&lines_row);
+    let context_row = adw::SwitchRow::new();
+    context_row.set_title(&tr("Pin enclosing context lines"));
+    context_row.set_active(shell.config.borrow().context_lines());
+    {
+        let shell = Rc::clone(&shell);
+        context_row.connect_active_notify(move |row| {
+            shell.config.borrow_mut().set_context_lines(row.is_active());
+            shell.save_config();
+            refresh_all_context_strips();
+        });
+    }
+    editor_group.add(&context_row);
     let keep_row = adw::SwitchRow::new();
     keep_row.set_title(&tr("Keep files open when their window closes"));
     keep_row.set_subtitle(

@@ -60,7 +60,9 @@ defecto) o en una `"window"` propia. `editor.mark_occurrences` (`true`
 por defecto) marca los demás lugares donde aparece la palabra
 seleccionada; `editor.occurrences_case_sensitive` y
 `editor.occurrences_whole_word` deciden qué cuenta como uno, ambos
-`true` por defecto.
+`true` por defecto. `editor.context_lines` (`true` por defecto) fija
+la primera línea de cada construcción envolvente en lo alto de la vista
+mientras un cuerpo largo se desplaza; `false` apaga las líneas fijadas.
 
 Todo es opcional: un archivo, una sección o una clave ausentes significan
 simplemente el valor por defecto. Las escrituras son atómicas (archivo

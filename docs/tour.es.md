@@ -160,6 +160,18 @@ reemplazarla. Lo envuelto sigue seleccionado, así que pulsar otro lo
 envuelve a su vez: `[`, `(` y `{` sobre `hello` dan `[({hello})]`.
 Escribir cualquier otra cosa reemplaza la selección como siempre.
 
+La barra fina bajo el editor responde lo que mirar el texto no puede:
+dónde está el cursor, si el archivo indenta con tabuladores o espacios
+y de cuántos, como qué lenguaje se trata, y su codificación. La
+indentación y el lenguaje se pueden pulsar y abren Propiedades del
+Archivo, donde se hacen esas elecciones.
+
+Con un cuerpo largo desplazado, la primera línea de cada construcción
+envolvente queda fija en lo alto de la vista —la línea `class` y la
+línea `def` mientras un método Python se desplaza— y pulsar una lleva
+hasta ella. Las líneas fijadas cuestan filas, así que
+`editor.context_lines: false` (o el interruptor en Ajustes) las apaga.
+
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
 primer marcador seleccionado, así que escribir lo reemplaza; ⇥ pasa al

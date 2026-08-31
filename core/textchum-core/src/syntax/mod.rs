@@ -102,6 +102,53 @@ impl SyntaxState {
         }
     }
 
+    /// The lines that answer "where am I?" for `line`: the first line
+    /// of each enclosing multi-line construct, outermost first. The
+    /// `class` line and the `def` line for a statement inside a Python
+    /// method, the `impl` and the `fn` for a Rust one.
+    ///
+    /// A construct that starts on `line` itself is not context — it is
+    /// already on screen — and several constructs starting on one line
+    /// count once, the way [`Self::fold_ranges`] folds them once.
+    pub fn context_lines(&self, rope: &Rope, line: usize) -> Vec<usize> {
+        let root = self.tree.root_node();
+        let Some(byte) = line_start_byte(rope, line) else {
+            return Vec::new();
+        };
+        let Some(mut node) = root.named_descendant_for_byte_range(byte, byte) else {
+            return Vec::new();
+        };
+        let mut lines = Vec::new();
+        loop {
+            let start = node.start_position().row;
+            let mut end = node.end_position().row;
+            // Python's blocks end where the dedent is, which is the
+            // start of the line after them; see fold_ranges.
+            if node.end_position().column == 0 {
+                end = end.saturating_sub(1);
+            }
+            // A node whose first named child starts at its own first
+            // byte is a body, not a header: Python's class body starts
+            // at the first statement, and pinning that line would show
+            // the statement, which says nothing about where you are.
+            let is_body = node
+                .named_child(0)
+                .is_some_and(|child| child.start_byte() == node.start_byte());
+            if node != root
+                && !is_body
+                && start < line
+                && end >= line
+                && lines.last() != Some(&start)
+            {
+                lines.push(start);
+            }
+            let Some(parent) = node.parent() else { break };
+            node = parent;
+        }
+        lines.reverse();
+        lines
+    }
+
     /// Every stretch that can be folded: a line that opens a block,
     /// and the last line of it.
     ///
@@ -278,6 +325,15 @@ fn capture_index(query: &Query, name: &str) -> Option<u32> {
 }
 
 /// Parses a rope without copying it, chunk by chunk.
+/// The byte offset where `line` (zero-based) starts, or `None` past
+/// the end of the text.
+fn line_start_byte(rope: &Rope, line: usize) -> Option<usize> {
+    if line >= rope.len_lines() {
+        return None;
+    }
+    Some(rope.line_to_byte(line))
+}
+
 fn parse_rope(parser: &mut Parser, rope: &Rope, old_tree: Option<&Tree>) -> Option<Tree> {
     parser.parse_with_options(
         &mut |byte, _point| {

@@ -1066,6 +1066,41 @@ func runSmokeTest() -> Int32 {
     wrapBench.window?.close()
     print("wrapping ok (delimiters nest, letters do not wrap)")
 
+    // The pinned context: scrolled into a Python method, the class line
+    // and the def line hold the top of the view; the status bar knows
+    // where the caret is and what the file is.
+    let pinBench = Workbench(sidebar: nil)
+    let pinDocument = DocumentController(document: CoreDocument())
+    pinBench.add(pinDocument)
+    pinBench.window?.makeKeyAndOrderFront(nil)
+    guard let pinView = pinDocument.views.first else {
+        print("FAIL: no view to pin over")
+        return 1
+    }
+    let pinBody = (0..<120).map { "        line_\($0) = \($0)" }.joined(separator: "\n")
+    pinView.textView.string = "class Greeter:\n    def greet(self):\n\(pinBody)\n"
+    pinDocument.noteTextReplaced()
+    _ = pinDocument.coreDocument.setLanguage("python")
+    pinView.gutter.invalidateLineStarts()
+    pinView.textView.layoutSubtreeIfNeeded()
+    let target = (pinView.textView.string as NSString).range(of: "line_100")
+    pinView.textView.scrollRangeToVisible(target)
+    pinView.textView.layoutSubtreeIfNeeded()
+    pinDocument.updateContextStrip(for: pinView)
+    guard pinView.contextStrip.lines == [0, 1] else {
+        print("FAIL: the pins say \(pinView.contextStrip.lines), not the class and the def")
+        return 1
+    }
+    pinView.textView.setSelectedRange(NSRange(location: target.location, length: 0))
+    let status = pinDocument.statusInfo
+    guard status.line == 103, status.language == "python", status.tabWidth > 0 else {
+        print("FAIL: the status bar would say Ln \(status.line), \(status.language ?? "nil")")
+        return 1
+    }
+    pinBench.statusBar.show(status)
+    pinBench.window?.close()
+    print("context ok (pins stack the class and the def, the bar knows the caret)")
+
     // A link clicked in the Markdown preview goes to the browser and
     // leaves the pane where it was. Which links count as a place in the
     // page is the core's rule, tested there; this is about the preview

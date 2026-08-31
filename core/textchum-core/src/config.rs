@@ -1063,6 +1063,21 @@ impl Config {
             .insert("line_numbers".into(), Value::Bool(shown));
     }
 
+    /// Whether the first line of each enclosing construct is pinned at
+    /// the top of the view — the breadcrumb that answers "where am I?"
+    /// in a long method. On unless turned off; it costs rows.
+    pub fn context_lines(&self) -> bool {
+        self.editor()
+            .get("context_lines")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
+
+    pub fn set_context_lines(&mut self, shown: bool) {
+        self.editor_mut()
+            .insert("context_lines".into(), Value::Bool(shown));
+    }
+
     /// The keyboard-shortcut overrides (`keys`), serialized: an object of
     /// `{action: "modifiers+key"}` entries (e.g. `"save": "cmd+s"`).
     /// Empty object when unset; hand-edited, no UI.

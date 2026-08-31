@@ -163,6 +163,19 @@ taper un autre l'entoure à son tour : `[`, `(` puis `{` sur `hello`
 donnent `[({hello})]`. Taper autre chose remplace la sélection comme
 avant.
 
+La barre fine sous l'éditeur répond à ce qu'un regard sur le texte ne
+peut pas : où est le curseur, si le fichier indente avec des
+tabulations ou des espaces et de combien, quel langage lui est
+appliqué, et son encodage. L'indentation et le langage sont cliquables
+et ouvrent les Propriétés du fichier, où ces choix se font.
+
+Défilé au fond d'un long corps, la première ligne de chaque
+construction englobante reste épinglée en haut de la vue — la ligne
+`class` et la ligne `def` pendant qu'une méthode Python défile — et
+cliquer sur une épingle y mène. Les épingles coûtent des lignes ;
+`editor.context_lines: false` (ou l'interrupteur des Réglages) les
+retire.
+
 La complétion apparaît à la frappe après les caractères d'identifiant
 et `.` ; ↑/↓ choisissent, ⏎ ou ⇥ acceptent, ⎋ ferme. Un snippet arrive
 avec son premier marqueur sélectionné, donc taper le remplace ; ⇥ passe

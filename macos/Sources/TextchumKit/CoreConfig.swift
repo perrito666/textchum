@@ -140,6 +140,13 @@ public final class CoreConfig {
         set { tc_config_set_line_numbers(handle, newValue) }
     }
 
+    /// Whether the first line of each enclosing construct is pinned at
+    /// the top of the view.
+    public var contextLines: Bool {
+        get { tc_config_context_lines(handle) }
+        set { tc_config_set_context_lines(handle, newValue) }
+    }
+
     /// Opens the grammars named under `languages`, and answers with
     /// what could not be opened — one line each, empty when every one
     /// of them loaded or none were named.

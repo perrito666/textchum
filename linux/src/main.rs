@@ -1334,6 +1334,56 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                     return 1;
                 }
                 println!("wrapping ok (delimiters nest, letters do not wrap)");
+            }
+
+            // The pinned context and the status bar: scrolled into a
+            // nested Rust body, the impl, the fn and the match hold the
+            // top of the view, and the bar says where the caret is.
+            {
+                let buffer = &page.buffer;
+                let mut source = String::from(
+                    "impl Item {\n    fn label(&self) {\n        match x {\n",
+                );
+                for index in 0..200 {
+                    source.push_str(&format!("            Kind::V{index} => {index},\n"));
+                }
+                source.push_str("        }\n    }\n}\n");
+                buffer.set_text(&source);
+                page.state.borrow_mut().document.set_language(Some("rust"));
+                for _ in 0..50 {
+                    context.iteration(false);
+                }
+                let Some(target) = buffer.iter_at_line(100) else {
+                    eprintln!("FAIL: no line 100 to scroll to");
+                    return 1;
+                };
+                // Scrolling in a test drives the adjustment directly:
+                // scroll_to_iter waits for a frame this loop never
+                // draws.
+                let (line_y, _) = page.view.line_yrange(&target);
+                let scrolled = page
+                    .view
+                    .parent()
+                    .and_downcast::<gtk::ScrolledWindow>()
+                    .expect("the view lives in its scrolled window");
+                scrolled.vadjustment().set_value(line_y as f64);
+                for _ in 0..50 {
+                    context.iteration(false);
+                }
+                crate::page::refresh_context_strip(&page);
+                let pins = page.context_pins.borrow().clone();
+                if pins != vec![0, 1, 2] {
+                    eprintln!("FAIL: the pins say {pins:?}, not the impl, fn and match");
+                    return 1;
+                }
+                buffer.place_cursor(&buffer.iter_at_line(100).expect("line 100"));
+                workbench.refresh_status();
+                let status = workbench.status_summary();
+                if !status.contains("101") || !status.contains("rust") {
+                    eprintln!("FAIL: the status bar says {status:?}");
+                    return 1;
+                }
+                println!("context ok (pins stack the enclosing constructs, the bar knows the caret)");
 
             // A link clicked in the Markdown preview goes to the
             // browser and leaves the pane where it was. Which links

@@ -1288,6 +1288,27 @@ pub unsafe extern "C" fn tc_config_set_line_numbers(config: *mut TcConfig, shown
     }
 }
 
+/// Whether the enclosing constructs' first lines are pinned at the top
+/// of the view.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_context_lines(config: *const TcConfig) -> bool {
+    unsafe { config.as_ref() }.map_or(true, |c| c.inner.context_lines())
+}
+
+/// Sets whether the enclosing constructs' first lines are pinned.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_context_lines(config: *mut TcConfig, shown: bool) {
+    if let Some(config) = unsafe { config.as_mut() } {
+        config.inner.set_context_lines(shown);
+    }
+}
+
 /// Whether a project's record lives with the checkout.
 ///
 /// # Safety
@@ -3126,6 +3147,30 @@ pub unsafe extern "C" fn tc_document_folds(doc: *const TcDocument) -> *mut c_cha
     };
     catch_unwind(AssertUnwindSafe(|| owned_c_string(doc.inner.fold_ranges_json())))
         .unwrap_or(std::ptr::null_mut())
+}
+
+/// The pinned context for a view whose first visible line is
+/// `top_line`, as a nul-terminated JSON array of line numbers — the
+/// first lines of the enclosing constructs, outermost first, at most
+/// `max_rows`. Release with [`tc_string_free`].
+///
+/// Empty for plain text, which has no structure to pin.
+///
+/// # Safety
+/// `doc` must be a live document handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_context_lines(
+    doc: *const TcDocument,
+    top_line: usize,
+    max_rows: usize,
+) -> *mut c_char {
+    let Some(doc) = (unsafe { doc.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(doc.inner.context_lines_json(top_line, max_rows))
+    }))
+    .unwrap_or(std::ptr::null_mut())
 }
 
 /// The code actions in a `textDocument/codeAction` result, as a

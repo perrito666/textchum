@@ -58,6 +58,9 @@ frontmost window's group (the default) or a `"window"` of their own.
 the selected word appears; `editor.occurrences_case_sensitive` and
 `editor.occurrences_whole_word` decide what counts as one, both `true`
 by default.
+`editor.context_lines` (`true` by default) pins the first line of each
+enclosing construct at the top of the view while a long body scrolls;
+`false` switches the pins off.
 
 Everything is optional — a missing file, a missing section, or a missing
 key simply means the default. Writes are atomic (temporary file plus

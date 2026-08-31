@@ -823,6 +823,23 @@ bool tc_config_line_numbers(const struct TcConfig *config);
 void tc_config_set_line_numbers(struct TcConfig *config, bool shown);
 
 /**
+ * Whether the enclosing constructs' first lines are pinned at the top
+ * of the view.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_context_lines(const struct TcConfig *config);
+
+/**
+ * Sets whether the enclosing constructs' first lines are pinned.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_context_lines(struct TcConfig *config, bool shown);
+
+/**
  * Whether a project's record lives with the checkout.
  *
  * # Safety
@@ -1785,6 +1802,21 @@ bool tc_path_is_test(const char *path, uintptr_t len);
  * `doc` must be a live document handle.
  */
 char *tc_document_folds(const struct TcDocument *doc);
+
+/**
+ * The pinned context for a view whose first visible line is
+ * `top_line`, as a nul-terminated JSON array of line numbers — the
+ * first lines of the enclosing constructs, outermost first, at most
+ * `max_rows`. Release with [`tc_string_free`].
+ *
+ * Empty for plain text, which has no structure to pin.
+ *
+ * # Safety
+ * `doc` must be a live document handle.
+ */
+char *tc_document_context_lines(const struct TcDocument *doc,
+                                uintptr_t top_line,
+                                uintptr_t max_rows);
 
 /**
  * The code actions in a `textDocument/codeAction` result, as a

@@ -128,6 +128,20 @@ public final class CoreDocument {
         }
     }
 
+    /// The pinned context for a view whose first visible line is
+    /// `topLine`: the first line of each enclosing construct, outermost
+    /// first, at most `maxRows`. Empty for plain text.
+    public func contextLines(topLine: Int, maxRows: Int) -> [Int] {
+        guard let json = tc_document_context_lines(handle, UInt(topLine), UInt(maxRows))
+        else { return [] }
+        defer { tc_string_free(json) }
+        let text = String(cString: json)
+        guard let data = text.data(using: .utf8),
+            let lines = (try? JSONSerialization.jsonObject(with: data)) as? [Int]
+        else { return [] }
+        return lines
+    }
+
     /// Styled spans over `range`, in application order: where spans
     /// overlap, apply later ones over earlier ones. Empty for plain text.
     public func highlights(in range: NSRange) -> [HighlightSpan] {
