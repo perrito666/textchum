@@ -1665,6 +1665,10 @@ final class DocumentController: NSResponder {
 
     /// Moves the caret to an LSP position and reveals it.
     func reveal(line: Int, character: Int) {
+        timed("reveal") { revealInner(line: line, character: character) }
+    }
+
+    private func revealInner(line: Int, character: Int) {
         guard let textView else { return }
         let text = textView.string as NSString
         var index = 0
@@ -1969,6 +1973,10 @@ final class DocumentController: NSResponder {
     /// Recomputes the pinned context for one view from its scroll
     /// position: at most five rows, rebuilt only when the lines change.
     func updateContextStrip(for view: DocumentView) {
+        timed("contextStrip") { updateContextStripInner(for: view) }
+    }
+
+    private func updateContextStripInner(for view: DocumentView) {
         let strip = view.contextStrip
         guard appliedSettings?.contextLines ?? true, coreDocument.languageName != nil else {
             strip.show(
@@ -2053,6 +2061,7 @@ final class DocumentController: NSResponder {
     }
 
     @objc private func editorDidScroll(_ notification: Notification) {
+        if Self.debugTimers { NSLog("TIMER scroll-tick") }
         if let clipView = notification.object as? NSClipView,
             let view = views.first(where: { $0.scrollView.contentView === clipView })
         {
@@ -2337,6 +2346,10 @@ final class DocumentController: NSResponder {
     /// search covers the painted stretch, so a long document costs
     /// what a short one does.
     private func refreshOccurrences() {
+        timed("occurrences") { refreshOccurrencesInner() }
+    }
+
+    private func refreshOccurrencesInner() {
         let previous = occurrenceRanges
         occurrenceRanges = []
         defer {
@@ -2379,18 +2392,40 @@ final class DocumentController: NSResponder {
     /// is what TextKit 2 renders from this layer, and a second pass
     /// would clear the first one's marks.
     private func renderMarks() {
+        timed("renderMarks") { renderMarksInner() }
+    }
+
+    private func renderMarksInner() {
         guard let textView, let layoutManager = textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager
         else { return }
         let documentRange = layoutManager.documentRange
+        // Scoped to the painted stretch, like the colours: clearing and
+        // redrawing marks across the whole document on every scroll
+        // turn is what a far jump spent its time on. Marks outside the
+        // stretch are repainted when scrolling brings them in, by this
+        // same pass.
+        let length = coreDocument.lengthInUTF16
+        let scope = paintedRange ?? NSRange(location: 0, length: length)
+        let clearRange: NSTextRange? = {
+            guard let start = contentManager.location(
+                documentRange.location, offsetBy: scope.location),
+                let end = contentManager.location(start, offsetBy: scope.length)
+            else { return nil }
+            return NSTextRange(location: start, end: end)
+        }()
         for target in paintTargets {
-            target.removeRenderingAttribute(.underlineStyle, for: documentRange)
-            target.removeRenderingAttribute(.underlineColor, for: documentRange)
-            target.removeRenderingAttribute(.backgroundColor, for: documentRange)
+            let range = clearRange ?? documentRange
+            target.removeRenderingAttribute(.underlineStyle, for: range)
+            target.removeRenderingAttribute(.underlineColor, for: range)
+            target.removeRenderingAttribute(.backgroundColor, for: range)
+        }
+        func inScope(_ range: NSRange) -> Bool {
+            NSIntersectionRange(range, scope).length > 0
         }
 
-        let text = textView.string as NSString
-        for occurrence in occurrenceRanges {
+        let text: NSString = textView.textStorage?.mutableString ?? (textView.string as NSString)
+        for occurrence in occurrenceRanges where inScope(occurrence) {
             guard NSMaxRange(occurrence) <= text.length,
                 let start = contentManager.location(
                     documentRange.location, offsetBy: occurrence.location),
@@ -2403,7 +2438,7 @@ final class DocumentController: NSResponder {
                     value: NSColor.systemGray.withAlphaComponent(0.30), for: textRange)
             }
         }
-        for spelling in spellingRanges {
+        for spelling in spellingRanges where inScope(spelling) {
             guard NSMaxRange(spelling) <= text.length,
                 let start = contentManager.location(
                     documentRange.location, offsetBy: spelling.location),
@@ -2416,8 +2451,28 @@ final class DocumentController: NSResponder {
                     value: NSColor.systemPurple.withAlphaComponent(0.18), for: textRange)
             }
         }
+        // One walk of the file for every diagnostic together: the old
+        // converter walked from the top once per diagnostic, which a
+        // server with plenty to say turned into seconds.
+        var lineStarts: [Int] = [0]
+        if !diagnostics.isEmpty {
+            var index = 0
+            while index < text.length {
+                index = NSMaxRange(text.lineRange(for: NSRange(location: index, length: 0)))
+                lineStarts.append(index)
+            }
+        }
+        func offset(line: Int, column: Int) -> Int {
+            let start = lineStarts[max(0, min(line, lineStarts.count - 1))]
+            return min(start + max(column, 0), text.length)
+        }
         for diagnostic in diagnostics {
-            guard let range = nsRange(of: diagnostic, in: text) else { continue }
+            let from = offset(line: diagnostic.line, column: diagnostic.character)
+            let to = offset(line: diagnostic.endLine, column: diagnostic.endCharacter)
+            guard to >= from, from < text.length || text.length == 0 else { continue }
+            let range = NSRange(
+                location: from, length: min(max(to - from, 1), max(text.length - from, 0)))
+            guard inScope(range) else { continue }
             guard
                 let start = contentManager.location(
                     documentRange.location, offsetBy: range.location),
@@ -2578,8 +2633,23 @@ final class DocumentController: NSResponder {
     /// Scoping to the viewport is what lets a large file be coloured at
     /// all: colouring whole documents meant a hard cap past which text
     /// arrived with no colour whatsoever.
+    static var debugTimers = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_TIMERS"] != nil
+    private func timed<T>(_ label: String, _ work: () -> T) -> T {
+        guard Self.debugTimers else { return work() }
+        let start = Date()
+        let result = work()
+        let ms = Date().timeIntervalSince(start) * 1000
+        if ms > 0.5 { NSLog("TIMER %@ %.1fms", label, ms) }
+        return result
+    }
+
     @discardableResult
     private func applyHighlights(force: Bool) -> Bool {
+        timed("applyHighlights") { applyHighlightsInner(force: force) }
+    }
+
+    @discardableResult
+    private func applyHighlightsInner(force: Bool) -> Bool {
         guard let textView,
             let layoutManager = textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager

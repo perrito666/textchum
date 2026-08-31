@@ -19,6 +19,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static var configPath: String { AppPaths.configPath }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let jump = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_JUMP"],
+            let line = Int(jump)
+        {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                MainActor.assumeIsolated {
+                    NSLog("TIMER jump-start")
+                    self.editors.first?.reveal(line: line, character: 0)
+                    NSLog("TIMER jump-returned")
+                }
+            }
+        }
         let config = CoreConfig(path: Self.configPath)
         self.config = config
         // The interface language first: every label below is drawn in
