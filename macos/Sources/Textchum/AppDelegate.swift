@@ -1609,7 +1609,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             selectDocument: { [weak self] id in
                 guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
                 else { return }
+                // Fronting the window stopped being enough when the
+                // documents became tabs in one window: the tab has to
+                // be shown too.
                 editor.window?.makeKeyAndOrderFront(nil)
+                editor.workbench?.showInFocusedPane(id)
             },
             showProperties: { [weak self] id in
                 guard let editor = self?.editors.first(where: { ObjectIdentifier($0) == id })
@@ -1619,10 +1623,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             openFile: { [weak self] path in
                 guard let self else { return }
-                // Focus an existing window for the file rather than
-                // opening it twice.
+                // Show the existing tab rather than opening the file
+                // twice — and show it, not merely its window, which is
+                // usually the front one already.
                 if let existing = self.editors.first(where: { $0.coreDocument.path == path }) {
                     existing.window?.makeKeyAndOrderFront(nil)
+                    existing.workbench?.showInFocusedPane(ObjectIdentifier(existing))
                 } else {
                     self.open(path: path)
                 }

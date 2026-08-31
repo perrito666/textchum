@@ -2091,6 +2091,10 @@ fn build_file_tree(root: &Path) -> gtk::ListView {
     });
 
     let view = gtk::ListView::new(Some(selection.clone()), Some(factory));
+    // One click opens, the way the Mac shell's tree taps do — and
+    // GtkListView's double-click activation was not reaching the
+    // handler at all through the TreeExpander rows.
+    view.set_single_click_activate(true);
     view.connect_activate(move |_, position| {
         let Some(tree_row) = selection
             .item(position)
