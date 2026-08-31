@@ -1594,9 +1594,15 @@ impl Workbench {
             .borrow()
             .as_ref()
             .map(|path| Shell::instance().config.borrow().file_override(path));
+        // Searched through iterators, not a copied string: the bar
+        // redraws on every caret move, and copying the whole buffer per
+        // arrow key is what stuttered on large files.
         let uses_tabs = stored.and_then(|s| s.spaces.map(|spaces| !spaces)).unwrap_or_else(|| {
-            let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
-            text.contains("\n\t") || text.starts_with('\t')
+            let start = buffer.start_iter();
+            start.char() == '\t'
+                || start
+                    .forward_search("\n\t", gtk::TextSearchFlags::TEXT_ONLY, None)
+                    .is_some()
         });
         self.status_indent.set_label(&if uses_tabs {
             fill(&tr("Tabs: {}"), &[&width.to_string()])

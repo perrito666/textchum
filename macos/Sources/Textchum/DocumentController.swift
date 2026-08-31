@@ -114,7 +114,10 @@ final class DocumentView {
             // to hidden lines, and would sit beside the wrong text.
             contextStrip.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             contextStrip.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            contextStrip.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            // To the clip view, not the scroll view: the find bar
+            // pushes the clip view down, and the pins must not sit on
+            // top of the search field.
+            contextStrip.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
         ])
     }
 }
@@ -170,7 +173,7 @@ final class DocumentController: NSResponder {
     /// Re-colors on system appearance changes (theme colors differ).
     private var appearanceObservation: NSKeyValueObservation?
     /// The core app handle, used for language-server notifications.
-    private let lspApp: CoreApp?
+    private var lspApp: CoreApp?
     /// The path this window has announced as open to the server pool.
     private var lspOpenPath: String?
     /// Debounces didChange notifications while typing.
@@ -507,6 +510,16 @@ final class DocumentController: NSResponder {
             lspApp.lspDidOpen(path: new, language: language, text: coreDocument.text)
         }
         lspOpenPath = current
+    }
+
+    /// Hands the server pool to a document that opened before the pool
+    /// existed — the command line delivers files before the launch
+    /// finishes, and a session that is never opened greys every server
+    /// command until a restart.
+    func adoptLSPApp(_ app: CoreApp) {
+        guard lspApp == nil else { return }
+        lspApp = app
+        syncLSPOpenState()
     }
 
     /// Re-announces the document after a pool restart, respawning its
@@ -1941,7 +1954,8 @@ final class DocumentController: NSResponder {
     func updateContextStrip(for view: DocumentView) {
         let strip = view.contextStrip
         guard appliedSettings?.contextLines ?? true, coreDocument.languageName != nil else {
-            strip.show(lines: [], text: { _ in NSAttributedString() }, rowHeight: 0)
+            strip.show(
+                lines: [], plainTexts: [], text: { _ in NSAttributedString() }, rowHeight: 0)
             return
         }
         let clip = view.scrollView.contentView.bounds
@@ -1954,6 +1968,7 @@ final class DocumentController: NSResponder {
         let rowHeight = (font.ascender - font.descender + font.leading).rounded(.up) + 2
         strip.show(
             lines: lines,
+            plainTexts: lines.map { plainLine($0, in: view) },
             text: { [weak self] line in
                 self?.attributedLine(line, in: view) ?? NSAttributedString()
             },
@@ -1964,8 +1979,24 @@ final class DocumentController: NSResponder {
     /// its line break. The editor's colours are rendering attributes on
     /// the layout manager, so the pins ask the core's highlighter for
     /// their own.
+    /// One line's text without its break, from the storage's backing
+    /// string — no bridging copy.
+    private func plainLine(_ line: Int, in view: DocumentView) -> String {
+        guard let text = view.textView.textStorage?.mutableString else { return "" }
+        let start = view.gutter.lineStart(ofLine: line)
+        guard start < text.length else { return "" }
+        var range = text.lineRange(for: NSRange(location: start, length: 0))
+        while range.length > 0,
+            [10, 13].contains(text.character(at: NSMaxRange(range) - 1))
+        {
+            range.length -= 1
+        }
+        return text.substring(with: range)
+    }
+
     private func attributedLine(_ line: Int, in view: DocumentView) -> NSAttributedString {
-        let text = view.textView.string as NSString
+        guard let storage = view.textView.textStorage else { return NSAttributedString() }
+        let text: NSString = storage.mutableString
         let start = view.gutter.lineStart(ofLine: line)
         guard start < text.length else { return NSAttributedString() }
         var range = text.lineRange(for: NSRange(location: start, length: 0))
@@ -2439,6 +2470,18 @@ final class DocumentController: NSResponder {
                 // where the selected word may also appear.
                 self.refreshOccurrences()
                 self.renderMarks()
+                // After a long jump the viewport controller can still
+                // answer with where the view was, so the paint lands on
+                // text nobody is looking at; one more coalesced pass
+                // catches the viewport where layout put it. It settles
+                // at once when the first paint was right.
+                if let (viewport, _) = self.highlightRange(),
+                    let painted = self.paintedRange,
+                    !NSLocationInRange(viewport.location, painted)
+                        || !NSLocationInRange(max(NSMaxRange(viewport) - 1, 0), painted)
+                {
+                    self.scheduleHighlightRefresh()
+                }
             }
         }
     }
@@ -2942,6 +2985,29 @@ final class DocumentController: NSResponder {
     }
 
     /// The document's facts, for the window's subtitle.
+    /// Counts edits, so per-caret-move work can cache against it.
+    private(set) var textVersion: UInt64 = 0
+    private var cachedUsesTabs: (version: UInt64, value: Bool)?
+
+    /// Whether the file indents with tabs, from its own text — scanned
+    /// on the storage's backing string, no bridging copy, and only
+    /// once per edit.
+    private func detectedUsesTabs() -> Bool {
+        if let cached = cachedUsesTabs, cached.version == textVersion {
+            return cached.value
+        }
+        let value: Bool
+        if let backing = textView?.textStorage?.mutableString {
+            value =
+                backing.range(of: "\n\t").location != NSNotFound
+                || backing.hasPrefix("\t")
+        } else {
+            value = false
+        }
+        cachedUsesTabs = (textVersion, value)
+        return value
+    }
+
     /// What the status bar says about this document right now.
     var statusInfo: StatusBar.Info {
         var info = StatusBar.Info()
@@ -2957,13 +3023,10 @@ final class DocumentController: NSResponder {
                 ?? CoreConfig.FileOverride()
         }
         // The override answers when it says; the file itself otherwise,
-        // the way formatting already reads it.
-        info.usesTabs =
-            stored?.spaces.map { !$0 }
-            ?? {
-                let text = textView?.string ?? ""
-                return text.contains("\n\t") || text.hasPrefix("\t")
-            }()
+        // the way formatting already reads it. The scan is cached per
+        // text version: the bar redraws on every caret move, and a
+        // whole-file scan per arrow key is what stuttered.
+        info.usesTabs = stored?.spaces.map { !$0 } ?? detectedUsesTabs()
         info.language = coreDocument.languageName
         info.encoding = coreDocument.encodingName
         return info
@@ -4001,8 +4064,8 @@ extension DocumentController: NSTextViewDelegate {
         lineRuler?.invalidateLineStarts()
         completionAfterTyping()
         scheduleAutosave()
+        textVersion &+= 1
         for view in views {
-            view.contextStrip.invalidateText()
             updateContextStrip(for: view)
         }
         assertInSync()

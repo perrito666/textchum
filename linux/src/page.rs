@@ -65,6 +65,10 @@ pub struct Page {
     /// they currently show.
     context_strip: gtk::Box,
     pub context_pins: RefCell<Vec<usize>>,
+    /// What the pins said when last drawn — an edit above moves text
+    /// under unchanged line numbers, and only a real change is worth
+    /// rebuilding five rows for.
+    context_texts: RefCell<Vec<String>>,
 
 }
 
@@ -335,6 +339,7 @@ impl Page {
             context_offset: Cell::new(None),
             context_strip,
             context_pins: RefCell::new(Vec::new()),
+            context_texts: RefCell::new(Vec::new()),
         });
         document.views.borrow_mut().push(Rc::downgrade(&page));
         {
@@ -393,7 +398,6 @@ fn install_change_handler(
                 let views = document.views();
                 for view in &views {
                     crate::workbench::refresh_chrome_for(view);
-                    view.context_pins.borrow_mut().clear();
                     refresh_context_strip(view);
                 }
                 debug_assert_eq!(
@@ -1680,22 +1684,31 @@ pub fn refresh_context_strip(page: &Rc<Page>) {
     let (top_iter, _) = page.view.line_at_y(top);
     let lines = state.document.context_lines(top_iter.line() as usize, 5);
     drop(state);
-    if *page.context_pins.borrow() == lines {
+    let buffer = &page.buffer;
+    let texts: Vec<String> = lines
+        .iter()
+        .map(|line| {
+            let start = buffer
+                .iter_at_line(*line as i32)
+                .unwrap_or_else(|| buffer.start_iter());
+            let mut end = start.clone();
+            if !end.ends_line() {
+                end.forward_to_line_end();
+            }
+            buffer.text(&start, &end, true).to_string()
+        })
+        .collect();
+    if *page.context_pins.borrow() == lines && *page.context_texts.borrow() == texts {
         return;
     }
     *page.context_pins.borrow_mut() = lines.clone();
+    *page.context_texts.borrow_mut() = texts.clone();
     while let Some(child) = strip.first_child() {
         strip.remove(&child);
     }
     strip.set_visible(!lines.is_empty());
-    let buffer = &page.buffer;
-    for line in lines {
-        let start = buffer.iter_at_line(line as i32).unwrap_or_else(|| buffer.start_iter());
-        let mut end = start.clone();
-        if !end.ends_line() {
-            end.forward_to_line_end();
-        }
-        let row = gtk::Label::new(Some(&buffer.text(&start, &end, true)));
+    for (line, text) in lines.into_iter().zip(texts) {
+        let row = gtk::Label::new(Some(&text));
         row.add_css_class("monospace");
         row.set_xalign(0.0);
         row.set_ellipsize(gtk::pango::EllipsizeMode::End);

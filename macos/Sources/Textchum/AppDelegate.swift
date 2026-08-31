@@ -106,6 +106,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         coreApp.ping(sequence: 1)
         coreApp.lspConfigure(json: "{\"lsp\":\(config.lspJSON),\"workspace\":\(config.workspaceJSON)}")
         self.coreApp = coreApp
+        // Files the command line delivered before this point opened
+        // with no server pool; hand it to them now.
+        for editor in editors {
+            editor.adoptLSPApp(coreApp)
+        }
 
         settingsModel.onRestartServers = { [weak self] in
             self?.restartLanguageServers()
