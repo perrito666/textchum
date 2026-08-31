@@ -133,6 +133,17 @@ cuando la escritura se detiene. Un archivo sin versión confirmada, o
 fuera de un repositorio, no lleva marcas en vez de dar todas sus líneas
 por nuevas.
 
+La barra compara con el último commit salvo que se le diga otra cosa.
+En lo hondo de una rama esa respuesta se calla —todo lo confirmado en
+la rama cuenta como sin cambios—, así que `editor.git_marks: "branch"`
+compara con el commit del que nació la rama, y la barra muestra todo lo
+que la rama toca. Cuando git no nombra una rama por defecto,
+`editor.merge_base_branches` lista los nombres que probar, el más
+probable primero; ambos ajustes se pueden anular por proyecto.
+**Ir → Cambiado en la rama** (⌃⌘T, Ctrl+Alt+P en Linux) lista los
+archivos de la rama —los del pull request, leídos solo de git— tras el
+mismo filtro difuso que Abrir rápido.
+
 **Autoría de la línea** (⌃⌘B, Ctrl+Alt+B en Linux) le pregunta a git
 quién tocó por última vez la línea bajo el cursor: el commit, el autor
 y cuándo la escribió, el asunto y el cuerpo del mensaje —donde suele

@@ -1946,7 +1946,30 @@ pub fn refresh_change_marks(page: &Rc<Page>) {
         return;
     };
     let text = page.state.borrow().document.text();
-    let marks = textchum_core::changes::changes_for(std::path::Path::new(&path), &text);
+    // The baseline and the branch priorities come from the project's
+    // override when it has one, the configuration otherwise.
+    let root = page
+        .document
+        .project_root
+        .borrow()
+        .clone()
+        .unwrap_or_default();
+    let baseline = {
+        let shell = crate::shell::Shell::instance();
+        let config = shell.config.borrow();
+        let overrides = config.editor_overrides_json(&root);
+        serde_json::from_str::<serde_json::Value>(&overrides)
+            .ok()
+            .and_then(|parsed| parsed["git_marks"].as_str().map(str::to_string))
+            .unwrap_or_else(|| config.git_marks())
+    };
+    let branches = crate::workbench::merge_base_branches_for(std::path::Path::new(&root));
+    let marks = textchum_core::changes::changes_against(
+        std::path::Path::new(&path),
+        &text,
+        textchum_core::changes::Baseline::parse(&baseline),
+        &branches,
+    );
     *page.change_marks.borrow_mut() = marks
         .into_iter()
         .map(|mark| (mark.line as i32, mark.kind))

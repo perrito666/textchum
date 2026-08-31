@@ -1309,6 +1309,62 @@ pub unsafe extern "C" fn tc_config_set_context_lines(config: *mut TcConfig, show
     }
 }
 
+/// What the gutter compares against: `"head"` or `"branch"`. Release
+/// with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_git_marks(config: *const TcConfig) -> *mut c_char {
+    let mode = unsafe { config.as_ref() }.map_or_else(|| "head".into(), |c| c.inner.git_marks());
+    owned_c_string(mode)
+}
+
+/// Sets what the gutter compares against.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `mode` valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_git_marks(
+    config: *mut TcConfig,
+    mode: *const c_char,
+    mode_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else { return };
+    let Some(mode) = (unsafe { str_from_raw(mode, mode_len) }) else { return };
+    config.inner.set_git_marks(mode);
+}
+
+/// The merge-base branch priority list as a JSON array of names.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_merge_base_branches(config: *const TcConfig) -> *mut c_char {
+    let names = unsafe { config.as_ref() }
+        .map(|c| c.inner.merge_base_branches())
+        .unwrap_or_default();
+    owned_c_string(serde_json::Value::from(names).to_string())
+}
+
+/// Sets the merge-base priority list from a JSON array of names; an
+/// empty array restores the default.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `names` valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_merge_base_branches(
+    config: *mut TcConfig,
+    names: *const c_char,
+    names_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else { return };
+    let Some(json) = (unsafe { str_from_raw(names, names_len) }) else { return };
+    let names: Vec<String> = serde_json::from_str(json).unwrap_or_default();
+    config.inner.set_merge_base_branches(&names);
+}
+
 /// Whether a project's record lives with the checkout.
 ///
 /// # Safety
@@ -3440,6 +3496,10 @@ pub unsafe extern "C" fn tc_changes_for_file(
     path_len: usize,
     text: *const c_char,
     text_len: usize,
+    baseline: *const c_char,
+    baseline_len: usize,
+    branches_json: *const c_char,
+    branches_json_len: usize,
 ) -> *mut c_char {
     let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
         return std::ptr::null_mut();
@@ -3447,9 +3507,48 @@ pub unsafe extern "C" fn tc_changes_for_file(
     let Some(text) = (unsafe { str_from_raw(text, text_len) }) else {
         return std::ptr::null_mut();
     };
+    let baseline = textchum_core::changes::Baseline::parse(
+        unsafe { str_from_raw(baseline, baseline_len) }.unwrap_or("head"),
+    );
+    let branches: Vec<String> = unsafe { str_from_raw(branches_json, branches_json_len) }
+        .and_then(|json| serde_json::from_str(json).ok())
+        .unwrap_or_default();
     catch_unwind(AssertUnwindSafe(|| {
-        let changes = textchum_core::changes::changes_for(std::path::Path::new(path), text);
+        let changes = textchum_core::changes::changes_against(
+            std::path::Path::new(path),
+            text,
+            baseline,
+            &branches,
+        );
         owned_c_string(textchum_core::changes::to_json(&changes))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// The files the branch touches, as JSON — `{"root": "...", "files":
+/// [{"status": "M", "path": "src/a.rs"}, …]}`, `{}` outside a
+/// repository. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `path` and `branches_json` must be valid UTF-8 for their lengths.
+#[no_mangle]
+pub unsafe extern "C" fn tc_branch_files(
+    path: *const c_char,
+    path_len: usize,
+    branches_json: *const c_char,
+    branches_json_len: usize,
+) -> *mut c_char {
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let branches: Vec<String> = unsafe { str_from_raw(branches_json, branches_json_len) }
+        .and_then(|json| serde_json::from_str(json).ok())
+        .unwrap_or_default();
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(textchum_core::changes::branch_files_json(
+            std::path::Path::new(path),
+            &branches,
+        ))
     }))
     .unwrap_or(std::ptr::null_mut())
 }

@@ -14,21 +14,29 @@ final class QuickFinderPanel: NSObject {
     enum Mode {
         case files
         case grep
+        /// The files the branch touches, as an openable list: the pull
+        /// request's files, read from git alone.
+        case changed
 
         var title: String {
             switch self {
-            case .files: "Open Quickly"
-            case .grep: "Find in Project"
+            case .files: t("Open Quickly")
+            case .grep: t("Find in Project")
+            case .changed: t("Changed in Branch")
             }
         }
 
         var placeholder: String {
             switch self {
-            case .files: "fuzzy file name…"
-            case .grep: "regular expression…"
+            case .files, .changed: t("fuzzy file name…")
+            case .grep: t("regular expression…")
             }
         }
     }
+
+    /// The merge-base priorities the changed list resolves with; handed
+    /// in by the caller, which knows the project.
+    var mergeBaseBranches: [String] = []
 
     private var panel: NSPanel?
     /// Spelled out in the status strip, because a finder whose ⏎ does
@@ -91,7 +99,7 @@ final class QuickFinderPanel: NSObject {
         panel.makeFirstResponder(queryField)
         // Files mode indexes the scope once; grep asks the core per
         // query (it streams from disk by design).
-        if mode == .files {
+        if mode != .grep {
             refreshFileIndex(force: true)
         } else {
             runSearch()
@@ -111,8 +119,16 @@ final class QuickFinderPanel: NSObject {
             "Indexing \((scope as NSString).lastPathComponent)…   ·   \(Self.keyHint)"
         searchGeneration += 1
         let generation = searchGeneration
+        let mode = self.mode
+        let branches = mergeBaseBranches
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let paths = CoreSearch.listFiles(root: scope)
+            let paths: [String]
+            if mode == .changed {
+                paths = CoreChanges.branchFiles(near: scope, branches: branches)?
+                    .files.map(\.path) ?? []
+            } else {
+                paths = CoreSearch.listFiles(root: scope)
+            }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self, self.searchGeneration == generation else { return }
@@ -271,7 +287,7 @@ final class QuickFinderPanel: NSObject {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    if self.mode == .files {
+                    if self.mode != .grep {
                         self.refreshFileIndex(force: true)
                     } else {
                         self.runSearch()
@@ -304,7 +320,7 @@ final class QuickFinderPanel: NSObject {
         let index = fileIndex
         // The walk owns the status line until it finishes; matching an
         // empty index would blank the panel and look like "no results".
-        if mode == .files, isIndexing { return }
+        if mode != .grep, isIndexing { return }
         searchGeneration += 1
         let generation = searchGeneration
 
@@ -314,7 +330,7 @@ final class QuickFinderPanel: NSObject {
             var results: [(String, String, Int)] = []
             var status = ""
             switch mode {
-            case .files:
+            case .files, .changed:
                 // Over-fetch so the stacked filters have something to
                 // prune; every filter kind applies to the path here.
                 let names = CoreSearch.matchFiles(paths: index, query: query, limit: 400)
@@ -491,7 +507,7 @@ extension QuickFinderPanel: NSTextFieldDelegate {
             // Search now (flushing the debounce). ⌘⏎ is what opens —
             // see the hint in the status line.
             debounce?.invalidate()
-            if mode == .files, indexedScope
+            if mode != .grep, indexedScope
                 != (scopeField.stringValue as NSString).expandingTildeInPath
             {
                 refreshFileIndex(force: true)

@@ -549,6 +549,27 @@ final class DocumentController: NSResponder {
         }
     }
 
+    /// What the gutter compares against and, when git does not say
+    /// which branch is the default, which names to try: the project's
+    /// override when it has one, the configuration otherwise.
+    var gitMarksSettings: (baseline: String, branches: [String]) {
+        let config = (NSApp.delegate as? AppDelegate)?.config
+        var baseline = config?.gitMarks ?? "head"
+        var branches = config?.mergeBaseBranches ?? []
+        if let root = projectRoot, let config,
+            let data = config.editorOverridesJSON(root: root).data(using: .utf8),
+            let overrides = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        {
+            if let mode = overrides["git_marks"] as? String, !mode.isEmpty {
+                baseline = mode
+            }
+            if let names = overrides["merge_base_branches"] as? [String], !names.isEmpty {
+                branches = names
+            }
+        }
+        return (baseline, branches)
+    }
+
     /// Asks for the marks now. The document is read here, on the main
     /// thread, and only the two strings cross to the background queue.
     func refreshChangeMarks() {
@@ -559,10 +580,13 @@ final class DocumentController: NSResponder {
             return
         }
         let text = coreDocument.text
+        let settings = gitMarksSettings
         let generation = changeMarkGeneration &+ 1
         changeMarkGeneration = generation
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let marks = CoreChanges.marks(forPath: path, text: text)
+            let marks = CoreChanges.marks(
+                forPath: path, text: text,
+                baseline: settings.baseline, branches: settings.branches)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self, self.changeMarkGeneration == generation else { return }
@@ -2839,6 +2863,8 @@ final class DocumentController: NSResponder {
                 view.contextStrip.invalidateText()
                 updateContextStrip(for: view)
             }
+            // The baseline choice may have moved; the gutter re-reads it.
+            refreshChangeMarks()
         }
         appliedFont = settings.font
         appliedTabWidth = settings.tabWidth

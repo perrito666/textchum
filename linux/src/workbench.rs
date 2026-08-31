@@ -291,6 +291,7 @@ impl Workbench {
         }
         file_section.append_submenu(Some(&tr("Open Recent")), &recent_menu);
         file_section.append(Some(&tr("Open Quickly…")), Some("win.quick-open"));
+        file_section.append(Some(&tr("Changed in Branch…")), Some("win.changed-files"));
         file_section.append(Some(&tr("Save")), Some("win.save"));
         file_section.append(Some(&tr("Save As…")), Some("win.save-as"));
         file_section.append(Some(&tr("Revert to Saved")), Some("win.revert"));
@@ -1871,6 +1872,17 @@ impl Workbench {
 /// Selected-page chrome refresh, callable from page signal handlers.
 /// The caret moved in `page`: the bar of whichever window shows it.
 /// The pinned-context switch moved: every view redraws its strip.
+/// The gutter's baseline moved: every page re-reads its marks.
+pub fn refresh_all_change_marks() {
+    WORKBENCHES.with(|list| {
+        for workbench in list.borrow().iter() {
+            for page in workbench.pages.borrow().iter() {
+                page::refresh_change_marks(page);
+            }
+        }
+    });
+}
+
 pub fn refresh_all_context_strips() {
     WORKBENCHES.with(|list| {
         for workbench in list.borrow().iter() {
@@ -2374,6 +2386,18 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             })
             .unwrap_or_else(glib::home_dir);
         show_grep(workbench, root);
+    });
+    add("changed-files", workbench, |workbench, _| {
+        let root = workbench
+            .selected()
+            .and_then(|page| {
+                page.path().borrow().as_deref().map(Path::new).and_then(|path| {
+                    workspace::project_root_for(path)
+                        .or_else(|| path.parent().map(Path::to_owned))
+                })
+            })
+            .unwrap_or_else(glib::home_dir);
+        show_changed_files(workbench, root);
     });
     add("quick-open", workbench, |workbench, _| {
         let root = workbench
@@ -3283,6 +3307,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("New Window", "win.new"),
     ("Open…", "win.open"),
     ("Open Quickly…", "win.quick-open"),
+    ("Changed in Branch…", "win.changed-files"),
     ("Save", "win.save"),
     ("Save As…", "win.save-as"),
     ("Revert to Saved", "win.revert"),
@@ -4655,6 +4680,48 @@ pub fn percent_decode(text: &str) -> String {
 /// A modal fuzzy file finder over the core's matcher: type, ⏎ opens the
 /// selection (or the first hit) as a tab, ⎋ closes.
 fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
+    let index = textchum_core::search::list_files(&root);
+    show_file_picker(workbench, root, index);
+}
+
+/// The files the branch touches — the pull request's files, read from
+/// git alone — behind the same fuzzy filter as Open Quickly.
+fn show_changed_files(workbench: &Rc<Workbench>, root: PathBuf) {
+    let branches = merge_base_branches_for(&root);
+    let Some((top, files)) = textchum_core::changes::branch_files(&root, &branches) else {
+        workbench.toast(&tr("Not inside a git repository."));
+        return;
+    };
+    let index: Vec<String> = files.into_iter().map(|(_, path)| path).collect();
+    if index.is_empty() {
+        workbench.toast(&tr("The branch touches no files."));
+        return;
+    }
+    show_file_picker(workbench, PathBuf::from(top), index);
+}
+
+/// What the gutter and the changed-files list resolve the fork point
+/// with: the project's override when it has one, the configuration
+/// otherwise.
+pub fn merge_base_branches_for(root: &Path) -> Vec<String> {
+    let shell = Shell::instance();
+    let config = shell.config.borrow();
+    let overrides = config.editor_overrides_json(&root.to_string_lossy());
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&overrides) {
+        if let Some(names) = parsed["merge_base_branches"].as_array() {
+            let names: Vec<String> = names
+                .iter()
+                .filter_map(|name| name.as_str().map(str::to_string))
+                .collect();
+            if !names.is_empty() {
+                return names;
+            }
+        }
+    }
+    config.merge_base_branches()
+}
+
+fn show_file_picker(workbench: &Rc<Workbench>, root: PathBuf, index: Vec<String>) {
     let entry = gtk::SearchEntry::new();
     entry.set_placeholder_text(Some(&tr("fuzzy file name…")));
     let list = gtk::ListBox::new();
@@ -4687,7 +4754,7 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
 
     // Walk once, match many: re-walking a real repository on every
     // keystroke is what makes a fuzzy finder feel broken.
-    let index: Rc<Vec<String>> = Rc::new(textchum_core::search::list_files(&root));
+    let index: Rc<Vec<String>> = Rc::new(index);
     let refill = {
         let list = list.clone();
         let index = Rc::clone(&index);
@@ -5529,6 +5596,63 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
     }
     editor_group.add(&context_row);
+    let marks_row = adw::ComboRow::new();
+    marks_row.set_title(&tr("Gutter marks compare against"));
+    let marks_choices =
+        gtk::StringList::new(&[&tr("The last commit"), &tr("Where the branch forked")]);
+    marks_row.set_model(Some(&marks_choices));
+    marks_row.set_selected(if shell.config.borrow().git_marks() == "branch" { 1 } else { 0 });
+    {
+        let shell = Rc::clone(&shell);
+        marks_row.connect_selected_notify(move |row| {
+            shell
+                .config
+                .borrow_mut()
+                .set_git_marks(if row.selected() == 1 { "branch" } else { "head" });
+            shell.save_config();
+            refresh_all_change_marks();
+        });
+    }
+    editor_group.add(&marks_row);
+    let branches_view = gtk::TextView::new();
+    branches_view.set_monospace(true);
+    branches_view.set_top_margin(6);
+    branches_view.set_bottom_margin(6);
+    branches_view.set_left_margin(8);
+    branches_view
+        .buffer()
+        .set_text(&shell.config.borrow().merge_base_branches().join("\n"));
+    {
+        let shell = Rc::clone(&shell);
+        branches_view.buffer().connect_changed(move |buffer| {
+            let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+            let names: Vec<String> = text
+                .lines()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+                .collect();
+            shell.config.borrow_mut().set_merge_base_branches(&names);
+            shell.save_config();
+        });
+    }
+    let branches_scroll = gtk::ScrolledWindow::builder()
+        .child(&branches_view)
+        .min_content_height(72)
+        .build();
+    branches_scroll.add_css_class("card");
+    let branches_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let branches_title = gtk::Label::new(Some(&tr("Merge-base branches, most likely first")));
+    branches_title.set_xalign(0.0);
+    let branches_hint =
+        gtk::Label::new(Some(&tr("Tried in order when git does not name a default branch.")));
+    branches_hint.set_xalign(0.0);
+    branches_hint.add_css_class("dim-label");
+    branches_box.append(&branches_title);
+    branches_box.append(&branches_hint);
+    branches_box.append(&branches_scroll);
+    branches_box.set_margin_top(8);
+    editor_group.add(&branches_box);
     let keep_row = adw::SwitchRow::new();
     keep_row.set_title(&tr("Keep files open when their window closes"));
     keep_row.set_subtitle(

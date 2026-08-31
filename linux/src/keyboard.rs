@@ -17,6 +17,7 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("newWithFormat", n_("New with Format"), "win.new-format-picker"),
     ("open", n_("Open"), "win.open"),
     ("openQuickly", n_("Open Quickly"), "win.quick-open"),
+    ("changedFiles", n_("Changed in Branch"), "win.changed-files"),
     ("save", n_("Save"), "win.save"),
     ("saveAs", n_("Save As"), "win.save-as"),
     ("revertToSaved", n_("Revert to Saved"), "win.revert"),

@@ -130,6 +130,17 @@ recomputed once typing settles. A file with no committed version, or
 one outside a repository, gets no marks rather than every line claimed
 as new.
 
+The bar compares against the last commit unless told otherwise. Deep in
+a feature branch that answer goes quiet — everything committed on the
+branch counts as unchanged — so `editor.git_marks: "branch"` compares
+against the commit the branch grew from instead, and the bar shows
+everything the branch touches. When git does not name a default branch,
+`editor.merge_base_branches` lists the names to try, most likely first;
+both settings can be overridden per project. **Go → Changed in Branch**
+(⌃⌘T, Ctrl+Alt+P on Linux) lists the branch's files — the pull
+request's files, read from git alone — behind the same fuzzy filter as
+Open Quickly.
+
 **Blame Line** (⌃⌘B, Ctrl+Alt+B on Linux) asks git who last touched the
 line under the caret: the commit, the author and when they wrote it,
 the subject and the message body — where the reasoning usually is — and

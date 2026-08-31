@@ -1078,6 +1078,68 @@ impl Config {
             .insert("context_lines".into(), Value::Bool(shown));
     }
 
+    /// What the gutter compares against: `"head"` (the default) for
+    /// the last commit, `"branch"` for the commit the branch grew from.
+    pub fn git_marks(&self) -> String {
+        self.editor()
+            .get("git_marks")
+            .and_then(Value::as_str)
+            .unwrap_or("head")
+            .to_string()
+    }
+
+    pub fn set_git_marks(&mut self, mode: &str) {
+        if mode == "head" {
+            // The default reads most naturally as an absent key.
+            self.editor_mut().remove("git_marks");
+        } else {
+            self.editor_mut()
+                .insert("git_marks".into(), Value::String(mode.into()));
+        }
+    }
+
+    /// The branch names tried, in order, as the merge base when git
+    /// does not say which branch is the default one.
+    pub fn merge_base_branches(&self) -> Vec<String> {
+        self.editor()
+            .get("merge_base_branches")
+            .and_then(Value::as_array)
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_else(|| {
+                crate::changes::DEFAULT_MERGE_BASE_BRANCHES
+                    .iter()
+                    .map(|name| name.to_string())
+                    .collect()
+            })
+    }
+
+    /// Sets the priority list; an empty list restores the default.
+    pub fn set_merge_base_branches(&mut self, names: &[String]) {
+        let names: Vec<&String> = names
+            .iter()
+            .filter(|name| !name.trim().is_empty())
+            .collect();
+        if names.is_empty() {
+            self.editor_mut().remove("merge_base_branches");
+        } else {
+            self.editor_mut().insert(
+                "merge_base_branches".into(),
+                Value::Array(
+                    names
+                        .into_iter()
+                        .map(|name| Value::String(name.trim().to_string()))
+                        .collect(),
+                ),
+            );
+        }
+    }
+
     /// The keyboard-shortcut overrides (`keys`), serialized: an object of
     /// `{action: "modifiers+key"}` entries (e.g. `"save": "cmd+s"`).
     /// Empty object when unset; hand-edited, no UI.
@@ -1736,6 +1798,35 @@ mod tests {
         config.save().unwrap();
         let written = std::fs::read_to_string(&path).unwrap();
         assert!(written.contains("kept"));
+    }
+
+    #[test]
+    fn git_marks_and_merge_base_branches_round_trip() {
+        let path = temp_path("git-marks.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.git_marks(), "head");
+        assert_eq!(
+            config.merge_base_branches(),
+            vec!["main", "master", "trunk", "develop"]
+        );
+        config.set_git_marks("branch");
+        config.set_merge_base_branches(&["work".into(), "main".into()]);
+        config.save().unwrap();
+        let (config2, _) = Config::load(&path);
+        assert_eq!(config2.git_marks(), "branch");
+        assert_eq!(config2.merge_base_branches(), vec!["work", "main"]);
+        // The defaults read most naturally as absent keys.
+        config.set_git_marks("head");
+        config.set_merge_base_branches(&[]);
+        config.save().unwrap();
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(!written.contains("git_marks"));
+        assert!(!written.contains("merge_base_branches"));
+        assert_eq!(
+            config.merge_base_branches(),
+            vec!["main", "master", "trunk", "develop"]
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

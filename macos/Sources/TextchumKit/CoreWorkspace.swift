@@ -439,16 +439,28 @@ public enum CoreChanges {
     /// when there is nothing to compare against: a file with no
     /// committed version, one outside a repository, or a machine with
     /// no git. None of those is an error.
-    public static func marks(forPath path: String, text: String) -> [Mark] {
+    public static func marks(
+        forPath path: String, text: String,
+        baseline: String = "head", branches: [String] = []
+    ) -> [Mark] {
+        let branchesJSON =
+            (try? JSONSerialization.data(withJSONObject: branches))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         let json = path.withCString { pathPointer -> UnsafeMutablePointer<CChar>? in
             var text = text
             return text.withUTF8 { bytes in
-                tc_changes_for_file(
-                    pathPointer, UInt(strlen(pathPointer)),
-                    bytes.baseAddress.map {
-                        UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
-                    },
-                    UInt(bytes.count))
+                baseline.withCString { baselinePointer in
+                    branchesJSON.withCString { branchesPointer in
+                        tc_changes_for_file(
+                            pathPointer, UInt(strlen(pathPointer)),
+                            bytes.baseAddress.map {
+                                UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                            },
+                            UInt(bytes.count),
+                            baselinePointer, UInt(strlen(baselinePointer)),
+                            branchesPointer, UInt(strlen(branchesPointer)))
+                    }
+                }
             }
         }
         guard let json else { return [] }
@@ -462,6 +474,48 @@ public enum CoreChanges {
             else { return nil }
             return Mark(line: line, kind: kind)
         }
+    }
+
+    /// One file the branch touches.
+    public struct BranchFile {
+        /// Git's one-letter status: A, M, R…
+        public let status: String
+        /// Relative to the repository root.
+        public let path: String
+    }
+
+    /// The files the branch touches — committed on it, changed in the
+    /// working tree, or not yet tracked. `root` is the repository's
+    /// top; nil outside one.
+    public static func branchFiles(
+        near path: String, branches: [String]
+    ) -> (root: String, files: [BranchFile])? {
+        let branchesJSON =
+            (try? JSONSerialization.data(withJSONObject: branches))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        let json = path.withCString { pathPointer in
+            branchesJSON.withCString { branchesPointer in
+                tc_branch_files(
+                    pathPointer, UInt(strlen(pathPointer)),
+                    branchesPointer, UInt(strlen(branchesPointer)))
+            }
+        }
+        guard let json else { return nil }
+        defer { tc_string_free(json) }
+        let data = Data(String(cString: json).utf8)
+        guard let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+            let root = parsed["root"] as? String,
+            let files = parsed["files"] as? [[String: Any]]
+        else { return nil }
+        return (
+            root,
+            files.compactMap { item in
+                guard let status = item["status"] as? String,
+                    let path = item["path"] as? String
+                else { return nil }
+                return BranchFile(status: status, path: path)
+            }
+        )
     }
 }
 

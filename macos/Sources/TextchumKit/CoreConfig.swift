@@ -140,6 +140,39 @@ public final class CoreConfig {
         set { tc_config_set_line_numbers(handle, newValue) }
     }
 
+    /// What the gutter compares against: "head" or "branch".
+    public var gitMarks: String {
+        get {
+            guard let raw = tc_config_git_marks(handle) else { return "head" }
+            defer { tc_string_free(raw) }
+            return String(cString: raw)
+        }
+        set {
+            newValue.withCString { pointer in
+                tc_config_set_git_marks(handle, pointer, UInt(strlen(pointer)))
+            }
+        }
+    }
+
+    /// The branch names tried, in order, as the merge base when git
+    /// does not say which branch is the default one.
+    public var mergeBaseBranches: [String] {
+        get {
+            guard let raw = tc_config_merge_base_branches(handle) else { return [] }
+            defer { tc_string_free(raw) }
+            let data = Data(String(cString: raw).utf8)
+            return (try? JSONSerialization.jsonObject(with: data)) as? [String] ?? []
+        }
+        set {
+            let json =
+                (try? JSONSerialization.data(withJSONObject: newValue))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+            json.withCString { pointer in
+                tc_config_set_merge_base_branches(handle, pointer, UInt(strlen(pointer)))
+            }
+        }
+    }
+
     /// Whether the first line of each enclosing construct is pinned at
     /// the top of the view.
     public var contextLines: Bool {

@@ -840,6 +840,43 @@ bool tc_config_context_lines(const struct TcConfig *config);
 void tc_config_set_context_lines(struct TcConfig *config, bool shown);
 
 /**
+ * What the gutter compares against: `"head"` or `"branch"`. Release
+ * with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_git_marks(const struct TcConfig *config);
+
+/**
+ * Sets what the gutter compares against.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `mode` valid UTF-8.
+ */
+void tc_config_set_git_marks(struct TcConfig *config, const char *mode, uintptr_t mode_len);
+
+/**
+ * The merge-base branch priority list as a JSON array of names.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_merge_base_branches(const struct TcConfig *config);
+
+/**
+ * Sets the merge-base priority list from a JSON array of names; an
+ * empty array restores the default.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `names` valid UTF-8.
+ */
+void tc_config_set_merge_base_branches(struct TcConfig *config,
+                                       const char *names,
+                                       uintptr_t names_len);
+
+/**
  * Whether a project's record lives with the checkout.
  *
  * # Safety
@@ -1980,7 +2017,24 @@ char *tc_references_elsewhere(const char *result,
 char *tc_changes_for_file(const char *path,
                           uintptr_t path_len,
                           const char *text,
-                          uintptr_t text_len);
+                          uintptr_t text_len,
+                          const char *baseline,
+                          uintptr_t baseline_len,
+                          const char *branches_json,
+                          uintptr_t branches_json_len);
+
+/**
+ * The files the branch touches, as JSON — `{"root": "...", "files":
+ * [{"status": "M", "path": "src/a.rs"}, …]}`, `{}` outside a
+ * repository. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `path` and `branches_json` must be valid UTF-8 for their lengths.
+ */
+char *tc_branch_files(const char *path,
+                      uintptr_t path_len,
+                      const char *branches_json,
+                      uintptr_t branches_json_len);
 
 /**
  * What git knows about one line of a file: who wrote it, when, and

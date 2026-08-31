@@ -61,6 +61,12 @@ by default.
 `editor.context_lines` (`true` by default) pins the first line of each
 enclosing construct at the top of the view while a long body scrolls;
 `false` switches the pins off.
+`editor.git_marks` chooses what the gutter's change bar compares
+against: `"head"` (the default) for the last commit, `"branch"` for the
+commit the branch grew from. `editor.merge_base_branches` is the list
+of branch names tried, in order, when git does not name a default
+branch — `["main", "master", "trunk", "develop"]` unless set. Both keys
+also work per project, as `editor` overrides on a workspace entry.
 
 Everything is optional — a missing file, a missing section, or a missing
 key simply means the default. Writes are atomic (temporary file plus

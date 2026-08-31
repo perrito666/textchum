@@ -63,6 +63,14 @@ seleccionada; `editor.occurrences_case_sensitive` y
 `true` por defecto. `editor.context_lines` (`true` por defecto) fija
 la primera línea de cada construcción envolvente en lo alto de la vista
 mientras un cuerpo largo se desplaza; `false` apaga las líneas fijadas.
+`editor.git_marks` elige con qué compara la barra de cambios del
+margen: `"head"` (el valor por defecto) con el último commit,
+`"branch"` con el commit del que nació la rama.
+`editor.merge_base_branches` es la lista de nombres de rama que se
+prueban, en orden, cuando git no nombra una rama por defecto —
+`["main", "master", "trunk", "develop"]` si no se establece. Ambas
+claves funcionan también por proyecto, como anulaciones `editor` de una
+entrada del workspace.
 
 Todo es opcional: un archivo, una sección o una clave ausentes significan
 simplemente el valor por defecto. Las escrituras son atómicas (archivo
