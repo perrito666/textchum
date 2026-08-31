@@ -1099,6 +1099,33 @@ func runSmokeTest() -> Int32 {
     }
     pinBench.statusBar.show(status)
     pinBench.window?.close()
+
+    // With the find bar open, the pins move below it: a search field
+    // nobody can see is a search nobody can read.
+    let finder = NSTextFinder()
+    finder.client = pinView.textView as? NSTextFinderClient
+    finder.findBarContainer = pinView.scrollView
+    pinView.scrollView.isFindBarVisible = true
+    let bar = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 28))
+    pinView.scrollView.findBarView = bar
+    // The strip's distance from the scroll view's top edge, in the
+    // container's unflipped coordinates.
+    func stripOffset() -> CGFloat {
+        pinView.container.layoutSubtreeIfNeeded()
+        return pinView.scrollView.frame.maxY - pinView.contextStrip.frame.maxY
+    }
+    spin(untilTrue: { stripOffset() >= 27 }, seconds: 3)
+    guard stripOffset() >= 27 else {
+        print("FAIL: the pins sit on the find bar (offset \(stripOffset()))")
+        return 1
+    }
+    pinView.scrollView.isFindBarVisible = false
+    spin(untilTrue: { stripOffset() < 1 }, seconds: 3)
+    guard stripOffset() < 1 else {
+        print("FAIL: the pins did not come back up")
+        return 1
+    }
+    print("find bar ok (the pins step below it and back)")
     print("context ok (pins stack the class and the def, the bar knows the caret)")
 
     // A link clicked in the Markdown preview goes to the browser and
