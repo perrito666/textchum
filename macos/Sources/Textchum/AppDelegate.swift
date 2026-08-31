@@ -19,14 +19,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static var configPath: String { AppPaths.configPath }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let jump = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_JUMP"],
-            let line = Int(jump)
-        {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                MainActor.assumeIsolated {
-                    NSLog("TIMER jump-start")
-                    self.editors.first?.reveal(line: line, character: 0)
-                    NSLog("TIMER jump-returned")
+        if let jumps = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_JUMP"] {
+            let lines = jumps.split(separator: ",").compactMap { Int($0) }
+            for (index, line) in lines.enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4 + Double(index) * 1.5) {
+                    MainActor.assumeIsolated {
+                        NSLog("TIMER jump-start \(line)")
+                        self.editors.first?.reveal(line: line, character: 0)
+                        NSLog("TIMER jump-returned")
+                    }
                 }
             }
         }

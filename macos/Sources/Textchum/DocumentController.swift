@@ -2577,21 +2577,20 @@ final class DocumentController: NSResponder {
             return (head, head)
         }
 
-        // The viewport controller knows exactly what is laid out; fall
-        // back to the caret when it has not settled yet (first paint).
-        var start = 0
-        var end = 0
-        if let viewport = layoutManager.textViewportLayoutController.viewportRange {
-            start = contentManager.offset(
-                from: contentManager.documentRange.location, to: viewport.location)
-            end = contentManager.offset(
-                from: contentManager.documentRange.location, to: viewport.endLocation)
-        } else {
-            let caret = min(textView.selectedRange().location, length)
-            start = caret
-            end = caret
-        }
-        _ = scrollView
+        // From the clip view's geometry, not the viewport layout
+        // controller: right after a long jump the controller still
+        // answers with where the view was, and painting there is how a
+        // jump landed on uncoloured text that nothing repainted. The
+        // clip view is what scrolled, so it is always current, and
+        // asking for the character at its corners lays that region out
+        // on demand.
+        _ = layoutManager
+        _ = contentManager
+        let visible = scrollView.contentView.bounds
+        let start = textView.characterIndexForInsertion(
+            at: NSPoint(x: 5, y: visible.minY + 1))
+        let end = textView.characterIndexForInsertion(
+            at: NSPoint(x: visible.maxX - 5, y: visible.maxY - 1))
         let from = max(0, start - Self.viewportMargin)
         let to = min(length, end + Self.viewportMargin)
         guard to > from else { return nil }
