@@ -90,6 +90,11 @@ final class DocumentView {
     let gutter: LineNumberGutterView
     /// The pinned context, laid over the top of the scroll view.
     let contextStrip = ContextStrip()
+    /// The strip's distance from the scroll view's top: zero, or the
+    /// find bar's height while one is shown — the scroll view tiles
+    /// the bar outside Auto Layout, so a constraint cannot see it.
+    fileprivate var contextStripTop: NSLayoutConstraint?
+    fileprivate var findBarObservation: NSKeyValueObservation?
 
     init(scrollView: NSScrollView, textView: NSTextView, gutter: LineNumberGutterView) {
         self.scrollView = scrollView
@@ -114,11 +119,23 @@ final class DocumentView {
             // to hidden lines, and would sit beside the wrong text.
             contextStrip.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             contextStrip.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            // To the clip view, not the scroll view: the find bar
-            // pushes the clip view down, and the pins must not sit on
-            // top of the search field.
-            contextStrip.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
         ])
+        let top = contextStrip.topAnchor.constraint(equalTo: scrollView.topAnchor)
+        top.isActive = true
+        contextStripTop = top
+        // The pins must not sit on top of the search field; when the
+        // find bar shows, they move down by its height.
+        findBarObservation = scrollView.observe(\.isFindBarVisible, options: [.initial]) {
+            [weak self] scrollView, _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.contextStripTop?.constant =
+                        scrollView.isFindBarVisible
+                        ? (scrollView.findBarView?.frame.height ?? 30) : 0
+                }
+            }
+        }
     }
 }
 
