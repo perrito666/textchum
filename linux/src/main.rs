@@ -1370,6 +1370,24 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                     return 1;
                 }
                 println!("wrapping ok (delimiters nest, letters do not wrap)");
+
+                // Code's own word boundaries, and a closer that takes
+                // its opener's indentation.
+                let symbols = textchum_core::motion::word_boundary("key\")} next", 3, true);
+                if symbols != 6 {
+                    eprintln!("FAIL: a run of symbols should be one word, landed at {symbols}");
+                    return 1;
+                }
+                buffer.set_text("fn f() {\n    if x {\n        y();\n        ");
+                context.iteration(false);
+                buffer.place_cursor(&buffer.end_iter());
+                let did = crate::page::outdent_for_test(&page, gtk::gdk::Key::from_name("braceright").unwrap());
+                let after = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+                if !did || !after.ends_with("\n    }") {
+                    eprintln!("FAIL: the closer did not take the opener's indentation: {after:?}");
+                    return 1;
+                }
+                println!("code motion ok (symbol runs are words, closers outdent)");
             }
 
             // The pinned context and the status bar: scrolled into a

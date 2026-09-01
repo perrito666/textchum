@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: textchum\n"
 "Report-Msgid-Bugs-To: https://github.com/perrito666/textchum/issues\n"
-"POT-Creation-Date: 2026-09-01 22:56+0200\n"
+"POT-Creation-Date: 2026-09-01 23:02+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -28,10 +28,10 @@ msgstr ""
 
 #: core/textchum-core/src/i18n.rs:348 core/textchum-core/src/i18n.rs:350
 #: core/textchum-core/src/i18n.rs:352 linux/src/keyboard.rs:24
-#: linux/src/main.rs:1523 linux/src/main.rs:1538 linux/src/workbench.rs:361
+#: linux/src/main.rs:1541 linux/src/main.rs:1556 linux/src/workbench.rs:361
 #: macos/Sources/Textchum/AppDelegate.swift:2319
-#: macos/Sources/Textchum/SmokeTest.swift:1443
-#: macos/Sources/Textchum/SmokeTest.swift:1464
+#: macos/Sources/Textchum/SmokeTest.swift:1492
+#: macos/Sources/Textchum/SmokeTest.swift:1513
 msgid "Close Tab"
 msgstr ""
 
@@ -266,8 +266,8 @@ msgstr ""
 msgid "Configured grammars: {}"
 msgstr ""
 
-#: linux/src/main.rs:152 linux/src/main.rs:1527 linux/src/workbench.rs:1197
-#: macos/Sources/Textchum/SmokeTest.swift:1447
+#: linux/src/main.rs:152 linux/src/main.rs:1545 linux/src/workbench.rs:1197
+#: macos/Sources/Textchum/SmokeTest.swift:1496
 msgid "Save changes to {}?"
 msgstr ""
 
@@ -298,45 +298,45 @@ msgstr ""
 msgid "Save All"
 msgstr ""
 
-#: linux/src/main.rs:1533 macos/Sources/Textchum/SmokeTest.swift:1451
+#: linux/src/main.rs:1551 macos/Sources/Textchum/SmokeTest.swift:1500
 msgid "A phrase nobody has translated"
 msgstr ""
 
-#: linux/src/main.rs:1542 linux/src/main.rs:1547
+#: linux/src/main.rs:1560 linux/src/main.rs:1565
 #: macos/Sources/Textchum/Settings.swift:2287
-#: macos/Sources/Textchum/SmokeTest.swift:1457
-#: macos/Sources/Textchum/SmokeTest.swift:1458
-#: macos/Sources/Textchum/SmokeTest.swift:1465
+#: macos/Sources/Textchum/SmokeTest.swift:1506
+#: macos/Sources/Textchum/SmokeTest.swift:1507
+#: macos/Sources/Textchum/SmokeTest.swift:1514
 msgid "{} file"
 msgid_plural "{} files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: linux/src/page.rs:1680 macos/Sources/Textchum/PreviewWebView.swift:18
+#: linux/src/page.rs:1758 macos/Sources/Textchum/PreviewWebView.swift:18
 msgid "Save as PDF…"
 msgstr ""
 
-#: linux/src/page.rs:2324 macos/Sources/Textchum/DocumentController.swift:4110
+#: linux/src/page.rs:2402 macos/Sources/Textchum/DocumentController.swift:4110
 msgid "Add to Dictionary"
 msgstr ""
 
-#: linux/src/page.rs:2325 macos/Sources/Textchum/DocumentController.swift:4118
+#: linux/src/page.rs:2403 macos/Sources/Textchum/DocumentController.swift:4118
 msgid "Ignore While This Runs"
 msgstr ""
 
-#: linux/src/page.rs:2335 macos/Sources/Textchum/AppDelegate.swift:2197
+#: linux/src/page.rs:2413 macos/Sources/Textchum/AppDelegate.swift:2197
 msgid "Invert Case"
 msgstr ""
 
-#: linux/src/page.rs:2336 macos/Sources/Textchum/AppDelegate.swift:2196
+#: linux/src/page.rs:2414 macos/Sources/Textchum/AppDelegate.swift:2196
 msgid "Title Case"
 msgstr ""
 
-#: linux/src/page.rs:2363 macos/Sources/Textchum/DocumentController.swift:4040
+#: linux/src/page.rs:2441 macos/Sources/Textchum/DocumentController.swift:4040
 msgid "Copy Path and Line"
 msgstr ""
 
-#: linux/src/page.rs:2364 macos/Sources/Textchum/DocumentController.swift:4043
+#: linux/src/page.rs:2442 macos/Sources/Textchum/DocumentController.swift:4043
 msgid "Copy Forge URL for Line"
 msgstr ""
 

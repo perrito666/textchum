@@ -195,6 +195,13 @@ terminal ouvre directement) et **URL de la forge pour la ligne**, l'URL
 du fichier sur la forge avec le fragment de ligne écrit comme cette
 forge l'écrit.
 
+Le déplacement par mots (⌥→/⌥←, Ctrl+flèches sous Linux, et leurs
+formes de sélection et de suppression) s'arrête à chaque changement de
+classe de caractère — identifiant, symbole, blanc — et à chaque saut de
+ligne : une suite comme `")}` est un arrêt, et le curseur ne saute
+jamais de ligne. Une parenthèse ou accolade fermante tapée en tête de
+ligne prend l'indentation de la ligne qui l'a ouverte.
+
 La complétion apparaît à la frappe après les caractères d'identifiant
 et `.` ; ↑/↓ choisissent, ⏎ ou ⇥ acceptent, ⎋ ferme. Un snippet arrive
 avec son premier marqueur sélectionné, donc taper le remplace ; ⇥ passe

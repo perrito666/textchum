@@ -1486,6 +1486,51 @@ pub unsafe extern "C" fn tc_preview_is_place_in_page(
     textchum_core::preview::is_place_in_page(current, target)
 }
 
+/// Where a word move from `offset` lands, by code's own boundaries:
+/// identifier characters, symbols, and whitespace are separate words,
+/// and a line break is a stop of its own.
+///
+/// # Safety
+/// `text` must be valid UTF-8 for its length.
+#[no_mangle]
+pub unsafe extern "C" fn tc_word_boundary(
+    text: *const c_char,
+    text_len: usize,
+    offset: usize,
+    forward: bool,
+) -> usize {
+    let Some(text) = (unsafe { str_from_raw(text, text_len) }) else { return offset };
+    textchum_core::motion::word_boundary(text, offset, forward)
+}
+
+/// What a closing bracket typed at `offset` asks of its line, as JSON
+/// — `{"start": 12, "end": 20, "indent": "    "}` — or an empty
+/// string when the line already carries text or no opener matches.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `text` must be valid UTF-8 for its length.
+#[no_mangle]
+pub unsafe extern "C" fn tc_closing_bracket_indent(
+    text: *const c_char,
+    text_len: usize,
+    offset: usize,
+    closer: u32,
+) -> *mut c_char {
+    let Some(text) = (unsafe { str_from_raw(text, text_len) }) else {
+        return owned_c_string(String::new());
+    };
+    let Some(closer) = char::from_u32(closer) else {
+        return owned_c_string(String::new());
+    };
+    match textchum_core::motion::closing_bracket_indent(text, offset, closer) {
+        Some((start, end, indent)) => owned_c_string(
+            serde_json::json!({"start": start, "end": end, "indent": indent}).to_string(),
+        ),
+        None => owned_c_string(String::new()),
+    }
+}
+
 // MARK: - Interface language
 
 /// Chooses the language the interface speaks. `system` follows the

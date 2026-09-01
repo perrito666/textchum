@@ -956,6 +956,30 @@ bool tc_preview_is_place_in_page(const char *current,
                                  uintptr_t target_len);
 
 /**
+ * Where a word move from `offset` lands, by code's own boundaries:
+ * identifier characters, symbols, and whitespace are separate words,
+ * and a line break is a stop of its own.
+ *
+ * # Safety
+ * `text` must be valid UTF-8 for its length.
+ */
+uintptr_t tc_word_boundary(const char *text, uintptr_t text_len, uintptr_t offset, bool forward);
+
+/**
+ * What a closing bracket typed at `offset` asks of its line, as JSON
+ * — `{"start": 12, "end": 20, "indent": "    "}` — or an empty
+ * string when the line already carries text or no opener matches.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `text` must be valid UTF-8 for its length.
+ */
+char *tc_closing_bracket_indent(const char *text,
+                                uintptr_t text_len,
+                                uintptr_t offset,
+                                uint32_t closer);
+
+/**
  * Chooses the language the interface speaks. `system` follows the
  * locale given in `locale`; anything the build does not carry reads as
  * English.
