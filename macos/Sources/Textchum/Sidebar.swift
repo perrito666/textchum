@@ -94,6 +94,10 @@ final class SidebarModel: ObservableObject {
 @MainActor
 final class FileTreeState: ObservableObject {
     @Published var expanded: Set<URL> = []
+    /// How to resolve a root's hidden-name globs, so a reveal can
+    /// prefetch listings without waiting for the rows to render one
+    /// level per runloop turn.
+    var globsProvider: (String) -> [String] = { _ in [".*"] }
     /// Directory listings the tree renders from, read off the main
     /// thread when a folder is first needed. A folder that is not
     /// expanded is never read — no listing, no stat, nothing.
@@ -175,6 +179,13 @@ final class FileTreeState: ObservableObject {
             ancestors.insert(treeKey(ancestor.path, isDirectory: true))
             if ancestor.path == rootURL.path { break }
             ancestor.deleteLastPathComponent()
+        }
+        // All the ancestors' listings at once: rendered one at a time,
+        // each level waits a turn for the one above it, which is the
+        // pause a deep reveal used to show.
+        let globs = globsProvider(root)
+        for ancestor in ancestors {
+            requestListing(of: ancestor, globs: globs)
         }
         guard highlighted != file || !ancestors.isSubset(of: expanded) else { return }
         DispatchQueue.main.async { [weak self] in
