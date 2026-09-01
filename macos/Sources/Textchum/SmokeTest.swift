@@ -1221,11 +1221,14 @@ func runSmokeTest() -> Int32 {
     previewBench.window?.close()
     // The context menu's Save as PDF… rides createPDF; the data it
     // would write must be a real document.
+    // Let the page finish loading first — a loaded runner takes its
+    // time — and give the render itself room too.
+    spin(untilTrue: { !previewWeb.isLoading }, seconds: 20)
     var pdfBytes = 0
     previewWeb.createPDF { result in
         if case .success(let data) = result { pdfBytes = data.count }
     }
-    spin(untilTrue: { pdfBytes > 0 }, seconds: 5)
+    spin(untilTrue: { pdfBytes > 0 }, seconds: 20)
     guard pdfBytes > 1000 else {
         print("FAIL: the preview's PDF came back with \(pdfBytes) bytes")
         return 1
