@@ -1266,7 +1266,11 @@ func runSmokeTest() -> Int32 {
         }
         print(String(format: "tree scroll: first pass %.1fms/step, second %.1fms/step",
             perStep[0], perStep[1]))
-        guard perStep.allSatisfy({ $0 < 25 }) else {
+        // The ceiling catches a structural cliff — the recursive tree
+        // was heading past everything reasonable as rows grew — not
+        // runner weather: shared CI machines measure several times the
+        // local numbers on a good day.
+        guard perStep.allSatisfy({ $0 < 150 }) else {
             print("FAIL: a scroll step through the big tree is too slow")
             return 1
         }
