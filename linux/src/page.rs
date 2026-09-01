@@ -2687,6 +2687,7 @@ pub fn hover_text(json: &str) -> Option<String> {
 /// placeholders look.
 const PREVIEW_STYLE: &str = r#"<style>
 :root { color-scheme: light dark; }
+@media print { :root { color-scheme: light; } }
 body { font: 15px/1.6 system-ui, sans-serif; margin: 0; padding: 1.5em 2em; }
 h1, h2 { border-bottom: 1px solid rgba(128,128,128,.3); padding-bottom: .3em; }
 code { font-family: monospace; font-size: .9em; background: rgba(128,128,128,.15);

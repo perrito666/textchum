@@ -44,9 +44,16 @@ struct SessionState: Codable {
     /// The sidebar's buffer-list/file-tree divider, as a fraction of the
     /// sidebar height. Shared by every window, so it is saved once.
     var sidebarSplit: Double?
+    /// Where the last untitled document was saved to — the next
+    /// untitled one's panel starts there.
+    var lastUntitledSaveFolder: String?
 }
 
 enum SessionStore {
+    /// See ``SessionState/lastUntitledSaveFolder``; read at launch,
+    /// written with the session.
+    static var lastUntitledSaveFolder: String?
+
     /// Where the session lives. It belongs to the same profile as the
     /// configuration, so a run pointed at a scratch config (tests,
     /// screenshots, `--config`) keeps its own session and can never

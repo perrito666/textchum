@@ -27,7 +27,22 @@ final class PreviewWebView: WKWebView {
         guard let window else { return }
         panel.beginSheetModal(for: window) { [weak self] response in
             guard response == .OK, let url = panel.url, let self else { return }
-            self.createPDF { result in
+            // A PDF is paper: it renders in the light palette whatever
+            // the window looks like, or dark mode would hand over
+            // near-white text on a white page.
+            let previous = self.appearance
+            self.appearance = NSAppearance(named: .aqua)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.renderPDF(to: url, restoring: previous)
+            }
+        }
+    }
+
+    private func renderPDF(to url: URL, restoring previous: NSAppearance?) {
+        createPDF { [weak self] result in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.appearance = previous }
+            }
                 switch result {
                 case .success(let data):
                     do {
@@ -40,7 +55,6 @@ final class PreviewWebView: WKWebView {
                     NSSound.beep()
                     NSLog("preview pdf: \(error)")
                 }
-            }
         }
     }
 }

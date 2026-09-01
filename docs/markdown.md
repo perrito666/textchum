@@ -17,6 +17,9 @@ shows it.
   document. A link into the document itself scrolls the preview to it.
 - Right-clicking the preview offers **Save as PDF…** — the rendered
   page, written straight to a file, no external tools involved.
+- Fenced code is syntax-coloured by the same grammars the editor
+  colours with, in the preview and in the PDF — which always comes out
+  in the light palette, whatever the window looks like.
 - Rendering supports CommonMark plus tables, strikethrough, task lists,
   and footnotes, and its styles follow the system (or configured)
   appearance.

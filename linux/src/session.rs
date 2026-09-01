@@ -11,8 +11,29 @@ use std::path::PathBuf;
 use adw::prelude::*;
 use serde_json::{json, Value};
 
+use std::cell::RefCell;
+
 use crate::shell::Shell;
 use crate::workbench::Workbench;
+
+thread_local! {
+    /// Where the last untitled document was saved to — the next
+    /// untitled one's dialog starts there. Session data, like the open
+    /// tabs; read at restore, written with the session.
+    static LAST_UNTITLED_FOLDER: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+pub fn last_untitled_folder() -> Option<String> {
+    LAST_UNTITLED_FOLDER.with(|slot| slot.borrow().clone())
+}
+
+pub fn note_untitled_save(path: &std::path::Path) {
+    if let Some(parent) = path.parent() {
+        LAST_UNTITLED_FOLDER
+            .with(|slot| *slot.borrow_mut() = Some(parent.to_string_lossy().into_owned()));
+        save();
+    }
+}
 
 /// `$XDG_STATE_HOME/textchum/session.json` (`~/.local/state` by
 /// default), or the profile `--data-dir` named.
@@ -44,12 +65,15 @@ pub fn save() {
     Workbench::for_each(|workbench| {
         layout.push(json!({"columns": workbench.column_state()}));
     });
-    let state = json!({
+    let mut state = json!({
         "version": 1,
         "windows": windows,
         "layout": layout,
         "frontmost": frontmost,
     });
+    if let Some(folder) = last_untitled_folder() {
+        state["last_untitled_folder"] = Value::String(folder);
+    }
     let path = session_path();
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -70,6 +94,9 @@ pub fn restore(workbench: &std::rc::Rc<Workbench>) -> usize {
     // garbage: the next save replaces it wholesale anyway.
     let Ok(state) = serde_json::from_str::<Value>(&data) else { return 0 };
     let mut opened = 0;
+    if let Some(folder) = state["last_untitled_folder"].as_str() {
+        LAST_UNTITLED_FOLDER.with(|slot| *slot.borrow_mut() = Some(folder.to_owned()));
+    }
     let mut frontmost_path: Option<String> = None;
     if let Some(front) = state["frontmost"].as_str() {
         frontmost_path = Some(front.to_owned());

@@ -3599,8 +3599,14 @@ final class DocumentController: NSResponder {
     func saveAsInteractively() -> Bool {
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
-        if coreDocument.path == nil, let suggestedSaveDirectory {
-            panel.directoryURL = suggestedSaveDirectory
+        // An untitled document starts where the last untitled was
+        // saved; failing a memory, wherever the window suggests.
+        if coreDocument.path == nil {
+            if let remembered = SessionStore.lastUntitledSaveFolder {
+                panel.directoryURL = URL(fileURLWithPath: remembered, isDirectory: true)
+            } else if let suggestedSaveDirectory {
+                panel.directoryURL = suggestedSaveDirectory
+            }
         }
         // The bare filename, not the window title — a disambiguated
         // title carries path components no filename should. An untitled
@@ -3614,8 +3620,13 @@ final class DocumentController: NSResponder {
             coreDocument.path.map { ($0 as NSString).lastPathComponent } ?? untitledName
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         guard preprocessBeforeSave() else { return false }
+        let wasUntitled = coreDocument.path == nil
         do {
             try coreDocument.save(to: url.path)
+            if wasUntitled {
+                SessionStore.lastUntitledSaveFolder =
+                    url.deletingLastPathComponent().path
+            }
             noteOwnSave()
             updateChrome()
             // An untitled document may just have gained a language from

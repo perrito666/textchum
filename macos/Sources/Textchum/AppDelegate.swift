@@ -196,6 +196,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, self.editors.isEmpty else { return }
+                SessionStore.lastUntitledSaveFolder =
+                    SessionStore.load()?.lastUntitledSaveFolder
                 if !skipRestore {
                     self.stamp("restore-begin")
                     self.restoreSession()
@@ -556,6 +558,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             workbench.recordLayouts()
         }
         var state = SessionState()
+        state.lastUntitledSaveFolder = SessionStore.lastUntitledSaveFolder
         for editor in editors {
             guard let path = editor.coreDocument.path else { continue }
             let position = editor.sessionPosition
