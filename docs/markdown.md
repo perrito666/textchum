@@ -15,6 +15,8 @@ shows it.
 - Scrolling either pane follows in the other.
 - A link goes to your browser when clicked; the pane stays on the
   document. A link into the document itself scrolls the preview to it.
+- Right-clicking the preview offers **Save as PDF…** — the rendered
+  page, written straight to a file, no external tools involved.
 - Rendering supports CommonMark plus tables, strikethrough, task lists,
   and footnotes, and its styles follow the system (or configured)
   appearance.

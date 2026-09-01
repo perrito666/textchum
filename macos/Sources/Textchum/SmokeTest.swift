@@ -1137,10 +1137,10 @@ func runSmokeTest() -> Int32 {
     _ = previewDocument.coreDocument.setLanguage("markdown")
     previewBench.add(previewDocument)
     previewBench.window?.makeKeyAndOrderFront(nil)
-    if previewDocument.previewWebViewForTest == nil {
+    if previewDocument.previewWebView == nil {
         previewDocument.togglePreview(nil)
     }
-    guard let previewWeb = previewDocument.previewWebViewForTest else {
+    guard let previewWeb = previewDocument.previewWebView else {
         print("FAIL: no Markdown preview")
         return 1
     }
@@ -1155,7 +1155,18 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     previewBench.window?.close()
-    print("preview links ok (the browser gets them, anchors stay)")
+    // The context menu's Save as PDF… rides createPDF; the data it
+    // would write must be a real document.
+    var pdfBytes = 0
+    previewWeb.createPDF { result in
+        if case .success(let data) = result { pdfBytes = data.count }
+    }
+    spin(untilTrue: { pdfBytes > 0 }, seconds: 5)
+    guard pdfBytes > 1000 else {
+        print("FAIL: the preview's PDF came back with \(pdfBytes) bytes")
+        return 1
+    }
+    print("preview links ok (the browser gets them, anchors stay, PDF renders)")
 
     // Folding hides the lines after the one that opens a block. TextKit
     // 2 lays out what the content storage offers, so what is checked

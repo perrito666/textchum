@@ -129,8 +129,12 @@ struct PathCopyMenu: View {
     var body: some View {
         if let onReveal {
             Button(t("Reveal in Tree")) { onReveal(path) }
-            Divider()
         }
+        Button(t("Reveal in Finder")) {
+            NSWorkspace.shared.activateFileViewerSelecting(
+                [URL(fileURLWithPath: path)])
+        }
+        Divider()
         Button(t("Copy File Name")) {
             PathActions.copy((path as NSString).lastPathComponent)
         }

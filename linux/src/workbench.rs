@@ -2758,6 +2758,30 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         }
     }
     {
+        // Right-click → Open Containing Folder: the desktop's file
+        // browser, on the folder the file lives in.
+        let action =
+            gtk::gio::SimpleAction::new("open-folder", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(workbench);
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some(path) = parameter.and_then(|p| p.str().map(str::to_owned)) else {
+                return;
+            };
+            let Some(parent) = Path::new(&path).parent() else { return };
+            let uri = format!("file://{}", parent.to_string_lossy());
+            if gtk::gio::AppInfo::launch_default_for_uri(
+                &uri,
+                None::<&gtk::gio::AppLaunchContext>,
+            )
+            .is_err()
+            {
+                workbench.toast(&tr("No file browser answered."));
+            }
+        });
+        workbench.window.add_action(&action);
+    }
+    {
         let action =
             gtk::gio::SimpleAction::new("move-to-window", Some(glib::VariantTy::STRING));
         let weak = Rc::downgrade(workbench);
@@ -3193,25 +3217,29 @@ fn copy_menu(current: &Workbench, path: &str) -> gtk::gio::Menu {
     let escaped = path.replace('\\', "\\\\").replace('\'', "\\'");
     let menu = gtk::gio::Menu::new();
     let copies = gtk::gio::Menu::new();
-    copies.append(Some("Copy Name"), Some(&format!("win.copy-name('{escaped}')")));
+    copies.append(Some(&tr("Copy Name")), Some(&format!("win.copy-name('{escaped}')")));
     copies.append(
-        Some("Copy Relative Path"),
+        Some(&tr("Copy Relative Path")),
         Some(&format!("win.copy-relative('{escaped}')")),
     );
     copies.append(
-        Some("Copy Absolute Path"),
+        Some(&tr("Copy Absolute Path")),
         Some(&format!("win.copy-absolute('{escaped}')")),
+    );
+    copies.append(
+        Some(&tr("Open Containing Folder")),
+        Some(&format!("win.open-folder('{escaped}')")),
     );
     if crate::path_actions::forge_url(path).is_some() {
         copies.append(
-            Some("Copy Forge URL"),
+            Some(&tr("Copy Forge URL")),
             Some(&format!("win.copy-forge('{escaped}')")),
         );
     }
     menu.append_section(None, &copies);
     let moves = gtk::gio::Menu::new();
     moves.append(
-        Some("Move to New Window"),
+        Some(&tr("Move to New Window")),
         Some(&format!("win.move-to-window('new|{escaped}')")),
     );
     WORKBENCHES.with(|all| {

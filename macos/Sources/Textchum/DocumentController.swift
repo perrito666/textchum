@@ -240,8 +240,7 @@ final class DocumentController: NSResponder {
     /// the window puts it on screen for whichever document has the
     /// keyboard, so switching tabs does not leave one file's preview
     /// beside another file's text.
-    private(set) var previewItem: NSSplitViewItem?
-    private var previewWebView: WKWebView?
+    private(set) var previewWebView: WKWebView?
     private var previewUpdateTimer: Timer?
     /// Suppresses scroll-sync echo: which side drove the last sync, when.
     private var lastScrollSync: (fromPreview: Bool, at: Date) = (false, .distantPast)
@@ -1926,7 +1925,7 @@ final class DocumentController: NSResponder {
 
     /// Shows or hides the preview pane (markdown documents only).
     @objc func togglePreview(_ sender: Any?) {
-        if previewItem != nil {
+        if previewWebView != nil {
             hidePreview()
         } else {
             showPreview()
@@ -1934,25 +1933,18 @@ final class DocumentController: NSResponder {
     }
 
     private func showPreview() {
-        guard previewItem == nil, coreDocument.languageName == "markdown" else { return }
+        guard previewWebView == nil, coreDocument.languageName == "markdown" else { return }
 
         let proxy = ScriptMessageProxy()
         proxy.target = self
         let configuration = WKWebViewConfiguration()
         configuration.userContentController.add(proxy, name: "scrolled")
-        let webView = WKWebView(frame: .zero, configuration: configuration)
+        let webView = PreviewWebView(frame: .zero, configuration: configuration)
         webView.setValue(false, forKey: "drawsBackground")
         webView.navigationDelegate = self
         webView.loadHTMLString(Self.previewTemplate, baseURL: nil)
-
-        let controller = NSViewController()
-        controller.view = webView
-        let item = NSSplitViewItem(viewController: controller)
-        item.minimumThickness = 240
-        // The editor must never be squeezed out: it keeps its space
-        // (higher holding priority, real minimum); the preview yields.
-        item.holdingPriority = NSLayoutConstraint.Priority(240)
-        previewItem = item
+        webView.suggestedPDFName =
+            ((chromeTitle as NSString).deletingPathExtension) + ".pdf"
         previewWebView = webView
         workbench?.refreshPreview()
         // Editor scrolling drives the preview via the scroll observer
@@ -1971,8 +1963,7 @@ final class DocumentController: NSResponder {
     }
 
     private func hidePreview() {
-        guard previewItem != nil else { return }
-        previewItem = nil
+        guard previewWebView != nil else { return }
         previewWebView = nil
         workbench?.refreshPreview()
     }
@@ -1989,7 +1980,7 @@ final class DocumentController: NSResponder {
 
     /// Debounced preview refresh, called from every text-changing path.
     private func schedulePreviewUpdate() {
-        guard previewItem != nil else { return }
+        guard previewWebView != nil else { return }
         previewUpdateTimer?.invalidate()
         previewUpdateTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) {
             [weak self] _ in
@@ -3193,7 +3184,14 @@ final class DocumentController: NSResponder {
             // reaches while it is laying out, and the navigator reads
             // this as it draws. SwiftUI ends the process over a value
             // set while its view graph is updating.
-            let root = projectRoot
+            //
+            // The tree falls back to the file's own folder when no
+            // marker names a root — a note saved into a plain folder
+            // still has somewhere to be shown, the way the GTK tree
+            // already does.
+            let root =
+                projectRoot
+                ?? state.2.map { ($0 as NSString).deletingLastPathComponent }
             let context = sidebarContext
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -3209,8 +3207,11 @@ final class DocumentController: NSResponder {
     /// (called when those settings change).
     func refreshProjectRoot() {
         projectRoot = coreDocument.path.flatMap(resolveProjectRoot)
-        if sidebarContext?.projectRoot != projectRoot {
-            sidebarContext?.projectRoot = projectRoot
+        let treeRoot =
+            projectRoot
+            ?? coreDocument.path.map { ($0 as NSString).deletingLastPathComponent }
+        if sidebarContext?.projectRoot != treeRoot {
+            sidebarContext?.projectRoot = treeRoot
         }
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
     }
@@ -3622,7 +3623,7 @@ final class DocumentController: NSResponder {
             // open the preview if it became markdown.
             refreshDecorations()
             syncLSPOpenState()
-            if coreDocument.languageName == "markdown", previewItem == nil {
+            if coreDocument.languageName == "markdown", previewWebView == nil {
                 showPreview()
             }
             return true
@@ -4119,9 +4120,6 @@ extension DocumentController: NSTextViewDelegate {
         return true
     }
 
-    /// The preview, for the smoke test to look at.
-    var previewWebViewForTest: WKWebView? { previewWebView }
-
     /// The text view was filled directly; tell the core what it says.
     func noteTextReplaced() {
         guard let textView else { return }
@@ -4457,7 +4455,7 @@ extension DocumentController: NSMenuItemValidation {
         case #selector(goToBlockStart(_:)), #selector(goToBlockEnd(_:)):
             return coreDocument.languageName != nil
         case #selector(togglePreview(_:)):
-            menuItem.state = previewItem != nil ? .on : .off
+            menuItem.state = previewWebView != nil ? .on : .off
             return coreDocument.languageName == "markdown"
         case #selector(copyFileName(_:)), #selector(copyRelativePath(_:)),
             #selector(copyAbsolutePath(_:)), #selector(revertToSaved(_:)):

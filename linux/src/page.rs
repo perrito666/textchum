@@ -358,6 +358,7 @@ impl Page {
         install_wrap_keys(&page);
         install_context_strip(&page);
         install_spell_follow(&page);
+        install_preview_pdf_menu(&page);
         // A file opens already differing from its committed self as
         // often as not, so the marks are wanted on the first paint.
         {
@@ -1644,6 +1645,62 @@ fn install_wrap_keys(page: &Rc<Page>) {
         }
     });
     page.view.add_controller(controller);
+}
+
+/// Right-click on the Markdown preview offers Save as PDF… — the
+/// rendered page is often the deliverable. WebKit prints to file
+/// through GTK's own file backend, so no external tool is involved.
+fn install_preview_pdf_menu(page: &Rc<Page>) {
+    let Some(web) = page.preview.clone() else { return };
+    let weak = Rc::downgrade(page);
+    web.connect_context_menu(move |web, menu, _hit| {
+        let action = gtk::gio::SimpleAction::new("preview-save-pdf", None);
+        {
+            let web = web.clone();
+            let weak = weak.clone();
+            action.connect_activate(move |_, _| {
+                let name = weak
+                    .upgrade()
+                    .and_then(|page| page.path().borrow().clone())
+                    .map(|path| {
+                        let stem = std::path::Path::new(&path)
+                            .file_stem()
+                            .map(|stem| stem.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| "document".into());
+                        format!("{stem}.pdf")
+                    })
+                    .unwrap_or_else(|| "document.pdf".into());
+                save_preview_pdf(&web, &name);
+            });
+        }
+        menu.append(&webkit6::ContextMenuItem::from_gaction(
+            &action,
+            &tr("Save as PDF…"),
+            None,
+        ));
+        false
+    });
+}
+
+fn save_preview_pdf(web: &webkit6::WebView, suggested: &str) {
+    let dialog = gtk::FileDialog::new();
+    dialog.set_initial_name(Some(suggested));
+    let window = web.root().and_downcast::<gtk::Window>();
+    let web = web.clone();
+    dialog.save(window.as_ref(), gtk::gio::Cancellable::NONE, move |result| {
+        let Ok(file) = result else { return };
+        let Some(path) = file.path() else { return };
+        let print = webkit6::PrintOperation::new(&web);
+        let settings = gtk::PrintSettings::new();
+        settings.set(gtk::PRINT_SETTINGS_PRINTER, Some("Print to File"));
+        settings.set(gtk::PRINT_SETTINGS_OUTPUT_FILE_FORMAT, Some("pdf"));
+        settings.set(
+            gtk::PRINT_SETTINGS_OUTPUT_URI,
+            Some(&format!("file://{}", path.display())),
+        );
+        print.set_print_settings(&settings);
+        print.print();
+    });
 }
 
 /// Spelling is scoped to what is on screen; what scrolls in gets its

@@ -435,8 +435,16 @@ struct SidebarView: View {
                         }
                         .contentShape(Rectangle())
                         .onTapGesture { onSelectDocument(document.id) }
+                        // Dragging a row carries the file itself, so a
+                        // drop elsewhere — Slack, a mail, the desktop —
+                        // copies or attaches it.
+                        .onDrag {
+                            guard let path = document.path else { return NSItemProvider() }
+                            return NSItemProvider(
+                                contentsOf: URL(fileURLWithPath: path)) ?? NSItemProvider()
+                        }
                         .contextMenu {
-                            Button("File Properties…") {
+                            Button(t("File Properties…")) {
                                 onShowProperties(document.id)
                             }
                             Divider()

@@ -17,7 +17,7 @@ import TextchumKit
 /// The tabs are drawn here. `NSWindow` tabs are separate windows with
 /// one visible at a time, which cannot be what a column shows.
 @MainActor
-final class Workbench: NSWindowController, NSWindowDelegate {
+final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate {
     /// Every window, in the order they were made.
     private(set) static var all: [Workbench] = []
 
@@ -99,9 +99,19 @@ final class Workbench: NSWindowController, NSWindowDelegate {
         tabModel.onClose = { [weak self] id in self?.closeTab(id) }
         tabModel.onSelectEverywhere = { [weak self] id in self?.showEverywhere(id) }
 
+        // The preview shares a split with the columns *below* the tab
+        // bar, so the bar always spans the whole window instead of
+        // stopping where a preview begins.
+        previewSplit.isVertical = true
+        previewSplit.dividerStyle = .thin
+        previewSplit.delegate = self
+        previewSplit.autosaveName = "TextchumEditorPreview"
+        previewSplit.translatesAutoresizingMaskIntoConstraints = false
+        previewSplit.addArrangedSubview(columnSplit)
+
         let editorSide = NSView()
         editorSide.addSubview(tabHost)
-        editorSide.addSubview(columnSplit)
+        editorSide.addSubview(previewSplit)
         editorSide.addSubview(statusBar)
         statusBar.onProperties = { [weak self] in
             self?.focusedDocument?.showFileProperties(nil)
@@ -111,10 +121,10 @@ final class Workbench: NSWindowController, NSWindowDelegate {
             tabHost.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
             tabHost.topAnchor.constraint(equalTo: editorSide.topAnchor),
             tabHost.heightAnchor.constraint(equalToConstant: 30),
-            columnSplit.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
-            columnSplit.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
-            columnSplit.topAnchor.constraint(equalTo: tabHost.bottomAnchor),
-            columnSplit.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
+            previewSplit.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
+            previewSplit.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
+            previewSplit.topAnchor.constraint(equalTo: tabHost.bottomAnchor),
+            previewSplit.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
             statusBar.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
             statusBar.bottomAnchor.constraint(equalTo: editorSide.bottomAnchor),
@@ -590,30 +600,65 @@ final class Workbench: NSWindowController, NSWindowDelegate {
     /// window is where it goes. Without this, switching tabs left one
     /// file's preview open beside another file's text.
     func refreshPreview() {
-        guard let splitController else { return }
-        let wanted = focusedDocument?.previewItem
-        // The sidebar and the editor come first; anything after them is
-        // a preview that a document put there.
-        for item in splitController.splitViewItems.dropFirst(2) where item !== wanted {
-            splitController.removeSplitViewItem(item)
+        let wanted = focusedDocument?.previewWebView
+        // The columns come first; anything after them is a preview
+        // that a document put there.
+        for view in previewSplit.arrangedSubviews.dropFirst() where view !== wanted {
+            view.removeFromSuperview()
         }
         guard let wanted else { return }
-        if !splitController.splitViewItems.contains(wanted) {
-            // The editor must never be squeezed out: it keeps its space
-            // (higher holding priority, real minimum); the preview yields.
-            if splitController.splitViewItems.count > 1 {
-                let editorItem = splitController.splitViewItems[1]
-                editorItem.minimumThickness = 340
-                editorItem.holdingPriority = NSLayoutConstraint.Priority(260)
-            }
-            splitController.addSplitViewItem(wanted)
+        if wanted.superview !== previewSplit {
+            previewSplit.addArrangedSubview(wanted)
+            placePreviewDivider()
         }
+    }
+
+    /// Puts the divider at a sensible split once the window has a
+    /// width to split — the first layout pass can run before it does,
+    /// which is how the preview once swallowed the whole editor.
+    private func placePreviewDivider(attempt: Int = 0) {
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.previewSplit.arrangedSubviews.count > 1 else { return }
+                let width = self.previewSplit.bounds.width
+                guard width > 0 else {
+                    if attempt < 5 { self.placePreviewDivider(attempt: attempt + 1) }
+                    return
+                }
+                let editorWidth = self.previewSplit.arrangedSubviews[0].frame.width
+                if editorWidth < 340 || width - editorWidth < 240 {
+                    self.previewSplit.setPosition(width * 0.58, ofDividerAt: 0)
+                }
+            }
+        }
+    }
+
+    // MARK: The preview divider's floor and ceiling
+
+    func splitView(
+        _ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat,
+        ofSubviewAt dividerIndex: Int
+    ) -> CGFloat {
+        guard splitView === previewSplit else { return proposedMinimumPosition }
+        // The editor must never be squeezed out.
+        return max(proposedMinimumPosition, 340)
+    }
+
+    func splitView(
+        _ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat,
+        ofSubviewAt dividerIndex: Int
+    ) -> CGFloat {
+        guard splitView === previewSplit else { return proposedMaximumPosition }
+        return min(proposedMaximumPosition, splitView.bounds.width - 240)
     }
 
     /// The window wears the focused document's facts, and the tab bar
     /// its name and dirty mark.
     /// The bar under the editor: caret, indentation, language.
     let statusBar = StatusBar()
+    /// Columns on the left, the focused document's Markdown preview —
+    /// when it has one — on the right, all of it under the tab bar.
+    let previewSplit = NSSplitView()
 
     /// Redraws the status bar from the focused document. Cheap: the bar
     /// only touches its labels when something it says changed.
