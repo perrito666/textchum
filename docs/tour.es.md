@@ -183,6 +183,13 @@ línea `def` mientras un método Python se desplaza— y pulsar una lleva
 hasta ella. Las líneas fijadas cuestan filas, así que
 `editor.context_lines: false` (o el interruptor en Ajustes) las apaga.
 
+La línea del cursor lleva un tinte leve, para encontrar el cursor de un
+vistazo en un archivo largo. El botón derecho sobre el texto —o
+**Archivo → Copiar ruta**— ofrece la línea del cursor en las formas que
+se pegan: **Ruta y línea** (`ruta:línea`, que un terminal abre
+directo) y **URL de la forja para la línea**, la URL del archivo en la
+forja con el fragmento de línea escrito como lo escribe esa forja.
+
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
 primer marcador seleccionado, así que escribir lo reemplaza; ⇥ pasa al

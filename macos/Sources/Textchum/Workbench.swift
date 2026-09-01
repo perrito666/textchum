@@ -348,10 +348,19 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         let length = (view.textView.string as NSString).length
         view.textView.setSelectedRange(
             NSRange(location: min(place.caret, length), length: 0))
-        if place.scroll > 0 {
+        guard place.scroll > 0 else { return }
+        let scroll = { [weak view] in
+            guard let view else { return }
+            view.container.layoutSubtreeIfNeeded()
             view.scrollView.contentView.scroll(to: NSPoint(x: 0, y: place.scroll))
             view.scrollView.reflectScrolledClipView(view.scrollView.contentView)
         }
+        scroll()
+        // The view was made a moment ago and has no height yet, so the
+        // scroll above clamps to what exists; once layout has run, the
+        // same scroll lands where it was left — the caret survived, the
+        // viewport did not.
+        DispatchQueue.main.async { MainActor.assumeIsolated(scroll) }
     }
 
     /// One more view of what the column shows, stacked under the rest.

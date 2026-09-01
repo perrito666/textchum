@@ -27,6 +27,17 @@ pub fn relative_path(path: &str, project_root: Option<&str>) -> String {
 /// and the file's path inside the repository. The URL shape follows
 /// the host — GitHub's `blob`, GitLab's `-/blob`, and the
 /// `src/branch` layout Forgejo and Gitea share.
+/// The forge URL with the caret's line as the fragment, spelled the
+/// way each forge does.
+pub fn forge_url_for_line(path: &str, line: usize) -> Option<String> {
+    let url = forge_url(path)?;
+    if url.starts_with("https://github.com/") || url.contains("gitlab") {
+        Some(format!("{url}#L{line}"))
+    } else {
+        Some(format!("{url}#lines-{line}"))
+    }
+}
+
 pub fn forge_url(path: &str) -> Option<String> {
     let dir = Path::new(path).parent()?.to_string_lossy().into_owned();
     let top = git(&dir, &["rev-parse", "--show-toplevel"])?;

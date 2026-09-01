@@ -23,7 +23,7 @@ use webkit6::prelude::*;
 
 use crate::shell::{PageHandles, Shell};
 use textchum_core::t;
-use textchum_core::i18n::{fill, tr};
+use textchum_core::i18n::{fill, n_, tr};
 
 pub struct State {
     pub document: Document,
@@ -229,6 +229,8 @@ impl Page {
         // Return inherits (and deepens) indentation — GtkSourceView has
         // this built in; macOS hand-rolls the same behavior.
         view.set_auto_indent(true);
+        // A faint tint on the caret's line, so it can be found at a glance.
+        view.set_highlight_current_line(true);
         view.set_show_line_numbers(Shell::instance().config.borrow().line_numbers());
         view.set_tab_width(Shell::instance().config.borrow().tab_width());
         view.set_left_margin(6);
@@ -2357,6 +2359,10 @@ pub fn context_menu(
     // Formatting falls back to the save-preprocessor chain, so it is
     // offered with or without a server.
     commands.push(("Format Document", "format"));
+    if path.is_some() {
+        commands.push((n_("Copy Path and Line"), "copy-path-line"));
+        commands.push((n_("Copy Forge URL for Line"), "copy-forge-line"));
+    }
     commands.push(("File Properties…", "file-properties"));
 
     let editor = gtk::gio::Menu::new();

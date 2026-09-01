@@ -187,6 +187,14 @@ cliquer sur une épingle y mène. Les épingles coûtent des lignes ;
 `editor.context_lines: false` (ou l'interrupteur des Réglages) les
 retire.
 
+La ligne du curseur porte une teinte légère, pour retrouver le curseur
+d'un coup d'œil dans un long fichier. Un clic droit sur le texte — ou
+**Fichier → Copier le chemin** — propose la ligne du curseur sous les
+formes qui se collent : **Chemin et ligne** (`chemin:ligne`, qu'un
+terminal ouvre directement) et **URL de la forge pour la ligne**, l'URL
+du fichier sur la forge avec le fragment de ligne écrit comme cette
+forge l'écrit.
+
 La complétion apparaît à la frappe après les caractères d'identifiant
 et `.` ; ↑/↓ choisissent, ⏎ ou ⇥ acceptent, ⎋ ferme. Un snippet arrive
 avec son premier marqueur sélectionné, donc taper le remplace ; ⇥ passe

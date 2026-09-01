@@ -41,6 +41,16 @@ enum PathActions {
     /// branch, and the file's path inside the repository. The URL shape
     /// follows the host — GitHub's `blob`/`tree`, GitLab's `-/blob`, and
     /// the `src/branch` layout Forgejo and Gitea share.
+    static func forgeURL(forPath path: String, isDirectory: Bool, line: Int? = nil) -> String? {
+        guard let url = forgeURL(forPath: path, isDirectory: isDirectory) else { return nil }
+        guard let line, !isDirectory else { return url }
+        // Each forge spells a line its own way.
+        if url.hasPrefix("https://github.com/") || url.contains("gitlab") {
+            return "\(url)#L\(line)"
+        }
+        return "\(url)#lines-\(line)"
+    }
+
     static func forgeURL(forPath path: String, isDirectory: Bool) -> String? {
         let dir = isDirectory ? path : (path as NSString).deletingLastPathComponent
         guard let top = git(in: dir, "rev-parse", "--show-toplevel"),

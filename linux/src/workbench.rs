@@ -2485,6 +2485,29 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         // field.
         entry_for_focus.grab_focus();
     });
+    // Copy Path and Line / Copy Forge URL for Line: the caret's line,
+    // one-based, in the shapes a terminal and a forge open straight to.
+    add("copy-path-line", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        let Some(path) = page.path().borrow().clone() else {
+            workbench.toast(&tr("Save the file first — an untitled document has no path."));
+            return;
+        };
+        let line = page.buffer.iter_at_mark(&page.buffer.get_insert()).line() + 1;
+        workbench.window.clipboard().set_text(&format!("{path}:{line}"));
+    });
+    add("copy-forge-line", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        let Some(path) = page.path().borrow().clone() else {
+            workbench.toast(&tr("Save the file first — an untitled document has no path."));
+            return;
+        };
+        let line = page.buffer.iter_at_mark(&page.buffer.get_insert()).line() + 1;
+        match crate::path_actions::forge_url_for_line(&path, line as usize) {
+            Some(url) => workbench.window.clipboard().set_text(&url),
+            None => workbench.toast(&tr("Not in a git repository with a remote.")),
+        }
+    });
     add("blame", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
@@ -6182,6 +6205,8 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     let add_root = adw::EntryRow::new();
     add_root.set_title(&tr("project root path"));
+    // The roots in question are usually open already; offer them.
+    attach_path_choices(&add_root, "Open projects", open_project_roots());
     let add_project_language = adw::EntryRow::new();
     add_project_language.set_title(&tr("language"));
     attach_language_choices(&add_project_language);
@@ -6315,6 +6340,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     let add_preprocessor_root = adw::EntryRow::new();
     add_preprocessor_root.set_title(&tr("project root (empty = default for all projects)"));
+    attach_path_choices(&add_preprocessor_root, "Open projects", open_project_roots());
     let add_preprocessor_language = adw::EntryRow::new();
     add_preprocessor_language.set_title(&tr("language (e.g. python)"));
     let add_preprocessor_chain = adw::EntryRow::new();
