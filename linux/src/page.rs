@@ -357,6 +357,7 @@ impl Page {
         install_indent_keys(&page);
         install_wrap_keys(&page);
         install_context_strip(&page);
+        install_spell_follow(&page);
         // A file opens already differing from its committed self as
         // often as not, so the marks are wanted on the first paint.
         {
@@ -1643,6 +1644,30 @@ fn install_wrap_keys(page: &Rc<Page>) {
         }
     });
     page.view.add_controller(controller);
+}
+
+/// Spelling is scoped to what is on screen; what scrolls in gets its
+/// turn once the scroll has settled for half a second.
+fn install_spell_follow(page: &Rc<Page>) {
+    let timer: Rc<Cell<Option<glib::SourceId>>> = Rc::new(Cell::new(None));
+    let weak = Rc::downgrade(page);
+    scrolled_window_of(page).vadjustment().connect_value_changed(move |_| {
+        if let Some(previous) = timer.take() {
+            previous.remove();
+        }
+        let weak = weak.clone();
+        let timer_inner = Rc::clone(&timer);
+        let source = glib::timeout_add_local_once(
+            std::time::Duration::from_millis(500),
+            move || {
+                timer_inner.set(None);
+                if let Some(page) = weak.upgrade() {
+                    crate::spell::run(&page);
+                }
+            },
+        );
+        timer.set(Some(source));
+    });
 }
 
 /// Follows scrolling with the pinned context.

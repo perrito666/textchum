@@ -18,7 +18,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// `--data-dir <path>` moves the whole profile; see `AppPaths`.
     private static var configPath: String { AppPaths.configPath }
 
+    /// Launch phases, stamped under TEXTCHUM_DEBUG_TIMERS so a slow
+    /// start can be attributed instead of guessed at.
+    private static let launchBegan = Date()
+    private func stamp(_ label: String) {
+        guard ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_TIMERS"] != nil else { return }
+        NSLog("TIMER launch %@ %.0fms", label, Date().timeIntervalSince(Self.launchBegan) * 1000)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        stamp("begin")
         if let jumps = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_JUMP"] {
             for (index, token) in jumps.split(separator: ",").enumerated() {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 4 + Double(index) * 2.0) {
@@ -55,7 +64,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Grammars the build does not carry, named in the
         // configuration. One that cannot be opened costs that language
         // and nothing else, so the rest of the launch carries on.
-        let grammarProblems = config.loadGrammars()
+        // Off the launch path: a grammar is needed when a file of its
+        // language opens, not before the first window. Documents that
+        // opened as plain text meanwhile are told again when the
+        // grammars arrive.
+        let grammarsJSON = config.grammarsJSON
+        DispatchQueue.global(qos: .utility).async {
+            let grammarProblems = CoreLanguages.load(grammarsJSON: grammarsJSON)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.stamp("grammars")
+                    self.finishGrammarLoading(problems: grammarProblems)
+                }
+            }
+        }
+        let grammarProblems: [String] = []
         for problem in grammarProblems {
             NSLog("languages: \(problem)")
         }
@@ -174,7 +197,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated {
                 guard let self, self.editors.isEmpty else { return }
                 if !skipRestore {
+                    self.stamp("restore-begin")
                     self.restoreSession()
+                    self.stamp("restore-end")
                 }
                 if self.editors.isEmpty {
                     self.newDocument(nil)
@@ -399,6 +424,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Files opened from Finder (double-click, Open With, drag to icon)
     /// and `textchum://` URLs from the `chum` command.
     /// Says once what the configured grammars could not do.
+    /// The configured grammars finished loading on their thread:
+    /// report what failed, and give every document that opened as
+    /// plain text another chance at its language.
+    private func finishGrammarLoading(problems: [String]) {
+        for problem in problems {
+            NSLog("languages: \(problem)")
+        }
+        grammarProblems = problems
+        announceGrammarProblems()
+        for editor in editors {
+            editor.retryLanguageDetection()
+        }
+    }
+
     private func announceGrammarProblems() {
         guard !grammarProblems.isEmpty else { return }
         let problems = grammarProblems
@@ -606,14 +645,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ?? [SessionState.Layout(tabs: state.windows.map(\.path), panes: [])]
         for group in layout {
             var workbench: Workbench?
+            // Tabs come back as documents only — parsed, listed, but
+            // not shown: showing each in passing would build and paint
+            // a set of views per tab for a window about to show one.
+            var restored: [DocumentController] = []
             for path in group.tabs where FileManager.default.fileExists(atPath: path) {
-                open(path: path, target: workbench == nil ? .window : .tab)
+                open(path: path, target: workbench == nil ? .window : .tab, deferShow: true)
                 guard let editor = editors.first(where: { $0.coreDocument.path == path })
                 else { continue }
                 workbench = editor.workbench
-                if let saved = state.windows.first(where: { $0.path == path }) {
-                    editor.restoreSessionPosition(caret: saved.caret, scroll: saved.scroll)
-                }
+                restored.append(editor)
                 if path == state.frontmost {
                     frontmostEditor = editor
                 }
@@ -637,9 +678,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         column: index, views: column.views, dividers: column.dividers)
                 }
                 workbench.focus(column: 0)
-            } else if let workbench, let only = saved.first {
-                workbench.restore(column: 0, views: only.views, dividers: only.dividers)
+            } else if let workbench {
+                // One column: it shows the frontmost file when it lives
+                // here, the first tab otherwise.
+                let shown =
+                    restored.first(where: { $0 === frontmostEditor })
+                    ?? restored.first
+                if let shown {
+                    workbench.show(shown, inColumn: 0)
+                }
+                if let only = saved.first {
+                    workbench.restore(column: 0, views: only.views, dividers: only.dividers)
+                }
             }
+            // The caret and the scroll come back only once a file has
+            // views to put them in; a never-shown tab takes its place
+            // when it is first shown.
+            for editor in restored {
+                if let savedPlace = state.windows.first(where: {
+                    $0.path == editor.coreDocument.path
+                }) {
+                    editor.restoreSessionPosition(
+                        caret: savedPlace.caret, scroll: savedPlace.scroll)
+                }
+            }
+            workbench?.showWindow(nil)
+            workbench?.window?.makeKeyAndOrderFront(nil)
+            stamp("restore-window")
         }
         frontmostEditor?.workbench?.window?.makeKeyAndOrderFront(nil)
         if let frontmostEditor, let workbench = frontmostEditor.workbench {
@@ -650,6 +715,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Quitting reviews every dirty window through the same save/discard
     /// flow as closing it by hand, then records the session with the
     /// freshest positions.
+    /// Coming back to the front is when the disk may have changed
+    /// underneath the tree; the listings re-read on their next render.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        fileTreeState.refreshListings()
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         saveSession()
         isTerminating = true
@@ -1932,7 +2003,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Opens `path` in a new editor (or fronts an existing one), alerting
     /// on failure. `target` overrides the configured tab/window choice;
     /// `revealLine` puts the caret on a one-based line.
-    private func open(path: String, target: CoreOpenTarget? = nil, revealLine: Int? = nil) {
+    private func open(
+        path: String, target: CoreOpenTarget? = nil, revealLine: Int? = nil,
+        deferShow: Bool = false
+    ) {
         // Absolute, standardized paths throughout: relative paths (e.g.
         // from the command line) would corrupt project-root resolution
         // and defeat open-file deduplication.
@@ -1961,7 +2035,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self?.openLocation(path: path, line: line, character: character)
                 }
             )
-            show(editor: editor, placeAsConfigured: true, target: target)
+            show(editor: editor, placeAsConfigured: true, target: target, deferShow: deferShow)
             // The window was built with the global settings; its project
             // root is known now, so any per-root overrides apply.
             if let model = settingsModel, editor.projectRoot != nil {
@@ -2016,7 +2090,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func show(
         editor: DocumentController,
         placeAsConfigured: Bool = false,
-        target: CoreOpenTarget? = nil
+        target: CoreOpenTarget? = nil,
+        deferShow: Bool = false
     ) {
         let workbench = placeAsConfigured ? self.workbench(for: target) : self.workbench(for: .tab)
         // A document told what it is stays told: reopening a .txt that
@@ -2033,7 +2108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         editors.append(editor)
-        workbench.add(editor)
+        workbench.add(editor, show: !deferShow)
+        // Session restore adds a window's worth of tabs and shows one
+        // at the end; presenting per tab would flash through them all.
+        guard !deferShow else { return }
         workbench.showWindow(nil)
         workbench.window?.makeKeyAndOrderFront(nil)
         workbench.focus(column: workbench.focusedColumn, view: workbench.focusedView)

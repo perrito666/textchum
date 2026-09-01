@@ -447,6 +447,19 @@ public final class CoreDocument {
 /// The selectable syntax languages, with a representative file
 /// extension each — for "new file with format" pickers.
 public enum CoreLanguages {
+    /// Opens the grammars named in a configuration snapshot — safe off
+    /// the main thread, which is the point: the registry locks, the
+    /// configuration does not.
+    public static func load(grammarsJSON json: String) -> [String] {
+        let raw = json.withCString { pointer in
+            tc_load_grammars_from(pointer, UInt(strlen(pointer)))
+        }
+        guard let raw else { return [] }
+        defer { tc_string_free(raw) }
+        let text = String(cString: raw)
+        return text.isEmpty ? [] : text.components(separatedBy: "\n")
+    }
+
     /// The language a filename implies, or nil when nothing matches.
     /// What a document is before anyone tells it otherwise.
     public static func detected(forPath path: String) -> String? {

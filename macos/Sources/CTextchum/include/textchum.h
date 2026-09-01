@@ -1099,6 +1099,27 @@ bool tc_project_forget(const char *path, uintptr_t path_len);
 char *tc_load_grammars(const struct TcConfig *config);
 
 /**
+ * The configuration's `languages` section as JSON, for handing to
+ * [`tc_load_grammars_from`] on another thread — the configuration
+ * itself is not shared across threads. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_grammars_json(const struct TcConfig *config);
+
+/**
+ * [`tc_load_grammars`], from a JSON snapshot instead of the live
+ * configuration, so the loading can happen off the main thread.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `json` must be valid UTF-8 for its length.
+ */
+char *tc_load_grammars_from(const char *json, uintptr_t json_len);
+
+/**
  * Whether a file stays open when the window showing it closes
  * (default false).
  *

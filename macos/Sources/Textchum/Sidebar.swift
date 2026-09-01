@@ -94,6 +94,43 @@ final class SidebarModel: ObservableObject {
 @MainActor
 final class FileTreeState: ObservableObject {
     @Published var expanded: Set<URL> = []
+    /// Directory listings the tree renders from, read off the main
+    /// thread when a folder is first needed. A folder that is not
+    /// expanded is never read — no listing, no stat, nothing.
+    @Published private(set) var listings: [URL: [FileNode]] = [:]
+    private var pendingListings: Set<URL> = []
+
+    /// The cached listing, or nil while the first read is in flight —
+    /// which it starts. Rendering from a cache is what keeps a render
+    /// from touching the disk.
+    func children(of url: URL, globs: [String]) -> [FileNode]? {
+        if let cached = listings[url] { return cached }
+        requestListing(of: url, globs: globs)
+        return nil
+    }
+
+    private func requestListing(of url: URL, globs: [String]) {
+        guard listings[url] == nil, !pendingListings.contains(url) else { return }
+        pendingListings.insert(url)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let children = FileNode.read(directory: url, globs: globs)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.pendingListings.remove(url)
+                    self.listings[url] = children
+                }
+            }
+        }
+    }
+
+    /// Forgets every listing, so what shows next reflects the disk;
+    /// called when the app comes back to the front, where files may
+    /// have changed underneath it. The expanded folders re-read on
+    /// their next render.
+    func refreshListings() {
+        guard !listings.isEmpty else { return }
+        listings = [:]
+    }
     /// The file last revealed in the tree, briefly emphasized.
     @Published var highlighted: URL?
 
@@ -175,7 +212,7 @@ struct FileTreeRow: View {
     var body: some View {
         if node.isDirectory {
             DisclosureGroup(isExpanded: state.binding(for: node.url)) {
-                ForEach(node.children ?? []) { child in
+                ForEach(state.children(of: node.url, globs: node.hiddenGlobs) ?? []) { child in
                     FileTreeRow(
                         node: child, state: state, projectRoot: projectRoot,
                         onOpenFile: onOpenFile)
@@ -227,11 +264,11 @@ struct FileNode: Identifiable, Hashable {
     var id: URL { url }
     var name: String { url.lastPathComponent }
 
-    /// nil for files (so OutlineGroup shows no disclosure), the sorted
-    /// visible entries for directories — names the configuration hides
-    /// (dotfiles by default; per-project globs on top) never appear.
-    var children: [FileNode]? {
-        guard isDirectory else { return nil }
+    /// The sorted visible entries of one directory — names the
+    /// configuration hides (dotfiles by default; per-project globs on
+    /// top) never appear. Called by the tree state's loader, off the
+    /// main thread; rendering reads the cache it fills.
+    static func read(directory url: URL, globs hiddenGlobs: [String]) -> [FileNode] {
         let entries = (try? FileManager.default.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -422,14 +459,14 @@ struct SidebarView: View {
     private var treePane: some View {
         Group {
             if let projectRoot {
-                let rootNode = FileNode(
-                    url: treeKey(projectRoot, isDirectory: true),
-                    isDirectory: true,
-                    hiddenGlobs: hiddenGlobs(projectRoot))
+                let rootURL = treeKey(projectRoot, isDirectory: true)
                 ScrollViewReader { proxy in
                     List {
                         Section((projectRoot as NSString).lastPathComponent) {
-                            ForEach(rootNode.children ?? []) { node in
+                            ForEach(
+                                treeState.children(
+                                    of: rootURL, globs: hiddenGlobs(projectRoot)) ?? []
+                            ) { node in
                                 FileTreeRow(
                                     node: node, state: treeState,
                                     projectRoot: projectRoot, onOpenFile: onOpenFile)

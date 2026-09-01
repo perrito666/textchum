@@ -81,6 +81,72 @@ final class LineNumberGutterView: NSView {
         needsDisplay = true
     }
 
+    /// Patches the cache around one edit instead of rebuilding it: the
+    /// starts after the edit move by a constant, and only the edited
+    /// stretch's own line breaks change. Typing pays for the keystroke,
+    /// not for the file. Anything that is not a single replacement —
+    /// multi-range edits, reloads — still takes the full rebuild.
+    func noteEdit(at range: NSRange, replacementLength: Int) {
+        guard let textView else { return }
+        let text: NSString =
+            textView.textStorage?.mutableString ?? (textView.string as NSString)
+        let delta = replacementLength - range.length
+        let oldEnd = NSMaxRange(range)
+        // Starts at or before the edit's first character are untouched:
+        // the newline that made each of them sits before the edit.
+        var patched: [Int] = []
+        patched.reserveCapacity(lineStarts.count + 4)
+        for start in lineStarts {
+            if start <= range.location {
+                patched.append(start)
+            } else if start > oldEnd {
+                patched.append(start + delta)
+            }
+            // Starts inside the replaced stretch are gone with it.
+        }
+        // The replacement's own line breaks, plus the boundary right
+        // after it — an edit ending in a newline makes one.
+        let newEnd = range.location + replacementLength
+        var index = range.location
+        while index < newEnd {
+            var found = text.range(
+                of: "\n", options: [], range: NSRange(location: index, length: newEnd - index))
+            if found.location == NSNotFound { break }
+            found.location += 1
+            if found.location < text.length || text.hasSuffix("\n") {
+                patched.append(found.location)
+            }
+            index = found.location
+        }
+        patched.sort()
+        // The edit can also have created or removed the boundary at its
+        // trailing edge (deleting up to a newline, say); one cheap local
+        // check settles it.
+        if newEnd > 0, newEnd <= text.length,
+            text.character(at: newEnd - 1) == 10,
+            newEnd < text.length || text.hasSuffix("\n"),
+            !patched.contains(newEnd)
+        {
+            patched.append(newEnd)
+            patched.sort()
+        }
+        lineStarts = patched.isEmpty ? [0] : patched
+        #if DEBUG
+            let before = lineStarts
+            invalidateLineStarts()
+            assert(
+                before == lineStarts,
+                "patched line starts diverge from the rebuild")
+        #else
+            let digits = max(2, String(lineStarts.count).count)
+            visibleWidth = CGFloat(digits) * 8 + 16
+            if shown {
+                widthConstraint?.constant = visibleWidth
+            }
+            needsDisplay = true
+        #endif
+    }
+
     /// The zero-based line holding the UTF-16 `offset`. The status bar
     /// and the pinned context ask; the cache is already here.
     func lineIndex(forOffset offset: Int) -> Int {
