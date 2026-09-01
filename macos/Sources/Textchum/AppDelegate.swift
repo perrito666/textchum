@@ -1617,7 +1617,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// going back is not itself a jump.
     private func navigate(to location: JumpLocation) {
         if let existing = editors.first(where: { $0.coreDocument.path == location.path }) {
+            // Fronting the window is not enough since the documents
+            // became tabs: the tab has to be shown before the caret can
+            // be placed in it — Go Back to a background tab did nothing.
             existing.window?.makeKeyAndOrderFront(nil)
+            existing.workbench?.showInFocusedPane(ObjectIdentifier(existing))
             existing.reveal(line: location.line, character: location.character)
         } else {
             open(path: location.path)
@@ -2371,6 +2375,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         copyPath.addItem(
             withTitle: t("Forge URL"),
             action: #selector(DocumentController.copyForgeURL(_:)), keyEquivalent: "")
+        copyPath.addItem(.separator())
+        copyPath.addItem(
+            withTitle: t("Path and Line"),
+            action: #selector(DocumentController.copyPathAndLine(_:)), keyEquivalent: "")
+        copyPath.addItem(
+            withTitle: t("Forge URL for Line"),
+            action: #selector(DocumentController.copyForgeURLForLine(_:)), keyEquivalent: "")
         copyPathItem.submenu = copyPath
         fileMenu.addItem(copyPathItem)
         let fileMenuItem = NSMenuItem()

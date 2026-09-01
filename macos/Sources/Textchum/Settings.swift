@@ -1928,9 +1928,25 @@ private struct LanguageServersTab: View {
 
                 GroupBox("Add override") {
                     VStack(spacing: 8) {
-                        PathPicker(
-                            text: $newScope,
-                            placeholder: t("Project root (empty = default for all projects)"))
+                        HStack(spacing: 8) {
+                            PathPicker(
+                                text: $newScope,
+                                placeholder: t("Project root (empty = default for all projects)"))
+                            // The roots in question are usually open
+                            // already; offer them instead of a path to type.
+                            Menu(t("Open projects")) {
+                                if model.openProjectRoots.isEmpty {
+                                    Text(t("No project is open"))
+                                }
+                                ForEach(model.openProjectRoots, id: \.self) { root in
+                                    Button((root as NSString).lastPathComponent) {
+                                        newScope = root
+                                    }
+                                    .help(root)
+                                }
+                            }
+                            .frame(width: 150)
+                        }
                         HStack(spacing: 8) {
                             EditableCombo(
                                 text: $newLanguage,
@@ -2024,9 +2040,25 @@ private struct PreprocessorsTab: View {
 
                 GroupBox("Add preprocessor chain") {
                     VStack(spacing: 8) {
-                        PathPicker(
-                            text: $newScope,
-                            placeholder: t("Project root (empty = default for all projects)"))
+                        HStack(spacing: 8) {
+                            PathPicker(
+                                text: $newScope,
+                                placeholder: t("Project root (empty = default for all projects)"))
+                            // The roots in question are usually open
+                            // already; offer them instead of a path to type.
+                            Menu(t("Open projects")) {
+                                if model.openProjectRoots.isEmpty {
+                                    Text(t("No project is open"))
+                                }
+                                ForEach(model.openProjectRoots, id: \.self) { root in
+                                    Button((root as NSString).lastPathComponent) {
+                                        newScope = root
+                                    }
+                                    .help(root)
+                                }
+                            }
+                            .frame(width: 150)
+                        }
                         HStack(alignment: .top, spacing: 8) {
                             EditableCombo(
                                 text: $newLanguage,

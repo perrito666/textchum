@@ -340,7 +340,7 @@ final class DocumentController: NSResponder {
                 size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
             container.widthTracksTextView = true
             layoutManager.textContainer = container
-            textView = NSTextView(frame: .zero, textContainer: container)
+            textView = EditorTextView(frame: .zero, textContainer: container)
             textView.isVerticallyResizable = true
             textView.isHorizontallyResizable = false
             textView.autoresizingMask = [.width]
@@ -348,7 +348,7 @@ final class DocumentController: NSResponder {
             scrollView.hasVerticalScroller = true
             scrollView.documentView = textView
         } else {
-            scrollView = NSTextView.scrollableTextView()
+            scrollView = EditorTextView.scrollableTextView()
             textView = scrollView.documentView as! NSTextView
         }
         textView.font = appliedSettings?.font ?? .monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -405,6 +405,14 @@ final class DocumentController: NSResponder {
         views.append(view)
         if isFirst {
             textView.string = coreDocument.text
+            settleLayout(of: textView)
+        }
+        // Every new view's gutter learns the lines: the first from the
+        // text just set, later ones from the shared storage. This used
+        // to ride the settings pass, which now only restyles on a real
+        // font change.
+        gutter.invalidateLineStarts()
+        if isFirst {
             // A file opens already differing from its committed self as
             // often as not, so the marks are wanted on the first paint.
             DispatchQueue.main.async { [weak self] in
@@ -2014,6 +2022,19 @@ final class DocumentController: NSResponder {
         }
     }
 
+    /// Lays the whole document out once, so its height is measured
+    /// rather than estimated. TextKit 2 otherwise corrects estimates as
+    /// fragments arrive, and every correction moves the text under the
+    /// viewport — the screen-sized jump while reading. Capped: a file
+    /// past a couple of megabytes keeps the estimates and the jitter
+    /// over a multi-second stall.
+    private func settleLayout(of textView: NSTextView) {
+        guard coreDocument.lengthInUTF16 < 2_000_000,
+            let layoutManager = textView.textLayoutManager
+        else { return }
+        layoutManager.ensureLayout(for: layoutManager.documentRange)
+    }
+
     /// Recomputes the pinned context for one view from its scroll
     /// position: at most five rows, rebuilt only when the lines change.
     func updateContextStrip(for view: DocumentView) {
@@ -3041,6 +3062,13 @@ final class DocumentController: NSResponder {
     /// Applies configuration-derived settings to the view: the font, and
     /// tab stops sized to the configured width in that font.
     func apply(settings: EditorSettings) {
+        // Only a font or tab-width change restyles the text below: the
+        // restyle relayouts the whole document, and TextKit 2 starts
+        // its height estimates over, which is the screen-sized jump a
+        // change to some unrelated setting used to cause.
+        let textStyleChanged =
+            appliedSettings == nil || appliedFont != settings.font
+            || appliedTabWidth != settings.tabWidth
         appliedSettings = settings
         defer {
             for view in views {
@@ -3069,12 +3097,13 @@ final class DocumentController: NSResponder {
             hoverPopover = nil
         }
         guard let textView else { return }
+        lineRuler?.setVisible(settings.lineNumbers)
+        guard textStyleChanged else { return }
         let paragraphStyle = NSMutableParagraphStyle()
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: settings.font]).width
         paragraphStyle.tabStops = []
         paragraphStyle.defaultTabInterval = spaceWidth * CGFloat(settings.tabWidth)
 
-        lineRuler?.setVisible(settings.lineNumbers)
         lineRuler?.invalidateLineStarts()
         textView.font = settings.font
         textView.defaultParagraphStyle = paragraphStyle
@@ -4007,6 +4036,13 @@ extension DocumentController: NSTextViewDelegate {
             commands.append(("Code Actions…", #selector(showCodeActions(_:))))
             commands.append(("Rename Symbol…", #selector(renameSymbol(_:))))
         }
+        if coreDocument.path != nil {
+            commands.append((n_("Copy Path and Line"), #selector(copyPathAndLine(_:))))
+            if coreDocument.path.map(PathActions.isInGitRepository) == true {
+                commands.append(
+                    (n_("Copy Forge URL for Line"), #selector(copyForgeURLForLine(_:))))
+            }
+        }
         if !diagnostics.isEmpty {
             commands.append(("Show Diagnostic for Line", #selector(showDiagnosticAtCaret(_:))))
             commands.append(("Diagnostics…", #selector(showDiagnosticList(_:))))
@@ -4022,7 +4058,7 @@ extension DocumentController: NSTextViewDelegate {
         contextMenu.addItem(.separator())
         for (title, selector) in commands {
             let item = NSMenuItem(
-                title: title, action: #selector(runContextCommand(_:)), keyEquivalent: "")
+                title: t(title), action: #selector(runContextCommand(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = ContextCommand(index: charIndex, selector: selector)
             contextMenu.addItem(item)
@@ -4495,8 +4531,10 @@ extension DocumentController: NSMenuItemValidation {
         case #selector(copyFileName(_:)), #selector(copyRelativePath(_:)),
             #selector(copyAbsolutePath(_:)), #selector(revertToSaved(_:)):
             return coreDocument.path != nil
-        case #selector(copyForgeURL(_:)):
+        case #selector(copyForgeURL(_:)), #selector(copyForgeURLForLine(_:)):
             return coreDocument.path.map(PathActions.isInGitRepository) ?? false
+        case #selector(copyPathAndLine(_:)):
+            return coreDocument.path != nil
         default:
             return true
         }
@@ -4529,5 +4567,32 @@ extension DocumentController {
             return
         }
         PathActions.copy(url)
+    }
+
+    /// The caret's line, one-based — what a forge fragment and a
+    /// terminal both count from.
+    private var caretLineNumber: Int { caretLSPPosition.line + 1 }
+
+    /// Copy Path ▸ Forge URL for Line: the file's forge URL with the
+    /// caret's line as the fragment, spelled the way that forge does.
+    @objc func copyForgeURLForLine(_ sender: Any?) {
+        guard let path = coreDocument.path,
+            let url = PathActions.forgeURL(
+                forPath: path, isDirectory: false, line: caretLineNumber)
+        else {
+            NSSound.beep()
+            return
+        }
+        PathActions.copy(url)
+    }
+
+    /// Copy Path ▸ Path and Line: `path:line`, the shape a terminal and
+    /// most editors open straight to.
+    @objc func copyPathAndLine(_ sender: Any?) {
+        guard let path = coreDocument.path else {
+            NSSound.beep()
+            return
+        }
+        PathActions.copy("\(path):\(caretLineNumber)")
     }
 }

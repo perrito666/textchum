@@ -180,6 +180,13 @@ the `def` line while a Python method scrolls — and clicking a pin goes
 to it. The pins cost rows, so `editor.context_lines: false` (or the
 switch in Settings) turns them off.
 
+The caret's line carries a faint tint, so the caret can be found in a
+long file at a glance. Right-clicking in the text — or **File → Copy
+Path** — offers the caret's line in the shapes that get pasted: **Path
+and Line** (`path:line`, which a terminal opens straight to) and
+**Forge URL for Line**, the file's forge URL with the line fragment
+spelled the way that forge does.
+
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
 first placeholder selected, so typing replaces it; ⇥ moves to the next
