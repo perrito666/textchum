@@ -1086,9 +1086,28 @@ func runSmokeTest() -> Int32 {
         print("FAIL: ⌥→ over a run of symbols landed at \(motionView.selectedRange().location)")
         return 1
     }
-    motionView.moveWordBackwardAndModifySelection(nil)
+    // The bound selector is moveWordLeft:, not moveWordBackward:, and
+    // on the user's line the default AppKit binding landed inside the
+    // last word. From the trailing `")}` the first left-move lands at
+    // its start, right after `token`, not inside it.
+    motionView.string = "return wrap(err, \"parsing jwt ui token\")}"
+    motionDocument.noteTextReplaced()
+    let lineEnd = (motionView.string as NSString).length
+    motionView.setSelectedRange(NSRange(location: lineEnd, length: 0))
+    motionView.moveWordLeft(nil)
+    let landedAt = motionView.selectedRange().location
+    let tailFromCaret = (motionView.string as NSString).substring(from: landedAt)
+    guard tailFromCaret == "\")}" else {
+        print("FAIL: opt-left landed at \(landedAt): \(tailFromCaret)")
+        return 1
+    }
+    motionView.string = "key\")} next"
+    motionDocument.noteTextReplaced()
+    // ⌥⇧→ from just after `key` extends over the symbol run alone.
+    motionView.setSelectedRange(NSRange(location: 3, length: 0))
+    motionView.moveWordRightAndModifySelection(nil)
     guard motionView.selectedRange() == NSRange(location: 3, length: 3) else {
-        print("FAIL: ⌥⇧← did not select the symbol run: \(motionView.selectedRange())")
+        print("FAIL: opt-shift-right did not select the symbol run: \(motionView.selectedRange())")
         return 1
     }
     motionView.string = "fn f() {\n    if x {\n        y();\n        "

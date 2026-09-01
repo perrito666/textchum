@@ -28,22 +28,31 @@ final class EditorTextView: NSTextView {
         return CoreMotion.wordBoundary(in: string, from: from, forward: forward)
     }
 
-    override func moveWordForward(_ sender: Any?) {
-        setSelectedRange(NSRange(location: wordTarget(forward: true), length: 0))
-        scrollRangeToVisible(selectedRange())
-    }
+    override func moveWordForward(_ sender: Any?) { moveWord(forward: true) }
+    override func moveWordBackward(_ sender: Any?) { moveWord(forward: false) }
 
-    override func moveWordBackward(_ sender: Any?) {
-        setSelectedRange(NSRange(location: wordTarget(forward: false), length: 0))
-        scrollRangeToVisible(selectedRange())
-    }
+    // Option+Arrow binds to the direction-aware selectors, not the
+    // backward/forward ones; the editor is left-to-right code, so left
+    // is backward. Without these, ⌥← used the text system's own words.
+    override func moveWordLeft(_ sender: Any?) { moveWord(forward: false) }
+    override func moveWordRight(_ sender: Any?) { moveWord(forward: true) }
 
     override func moveWordForwardAndModifySelection(_ sender: Any?) {
         extendSelection(to: wordBoundaryFromCaret(forward: true))
     }
-
     override func moveWordBackwardAndModifySelection(_ sender: Any?) {
         extendSelection(to: wordBoundaryFromCaret(forward: false))
+    }
+    override func moveWordLeftAndModifySelection(_ sender: Any?) {
+        extendSelection(to: wordBoundaryFromCaret(forward: false))
+    }
+    override func moveWordRightAndModifySelection(_ sender: Any?) {
+        extendSelection(to: wordBoundaryFromCaret(forward: true))
+    }
+
+    private func moveWord(forward: Bool) {
+        setSelectedRange(NSRange(location: wordTarget(forward: forward), length: 0))
+        scrollRangeToVisible(selectedRange())
     }
 
     override func deleteWordForward(_ sender: Any?) {
