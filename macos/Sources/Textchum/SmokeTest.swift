@@ -1162,10 +1162,15 @@ func runSmokeTest() -> Int32 {
         treeBench.add(editorA)
         treeBench.add(editorB)
         treeBench.window?.makeKeyAndOrderFront(nil)
-        func settled() { spin(untilTrue: { false }, seconds: 0.3) }
+        // The publishes are deferred a turn; wait for the answer, not
+        // for a fixed beat a busy CI machine can miss.
         treeBench.showInFocusedPane(ObjectIdentifier(editorA))
         treeBench.refreshChrome(for: editorA)
-        settled()
+        spin(
+            untilTrue: {
+                treeBench.sidebarContext.projectRoot == projectA.path
+                    && treeBench.sidebarContext.focusedPath == fileA.path
+            }, seconds: 5)
         guard treeBench.sidebarContext.projectRoot == projectA.path,
             treeBench.sidebarContext.focusedPath == fileA.path
         else {
@@ -1175,7 +1180,8 @@ func runSmokeTest() -> Int32 {
         }
         treeBench.showInFocusedPane(ObjectIdentifier(editorB))
         treeBench.refreshChrome(for: editorB)
-        settled()
+        spin(
+            untilTrue: { treeBench.sidebarContext.projectRoot == projectB.path }, seconds: 5)
         guard treeBench.sidebarContext.projectRoot == projectB.path else {
             print(
                 "FAIL: after switching, the tree shows \(treeBench.sidebarContext.projectRoot ?? "nothing"), not beta")
