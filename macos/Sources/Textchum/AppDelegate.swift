@@ -12,6 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Strong references to open editors; windows do not retain their
     /// controllers. Entries are removed as their windows close.
     private var editors: [DocumentController] = []
+    /// The open documents, for the smoke test to look at.
+    var editorsForTest: [DocumentController] { editors }
 
     /// `~/Library/Application Support/Textchum/config.json` — GUI-managed,
     /// hand-editable JSON. `--config <path>` points at another file and

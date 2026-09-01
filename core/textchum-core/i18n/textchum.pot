@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: textchum\n"
 "Report-Msgid-Bugs-To: https://github.com/perrito666/textchum/issues\n"
-"POT-Creation-Date: 2026-09-01 20:22+0200\n"
+"POT-Creation-Date: 2026-09-01 20:55+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -29,9 +29,9 @@ msgstr ""
 #: core/textchum-core/src/i18n.rs:348 core/textchum-core/src/i18n.rs:350
 #: core/textchum-core/src/i18n.rs:352 linux/src/keyboard.rs:24
 #: linux/src/main.rs:1523 linux/src/main.rs:1538 linux/src/workbench.rs:361
-#: macos/Sources/Textchum/AppDelegate.swift:2267
-#: macos/Sources/Textchum/SmokeTest.swift:1269
-#: macos/Sources/Textchum/SmokeTest.swift:1290
+#: macos/Sources/Textchum/AppDelegate.swift:2269
+#: macos/Sources/Textchum/SmokeTest.swift:1327
+#: macos/Sources/Textchum/SmokeTest.swift:1348
 msgid "Close Tab"
 msgstr ""
 
@@ -40,9 +40,9 @@ msgid "New Tab"
 msgstr ""
 
 #: linux/src/keyboard.rs:17 linux/src/workbench.rs:259
-#: macos/Sources/Textchum/AppDelegate.swift:1977
-#: macos/Sources/Textchum/AppDelegate.swift:2234
-#: macos/Sources/Textchum/AppDelegate.swift:2235
+#: macos/Sources/Textchum/AppDelegate.swift:1979
+#: macos/Sources/Textchum/AppDelegate.swift:2236
+#: macos/Sources/Textchum/AppDelegate.swift:2237
 msgid "New with Format"
 msgstr ""
 
@@ -59,8 +59,8 @@ msgid "Changed in Branch"
 msgstr ""
 
 #: linux/src/keyboard.rs:21 linux/src/workbench.rs:295
-#: linux/src/workbench.rs:1304 macos/Sources/Textchum/AppDelegate.swift:2291
-#: macos/Sources/Textchum/DocumentController.swift:3920
+#: linux/src/workbench.rs:1304 macos/Sources/Textchum/AppDelegate.swift:2293
+#: macos/Sources/Textchum/DocumentController.swift:3944
 msgid "Save"
 msgstr ""
 
@@ -69,52 +69,52 @@ msgid "Save As"
 msgstr ""
 
 #: linux/src/keyboard.rs:23 linux/src/workbench.rs:297
-#: macos/Sources/Textchum/AppDelegate.swift:2303
+#: macos/Sources/Textchum/AppDelegate.swift:2305
 msgid "Revert to Saved"
 msgstr ""
 
 #: linux/src/keyboard.rs:25 linux/src/workbench.rs:305
-#: macos/Sources/Textchum/AppDelegate.swift:2475
+#: macos/Sources/Textchum/AppDelegate.swift:2477
 msgid "Fold"
 msgstr ""
 
 #: linux/src/keyboard.rs:26 linux/src/workbench.rs:306
-#: macos/Sources/Textchum/AppDelegate.swift:2481
+#: macos/Sources/Textchum/AppDelegate.swift:2483
 msgid "Fold All"
 msgstr ""
 
 #: linux/src/keyboard.rs:27 linux/src/workbench.rs:307
-#: macos/Sources/Textchum/AppDelegate.swift:2487
+#: macos/Sources/Textchum/AppDelegate.swift:2489
 msgid "Unfold All"
 msgstr ""
 
 #: linux/src/keyboard.rs:28 linux/src/workbench.rs:308
-#: macos/Sources/Textchum/AppDelegate.swift:2494
+#: macos/Sources/Textchum/AppDelegate.swift:2496
 msgid "New Column"
 msgstr ""
 
 #: linux/src/keyboard.rs:29 linux/src/workbench.rs:309
-#: macos/Sources/Textchum/AppDelegate.swift:2500
+#: macos/Sources/Textchum/AppDelegate.swift:2502
 msgid "Close Column"
 msgstr ""
 
 #: linux/src/keyboard.rs:30 linux/src/workbench.rs:310
-#: macos/Sources/Textchum/AppDelegate.swift:2506
+#: macos/Sources/Textchum/AppDelegate.swift:2508
 msgid "Second View"
 msgstr ""
 
 #: linux/src/keyboard.rs:31 linux/src/workbench.rs:311
-#: macos/Sources/Textchum/AppDelegate.swift:2512
+#: macos/Sources/Textchum/AppDelegate.swift:2514
 msgid "Close View"
 msgstr ""
 
 #: linux/src/keyboard.rs:32 linux/src/workbench.rs:312
-#: macos/Sources/Textchum/AppDelegate.swift:2518
+#: macos/Sources/Textchum/AppDelegate.swift:2520
 msgid "Next Pane"
 msgstr ""
 
 #: linux/src/keyboard.rs:33 linux/src/workbench.rs:362
-#: macos/Sources/Textchum/AppDelegate.swift:2283
+#: macos/Sources/Textchum/AppDelegate.swift:2285
 msgid "Reopen Closed Tab"
 msgstr ""
 
@@ -123,12 +123,12 @@ msgid "File Properties"
 msgstr ""
 
 #: linux/src/keyboard.rs:35 linux/src/workbench.rs:299
-#: macos/Sources/Textchum/AppDelegate.swift:2334
+#: macos/Sources/Textchum/AppDelegate.swift:2336
 msgid "Undo"
 msgstr ""
 
 #: linux/src/keyboard.rs:36 linux/src/workbench.rs:300
-#: macos/Sources/Textchum/AppDelegate.swift:2340
+#: macos/Sources/Textchum/AppDelegate.swift:2342
 msgid "Redo"
 msgstr ""
 
@@ -148,12 +148,12 @@ msgstr ""
 msgid "Find and Replace"
 msgstr ""
 
-#: linux/src/keyboard.rs:41 macos/Sources/Textchum/AppDelegate.swift:2578
+#: linux/src/keyboard.rs:41 macos/Sources/Textchum/AppDelegate.swift:2580
 #: macos/Sources/Textchum/PathActions.swift:131
 msgid "Reveal in Tree"
 msgstr ""
 
-#: linux/src/keyboard.rs:42 macos/Sources/Textchum/AppDelegate.swift:2430
+#: linux/src/keyboard.rs:42 macos/Sources/Textchum/AppDelegate.swift:2432
 msgid "Complete"
 msgstr ""
 
@@ -162,12 +162,12 @@ msgid "Find in Project"
 msgstr ""
 
 #: linux/src/keyboard.rs:44 linux/src/workbench.rs:333
-#: macos/Sources/Textchum/AppDelegate.swift:2359
+#: macos/Sources/Textchum/AppDelegate.swift:2361
 msgid "Jump to Definition"
 msgstr ""
 
 #: linux/src/keyboard.rs:45 linux/src/workbench.rs:336
-#: macos/Sources/Textchum/AppDelegate.swift:2380
+#: macos/Sources/Textchum/AppDelegate.swift:2382
 msgid "Find References"
 msgstr ""
 
@@ -176,47 +176,47 @@ msgid "Code Actions"
 msgstr ""
 
 #: linux/src/keyboard.rs:47 linux/src/workbench.rs:2972
-#: macos/Sources/Textchum/DocumentController.swift:1137
+#: macos/Sources/Textchum/DocumentController.swift:1161
 msgid "Rename Symbol"
 msgstr ""
 
 #: linux/src/keyboard.rs:48 linux/src/workbench.rs:339
-#: macos/Sources/Textchum/AppDelegate.swift:2402
+#: macos/Sources/Textchum/AppDelegate.swift:2404
 msgid "Format Document"
 msgstr ""
 
 #: linux/src/keyboard.rs:49 linux/src/workbench.rs:303
-#: macos/Sources/Textchum/AppDelegate.swift:2409
+#: macos/Sources/Textchum/AppDelegate.swift:2411
 msgid "Run Save Preprocessors"
 msgstr ""
 
 #: linux/src/keyboard.rs:50
-#: macos/Sources/Textchum/DocumentController.swift:1054
+#: macos/Sources/Textchum/DocumentController.swift:1078
 msgid "Document Outline"
 msgstr ""
 
 #: linux/src/keyboard.rs:51 linux/src/workbench.rs:334
-#: macos/Sources/Textchum/AppDelegate.swift:2366
+#: macos/Sources/Textchum/AppDelegate.swift:2368
 msgid "Go Back"
 msgstr ""
 
 #: linux/src/keyboard.rs:52 linux/src/workbench.rs:335
-#: macos/Sources/Textchum/AppDelegate.swift:2373
+#: macos/Sources/Textchum/AppDelegate.swift:2375
 msgid "Go Forward"
 msgstr ""
 
 #: linux/src/keyboard.rs:53 linux/src/workbench.rs:2437
-#: macos/Sources/Textchum/DocumentController.swift:1648
+#: macos/Sources/Textchum/DocumentController.swift:1672
 msgid "Go to Line"
 msgstr ""
 
 #: linux/src/keyboard.rs:54 linux/src/workbench.rs:346
-#: macos/Sources/Textchum/AppDelegate.swift:2416
+#: macos/Sources/Textchum/AppDelegate.swift:2418
 msgid "Go to Block Start"
 msgstr ""
 
 #: linux/src/keyboard.rs:55 linux/src/workbench.rs:347
-#: macos/Sources/Textchum/AppDelegate.swift:2423
+#: macos/Sources/Textchum/AppDelegate.swift:2425
 msgid "Go to Block End"
 msgstr ""
 
@@ -225,7 +225,7 @@ msgid "Blame Line"
 msgstr ""
 
 #: linux/src/keyboard.rs:57 linux/src/workbench.rs:344
-#: macos/Sources/Textchum/AppDelegate.swift:2599
+#: macos/Sources/Textchum/AppDelegate.swift:2601
 msgid "Show Diagnostic for Line"
 msgstr ""
 
@@ -234,7 +234,7 @@ msgid "Diagnostics"
 msgstr ""
 
 #: linux/src/keyboard.rs:59 linux/src/workbench.rs:341
-#: macos/Sources/Textchum/AppDelegate.swift:2565
+#: macos/Sources/Textchum/AppDelegate.swift:2567
 msgid "Show Documentation for Symbol"
 msgstr ""
 
@@ -242,7 +242,7 @@ msgstr ""
 msgid "Command Palette"
 msgstr ""
 
-#: linux/src/keyboard.rs:61 macos/Sources/Textchum/AppDelegate.swift:2532
+#: linux/src/keyboard.rs:61 macos/Sources/Textchum/AppDelegate.swift:2534
 msgid "Toggle Navigator"
 msgstr ""
 
@@ -267,7 +267,7 @@ msgid "Configured grammars: {}"
 msgstr ""
 
 #: linux/src/main.rs:152 linux/src/main.rs:1527 linux/src/workbench.rs:1197
-#: macos/Sources/Textchum/SmokeTest.swift:1273
+#: macos/Sources/Textchum/SmokeTest.swift:1331
 msgid "Save changes to {}?"
 msgstr ""
 
@@ -280,12 +280,12 @@ msgstr[1] ""
 #: linux/src/main.rs:160 linux/src/workbench.rs:1205
 #: linux/src/workbench.rs:1302 linux/src/workbench.rs:2445
 #: linux/src/workbench.rs:2873 linux/src/workbench.rs:2978
-#: linux/src/workbench.rs:4293 macos/Sources/Textchum/AppDelegate.swift:767
-#: macos/Sources/Textchum/DocumentController.swift:1144
-#: macos/Sources/Textchum/DocumentController.swift:1654
-#: macos/Sources/Textchum/DocumentController.swift:2946
-#: macos/Sources/Textchum/DocumentController.swift:3572
-#: macos/Sources/Textchum/DocumentController.swift:3921
+#: linux/src/workbench.rs:4293 macos/Sources/Textchum/AppDelegate.swift:769
+#: macos/Sources/Textchum/DocumentController.swift:1168
+#: macos/Sources/Textchum/DocumentController.swift:1678
+#: macos/Sources/Textchum/DocumentController.swift:2970
+#: macos/Sources/Textchum/DocumentController.swift:3596
+#: macos/Sources/Textchum/DocumentController.swift:3945
 msgid "Cancel"
 msgstr ""
 
@@ -294,19 +294,19 @@ msgid "Quit Without Saving"
 msgstr ""
 
 #: linux/src/main.rs:162 linux/src/workbench.rs:1207
-#: macos/Sources/Textchum/AppDelegate.swift:766
+#: macos/Sources/Textchum/AppDelegate.swift:768
 msgid "Save All"
 msgstr ""
 
-#: linux/src/main.rs:1533 macos/Sources/Textchum/SmokeTest.swift:1277
+#: linux/src/main.rs:1533 macos/Sources/Textchum/SmokeTest.swift:1335
 msgid "A phrase nobody has translated"
 msgstr ""
 
 #: linux/src/main.rs:1542 linux/src/main.rs:1547
 #: macos/Sources/Textchum/Settings.swift:2255
-#: macos/Sources/Textchum/SmokeTest.swift:1283
-#: macos/Sources/Textchum/SmokeTest.swift:1284
-#: macos/Sources/Textchum/SmokeTest.swift:1291
+#: macos/Sources/Textchum/SmokeTest.swift:1341
+#: macos/Sources/Textchum/SmokeTest.swift:1342
+#: macos/Sources/Textchum/SmokeTest.swift:1349
 msgid "{} file"
 msgid_plural "{} files"
 msgstr[0] ""
@@ -316,23 +316,23 @@ msgstr[1] ""
 msgid "Save as PDF…"
 msgstr ""
 
-#: linux/src/page.rs:2322 macos/Sources/Textchum/DocumentController.swift:4050
+#: linux/src/page.rs:2322 macos/Sources/Textchum/DocumentController.swift:4074
 msgid "Add to Dictionary"
 msgstr ""
 
-#: linux/src/page.rs:2323 macos/Sources/Textchum/DocumentController.swift:4058
+#: linux/src/page.rs:2323 macos/Sources/Textchum/DocumentController.swift:4082
 msgid "Ignore While This Runs"
 msgstr ""
 
-#: linux/src/page.rs:2333 macos/Sources/Textchum/AppDelegate.swift:2145
+#: linux/src/page.rs:2333 macos/Sources/Textchum/AppDelegate.swift:2147
 msgid "Invert Case"
 msgstr ""
 
-#: linux/src/page.rs:2334 macos/Sources/Textchum/AppDelegate.swift:2144
+#: linux/src/page.rs:2334 macos/Sources/Textchum/AppDelegate.swift:2146
 msgid "Title Case"
 msgstr ""
 
-#: linux/src/workbench.rs:258 macos/Sources/Textchum/AppDelegate.swift:2228
+#: linux/src/workbench.rs:258 macos/Sources/Textchum/AppDelegate.swift:2230
 msgid "New with Format…"
 msgstr ""
 
@@ -341,99 +341,99 @@ msgid "New Window"
 msgstr ""
 
 #: linux/src/workbench.rs:261 linux/src/workbench.rs:5427
-#: macos/Sources/Textchum/AppDelegate.swift:2248
+#: macos/Sources/Textchum/AppDelegate.swift:2250
 #: macos/Sources/Textchum/Settings.swift:974
 msgid "Open…"
 msgstr ""
 
-#: linux/src/workbench.rs:292 macos/Sources/Textchum/AppDelegate.swift:2259
-#: macos/Sources/Textchum/AppDelegate.swift:2260
+#: linux/src/workbench.rs:292 macos/Sources/Textchum/AppDelegate.swift:2261
+#: macos/Sources/Textchum/AppDelegate.swift:2262
 msgid "Open Recent"
 msgstr ""
 
-#: linux/src/workbench.rs:293 macos/Sources/Textchum/AppDelegate.swift:2250
+#: linux/src/workbench.rs:293 macos/Sources/Textchum/AppDelegate.swift:2252
 msgid "Open Quickly…"
 msgstr ""
 
-#: linux/src/workbench.rs:294 macos/Sources/Textchum/AppDelegate.swift:2252
+#: linux/src/workbench.rs:294 macos/Sources/Textchum/AppDelegate.swift:2254
 msgid "Changed in Branch…"
 msgstr ""
 
-#: linux/src/workbench.rs:296 macos/Sources/Textchum/AppDelegate.swift:2296
+#: linux/src/workbench.rs:296 macos/Sources/Textchum/AppDelegate.swift:2298
 msgid "Save As…"
 msgstr ""
 
-#: linux/src/workbench.rs:302 macos/Sources/Textchum/AppDelegate.swift:2463
+#: linux/src/workbench.rs:302 macos/Sources/Textchum/AppDelegate.swift:2465
 msgid "Find in Project…"
 msgstr ""
 
-#: linux/src/workbench.rs:304 macos/Sources/Textchum/AppDelegate.swift:2620
+#: linux/src/workbench.rs:304 macos/Sources/Textchum/AppDelegate.swift:2622
 msgid "Redraw"
 msgstr ""
 
-#: linux/src/workbench.rs:330 macos/Sources/Textchum/AppDelegate.swift:2139
-#: macos/Sources/Textchum/AppDelegate.swift:2170
+#: linux/src/workbench.rs:330 macos/Sources/Textchum/AppDelegate.swift:2141
+#: macos/Sources/Textchum/AppDelegate.swift:2172
 msgid "Transform"
 msgstr ""
 
-#: linux/src/workbench.rs:337 macos/Sources/Textchum/AppDelegate.swift:2387
+#: linux/src/workbench.rs:337 macos/Sources/Textchum/AppDelegate.swift:2389
 msgid "Code Actions…"
 msgstr ""
 
-#: linux/src/workbench.rs:338 macos/Sources/Textchum/AppDelegate.swift:2395
+#: linux/src/workbench.rs:338 macos/Sources/Textchum/AppDelegate.swift:2397
 msgid "Rename Symbol…"
 msgstr ""
 
-#: linux/src/workbench.rs:340 macos/Sources/Textchum/AppDelegate.swift:2585
+#: linux/src/workbench.rs:340 macos/Sources/Textchum/AppDelegate.swift:2587
 msgid "Document Outline…"
 msgstr ""
 
-#: linux/src/workbench.rs:342 macos/Sources/Textchum/AppDelegate.swift:2613
+#: linux/src/workbench.rs:342 macos/Sources/Textchum/AppDelegate.swift:2615
 msgid "Go to Line…"
 msgstr ""
 
-#: linux/src/workbench.rs:343 macos/Sources/Textchum/AppDelegate.swift:2606
+#: linux/src/workbench.rs:343 macos/Sources/Textchum/AppDelegate.swift:2608
 msgid "Blame Line…"
 msgstr ""
 
-#: linux/src/workbench.rs:345 macos/Sources/Textchum/AppDelegate.swift:2592
+#: linux/src/workbench.rs:345 macos/Sources/Textchum/AppDelegate.swift:2594
 msgid "Diagnostics…"
 msgstr ""
 
-#: linux/src/workbench.rs:348 macos/Sources/Textchum/AppDelegate.swift:2628
+#: linux/src/workbench.rs:348 macos/Sources/Textchum/AppDelegate.swift:2630
 msgid "Command Palette…"
 msgstr ""
 
-#: linux/src/workbench.rs:349 macos/Sources/Textchum/AppDelegate.swift:2572
+#: linux/src/workbench.rs:349 macos/Sources/Textchum/AppDelegate.swift:2574
 msgid "Language Server Status"
 msgstr ""
 
-#: linux/src/workbench.rs:351 macos/Sources/Textchum/AppDelegate.swift:2552
+#: linux/src/workbench.rs:351 macos/Sources/Textchum/AppDelegate.swift:2554
 msgid "Toggle Path Display"
 msgstr ""
 
-#: linux/src/workbench.rs:353 macos/Sources/Textchum/AppDelegate.swift:2538
+#: linux/src/workbench.rs:353 macos/Sources/Textchum/AppDelegate.swift:2540
 msgid "Toggle Markdown Preview"
 msgstr ""
 
-#: linux/src/workbench.rs:357 macos/Sources/Textchum/AppDelegate.swift:2203
+#: linux/src/workbench.rs:357 macos/Sources/Textchum/AppDelegate.swift:2205
 msgid "From VS Code…"
 msgstr ""
 
-#: linux/src/workbench.rs:358 macos/Sources/Textchum/AppDelegate.swift:2208
+#: linux/src/workbench.rs:358 macos/Sources/Textchum/AppDelegate.swift:2210
 msgid "From TextMate…"
 msgstr ""
 
-#: linux/src/workbench.rs:359 macos/Sources/Textchum/AppDelegate.swift:2200
-#: macos/Sources/Textchum/AppDelegate.swift:2201
+#: linux/src/workbench.rs:359 macos/Sources/Textchum/AppDelegate.swift:2202
+#: macos/Sources/Textchum/AppDelegate.swift:2203
 msgid "Import Theme"
 msgstr ""
 
-#: linux/src/workbench.rs:360 macos/Sources/Textchum/AppDelegate.swift:2180
+#: linux/src/workbench.rs:360 macos/Sources/Textchum/AppDelegate.swift:2182
 msgid "About Textchum"
 msgstr ""
 
-#: linux/src/workbench.rs:363 macos/Sources/Textchum/AppDelegate.swift:2271
+#: linux/src/workbench.rs:363 macos/Sources/Textchum/AppDelegate.swift:2273
 msgid "Close Window"
 msgstr ""
 
@@ -505,7 +505,7 @@ msgstr ""
 msgid "Plain Text"
 msgstr ""
 
-#: linux/src/workbench.rs:1699 macos/Sources/Textchum/Sidebar.swift:373
+#: linux/src/workbench.rs:1699 macos/Sources/Textchum/Sidebar.swift:407
 msgid "Open Files"
 msgstr ""
 
@@ -562,7 +562,7 @@ msgid "Save the file first — an untitled document has no path."
 msgstr ""
 
 #: linux/src/workbench.rs:2446
-#: macos/Sources/Textchum/DocumentController.swift:1653
+#: macos/Sources/Textchum/DocumentController.swift:1677
 msgid "Go"
 msgstr ""
 
@@ -623,7 +623,7 @@ msgid "Local changes will be replaced with the file on disk."
 msgstr ""
 
 #: linux/src/workbench.rs:2874
-#: macos/Sources/Textchum/DocumentController.swift:2945
+#: macos/Sources/Textchum/DocumentController.swift:2969
 msgid "Revert"
 msgstr ""
 
@@ -640,7 +640,7 @@ msgid "New name"
 msgstr ""
 
 #: linux/src/workbench.rs:2979
-#: macos/Sources/Textchum/DocumentController.swift:1143
+#: macos/Sources/Textchum/DocumentController.swift:1167
 msgid "Rename"
 msgstr ""
 
@@ -709,7 +709,7 @@ msgid "Could not save the document."
 msgstr ""
 
 #: linux/src/workbench.rs:4294
-#: macos/Sources/Textchum/DocumentController.swift:3571
+#: macos/Sources/Textchum/DocumentController.swift:3595
 msgid "Save Without Preprocessing"
 msgstr ""
 
@@ -718,7 +718,7 @@ msgid "No references found."
 msgstr ""
 
 #: linux/src/workbench.rs:4347
-#: macos/Sources/Textchum/DocumentController.swift:1443
+#: macos/Sources/Textchum/DocumentController.swift:1467
 msgid "The language server has no action for this place."
 msgstr ""
 
@@ -731,7 +731,7 @@ msgid "The language server would not finish that action."
 msgstr ""
 
 #: linux/src/workbench.rs:4426
-#: macos/Sources/Textchum/DocumentController.swift:1489
+#: macos/Sources/Textchum/DocumentController.swift:1513
 msgid "The language server had no edit for that action."
 msgstr ""
 
@@ -1023,202 +1023,202 @@ msgstr ""
 msgid "Forget"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:420
+#: macos/Sources/Textchum/AppDelegate.swift:422
 msgid "Settings file could not be read"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:755
-#: macos/Sources/Textchum/DocumentController.swift:3100
+#: macos/Sources/Textchum/AppDelegate.swift:757
+#: macos/Sources/Textchum/DocumentController.swift:3124
 msgid "Untitled"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:761
-#: macos/Sources/Textchum/DocumentController.swift:3918
+#: macos/Sources/Textchum/AppDelegate.swift:763
+#: macos/Sources/Textchum/DocumentController.swift:3942
 msgid "Do you want to save the changes made to {}?"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:763
+#: macos/Sources/Textchum/AppDelegate.swift:765
 msgid "Do you want to save the changes made to {} file?"
 msgid_plural "Do you want to save the changes made to {} files?"
 msgstr[0] ""
 msgstr[1] ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:768
-#: macos/Sources/Textchum/DocumentController.swift:3922
+#: macos/Sources/Textchum/AppDelegate.swift:770
+#: macos/Sources/Textchum/DocumentController.swift:3946
 msgid "Don’t Save"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:809
+#: macos/Sources/Textchum/AppDelegate.swift:811
 msgid "No language server for this project"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:831
+#: macos/Sources/Textchum/AppDelegate.swift:833
 msgid "Language server failed to start"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:1455
+#: macos/Sources/Textchum/AppDelegate.swift:1457
 msgid "The icon pack could not be used"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:1669
+#: macos/Sources/Textchum/AppDelegate.swift:1671
 msgid "This Window"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:1867
+#: macos/Sources/Textchum/AppDelegate.swift:1869
 msgid "No Recent Files"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:1873
+#: macos/Sources/Textchum/AppDelegate.swift:1875
 msgid "Clear Menu"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:1977
+#: macos/Sources/Textchum/AppDelegate.swift:1979
 msgid "language…"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2142
+#: macos/Sources/Textchum/AppDelegate.swift:2144
 msgid "Upper Case"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2143
+#: macos/Sources/Textchum/AppDelegate.swift:2145
 msgid "Lower Case"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2148
+#: macos/Sources/Textchum/AppDelegate.swift:2150
 msgid "Sort Lines"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2149
+#: macos/Sources/Textchum/AppDelegate.swift:2151
 msgid "Sort Lines Reversed"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2150
+#: macos/Sources/Textchum/AppDelegate.swift:2152
 msgid "Remove Duplicate Lines"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2151
+#: macos/Sources/Textchum/AppDelegate.swift:2153
 msgid "Join Lines"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2152
+#: macos/Sources/Textchum/AppDelegate.swift:2154
 msgid "Trim Trailing Whitespace"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2155
+#: macos/Sources/Textchum/AppDelegate.swift:2157
 msgid "Convert to Unix Line Endings (LF)"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2156
+#: macos/Sources/Textchum/AppDelegate.swift:2158
 msgid "Convert to Windows Line Endings (CRLF)"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2186
+#: macos/Sources/Textchum/AppDelegate.swift:2188
 msgid "Settings…"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2191
+#: macos/Sources/Textchum/AppDelegate.swift:2193
 msgid "Install chum Command…"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2196
+#: macos/Sources/Textchum/AppDelegate.swift:2198
 msgid "Open Themes Folder"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2216
+#: macos/Sources/Textchum/AppDelegate.swift:2218
 msgid "Quit Textchum"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2224
+#: macos/Sources/Textchum/AppDelegate.swift:2226
 msgid "File"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2226
+#: macos/Sources/Textchum/AppDelegate.swift:2228
 msgid "New"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2277
+#: macos/Sources/Textchum/AppDelegate.swift:2279
 msgid "Get Info"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2312
-#: macos/Sources/Textchum/AppDelegate.swift:2313
+#: macos/Sources/Textchum/AppDelegate.swift:2314
+#: macos/Sources/Textchum/AppDelegate.swift:2315
 msgid "Copy Path"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2315
+#: macos/Sources/Textchum/AppDelegate.swift:2317
 msgid "File Name"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2318
+#: macos/Sources/Textchum/AppDelegate.swift:2320
 msgid "Relative Path"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2321
+#: macos/Sources/Textchum/AppDelegate.swift:2323
 msgid "Absolute Path"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2324
+#: macos/Sources/Textchum/AppDelegate.swift:2326
 msgid "Forge URL"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2332
+#: macos/Sources/Textchum/AppDelegate.swift:2334
 msgid "Edit"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2347
+#: macos/Sources/Textchum/AppDelegate.swift:2349
 msgid "Cut"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2349
+#: macos/Sources/Textchum/AppDelegate.swift:2351
 msgid "Copy"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2351
+#: macos/Sources/Textchum/AppDelegate.swift:2353
 msgid "Paste"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2353
+#: macos/Sources/Textchum/AppDelegate.swift:2355
 msgid "Select All"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2454
-#: macos/Sources/Textchum/AppDelegate.swift:2469
+#: macos/Sources/Textchum/AppDelegate.swift:2456
+#: macos/Sources/Textchum/AppDelegate.swift:2471
 msgid "Find"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2530
+#: macos/Sources/Textchum/AppDelegate.swift:2532
 msgid "View"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2545
+#: macos/Sources/Textchum/AppDelegate.swift:2547
 msgid "Toggle Line Numbers"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2559
+#: macos/Sources/Textchum/AppDelegate.swift:2561
 msgid "Hover Documentation"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2638
+#: macos/Sources/Textchum/AppDelegate.swift:2640
 msgid "Window"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2640
+#: macos/Sources/Textchum/AppDelegate.swift:2642
 msgid "Minimize"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2646
+#: macos/Sources/Textchum/AppDelegate.swift:2648
 msgid "Next Tab"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2652
+#: macos/Sources/Textchum/AppDelegate.swift:2654
 msgid "Previous Tab"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2671
+#: macos/Sources/Textchum/AppDelegate.swift:2673
 msgid "This File in Every Column"
 msgstr ""
 
-#: macos/Sources/Textchum/AppDelegate.swift:2675
+#: macos/Sources/Textchum/AppDelegate.swift:2677
 msgid "Move Tab to New Window"
 msgstr ""
 
@@ -1250,75 +1250,75 @@ msgid ""
 "universal-ctags)."
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:957
+#: macos/Sources/Textchum/DocumentController.swift:981
 msgid "On the definition"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:958
+#: macos/Sources/Textchum/DocumentController.swift:982
 msgid "Nothing else in the workspace refers to this symbol."
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:996
+#: macos/Sources/Textchum/DocumentController.swift:1020
 msgid "Nothing reported"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:996
+#: macos/Sources/Textchum/DocumentController.swift:1020
 msgid "No diagnostics for this document."
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:1013
+#: macos/Sources/Textchum/DocumentController.swift:1037
 msgid "message…"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:1054
+#: macos/Sources/Textchum/DocumentController.swift:1078
 msgid "symbol…"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:1442
+#: macos/Sources/Textchum/DocumentController.swift:1466
 msgid "Nothing on offer"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:1451
+#: macos/Sources/Textchum/DocumentController.swift:1475
 msgid "action…"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:1488
+#: macos/Sources/Textchum/DocumentController.swift:1512
 msgid "Nothing came back"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:1627
+#: macos/Sources/Textchum/DocumentController.swift:1651
 msgid "Save it before asking git who wrote a line."
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:2922
+#: macos/Sources/Textchum/DocumentController.swift:2946
 msgid ""
 "The file was modified by another program, and you have unsaved changes. "
 "Reloading will discard your changes (one Undo brings them back)."
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:2923
+#: macos/Sources/Textchum/DocumentController.swift:2947
 msgid "Keep My Changes"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:2924
+#: macos/Sources/Textchum/DocumentController.swift:2948
 msgid "Reload From Disk"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:2942
+#: macos/Sources/Textchum/DocumentController.swift:2966
 msgid "Revert to the saved version?"
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:2944
+#: macos/Sources/Textchum/DocumentController.swift:2968
 msgid ""
 "Your unsaved changes will be replaced by the file on disk (one Undo brings "
 "them back)."
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:3919
+#: macos/Sources/Textchum/DocumentController.swift:3943
 msgid "Your changes will be lost if you don’t save them."
 msgstr ""
 
-#: macos/Sources/Textchum/DocumentController.swift:4034
+#: macos/Sources/Textchum/DocumentController.swift:4058
 msgid "No Suggestions"
 msgstr ""
 
@@ -1657,19 +1657,19 @@ msgstr ""
 msgid "Forget Selected"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:399
+#: macos/Sources/Textchum/Sidebar.swift:433
 msgid "Split into New Window"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:402
+#: macos/Sources/Textchum/Sidebar.swift:436
 msgid "Gather Into"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:447
+#: macos/Sources/Textchum/Sidebar.swift:482
 msgid "File Properties…"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:496
+#: macos/Sources/Textchum/Sidebar.swift:533
 msgid "No project"
 msgstr ""
 

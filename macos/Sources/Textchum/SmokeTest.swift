@@ -1128,6 +1128,64 @@ func runSmokeTest() -> Int32 {
     print("find bar ok (the pins step below it and back)")
     print("context ok (pins stack the class and the def, the bar knows the caret)")
 
+    // The tree follows the focused tab across projects: two bare
+    // folders, two tabs of one window, and the window's tree root and
+    // focus marks move with the tab.
+    do {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-tree-\(ProcessInfo.processInfo.processIdentifier)")
+        let projectA = base.appendingPathComponent("alpha")
+        let projectB = base.appendingPathComponent("beta")
+        try? FileManager.default.createDirectory(
+            at: projectA, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(
+            at: projectB, withIntermediateDirectories: true)
+        let fileA = projectA.appendingPathComponent("one.txt")
+        let fileB = projectB.appendingPathComponent("two.txt")
+        try? "alpha\n".write(to: fileA, atomically: true, encoding: .utf8)
+        try? "beta\n".write(to: fileB, atomically: true, encoding: .utf8)
+        let sidebar = SidebarConfiguration(
+            treeState: FileTreeState(),
+            resolveProjectRoot: { _ in nil },
+            selectDocument: { _ in },
+            showProperties: { _ in },
+            openFile: { _ in })
+        let treeBench = Workbench(sidebar: sidebar)
+        guard let docA = try? CoreDocument(contentsOf: fileA.path),
+            let docB = try? CoreDocument(contentsOf: fileB.path)
+        else {
+            print("FAIL: the project files did not open")
+            return 1
+        }
+        let editorA = DocumentController(document: docA)
+        let editorB = DocumentController(document: docB)
+        treeBench.add(editorA)
+        treeBench.add(editorB)
+        treeBench.window?.makeKeyAndOrderFront(nil)
+        func settled() { spin(untilTrue: { false }, seconds: 0.3) }
+        treeBench.showInFocusedPane(ObjectIdentifier(editorA))
+        treeBench.refreshChrome(for: editorA)
+        settled()
+        guard treeBench.sidebarContext.projectRoot == projectA.path,
+            treeBench.sidebarContext.focusedPath == fileA.path
+        else {
+            print(
+                "FAIL: the tree shows \(treeBench.sidebarContext.projectRoot ?? "nothing"), not alpha")
+            return 1
+        }
+        treeBench.showInFocusedPane(ObjectIdentifier(editorB))
+        treeBench.refreshChrome(for: editorB)
+        settled()
+        guard treeBench.sidebarContext.projectRoot == projectB.path else {
+            print(
+                "FAIL: after switching, the tree shows \(treeBench.sidebarContext.projectRoot ?? "nothing"), not beta")
+            return 1
+        }
+        treeBench.window?.close()
+        try? FileManager.default.removeItem(at: base)
+        print("tree follows ok (the root and the marks move with focus)")
+    }
+
     // A link clicked in the Markdown preview goes to the browser and
     // leaves the pane where it was. Which links count as a place in the
     // page is the core's rule, tested there; this is about the preview

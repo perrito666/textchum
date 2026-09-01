@@ -675,6 +675,22 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         refreshPreview()
         refreshStatus()
         guard focusedDocument === document, let window else { return }
+        // The tree follows the focused file's project, and the marks
+        // that say "this one is in front" follow the focus.
+        document.publishTreeRoot()
+        let identity = ObjectIdentifier(document)
+        let path = document.coreDocument.path.map { ($0 as NSString).standardizingPath }
+        if sidebarContext.focusedDocumentID != identity || sidebarContext.focusedPath != path {
+            let context = sidebarContext
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if context.focusedDocumentID != identity {
+                        context.focusedDocumentID = identity
+                    }
+                    if context.focusedPath != path { context.focusedPath = path }
+                }
+            }
+        }
         if let path = document.coreDocument.path {
             window.representedURL = URL(fileURLWithPath: path)
         } else {

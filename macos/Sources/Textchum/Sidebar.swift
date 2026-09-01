@@ -207,6 +207,10 @@ struct FileTreeRow: View {
     let node: FileNode
     @ObservedObject var state: FileTreeState
     let projectRoot: String?
+    /// Dirty-by-path for every open file, and the focused file's path,
+    /// so a row can say "open", "in front", and "unsaved" at a glance.
+    var openFiles: [String: Bool] = [:]
+    var currentPath: String?
     let onOpenFile: (String) -> Void
 
     var body: some View {
@@ -215,6 +219,7 @@ struct FileTreeRow: View {
                 ForEach(state.children(of: node.url, globs: node.hiddenGlobs) ?? []) { child in
                     FileTreeRow(
                         node: child, state: state, projectRoot: projectRoot,
+                        openFiles: openFiles, currentPath: currentPath,
                         onOpenFile: onOpenFile)
                 }
             } label: {
@@ -237,6 +242,22 @@ struct FileTreeRow: View {
             }
             Text(node.name)
             Spacer(minLength: 0)
+            // The file in front wears a filled dot, other open files a
+            // hollow one, and unsaved changes the same dot the Open
+            // Files list marks them with.
+            if !node.isDirectory, let dirty = openFiles[node.url.path] {
+                if dirty {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 7))
+                        .foregroundStyle(.primary)
+                }
+                Image(systemName: node.url.path == currentPath ? "circle.fill" : "circle")
+                    .font(.system(size: 6))
+                    .foregroundStyle(
+                        node.url.path == currentPath
+                            ? AnyShapeStyle(Color.accentColor)
+                            : AnyShapeStyle(.tertiary))
+            }
         }
         .padding(.horizontal, 3)
         .background(
@@ -322,6 +343,19 @@ struct SidebarView: View {
     var onRevealInTree: (String) -> Void = { _ in }
 
     private var projectRoot: String? { context.projectRoot }
+
+    /// Dirty-by-path over every open document, standardized the way
+    /// the tree's own keys are.
+    private var openFiles: [String: Bool] {
+        var open: [String: Bool] = [:]
+        for document in model.groups.flatMap(\.documents) {
+            guard let path = document.path else { continue }
+            open[(path as NSString).standardizingPath] = document.isDirty
+        }
+        return open
+    }
+
+    private var currentPath: String? { context.focusedPath }
 
     var body: some View {
         // A hand-rolled splitter rather than VSplitView: the divider
@@ -427,7 +461,8 @@ struct SidebarView: View {
                             }
                             Text(document.display)
                                 .fontWeight(
-                                    document.id == currentDocumentID
+                                    document.id
+                                        == (context.focusedDocumentID ?? currentDocumentID)
                                         ? .semibold : .regular)
                                 .lineLimit(1)
                                 .truncationMode(.head)
@@ -477,7 +512,9 @@ struct SidebarView: View {
                             ) { node in
                                 FileTreeRow(
                                     node: node, state: treeState,
-                                    projectRoot: projectRoot, onOpenFile: onOpenFile)
+                                    projectRoot: projectRoot,
+                                    openFiles: openFiles, currentPath: currentPath,
+                                    onOpenFile: onOpenFile)
                             }
                         }
                     }
