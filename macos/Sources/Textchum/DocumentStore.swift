@@ -50,6 +50,9 @@ struct DocumentLayout {
     struct Place {
         var caret = 0
         var scroll = 0.0
+        /// The first character shown: the line, which a reflow keeps
+        /// where the pixel offset would not.
+        var top = 0
     }
 }
 

@@ -314,7 +314,7 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         }
         placeDividers(of: column, at: layout.dividers)
         for (view, place) in zip(column.views, layout.places) {
-            restore(view: view, to: place)
+            restore(view: view, to: place, of: document)
         }
         refreshTabs()
         refreshChrome(for: document)
@@ -330,7 +330,8 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
             places: column.views.map { view in
                 DocumentLayout.Place(
                     caret: view.textView.selectedRange().location,
-                    scroll: Double(view.scrollView.contentView.bounds.origin.y))
+                    scroll: Double(view.scrollView.contentView.bounds.origin.y),
+                    top: document.topOffset(of: view))
             })
         // The file is what remembers, and the project is where that is
         // written down.
@@ -344,16 +345,34 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
     }
 
     /// Puts a view back where it was looking.
-    private func restore(view: DocumentView, to place: DocumentLayout.Place) {
+    private func restore(
+        view: DocumentView, to place: DocumentLayout.Place, of document: DocumentController
+    ) {
         let length = (view.textView.string as NSString).length
         view.textView.setSelectedRange(
             NSRange(location: min(place.caret, length), length: 0))
-        guard place.scroll > 0 else { return }
-        let scroll = { [weak view] in
-            guard let view else { return }
+        guard place.scroll > 0 || place.top > 0 else { return }
+        let scroll = { [weak view, weak document] in
+            guard let view, let document else { return }
+            if place.top > 0 {
+                // By line: the view is new, laid out at whatever width
+                // it had a moment ago, and a pixel offset into that
+                // layout is some other line.
+                document.scroll(view, topOffset: place.top)
+                return
+            }
+            // Records from before lines were kept: by pixel, clamped —
+            // the clip view does not clamp on its own, and past the end
+            // of the text it shows the nothing below it.
             view.container.layoutSubtreeIfNeeded()
-            view.scrollView.contentView.scroll(to: NSPoint(x: 0, y: place.scroll))
-            view.scrollView.reflectScrolledClipView(view.scrollView.contentView)
+            let clip = view.scrollView.contentView
+            let total = view.scrollView.documentView?.frame.height ?? 0
+            let target = max(0, min(place.scroll, total - clip.bounds.height))
+            clip.scroll(to: NSPoint(x: 0, y: target))
+            view.scrollView.reflectScrolledClipView(clip)
+            view.viewportAnchor = (
+                view.textView.characterIndexForInsertion(at: NSPoint(x: 5, y: target + 1)),
+                view.textView.frame.width)
         }
         scroll()
         // The view was made a moment ago and has no height yet, so the

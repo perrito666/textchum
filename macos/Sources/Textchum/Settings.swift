@@ -1249,8 +1249,10 @@ struct GitMarksOverridePicker: View {
         .frame(width: 220)
         .onAppear {
             guard !loaded else { return }
-            loaded = true
             choice = initial
+            // Armed a turn later: the assignment above counts as a
+            // change too, and committing it would write the value back.
+            DispatchQueue.main.async { loaded = true }
         }
         .onChange(of: choice) { _, chosen in
             guard loaded else { return }
