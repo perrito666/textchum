@@ -129,18 +129,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // rebuilding the list reentrantly trips NSTableView.
             // Coalesced as well: a session restore posts once per tab,
             // and one rebuild covers the burst.
-            if self?.sidebarRebuildPending == false {
-                self?.sidebarRebuildPending = true
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        guard let self else { return }
-                        self.sidebarRebuildPending = false
-                        self.rebuildSidebar()
-                        if !self.isTerminating {
-                            // The write itself is debounced: recording
-                            // the session on every dirty flip wrote a
-                            // file per keystroke burst.
-                            self.scheduleSessionSave()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    // One rebuild covers the burst: the first
+                    // notification schedules it, the rest ride along.
+                    guard !self.sidebarRebuildPending else { return }
+                    self.sidebarRebuildPending = true
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            self.sidebarRebuildPending = false
+                            self.rebuildSidebar()
+                            if !self.isTerminating {
+                                // The write itself is debounced too: a
+                                // session file per keystroke burst was
+                                // one write too many.
+                                self.scheduleSessionSave()
+                            }
                         }
                     }
                 }
