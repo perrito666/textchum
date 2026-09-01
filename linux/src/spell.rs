@@ -88,29 +88,34 @@ fn personal_words() -> HashSet<String> {
 /// the settle timer, not per keystroke.
 pub fn run(page: &Rc<Page>) {
     let buffer = &page.buffer;
-    let clear = |buffer: &sourceview5::Buffer| {
-        buffer.remove_tag_by_name(TAG, &buffer.start_iter(), &buffer.end_iter());
-    };
     let languages = Shell::instance().config.borrow().spell_languages();
     if languages.is_empty() {
-        clear(buffer);
+        buffer.remove_tag_by_name(TAG, &buffer.start_iter(), &buffer.end_iter());
         return;
     }
 
-    let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
-    let ranges = prose_char_ranges(page, &text);
-    clear(buffer);
+    // Scoped to the lines on screen plus a margin, the way the macOS
+    // shell scopes it: checking a whole large file on the main loop is
+    // a freeze. What scrolls in gets its turn when the scroll settles
+    // (see install_spell_follow), and marks outside the scope keep
+    // whatever the pass that saw them said.
+    let (scope_start, scope_end) = visible_scope(page);
+    let scope_start_char = scope_start.offset() as usize;
+    buffer.remove_tag_by_name(TAG, &scope_start, &scope_end);
+    let text = buffer.text(&scope_start, &scope_end, true).to_string();
+    if text.is_empty() {
+        return;
+    }
+    let ranges = prose_char_ranges(page, &text, &scope_start, &scope_end);
     if ranges.is_empty() {
         return;
     }
-    let prose: String = {
-        let characters: Vec<char> = text.chars().collect();
-        ranges
-            .iter()
-            .map(|(start, end)| characters[*start..*end].iter().collect::<String>())
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
+    let characters: Vec<char> = text.chars().collect();
+    let prose: String = ranges
+        .iter()
+        .map(|(start, end)| characters[*start..*end].iter().collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
     let Some(misspelled) = misspelled_words(&prose, &languages) else {
         return;
     };
@@ -122,7 +127,6 @@ pub fn run(page: &Rc<Page>) {
     // Tag every occurrence of a misspelled word inside the prose
     // ranges. Word scanning mirrors hunspell's: letter runs, with
     // apostrophes allowed inside.
-    let characters: Vec<char> = text.chars().collect();
     for (start, end) in ranges {
         let mut index = start;
         while index < end {
@@ -142,12 +146,38 @@ pub fn run(page: &Rc<Page>) {
                 && misspelled.contains(word)
                 && !accepted(word, &personal)
             {
-                let from = buffer.iter_at_offset(word_start as i32);
-                let to = buffer.iter_at_offset(index as i32);
+                let from = buffer.iter_at_offset((scope_start_char + word_start) as i32);
+                let to = buffer.iter_at_offset((scope_start_char + index) as i32);
                 buffer.apply_tag_by_name(TAG, &from, &to);
             }
         }
     }
+}
+
+/// The stretch of the buffer worth spell-checking: the visible lines
+/// plus a hundred either side, whole lines both ends so no word is cut.
+fn visible_scope(page: &Rc<Page>) -> (gtk::TextIter, gtk::TextIter) {
+    let buffer = &page.buffer;
+    let Some(scrolled) = page
+        .view
+        .parent()
+        .and_downcast::<gtk::ScrolledWindow>()
+    else {
+        return (buffer.start_iter(), buffer.end_iter());
+    };
+    let adjustment = scrolled.vadjustment();
+    let top = adjustment.value() as i32;
+    let bottom = top + adjustment.page_size() as i32;
+    let (top_iter, _) = page.view.line_at_y(top);
+    let (bottom_iter, _) = page.view.line_at_y(bottom);
+    let first = (top_iter.line() - 100).max(0);
+    let last = bottom_iter.line() + 100;
+    let start = buffer.iter_at_line(first).unwrap_or_else(|| buffer.start_iter());
+    let mut end = buffer.iter_at_line(last).unwrap_or_else(|| buffer.end_iter());
+    if !end.ends_line() {
+        end.forward_to_line_end();
+    }
+    (start, end)
 }
 
 /// The misspelled word the character offset sits inside, with its
@@ -207,7 +237,12 @@ pub fn suggestions(word: &str) -> Vec<String> {
 
 /// Where prose lives, as character ranges: everywhere for languages
 /// that are prose, only inside comments for code.
-fn prose_char_ranges(page: &Rc<Page>, text: &str) -> Vec<(usize, usize)> {
+fn prose_char_ranges(
+    page: &Rc<Page>,
+    text: &str,
+    scope_start: &gtk::TextIter,
+    scope_end: &gtk::TextIter,
+) -> Vec<(usize, usize)> {
     let state = page.state.borrow();
     let language = state.document.language_name();
     let total_chars = text.chars().count();
@@ -240,8 +275,12 @@ fn prose_char_ranges(page: &Rc<Page>, text: &str) -> Vec<(usize, usize)> {
         return kept;
     }
     let comment_style = textchum_core::theme::resolve("comment");
-    let total_utf16 = text.encode_utf16().count();
-    let Ok(spans) = state.document.highlights(0, total_utf16) else {
+    // The document speaks UTF-16 offsets; the scope's own start is the
+    // origin the spans come back relative to.
+    let scope_start_utf16 =
+        crate::page::utf16_offset(&page.buffer, scope_start.offset()) as usize;
+    let scope_end_utf16 = crate::page::utf16_offset(&page.buffer, scope_end.offset()) as usize;
+    let Ok(spans) = state.document.highlights(scope_start_utf16, scope_end_utf16) else {
         return Vec::new();
     };
     spans
@@ -249,10 +288,17 @@ fn prose_char_ranges(page: &Rc<Page>, text: &str) -> Vec<(usize, usize)> {
         // Asked by name: style ids are positions in an alphabetical
         // table and move whenever a capture is added.
         .filter(|span| Some(span.style) == comment_style)
+        .filter(|span| span.end_utf16 > scope_start_utf16 && span.start_utf16 < scope_end_utf16)
         .map(|span| {
             (
-                crate::page::char_offset(text, span.start_utf16) as usize,
-                crate::page::char_offset(text, span.end_utf16) as usize,
+                crate::page::char_offset(
+                    text,
+                    span.start_utf16.saturating_sub(scope_start_utf16),
+                ) as usize,
+                crate::page::char_offset(
+                    text,
+                    (span.end_utf16 - scope_start_utf16).min(scope_end_utf16 - scope_start_utf16),
+                ) as usize,
             )
         })
         .filter(|(start, end)| end > start)

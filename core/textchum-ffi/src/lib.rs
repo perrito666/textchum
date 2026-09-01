@@ -1733,6 +1733,39 @@ pub unsafe extern "C" fn tc_load_grammars(config: *const TcConfig) -> *mut c_cha
     owned_c_string(problems.join("\n"))
 }
 
+/// The configuration's `languages` section as JSON, for handing to
+/// [`tc_load_grammars_from`] on another thread — the configuration
+/// itself is not shared across threads. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_grammars_json(config: *const TcConfig) -> *mut c_char {
+    let json = unsafe { config.as_ref() }
+        .map(|config| config.inner.grammars_json())
+        .unwrap_or_default();
+    owned_c_string(json)
+}
+
+/// [`tc_load_grammars`], from a JSON snapshot instead of the live
+/// configuration, so the loading can happen off the main thread.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `json` must be valid UTF-8 for its length.
+#[no_mangle]
+pub unsafe extern "C" fn tc_load_grammars_from(
+    json: *const c_char,
+    json_len: usize,
+) -> *mut c_char {
+    let Some(json) = (unsafe { str_from_raw(json, json_len) }) else {
+        return owned_c_string(String::new());
+    };
+    let problems = textchum_core::grammar::load_configured(json);
+    owned_c_string(problems.join("\n"))
+}
+
 /// Whether a file stays open when the window showing it closes
 /// (default false).
 ///

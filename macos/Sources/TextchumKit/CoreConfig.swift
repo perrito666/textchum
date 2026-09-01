@@ -186,6 +186,14 @@ public final class CoreConfig {
     ///
     /// The library stays loaded for the life of the process: a syntax
     /// tree points into the grammar's tables.
+    /// The `languages` section as JSON — a snapshot another thread can
+    /// load grammars from without touching this object.
+    public var grammarsJSON: String {
+        guard let raw = tc_config_grammars_json(handle) else { return "{}" }
+        defer { tc_string_free(raw) }
+        return String(cString: raw)
+    }
+
     public func loadGrammars() -> [String] {
         guard let raw = tc_load_grammars(handle) else { return [] }
         defer { tc_string_free(raw) }

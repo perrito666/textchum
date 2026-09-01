@@ -209,14 +209,19 @@ final class Workbench: NSWindowController, NSWindowDelegate {
 
     /// Adds a document to this window and shows it in the focused
     /// column.
-    func add(_ document: DocumentController, at index: Int? = nil) {
+    func add(_ document: DocumentController, at index: Int? = nil, show: Bool = true) {
         document.workbench = self
         if let index, index <= documents.count {
             documents.insert(document, at: index)
         } else {
             documents.append(document)
         }
-        show(document, inColumn: focusedColumn)
+        // Session restore adds a whole window's tabs at once; showing
+        // each one in passing would build and paint that many sets of
+        // views for a window that ends up showing one.
+        if show {
+            self.show(document, inColumn: focusedColumn)
+        }
         refreshTabs()
     }
 
@@ -637,7 +642,10 @@ final class Workbench: NSWindowController, NSWindowDelegate {
 
     /// Rebuilds the tab bar from the documents and the focused column.
     func refreshTabs() {
-        tabModel.tabs = documents.map { document in
+        // Rebuilt per keystroke via refreshChrome; assigning an equal
+        // array would still make SwiftUI diff the whole bar, so only a
+        // real change reaches the model.
+        let tabs = documents.map { document in
             TabBarModel.Tab(
                 id: ObjectIdentifier(document),
                 title: document.chromeTitle,
@@ -649,7 +657,9 @@ final class Workbench: NSWindowController, NSWindowDelegate {
                 }
             )
         }
-        tabModel.selected = focusedDocument.map(ObjectIdentifier.init)
+        if tabModel.tabs != tabs { tabModel.tabs = tabs }
+        let selected = focusedDocument.map(ObjectIdentifier.init)
+        if tabModel.selected != selected { tabModel.selected = selected }
     }
 
     // MARK: Window

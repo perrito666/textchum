@@ -423,6 +423,10 @@ final class DocumentController: NSResponder {
             MainActor.assumeIsolated {
                 guard let self, let view else { return }
                 self.updateContextStrip(for: view)
+                if let pending = self.pendingSessionPosition {
+                    self.pendingSessionPosition = nil
+                    self.restoreSessionPosition(caret: pending.caret, scroll: pending.scroll)
+                }
             }
         }
         return view
@@ -536,6 +540,24 @@ final class DocumentController: NSResponder {
     func adoptLSPApp(_ app: CoreApp) {
         guard lspApp == nil else { return }
         lspApp = app
+        syncLSPOpenState()
+    }
+
+    /// A grammar arrived after this file opened as plain text: detect
+    /// again, colour, and open the server session the language now
+    /// calls for. A recorded override still wins.
+    func retryLanguageDetection() {
+        guard coreDocument.languageName == nil, languageOverride == nil,
+            let path = coreDocument.path,
+            let detected = CoreLanguages.detected(forPath: path),
+            coreDocument.setLanguage(detected)
+        else { return }
+        refreshDecorations()
+        updateChrome()
+        for view in views {
+            view.contextStrip.invalidateText()
+            updateContextStrip(for: view)
+        }
         syncLSPOpenState()
     }
 
@@ -1572,8 +1594,15 @@ final class DocumentController: NSResponder {
     }
 
     /// Restores a saved caret and scroll position (clamped to the text).
+    /// A session position handed over before the tab has views — a
+    /// restored tab not yet shown — waits for the first view.
+    private var pendingSessionPosition: (caret: Int, scroll: Double)?
+
     func restoreSessionPosition(caret: Int, scroll: Double) {
-        guard let textView else { return }
+        guard let textView else {
+            pendingSessionPosition = (caret, scroll)
+            return
+        }
         let length = (textView.string as NSString).length
         selectionChangeIsFromEditing = false
         textView.setSelectedRange(NSRange(location: min(caret, length), length: 0))
@@ -3084,6 +3113,9 @@ final class DocumentController: NSResponder {
     /// The document's facts, for the window's subtitle.
     /// Counts edits, so per-caret-move work can cache against it.
     private(set) var textVersion: UInt64 = 0
+    /// One typed replacement the delegate accepted, waiting for
+    /// textDidChange so the gutters can patch rather than rebuild.
+    private var pendingLineEdit: (range: NSRange, length: Int)?
     private var cachedUsesTabs: (version: UInt64, value: Bool)?
 
     /// Whether the file indents with tabs, from its own text — scanned
@@ -4036,6 +4068,11 @@ extension DocumentController: NSTextViewDelegate {
             try coreDocument.replace(utf16Range: affectedCharRange, with: replacementString)
             selectionChangeIsFromEditing = true
             lastTypedText = replacementString
+            // The gutters patch their line-start caches around this
+            // one edit instead of rebuilding; see textDidChange.
+            pendingLineEdit = (
+                affectedCharRange, (replacementString as NSString).length
+            )
             return true
         } catch {
             // Core refused: refuse the view edit as well so neither side
@@ -4158,7 +4195,16 @@ extension DocumentController: NSTextViewDelegate {
         scheduleLSPChange()
         scheduleChangeMarks()
         schedulePreviewUpdate()
-        lineRuler?.invalidateLineStarts()
+        if let edit = pendingLineEdit {
+            pendingLineEdit = nil
+            for view in views {
+                view.gutter.noteEdit(at: edit.range, replacementLength: edit.length)
+            }
+        } else {
+            for view in views {
+                view.gutter.invalidateLineStarts()
+            }
+        }
         completionAfterTyping()
         scheduleAutosave()
         textVersion &+= 1
