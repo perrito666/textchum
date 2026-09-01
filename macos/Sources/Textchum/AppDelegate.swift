@@ -127,12 +127,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Deferred a runloop turn: the notification can fire while
             // AppKit is mid-layout (e.g. from a window-title update), and
             // rebuilding the list reentrantly trips NSTableView.
+            // Coalesced as well: a session restore posts once per tab,
+            // and one rebuild covers the burst.
+            if self?.sidebarRebuildPending == false {
+                self?.sidebarRebuildPending = true
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.sidebarRebuildPending = false
+                        self.rebuildSidebar()
+                        if !self.isTerminating {
+                            // The write itself is debounced: recording
+                            // the session on every dirty flip wrote a
+                            // file per keystroke burst.
+                            self.scheduleSessionSave()
+                        }
+                    }
+                }
+            }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    self?.rebuildSidebar()
-                    if self?.isTerminating != true {
-                        self?.saveSession()
-                    }
                     // Save-as gives untitled documents a path; recents
                     // track it (the controller cannot reach this list).
                     if let path = changedEditor?.coreDocument.path {
@@ -728,6 +742,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Not on the first activation, which is the launch itself — the
     /// tree is loading right then, and forgetting it doubles the work.
     private var hasActivatedOnce = false
+    /// One sidebar rebuild per burst of document notifications.
+    private var sidebarRebuildPending = false
+    private var sessionSaveTimer: Timer?
+
+    /// Writes the session soon, once, however many changes asked.
+    private func scheduleSessionSave() {
+        sessionSaveTimer?.invalidate()
+        sessionSaveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, !self.isTerminating else { return }
+                    self.saveSession()
+                }
+            }
+        }
+    }
     func applicationDidBecomeActive(_ notification: Notification) {
         guard hasActivatedOnce else {
             hasActivatedOnce = true
@@ -1566,6 +1597,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 )
             }
             workbench.sidebarModel.rebuild(entries: entries)
+            // The first rebuild settles the list: before it, empty
+            // means "still loading"; after it, empty means empty.
+            if !workbench.sidebarModel.settled {
+                workbench.sidebarModel.settled = true
+            }
             workbench.refreshTabs()
         }
     }

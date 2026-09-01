@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: textchum\n"
 "Report-Msgid-Bugs-To: https://github.com/perrito666/textchum/issues\n"
-"POT-Creation-Date: 2026-09-01 19:53+0200\n"
+"POT-Creation-Date: 2026-09-01 21:28+0200\n"
 "PO-Revision-Date: 2026-08-30 00:00+0000\n"
 "Last-Translator: Textchum\n"
 "Language-Team: French\n"
@@ -23,9 +23,9 @@ msgstr ""
 #: core/textchum-core/src/i18n.rs:348 core/textchum-core/src/i18n.rs:350
 #: core/textchum-core/src/i18n.rs:352 linux/src/keyboard.rs:24
 #: linux/src/main.rs:1523 linux/src/main.rs:1538 linux/src/workbench.rs:361
-#: macos/Sources/Textchum/AppDelegate.swift:2264
-#: macos/Sources/Textchum/SmokeTest.swift:1269
-#: macos/Sources/Textchum/SmokeTest.swift:1290
+#: macos/Sources/Textchum/AppDelegate.swift:2315
+#: macos/Sources/Textchum/SmokeTest.swift:1417
+#: macos/Sources/Textchum/SmokeTest.swift:1438
 msgid "Close Tab"
 msgstr "Fermer l'onglet"
 
@@ -34,9 +34,9 @@ msgid "New Tab"
 msgstr "Nouvel onglet"
 
 #: linux/src/keyboard.rs:17 linux/src/workbench.rs:259
-#: macos/Sources/Textchum/AppDelegate.swift:1974
-#: macos/Sources/Textchum/AppDelegate.swift:2231
-#: macos/Sources/Textchum/AppDelegate.swift:2232
+#: macos/Sources/Textchum/AppDelegate.swift:2025
+#: macos/Sources/Textchum/AppDelegate.swift:2282
+#: macos/Sources/Textchum/AppDelegate.swift:2283
 msgid "New with Format"
 msgstr "Nouveau avec format"
 
@@ -53,8 +53,8 @@ msgid "Changed in Branch"
 msgstr "Modifié dans la branche"
 
 #: linux/src/keyboard.rs:21 linux/src/workbench.rs:295
-#: linux/src/workbench.rs:1304 macos/Sources/Textchum/AppDelegate.swift:2288
-#: macos/Sources/Textchum/DocumentController.swift:3909
+#: linux/src/workbench.rs:1304 macos/Sources/Textchum/AppDelegate.swift:2339
+#: macos/Sources/Textchum/DocumentController.swift:3944
 msgid "Save"
 msgstr "Enregistrer"
 
@@ -63,52 +63,52 @@ msgid "Save As"
 msgstr "Enregistrer sous"
 
 #: linux/src/keyboard.rs:23 linux/src/workbench.rs:297
-#: macos/Sources/Textchum/AppDelegate.swift:2300
+#: macos/Sources/Textchum/AppDelegate.swift:2351
 msgid "Revert to Saved"
 msgstr "Revenir au fichier enregistré"
 
 #: linux/src/keyboard.rs:25 linux/src/workbench.rs:305
-#: macos/Sources/Textchum/AppDelegate.swift:2472
+#: macos/Sources/Textchum/AppDelegate.swift:2523
 msgid "Fold"
 msgstr "Replier"
 
 #: linux/src/keyboard.rs:26 linux/src/workbench.rs:306
-#: macos/Sources/Textchum/AppDelegate.swift:2478
+#: macos/Sources/Textchum/AppDelegate.swift:2529
 msgid "Fold All"
 msgstr "Tout replier"
 
 #: linux/src/keyboard.rs:27 linux/src/workbench.rs:307
-#: macos/Sources/Textchum/AppDelegate.swift:2484
+#: macos/Sources/Textchum/AppDelegate.swift:2535
 msgid "Unfold All"
 msgstr "Tout déplier"
 
 #: linux/src/keyboard.rs:28 linux/src/workbench.rs:308
-#: macos/Sources/Textchum/AppDelegate.swift:2491
+#: macos/Sources/Textchum/AppDelegate.swift:2542
 msgid "New Column"
 msgstr "Nouvelle colonne"
 
 #: linux/src/keyboard.rs:29 linux/src/workbench.rs:309
-#: macos/Sources/Textchum/AppDelegate.swift:2497
+#: macos/Sources/Textchum/AppDelegate.swift:2548
 msgid "Close Column"
 msgstr "Fermer la colonne"
 
 #: linux/src/keyboard.rs:30 linux/src/workbench.rs:310
-#: macos/Sources/Textchum/AppDelegate.swift:2503
+#: macos/Sources/Textchum/AppDelegate.swift:2554
 msgid "Second View"
 msgstr "Seconde vue"
 
 #: linux/src/keyboard.rs:31 linux/src/workbench.rs:311
-#: macos/Sources/Textchum/AppDelegate.swift:2509
+#: macos/Sources/Textchum/AppDelegate.swift:2560
 msgid "Close View"
 msgstr "Fermer la vue"
 
 #: linux/src/keyboard.rs:32 linux/src/workbench.rs:312
-#: macos/Sources/Textchum/AppDelegate.swift:2515
+#: macos/Sources/Textchum/AppDelegate.swift:2566
 msgid "Next Pane"
 msgstr "Panneau suivant"
 
 #: linux/src/keyboard.rs:33 linux/src/workbench.rs:362
-#: macos/Sources/Textchum/AppDelegate.swift:2280
+#: macos/Sources/Textchum/AppDelegate.swift:2331
 msgid "Reopen Closed Tab"
 msgstr "Rouvrir l'onglet fermé"
 
@@ -117,12 +117,12 @@ msgid "File Properties"
 msgstr "Propriétés du fichier"
 
 #: linux/src/keyboard.rs:35 linux/src/workbench.rs:299
-#: macos/Sources/Textchum/AppDelegate.swift:2331
+#: macos/Sources/Textchum/AppDelegate.swift:2382
 msgid "Undo"
 msgstr "Annuler"
 
 #: linux/src/keyboard.rs:36 linux/src/workbench.rs:300
-#: macos/Sources/Textchum/AppDelegate.swift:2337
+#: macos/Sources/Textchum/AppDelegate.swift:2388
 msgid "Redo"
 msgstr "Rétablir"
 
@@ -142,12 +142,12 @@ msgstr "Rechercher le précédent"
 msgid "Find and Replace"
 msgstr "Rechercher et remplacer"
 
-#: linux/src/keyboard.rs:41 macos/Sources/Textchum/AppDelegate.swift:2575
+#: linux/src/keyboard.rs:41 macos/Sources/Textchum/AppDelegate.swift:2626
 #: macos/Sources/Textchum/PathActions.swift:131
 msgid "Reveal in Tree"
 msgstr "Révéler dans l'arbre"
 
-#: linux/src/keyboard.rs:42 macos/Sources/Textchum/AppDelegate.swift:2427
+#: linux/src/keyboard.rs:42 macos/Sources/Textchum/AppDelegate.swift:2478
 msgid "Complete"
 msgstr "Compléter"
 
@@ -156,12 +156,12 @@ msgid "Find in Project"
 msgstr "Rechercher dans le projet"
 
 #: linux/src/keyboard.rs:44 linux/src/workbench.rs:333
-#: macos/Sources/Textchum/AppDelegate.swift:2356
+#: macos/Sources/Textchum/AppDelegate.swift:2407
 msgid "Jump to Definition"
 msgstr "Aller à la définition"
 
 #: linux/src/keyboard.rs:45 linux/src/workbench.rs:336
-#: macos/Sources/Textchum/AppDelegate.swift:2377
+#: macos/Sources/Textchum/AppDelegate.swift:2428
 msgid "Find References"
 msgstr "Rechercher les références"
 
@@ -169,48 +169,48 @@ msgstr "Rechercher les références"
 msgid "Code Actions"
 msgstr "Actions de code"
 
-#: linux/src/keyboard.rs:47 linux/src/workbench.rs:2963
-#: macos/Sources/Textchum/DocumentController.swift:1137
+#: linux/src/keyboard.rs:47 linux/src/workbench.rs:2972
+#: macos/Sources/Textchum/DocumentController.swift:1161
 msgid "Rename Symbol"
 msgstr "Renommer le symbole"
 
 #: linux/src/keyboard.rs:48 linux/src/workbench.rs:339
-#: macos/Sources/Textchum/AppDelegate.swift:2399
+#: macos/Sources/Textchum/AppDelegate.swift:2450
 msgid "Format Document"
 msgstr "Formater le document"
 
 #: linux/src/keyboard.rs:49 linux/src/workbench.rs:303
-#: macos/Sources/Textchum/AppDelegate.swift:2406
+#: macos/Sources/Textchum/AppDelegate.swift:2457
 msgid "Run Save Preprocessors"
 msgstr "Lancer les préprocesseurs d'enregistrement"
 
 #: linux/src/keyboard.rs:50
-#: macos/Sources/Textchum/DocumentController.swift:1054
+#: macos/Sources/Textchum/DocumentController.swift:1078
 msgid "Document Outline"
 msgstr "Plan du document"
 
 #: linux/src/keyboard.rs:51 linux/src/workbench.rs:334
-#: macos/Sources/Textchum/AppDelegate.swift:2363
+#: macos/Sources/Textchum/AppDelegate.swift:2414
 msgid "Go Back"
 msgstr "Retour"
 
 #: linux/src/keyboard.rs:52 linux/src/workbench.rs:335
-#: macos/Sources/Textchum/AppDelegate.swift:2370
+#: macos/Sources/Textchum/AppDelegate.swift:2421
 msgid "Go Forward"
 msgstr "Suivant"
 
-#: linux/src/keyboard.rs:53 linux/src/workbench.rs:2428
-#: macos/Sources/Textchum/DocumentController.swift:1648
+#: linux/src/keyboard.rs:53 linux/src/workbench.rs:2437
+#: macos/Sources/Textchum/DocumentController.swift:1672
 msgid "Go to Line"
 msgstr "Aller à la ligne"
 
 #: linux/src/keyboard.rs:54 linux/src/workbench.rs:346
-#: macos/Sources/Textchum/AppDelegate.swift:2413
+#: macos/Sources/Textchum/AppDelegate.swift:2464
 msgid "Go to Block Start"
 msgstr "Aller au début du bloc"
 
 #: linux/src/keyboard.rs:55 linux/src/workbench.rs:347
-#: macos/Sources/Textchum/AppDelegate.swift:2420
+#: macos/Sources/Textchum/AppDelegate.swift:2471
 msgid "Go to Block End"
 msgstr "Aller à la fin du bloc"
 
@@ -219,7 +219,7 @@ msgid "Blame Line"
 msgstr "Blâme de la ligne"
 
 #: linux/src/keyboard.rs:57 linux/src/workbench.rs:344
-#: macos/Sources/Textchum/AppDelegate.swift:2596
+#: macos/Sources/Textchum/AppDelegate.swift:2647
 msgid "Show Diagnostic for Line"
 msgstr "Voir le diagnostic de la ligne"
 
@@ -228,7 +228,7 @@ msgid "Diagnostics"
 msgstr "Diagnostics"
 
 #: linux/src/keyboard.rs:59 linux/src/workbench.rs:341
-#: macos/Sources/Textchum/AppDelegate.swift:2562
+#: macos/Sources/Textchum/AppDelegate.swift:2613
 msgid "Show Documentation for Symbol"
 msgstr "Voir la documentation du symbole"
 
@@ -236,7 +236,7 @@ msgstr "Voir la documentation du symbole"
 msgid "Command Palette"
 msgstr "Palette de commandes"
 
-#: linux/src/keyboard.rs:61 macos/Sources/Textchum/AppDelegate.swift:2529
+#: linux/src/keyboard.rs:61 macos/Sources/Textchum/AppDelegate.swift:2580
 msgid "Toggle Navigator"
 msgstr "Afficher ou masquer le navigateur"
 
@@ -252,7 +252,7 @@ msgstr "Afficher les chemins complets"
 msgid "Redraw Document"
 msgstr "Redessiner le document"
 
-#: linux/src/keyboard.rs:65 linux/src/workbench.rs:5345
+#: linux/src/keyboard.rs:65 linux/src/workbench.rs:5358
 msgid "Preferences"
 msgstr "Préférences"
 
@@ -261,7 +261,7 @@ msgid "Configured grammars: {}"
 msgstr "Grammaires configurées : {}"
 
 #: linux/src/main.rs:152 linux/src/main.rs:1527 linux/src/workbench.rs:1197
-#: macos/Sources/Textchum/SmokeTest.swift:1273
+#: macos/Sources/Textchum/SmokeTest.swift:1421
 msgid "Save changes to {}?"
 msgstr "Enregistrer les modifications de {} ?"
 
@@ -272,14 +272,14 @@ msgstr[0] "Enregistrer les modifications de {} fichier ?"
 msgstr[1] "Enregistrer les modifications de {} fichiers ?"
 
 #: linux/src/main.rs:160 linux/src/workbench.rs:1205
-#: linux/src/workbench.rs:1302 linux/src/workbench.rs:2436
-#: linux/src/workbench.rs:2864 linux/src/workbench.rs:2969
-#: linux/src/workbench.rs:4280 macos/Sources/Textchum/AppDelegate.swift:764
-#: macos/Sources/Textchum/DocumentController.swift:1144
-#: macos/Sources/Textchum/DocumentController.swift:1654
-#: macos/Sources/Textchum/DocumentController.swift:2946
-#: macos/Sources/Textchum/DocumentController.swift:3572
-#: macos/Sources/Textchum/DocumentController.swift:3910
+#: linux/src/workbench.rs:1302 linux/src/workbench.rs:2445
+#: linux/src/workbench.rs:2873 linux/src/workbench.rs:2978
+#: linux/src/workbench.rs:4293 macos/Sources/Textchum/AppDelegate.swift:810
+#: macos/Sources/Textchum/DocumentController.swift:1168
+#: macos/Sources/Textchum/DocumentController.swift:1678
+#: macos/Sources/Textchum/DocumentController.swift:2970
+#: macos/Sources/Textchum/DocumentController.swift:3596
+#: macos/Sources/Textchum/DocumentController.swift:3945
 msgid "Cancel"
 msgstr "Annuler"
 
@@ -288,45 +288,45 @@ msgid "Quit Without Saving"
 msgstr "Quitter sans enregistrer"
 
 #: linux/src/main.rs:162 linux/src/workbench.rs:1207
-#: macos/Sources/Textchum/AppDelegate.swift:763
+#: macos/Sources/Textchum/AppDelegate.swift:809
 msgid "Save All"
 msgstr "Tout enregistrer"
 
-#: linux/src/main.rs:1533 macos/Sources/Textchum/SmokeTest.swift:1277
+#: linux/src/main.rs:1533 macos/Sources/Textchum/SmokeTest.swift:1425
 msgid "A phrase nobody has translated"
 msgstr ""
 
 #: linux/src/main.rs:1542 linux/src/main.rs:1547
 #: macos/Sources/Textchum/Settings.swift:2255
-#: macos/Sources/Textchum/SmokeTest.swift:1283
-#: macos/Sources/Textchum/SmokeTest.swift:1284
-#: macos/Sources/Textchum/SmokeTest.swift:1291
+#: macos/Sources/Textchum/SmokeTest.swift:1431
+#: macos/Sources/Textchum/SmokeTest.swift:1432
+#: macos/Sources/Textchum/SmokeTest.swift:1439
 msgid "{} file"
 msgid_plural "{} files"
 msgstr[0] "{} fichier"
 msgstr[1] "{} fichiers"
 
-#: linux/src/page.rs:1678
+#: linux/src/page.rs:1678 macos/Sources/Textchum/PreviewWebView.swift:18
 msgid "Save as PDF…"
 msgstr "Enregistrer en PDF…"
 
-#: linux/src/page.rs:2322 macos/Sources/Textchum/DocumentController.swift:4039
+#: linux/src/page.rs:2322 macos/Sources/Textchum/DocumentController.swift:4074
 msgid "Add to Dictionary"
 msgstr "Ajouter au dictionnaire"
 
-#: linux/src/page.rs:2323 macos/Sources/Textchum/DocumentController.swift:4047
+#: linux/src/page.rs:2323 macos/Sources/Textchum/DocumentController.swift:4082
 msgid "Ignore While This Runs"
 msgstr "Ignorer tant que ceci tourne"
 
-#: linux/src/page.rs:2333 macos/Sources/Textchum/AppDelegate.swift:2142
+#: linux/src/page.rs:2333 macos/Sources/Textchum/AppDelegate.swift:2193
 msgid "Invert Case"
 msgstr "Inverser la casse"
 
-#: linux/src/page.rs:2334 macos/Sources/Textchum/AppDelegate.swift:2141
+#: linux/src/page.rs:2334 macos/Sources/Textchum/AppDelegate.swift:2192
 msgid "Title Case"
 msgstr "Casse de titre"
 
-#: linux/src/workbench.rs:258 macos/Sources/Textchum/AppDelegate.swift:2225
+#: linux/src/workbench.rs:258 macos/Sources/Textchum/AppDelegate.swift:2276
 msgid "New with Format…"
 msgstr "Nouveau avec format…"
 
@@ -334,100 +334,100 @@ msgstr "Nouveau avec format…"
 msgid "New Window"
 msgstr "Nouvelle fenêtre"
 
-#: linux/src/workbench.rs:261 linux/src/workbench.rs:5414
-#: macos/Sources/Textchum/AppDelegate.swift:2245
+#: linux/src/workbench.rs:261 linux/src/workbench.rs:5427
+#: macos/Sources/Textchum/AppDelegate.swift:2296
 #: macos/Sources/Textchum/Settings.swift:974
 msgid "Open…"
 msgstr "Ouvrir…"
 
-#: linux/src/workbench.rs:292 macos/Sources/Textchum/AppDelegate.swift:2256
-#: macos/Sources/Textchum/AppDelegate.swift:2257
+#: linux/src/workbench.rs:292 macos/Sources/Textchum/AppDelegate.swift:2307
+#: macos/Sources/Textchum/AppDelegate.swift:2308
 msgid "Open Recent"
 msgstr "Ouvrir un récent"
 
-#: linux/src/workbench.rs:293 macos/Sources/Textchum/AppDelegate.swift:2247
+#: linux/src/workbench.rs:293 macos/Sources/Textchum/AppDelegate.swift:2298
 msgid "Open Quickly…"
 msgstr "Ouvrir rapidement…"
 
-#: linux/src/workbench.rs:294 macos/Sources/Textchum/AppDelegate.swift:2249
+#: linux/src/workbench.rs:294 macos/Sources/Textchum/AppDelegate.swift:2300
 msgid "Changed in Branch…"
 msgstr "Modifié dans la branche…"
 
-#: linux/src/workbench.rs:296 macos/Sources/Textchum/AppDelegate.swift:2293
+#: linux/src/workbench.rs:296 macos/Sources/Textchum/AppDelegate.swift:2344
 msgid "Save As…"
 msgstr "Enregistrer sous…"
 
-#: linux/src/workbench.rs:302 macos/Sources/Textchum/AppDelegate.swift:2460
+#: linux/src/workbench.rs:302 macos/Sources/Textchum/AppDelegate.swift:2511
 msgid "Find in Project…"
 msgstr "Rechercher dans le projet…"
 
-#: linux/src/workbench.rs:304 macos/Sources/Textchum/AppDelegate.swift:2617
+#: linux/src/workbench.rs:304 macos/Sources/Textchum/AppDelegate.swift:2668
 msgid "Redraw"
 msgstr "Redessiner"
 
-#: linux/src/workbench.rs:330 macos/Sources/Textchum/AppDelegate.swift:2136
-#: macos/Sources/Textchum/AppDelegate.swift:2167
+#: linux/src/workbench.rs:330 macos/Sources/Textchum/AppDelegate.swift:2187
+#: macos/Sources/Textchum/AppDelegate.swift:2218
 msgid "Transform"
 msgstr "Transformer"
 
-#: linux/src/workbench.rs:337 macos/Sources/Textchum/AppDelegate.swift:2384
+#: linux/src/workbench.rs:337 macos/Sources/Textchum/AppDelegate.swift:2435
 msgid "Code Actions…"
 msgstr "Actions de code…"
 
-#: linux/src/workbench.rs:338 macos/Sources/Textchum/AppDelegate.swift:2392
+#: linux/src/workbench.rs:338 macos/Sources/Textchum/AppDelegate.swift:2443
 msgid "Rename Symbol…"
 msgstr "Renommer le symbole…"
 
-#: linux/src/workbench.rs:340 macos/Sources/Textchum/AppDelegate.swift:2582
+#: linux/src/workbench.rs:340 macos/Sources/Textchum/AppDelegate.swift:2633
 msgid "Document Outline…"
 msgstr "Plan du document…"
 
-#: linux/src/workbench.rs:342 macos/Sources/Textchum/AppDelegate.swift:2610
+#: linux/src/workbench.rs:342 macos/Sources/Textchum/AppDelegate.swift:2661
 msgid "Go to Line…"
 msgstr "Aller à la ligne…"
 
-#: linux/src/workbench.rs:343 macos/Sources/Textchum/AppDelegate.swift:2603
+#: linux/src/workbench.rs:343 macos/Sources/Textchum/AppDelegate.swift:2654
 msgid "Blame Line…"
 msgstr "Blâme de la ligne…"
 
-#: linux/src/workbench.rs:345 macos/Sources/Textchum/AppDelegate.swift:2589
+#: linux/src/workbench.rs:345 macos/Sources/Textchum/AppDelegate.swift:2640
 msgid "Diagnostics…"
 msgstr "Diagnostics…"
 
-#: linux/src/workbench.rs:348 macos/Sources/Textchum/AppDelegate.swift:2625
+#: linux/src/workbench.rs:348 macos/Sources/Textchum/AppDelegate.swift:2676
 msgid "Command Palette…"
 msgstr "Palette de commandes…"
 
-#: linux/src/workbench.rs:349 macos/Sources/Textchum/AppDelegate.swift:2569
+#: linux/src/workbench.rs:349 macos/Sources/Textchum/AppDelegate.swift:2620
 msgid "Language Server Status"
 msgstr "État du serveur de langage"
 
-#: linux/src/workbench.rs:351 macos/Sources/Textchum/AppDelegate.swift:2549
+#: linux/src/workbench.rs:351 macos/Sources/Textchum/AppDelegate.swift:2600
 msgid "Toggle Path Display"
 msgstr "Afficher ou masquer les chemins"
 
-#: linux/src/workbench.rs:353 macos/Sources/Textchum/AppDelegate.swift:2535
+#: linux/src/workbench.rs:353 macos/Sources/Textchum/AppDelegate.swift:2586
 msgid "Toggle Markdown Preview"
 msgstr "Afficher ou masquer l'aperçu Markdown"
 
-#: linux/src/workbench.rs:357 macos/Sources/Textchum/AppDelegate.swift:2200
+#: linux/src/workbench.rs:357 macos/Sources/Textchum/AppDelegate.swift:2251
 msgid "From VS Code…"
 msgstr "Depuis VS Code…"
 
-#: linux/src/workbench.rs:358 macos/Sources/Textchum/AppDelegate.swift:2205
+#: linux/src/workbench.rs:358 macos/Sources/Textchum/AppDelegate.swift:2256
 msgid "From TextMate…"
 msgstr "Depuis TextMate…"
 
-#: linux/src/workbench.rs:359 macos/Sources/Textchum/AppDelegate.swift:2197
-#: macos/Sources/Textchum/AppDelegate.swift:2198
+#: linux/src/workbench.rs:359 macos/Sources/Textchum/AppDelegate.swift:2248
+#: macos/Sources/Textchum/AppDelegate.swift:2249
 msgid "Import Theme"
 msgstr "Importer un thème"
 
-#: linux/src/workbench.rs:360 macos/Sources/Textchum/AppDelegate.swift:2177
+#: linux/src/workbench.rs:360 macos/Sources/Textchum/AppDelegate.swift:2228
 msgid "About Textchum"
 msgstr "À propos de Textchum"
 
-#: linux/src/workbench.rs:363 macos/Sources/Textchum/AppDelegate.swift:2268
+#: linux/src/workbench.rs:363 macos/Sources/Textchum/AppDelegate.swift:2319
 msgid "Close Window"
 msgstr "Fermer la fenêtre"
 
@@ -439,7 +439,7 @@ msgstr "Quitter"
 msgid "Find in file…"
 msgstr "Rechercher dans le fichier…"
 
-#: linux/src/workbench.rs:387 linux/src/workbench.rs:5845
+#: linux/src/workbench.rs:387 linux/src/workbench.rs:5858
 msgid "Match case"
 msgstr "Respecter la casse"
 
@@ -500,7 +500,7 @@ msgstr "Espaces : {}"
 msgid "Plain Text"
 msgstr "Texte brut"
 
-#: linux/src/workbench.rs:1699 macos/Sources/Textchum/Sidebar.swift:373
+#: linux/src/workbench.rs:1699 macos/Sources/Textchum/Sidebar.swift:444
 msgid "Open Files"
 msgstr "Fichiers ouverts"
 
@@ -512,714 +512,714 @@ msgstr "Aucun onglet fermé récemment à rouvrir."
 msgid "{} is no longer there."
 msgstr "{} n'est plus là."
 
-#: linux/src/workbench.rs:2257
+#: linux/src/workbench.rs:2266
 msgid "Not a Markdown document."
 msgstr "Ce n'est pas un document Markdown."
 
-#: linux/src/workbench.rs:2268
+#: linux/src/workbench.rs:2277
 msgid "No block opens on this line."
 msgstr "Aucun bloc ne s'ouvre sur cette ligne."
 
-#: linux/src/workbench.rs:2274
+#: linux/src/workbench.rs:2283
 msgid "Nothing here folds."
 msgstr "Rien ne se replie ici."
 
-#: linux/src/workbench.rs:2280
+#: linux/src/workbench.rs:2289
 msgid "Nothing is folded."
 msgstr "Rien n'est replié."
 
-#: linux/src/workbench.rs:2288
+#: linux/src/workbench.rs:2297
 msgid "This window has one column."
 msgstr "Cette fenêtre n'a qu'une colonne."
 
-#: linux/src/workbench.rs:2301
+#: linux/src/workbench.rs:2310
 msgid "There is one pane in this window."
 msgstr "Il n'y a qu'un panneau dans cette fenêtre."
 
-#: linux/src/workbench.rs:2315 linux/src/workbench.rs:2904
-#: linux/src/workbench.rs:2932 linux/src/workbench.rs:2959
-#: linux/src/workbench.rs:3055
+#: linux/src/workbench.rs:2324 linux/src/workbench.rs:2913
+#: linux/src/workbench.rs:2941 linux/src/workbench.rs:2968
+#: linux/src/workbench.rs:3064
 msgid "Save the file first — untitled documents have no server."
 msgstr ""
 "Enregistrez d'abord le fichier — un document sans titre n'a pas de serveur."
 
-#: linux/src/workbench.rs:2328 linux/src/workbench.rs:2914
-#: linux/src/workbench.rs:2942 linux/src/workbench.rs:2990
-#: linux/src/workbench.rs:3063
+#: linux/src/workbench.rs:2337 linux/src/workbench.rs:2923
+#: linux/src/workbench.rs:2951 linux/src/workbench.rs:2999
+#: linux/src/workbench.rs:3072
 msgid "No language server is running for this document."
 msgstr "Aucun serveur de langage ne tourne pour ce document."
 
-#: linux/src/workbench.rs:2354
+#: linux/src/workbench.rs:2363
 msgid "No definition found."
 msgstr "Aucune définition trouvée."
 
-#: linux/src/workbench.rs:2375 linux/src/workbench.rs:3399
+#: linux/src/workbench.rs:2384 linux/src/workbench.rs:3408
 msgid "Save the file first — an untitled document has no path."
 msgstr ""
 "Enregistrez d'abord le fichier — un document sans titre n'a pas de chemin."
 
-#: linux/src/workbench.rs:2437
-#: macos/Sources/Textchum/DocumentController.swift:1653
+#: linux/src/workbench.rs:2446
+#: macos/Sources/Textchum/DocumentController.swift:1677
 msgid "Go"
 msgstr "Aller"
 
-#: linux/src/workbench.rs:2450
+#: linux/src/workbench.rs:2459
 msgid "Nothing in that names a line."
 msgstr "Rien là-dedans ne nomme une ligne."
 
-#: linux/src/workbench.rs:2482
+#: linux/src/workbench.rs:2491
 msgid "Save the file first — git has nothing to blame yet."
 msgstr "Enregistrez d'abord le fichier : git n'a encore rien à attribuer."
 
-#: linux/src/workbench.rs:2493
+#: linux/src/workbench.rs:2502
 msgid "git could not blame this line: {}"
 msgstr "git n'a pas pu attribuer cette ligne : {}"
 
-#: linux/src/workbench.rs:2502 linux/src/workbench.rs:2530
+#: linux/src/workbench.rs:2511 linux/src/workbench.rs:2539
 msgid "No diagnostics for an unsaved document."
 msgstr "Aucun diagnostic pour un document non enregistré."
 
-#: linux/src/workbench.rs:2516
+#: linux/src/workbench.rs:2525
 msgid "Nothing reported on this line."
 msgstr "Rien de signalé sur cette ligne."
 
-#: linux/src/workbench.rs:2522 linux/src/workbench.rs:5188
+#: linux/src/workbench.rs:2531 linux/src/workbench.rs:5201
 msgid "Close"
 msgstr "Fermer"
 
-#: linux/src/workbench.rs:2542
+#: linux/src/workbench.rs:2551
 msgid "Nothing reported in this document."
 msgstr "Rien de signalé dans ce document."
 
-#: linux/src/workbench.rs:2717
+#: linux/src/workbench.rs:2726
 msgid "The text moved — nothing was replaced."
 msgstr "Le texte a bougé : rien n'a été remplacé."
 
-#: linux/src/workbench.rs:2754
+#: linux/src/workbench.rs:2763
 msgid "Not in a git repository with a remote."
 msgstr "Pas dans un dépôt git avec un distant."
 
-#: linux/src/workbench.rs:2779
+#: linux/src/workbench.rs:2788
 msgid "No file browser answered."
 msgstr "Aucun explorateur de fichiers n'a répondu."
 
-#: linux/src/workbench.rs:2837
+#: linux/src/workbench.rs:2846
 msgid "No save preprocessors configured for this language."
 msgstr "Aucun préprocesseur d'enregistrement configuré pour ce langage."
 
-#: linux/src/workbench.rs:2853
+#: linux/src/workbench.rs:2862
 msgid "Untitled documents have no file to revert to."
 msgstr "Un document sans titre n'a aucun fichier où revenir."
 
-#: linux/src/workbench.rs:2861
+#: linux/src/workbench.rs:2870
 msgid "Revert to Saved?"
 msgstr "Revenir au fichier enregistré ?"
 
-#: linux/src/workbench.rs:2862
+#: linux/src/workbench.rs:2871
 msgid "Local changes will be replaced with the file on disk."
 msgstr ""
 "Les modifications locales seront remplacées par le fichier sur le disque."
 
-#: linux/src/workbench.rs:2865
-#: macos/Sources/Textchum/DocumentController.swift:2945
+#: linux/src/workbench.rs:2874
+#: macos/Sources/Textchum/DocumentController.swift:2969
 msgid "Revert"
 msgstr "Revenir"
 
-#: linux/src/workbench.rs:2884
+#: linux/src/workbench.rs:2893
 msgid "Nowhere to go back to."
 msgstr "Nulle part où revenir."
 
-#: linux/src/workbench.rs:2893
+#: linux/src/workbench.rs:2902
 msgid "Nowhere to go forward to."
 msgstr "Nulle part où avancer."
 
-#: linux/src/workbench.rs:2965
+#: linux/src/workbench.rs:2974
 msgid "New name"
 msgstr "Nouveau nom"
 
-#: linux/src/workbench.rs:2970
-#: macos/Sources/Textchum/DocumentController.swift:1143
+#: linux/src/workbench.rs:2979
+#: macos/Sources/Textchum/DocumentController.swift:1167
 msgid "Rename"
 msgstr "Renommer"
 
-#: linux/src/workbench.rs:3074
+#: linux/src/workbench.rs:3083
 msgid "The server offered no outline."
 msgstr "Le serveur n'a proposé aucun plan."
 
-#: linux/src/workbench.rs:3134
+#: linux/src/workbench.rs:3143
 msgid "Nothing else refers to this symbol."
 msgstr "Rien d'autre ne fait référence à ce symbole."
 
-#: linux/src/workbench.rs:3220
+#: linux/src/workbench.rs:3229
 msgid "Copy Name"
 msgstr "Copier le nom"
 
-#: linux/src/workbench.rs:3222 macos/Sources/Textchum/PathActions.swift:141
+#: linux/src/workbench.rs:3231 macos/Sources/Textchum/PathActions.swift:141
 msgid "Copy Relative Path"
 msgstr "Copier le chemin relatif"
 
-#: linux/src/workbench.rs:3226 macos/Sources/Textchum/PathActions.swift:144
+#: linux/src/workbench.rs:3235 macos/Sources/Textchum/PathActions.swift:144
 msgid "Copy Absolute Path"
 msgstr "Copier le chemin absolu"
 
-#: linux/src/workbench.rs:3230
+#: linux/src/workbench.rs:3239
 msgid "Open Containing Folder"
 msgstr "Ouvrir le dossier contenant"
 
-#: linux/src/workbench.rs:3235 macos/Sources/Textchum/PathActions.swift:148
+#: linux/src/workbench.rs:3244 macos/Sources/Textchum/PathActions.swift:148
 msgid "Copy Forge URL"
 msgstr "Copier l'URL de la forge"
 
-#: linux/src/workbench.rs:3242
+#: linux/src/workbench.rs:3251
 msgid "Move to New Window"
 msgstr "Déplacer vers une nouvelle fenêtre"
 
-#: linux/src/workbench.rs:3330
+#: linux/src/workbench.rs:3339
 msgid "No enclosing block here."
 msgstr "Aucun bloc englobant ici."
 
-#: linux/src/workbench.rs:3422
+#: linux/src/workbench.rs:3431
 msgid "Language"
 msgstr "Langage"
 
-#: linux/src/workbench.rs:3443 linux/src/workbench.rs:5602
+#: linux/src/workbench.rs:3452 linux/src/workbench.rs:5615
 msgid "Tab width"
 msgstr "Largeur de tabulation"
 
-#: linux/src/workbench.rs:3444
+#: linux/src/workbench.rs:3453
 msgid "0 follows the project"
 msgstr "0 suit le projet"
 
-#: linux/src/workbench.rs:3449
+#: linux/src/workbench.rs:3458
 msgid "Indent with"
 msgstr "Indenter avec"
 
-#: linux/src/workbench.rs:3605
+#: linux/src/workbench.rs:3614
 msgid "Type to filter…"
 msgstr "Tapez pour filtrer…"
 
-#: linux/src/workbench.rs:3725
+#: linux/src/workbench.rs:3734
 msgid "Type a command…"
 msgstr "Tapez une commande…"
 
-#: linux/src/workbench.rs:4095
+#: linux/src/workbench.rs:4105
 msgid "Could not save the document."
 msgstr "Le document n'a pas pu être enregistré."
 
-#: linux/src/workbench.rs:4281
-#: macos/Sources/Textchum/DocumentController.swift:3571
+#: linux/src/workbench.rs:4294
+#: macos/Sources/Textchum/DocumentController.swift:3595
 msgid "Save Without Preprocessing"
 msgstr "Enregistrer sans préprocesser"
 
-#: linux/src/workbench.rs:4310 linux/src/workbench.rs:4322
+#: linux/src/workbench.rs:4323 linux/src/workbench.rs:4335
 msgid "No references found."
 msgstr "Aucune référence trouvée."
 
-#: linux/src/workbench.rs:4334
-#: macos/Sources/Textchum/DocumentController.swift:1443
+#: linux/src/workbench.rs:4347
+#: macos/Sources/Textchum/DocumentController.swift:1467
 msgid "The language server has no action for this place."
 msgstr "Le serveur de langage n'a aucune action pour cet endroit."
 
-#: linux/src/workbench.rs:4383
+#: linux/src/workbench.rs:4396
 msgid "The language server would not run that action."
 msgstr "Le serveur de langage n'a pas exécuté cette action."
 
-#: linux/src/workbench.rs:4392
+#: linux/src/workbench.rs:4405
 msgid "The language server would not finish that action."
 msgstr "Le serveur de langage n'a pas terminé cette action."
 
-#: linux/src/workbench.rs:4413
-#: macos/Sources/Textchum/DocumentController.swift:1489
+#: linux/src/workbench.rs:4426
+#: macos/Sources/Textchum/DocumentController.swift:1513
 msgid "The language server had no edit for that action."
 msgstr "Le serveur de langage n'avait aucune modification pour cette action."
 
-#: linux/src/workbench.rs:4668
+#: linux/src/workbench.rs:4681
 msgid "The server had no rename to offer."
 msgstr "Le serveur n'a proposé aucun renommage."
 
-#: linux/src/workbench.rs:4730
+#: linux/src/workbench.rs:4743
 msgid "Not inside a git repository."
 msgstr "Pas dans un dépôt git."
 
-#: linux/src/workbench.rs:4735
+#: linux/src/workbench.rs:4748
 msgid "The branch touches no files."
 msgstr "La branche ne touche aucun fichier."
 
-#: linux/src/workbench.rs:4764 macos/Sources/Textchum/QuickFinderPanel.swift:31
+#: linux/src/workbench.rs:4777 macos/Sources/Textchum/QuickFinderPanel.swift:31
 msgid "fuzzy file name…"
 msgstr "nom de fichier approximatif…"
 
-#: linux/src/workbench.rs:4912 macos/Sources/Textchum/QuickFinderPanel.swift:32
+#: linux/src/workbench.rs:4925 macos/Sources/Textchum/QuickFinderPanel.swift:32
 msgid "regular expression…"
 msgstr "expression régulière…"
 
-#: linux/src/workbench.rs:5087
+#: linux/src/workbench.rs:5100
 msgid "filter text…"
 msgstr "texte à filtrer…"
 
-#: linux/src/workbench.rs:5190 macos/Sources/Textchum/BlamePanel.swift:99
+#: linux/src/workbench.rs:5203 macos/Sources/Textchum/BlamePanel.swift:99
 msgid "Copy Commit"
 msgstr "Copier le commit"
 
-#: linux/src/workbench.rs:5275
+#: linux/src/workbench.rs:5288
 msgid "Nothing was imported. {}"
 msgstr "Rien n'a été importé. {}"
 
-#: linux/src/workbench.rs:5353 macos/Sources/Textchum/Settings.swift:813
+#: linux/src/workbench.rs:5366 macos/Sources/Textchum/Settings.swift:813
 msgid "General"
 msgstr "Général"
 
-#: linux/src/workbench.rs:5357 linux/src/workbench.rs:5359
+#: linux/src/workbench.rs:5370 linux/src/workbench.rs:5372
 msgid "Appearance"
 msgstr "Apparence"
 
-#: linux/src/workbench.rs:5384
+#: linux/src/workbench.rs:5397
 msgid "Theme"
 msgstr "Thème"
 
-#: linux/src/workbench.rs:5411
+#: linux/src/workbench.rs:5424
 msgid "File icons"
 msgstr "Icônes de fichier"
 
-#: linux/src/workbench.rs:5588
+#: linux/src/workbench.rs:5601
 msgid "Editor"
 msgstr "Éditeur"
 
-#: linux/src/workbench.rs:5590
+#: linux/src/workbench.rs:5603
 msgid "Font size"
 msgstr "Corps de la police"
 
-#: linux/src/workbench.rs:5614 macos/Sources/Textchum/Settings.swift:1010
+#: linux/src/workbench.rs:5627 macos/Sources/Textchum/Settings.swift:1010
 msgid "Show line numbers"
 msgstr "Afficher les numéros de ligne"
 
-#: linux/src/workbench.rs:5626 macos/Sources/Textchum/Settings.swift:1011
+#: linux/src/workbench.rs:5639 macos/Sources/Textchum/Settings.swift:1011
 msgid "Pin enclosing context lines"
 msgstr "Épingler les lignes de contexte"
 
-#: linux/src/workbench.rs:5638 macos/Sources/Textchum/Settings.swift:1012
+#: linux/src/workbench.rs:5651 macos/Sources/Textchum/Settings.swift:1012
 msgid "Gutter marks compare against"
 msgstr "Les marques de la marge comparent avec"
 
-#: linux/src/workbench.rs:5640 macos/Sources/Textchum/Settings.swift:1013
+#: linux/src/workbench.rs:5653 macos/Sources/Textchum/Settings.swift:1013
 #: macos/Sources/Textchum/Settings.swift:1246
 msgid "The last commit"
 msgstr "Le dernier commit"
 
-#: linux/src/workbench.rs:5640 macos/Sources/Textchum/Settings.swift:1014
+#: linux/src/workbench.rs:5653 macos/Sources/Textchum/Settings.swift:1014
 #: macos/Sources/Textchum/Settings.swift:1247
 msgid "Where the branch forked"
 msgstr "Là où la branche a bifurqué"
 
-#: linux/src/workbench.rs:5683 macos/Sources/Textchum/Settings.swift:1017
+#: linux/src/workbench.rs:5696 macos/Sources/Textchum/Settings.swift:1017
 msgid "Merge-base branches, most likely first"
 msgstr "Branches de base, la plus probable d'abord"
 
-#: linux/src/workbench.rs:5686 macos/Sources/Textchum/Settings.swift:1018
+#: linux/src/workbench.rs:5699 macos/Sources/Textchum/Settings.swift:1018
 msgid "Tried in order when git does not name a default branch."
 msgstr "Essayées dans l'ordre quand git ne nomme pas de branche par défaut."
 
-#: linux/src/workbench.rs:5695 macos/Sources/Textchum/Settings.swift:1029
+#: linux/src/workbench.rs:5708 macos/Sources/Textchum/Settings.swift:1029
 msgid "Keep files open when their window closes"
 msgstr "Garder les fichiers ouverts quand leur fenêtre se ferme"
 
-#: linux/src/workbench.rs:5710 macos/Sources/Textchum/Settings.swift:2172
+#: linux/src/workbench.rs:5723 macos/Sources/Textchum/Settings.swift:2172
 msgid "Keep each project's state with the checkout"
 msgstr "Garder l'état de chaque projet avec la copie de travail"
 
-#: linux/src/workbench.rs:5730 macos/Sources/Textchum/Settings.swift:1030
+#: linux/src/workbench.rs:5743 macos/Sources/Textchum/Settings.swift:1030
 msgid "Interface language"
 msgstr "Langue de l'interface"
 
-#: linux/src/workbench.rs:5731 macos/Sources/Textchum/Settings.swift:1036
+#: linux/src/workbench.rs:5744 macos/Sources/Textchum/Settings.swift:1036
 msgid "Restart to apply"
 msgstr "Redémarrer pour appliquer"
 
-#: linux/src/workbench.rs:5733 macos/Sources/Textchum/Settings.swift:935
+#: linux/src/workbench.rs:5746 macos/Sources/Textchum/Settings.swift:935
 #: macos/Sources/Textchum/Settings.swift:1031
 msgid "System"
 msgstr "Du système"
 
-#: linux/src/workbench.rs:5766 macos/Sources/Textchum/Settings.swift:2180
+#: linux/src/workbench.rs:5779 macos/Sources/Textchum/Settings.swift:2180
 msgid "Records folder"
 msgstr "Dossier des registres"
 
-#: linux/src/workbench.rs:5784 macos/Sources/Textchum/Settings.swift:2188
+#: linux/src/workbench.rs:5797 macos/Sources/Textchum/Settings.swift:2188
 msgid "Manage…"
 msgstr "Gérer…"
 
-#: linux/src/workbench.rs:5794 macos/Sources/Textchum/Settings.swift:2193
+#: linux/src/workbench.rs:5807 macos/Sources/Textchum/Settings.swift:2193
 msgid "Forget records at launch"
 msgstr "Oublier les registres au démarrage"
 
-#: linux/src/workbench.rs:5813
+#: linux/src/workbench.rs:5826
 msgid "Keep records for"
 msgstr "Conserver les registres pendant"
 
-#: linux/src/workbench.rs:5814
+#: linux/src/workbench.rs:5827
 msgid "Days since a record was last written; zero keeps them"
 msgstr "Jours depuis la dernière écriture d'un registre ; zéro les garde"
 
-#: linux/src/workbench.rs:5828 macos/Sources/Textchum/Settings.swift:1028
+#: linux/src/workbench.rs:5841 macos/Sources/Textchum/Settings.swift:1028
 msgid "Hover documentation"
 msgstr "Documentation au survol"
 
-#: linux/src/workbench.rs:5829
+#: linux/src/workbench.rs:5842
 msgid "Show server documentation when the mouse rests on a symbol"
 msgstr ""
 "Afficher la documentation du serveur quand la souris s'arrête sur un symbole"
 
-#: linux/src/workbench.rs:5841
+#: linux/src/workbench.rs:5854
 msgid "Mark the selected word elsewhere"
 msgstr "Marquer le mot sélectionné ailleurs"
 
-#: linux/src/workbench.rs:5842
+#: linux/src/workbench.rs:5855
 msgid "Selecting a whole word marks its other occurrences on screen"
 msgstr "Sélectionner un mot entier marque ses autres occurrences à l'écran"
 
-#: linux/src/workbench.rs:5849
+#: linux/src/workbench.rs:5862
 msgid "Whole words only"
 msgstr "Mots entiers seulement"
 
-#: linux/src/workbench.rs:5850
+#: linux/src/workbench.rs:5863
 msgid "Off marks `item` inside `items` too"
 msgstr "Désactivé marque aussi `item` dans `items`"
 
-#: linux/src/workbench.rs:5892
+#: linux/src/workbench.rs:5905
 msgid "Spell check prose (off, auto, or dictionaries like en_US, es_ES)"
 msgstr ""
 "Vérifier l'orthographe de la prose (off, auto, ou des dictionnaires comme "
 "en_US, fr_FR)"
 
-#: linux/src/workbench.rs:5996
+#: linux/src/workbench.rs:6009
 msgid "Autosave after (seconds)"
 msgstr "Enregistrement automatique après (secondes)"
 
-#: linux/src/workbench.rs:6021 macos/Sources/Textchum/Settings.swift:822
+#: linux/src/workbench.rs:6034 macos/Sources/Textchum/Settings.swift:822
 msgid "Language Servers"
 msgstr "Serveurs de langage"
 
-#: linux/src/workbench.rs:6024
+#: linux/src/workbench.rs:6037
 msgid "Default server commands"
 msgstr "Commandes de serveur par défaut"
 
-#: linux/src/workbench.rs:6114 linux/src/workbench.rs:6392
+#: linux/src/workbench.rs:6127 linux/src/workbench.rs:6405
 msgid "Per-project overrides"
 msgstr "Réglages par projet"
 
-#: linux/src/workbench.rs:6171
+#: linux/src/workbench.rs:6184
 msgid "project root path"
 msgstr "chemin de la racine du projet"
 
-#: linux/src/workbench.rs:6173
+#: linux/src/workbench.rs:6186
 msgid "language"
 msgstr "langage"
 
-#: linux/src/workbench.rs:6176
+#: linux/src/workbench.rs:6189
 msgid "command"
 msgstr "commande"
 
-#: linux/src/workbench.rs:6205 linux/src/workbench.rs:6306
+#: linux/src/workbench.rs:6218 linux/src/workbench.rs:6319
 msgid "language (e.g. python)"
 msgstr "langage (par exemple python)"
 
-#: linux/src/workbench.rs:6208
+#: linux/src/workbench.rs:6221
 msgid "command (e.g. pylsp)"
 msgstr "commande (par exemple pylsp)"
 
-#: linux/src/workbench.rs:6238
+#: linux/src/workbench.rs:6251
 msgid "Save preprocessors"
 msgstr "Préprocesseurs d'enregistrement"
 
-#: linux/src/workbench.rs:6304
+#: linux/src/workbench.rs:6317
 msgid "project root (empty = default for all projects)"
 msgstr "racine du projet (vide = par défaut pour tous)"
 
-#: linux/src/workbench.rs:6308
+#: linux/src/workbench.rs:6321
 msgid "commands (e.g. ruff check --fix - ;; black -)"
 msgstr "commandes (par exemple ruff check --fix - ;; black -)"
 
-#: linux/src/workbench.rs:6341 macos/Sources/Textchum/Settings.swift:819
+#: linux/src/workbench.rs:6354 macos/Sources/Textchum/Settings.swift:819
 msgid "Projects"
 msgstr "Projets"
 
-#: linux/src/workbench.rs:6344
+#: linux/src/workbench.rs:6357
 msgid "Defaults (all projects)"
 msgstr "Par défaut (tous les projets)"
 
-#: linux/src/workbench.rs:6416
+#: linux/src/workbench.rs:6429
 msgid "copy settings from this project"
 msgstr "copier les réglages de ce projet"
 
-#: linux/src/workbench.rs:6547
+#: linux/src/workbench.rs:6560
 msgid "start from this project's settings (optional)"
 msgstr "partir des réglages de ce projet (facultatif)"
 
-#: linux/src/workbench.rs:6555
+#: linux/src/workbench.rs:6568
 msgid "add project root path"
 msgstr "ajouter le chemin de la racine du projet"
 
-#: linux/src/workbench.rs:6613 macos/Sources/Textchum/Settings.swift:1796
+#: linux/src/workbench.rs:6626 macos/Sources/Textchum/Settings.swift:1796
 msgid "Remove missing"
 msgstr "Supprimer les manquants"
 
-#: linux/src/workbench.rs:6636
+#: linux/src/workbench.rs:6649
 msgid "Hide presets"
 msgstr "Masquer les profils"
 
-#: linux/src/workbench.rs:6659
+#: linux/src/workbench.rs:6672
 msgid "new preset name"
 msgstr "nom du nouveau profil"
 
-#: linux/src/workbench.rs:6680
+#: linux/src/workbench.rs:6693
 msgid "Restore built-in presets"
 msgstr "Restaurer les profils d'origine"
 
-#: linux/src/workbench.rs:6732
+#: linux/src/workbench.rs:6745
 msgid "Choose an icon pack"
 msgstr "Choisir un jeu d'icônes"
 
-#: linux/src/workbench.rs:6781 macos/Sources/Textchum/Settings.swift:816
+#: linux/src/workbench.rs:6794 macos/Sources/Textchum/Settings.swift:816
 msgid "Keyboard"
 msgstr "Clavier"
 
-#: linux/src/workbench.rs:6785 linux/src/workbench.rs:6799
+#: linux/src/workbench.rs:6798 linux/src/workbench.rs:6812
 #: macos/Sources/Textchum/Settings.swift:1441
 msgid "Profile"
 msgstr "Profil"
 
-#: linux/src/workbench.rs:6827
+#: linux/src/workbench.rs:6840
 msgid "save what is in force as a profile named"
 msgstr "enregistrer ce qui est en vigueur comme un profil nommé"
 
-#: linux/src/workbench.rs:6861 macos/Sources/Textchum/Settings.swift:1448
+#: linux/src/workbench.rs:6874 macos/Sources/Textchum/Settings.swift:1448
 msgid "Reset changes"
 msgstr "Annuler les modifications"
 
-#: linux/src/workbench.rs:6862
+#: linux/src/workbench.rs:6875
 msgid "Give every command back the shortcut its profile says it has"
 msgstr "Rendre à chaque commande le raccourci que son profil indique"
 
-#: linux/src/workbench.rs:6878
+#: linux/src/workbench.rs:6891
 msgid "Commands"
 msgstr "Commandes"
 
-#: linux/src/workbench.rs:7212 macos/Sources/Textchum/Settings.swift:2234
+#: linux/src/workbench.rs:7225 macos/Sources/Textchum/Settings.swift:2234
 msgid "Project Records"
 msgstr "Registres de projet"
 
-#: linux/src/workbench.rs:7221
+#: linux/src/workbench.rs:7234
 msgid "Records"
 msgstr "Registres"
 
-#: linux/src/workbench.rs:7227
+#: linux/src/workbench.rs:7240
 msgid "No project has anything recorded yet"
 msgstr "Aucun projet n'a encore quoi que ce soit de noté"
 
-#: linux/src/workbench.rs:7247
+#: linux/src/workbench.rs:7260
 msgid "Forget this record"
 msgstr "Oublier ce registre"
 
-#: linux/src/workbench.rs:7273
+#: linux/src/workbench.rs:7286
 msgid "Forget"
 msgstr "Oublier"
 
-#: macos/Sources/Textchum/AppDelegate.swift:418
+#: macos/Sources/Textchum/AppDelegate.swift:439
 msgid "Settings file could not be read"
 msgstr "Le fichier de réglages n'a pas pu être lu"
 
-#: macos/Sources/Textchum/AppDelegate.swift:752
-#: macos/Sources/Textchum/DocumentController.swift:3100
+#: macos/Sources/Textchum/AppDelegate.swift:798
+#: macos/Sources/Textchum/DocumentController.swift:3124
 msgid "Untitled"
 msgstr "Sans titre"
 
-#: macos/Sources/Textchum/AppDelegate.swift:758
-#: macos/Sources/Textchum/DocumentController.swift:3907
+#: macos/Sources/Textchum/AppDelegate.swift:804
+#: macos/Sources/Textchum/DocumentController.swift:3942
 msgid "Do you want to save the changes made to {}?"
 msgstr "Enregistrer les modifications faites à {} ?"
 
-#: macos/Sources/Textchum/AppDelegate.swift:760
+#: macos/Sources/Textchum/AppDelegate.swift:806
 msgid "Do you want to save the changes made to {} file?"
 msgid_plural "Do you want to save the changes made to {} files?"
 msgstr[0] "Enregistrer les modifications faites à {} fichier ?"
 msgstr[1] "Enregistrer les modifications faites à {} fichiers ?"
 
-#: macos/Sources/Textchum/AppDelegate.swift:765
-#: macos/Sources/Textchum/DocumentController.swift:3911
+#: macos/Sources/Textchum/AppDelegate.swift:811
+#: macos/Sources/Textchum/DocumentController.swift:3946
 msgid "Don’t Save"
 msgstr "Ne pas enregistrer"
 
-#: macos/Sources/Textchum/AppDelegate.swift:806
+#: macos/Sources/Textchum/AppDelegate.swift:852
 msgid "No language server for this project"
 msgstr "Aucun serveur de langage pour ce projet"
 
-#: macos/Sources/Textchum/AppDelegate.swift:828
+#: macos/Sources/Textchum/AppDelegate.swift:874
 msgid "Language server failed to start"
 msgstr "Le serveur de langage n'a pas démarré"
 
-#: macos/Sources/Textchum/AppDelegate.swift:1452
+#: macos/Sources/Textchum/AppDelegate.swift:1498
 msgid "The icon pack could not be used"
 msgstr "Le jeu d'icônes n'a pas pu être utilisé"
 
-#: macos/Sources/Textchum/AppDelegate.swift:1666
+#: macos/Sources/Textchum/AppDelegate.swift:1717
 msgid "This Window"
 msgstr "Cette fenêtre"
 
-#: macos/Sources/Textchum/AppDelegate.swift:1864
+#: macos/Sources/Textchum/AppDelegate.swift:1915
 msgid "No Recent Files"
 msgstr "Aucun fichier récent"
 
-#: macos/Sources/Textchum/AppDelegate.swift:1870
+#: macos/Sources/Textchum/AppDelegate.swift:1921
 msgid "Clear Menu"
 msgstr "Vider le menu"
 
-#: macos/Sources/Textchum/AppDelegate.swift:1974
+#: macos/Sources/Textchum/AppDelegate.swift:2025
 msgid "language…"
 msgstr "langage…"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2139
+#: macos/Sources/Textchum/AppDelegate.swift:2190
 msgid "Upper Case"
 msgstr "Majuscules"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2140
+#: macos/Sources/Textchum/AppDelegate.swift:2191
 msgid "Lower Case"
 msgstr "Minuscules"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2145
+#: macos/Sources/Textchum/AppDelegate.swift:2196
 msgid "Sort Lines"
 msgstr "Trier les lignes"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2146
+#: macos/Sources/Textchum/AppDelegate.swift:2197
 msgid "Sort Lines Reversed"
 msgstr "Trier les lignes à l'envers"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2147
+#: macos/Sources/Textchum/AppDelegate.swift:2198
 msgid "Remove Duplicate Lines"
 msgstr "Supprimer les lignes en double"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2148
+#: macos/Sources/Textchum/AppDelegate.swift:2199
 msgid "Join Lines"
 msgstr "Joindre les lignes"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2149
+#: macos/Sources/Textchum/AppDelegate.swift:2200
 msgid "Trim Trailing Whitespace"
 msgstr "Supprimer les espaces en fin de ligne"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2152
+#: macos/Sources/Textchum/AppDelegate.swift:2203
 msgid "Convert to Unix Line Endings (LF)"
 msgstr "Convertir en fins de ligne Unix (LF)"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2153
+#: macos/Sources/Textchum/AppDelegate.swift:2204
 msgid "Convert to Windows Line Endings (CRLF)"
 msgstr "Convertir en fins de ligne Windows (CRLF)"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2183
+#: macos/Sources/Textchum/AppDelegate.swift:2234
 msgid "Settings…"
 msgstr "Réglages…"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2188
+#: macos/Sources/Textchum/AppDelegate.swift:2239
 msgid "Install chum Command…"
 msgstr "Installer la commande chum…"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2193
+#: macos/Sources/Textchum/AppDelegate.swift:2244
 msgid "Open Themes Folder"
 msgstr "Ouvrir le dossier des thèmes"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2213
+#: macos/Sources/Textchum/AppDelegate.swift:2264
 msgid "Quit Textchum"
 msgstr "Quitter Textchum"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2221
+#: macos/Sources/Textchum/AppDelegate.swift:2272
 msgid "File"
 msgstr "Fichier"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2223
+#: macos/Sources/Textchum/AppDelegate.swift:2274
 msgid "New"
 msgstr "Nouveau"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2274
+#: macos/Sources/Textchum/AppDelegate.swift:2325
 msgid "Get Info"
 msgstr "Informations"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2309
-#: macos/Sources/Textchum/AppDelegate.swift:2310
+#: macos/Sources/Textchum/AppDelegate.swift:2360
+#: macos/Sources/Textchum/AppDelegate.swift:2361
 msgid "Copy Path"
 msgstr "Copier le chemin"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2312
+#: macos/Sources/Textchum/AppDelegate.swift:2363
 msgid "File Name"
 msgstr "Nom du fichier"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2315
+#: macos/Sources/Textchum/AppDelegate.swift:2366
 msgid "Relative Path"
 msgstr "Chemin relatif"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2318
+#: macos/Sources/Textchum/AppDelegate.swift:2369
 msgid "Absolute Path"
 msgstr "Chemin absolu"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2321
+#: macos/Sources/Textchum/AppDelegate.swift:2372
 msgid "Forge URL"
 msgstr "URL de la forge"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2329
+#: macos/Sources/Textchum/AppDelegate.swift:2380
 msgid "Edit"
 msgstr "Édition"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2344
+#: macos/Sources/Textchum/AppDelegate.swift:2395
 msgid "Cut"
 msgstr "Couper"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2346
+#: macos/Sources/Textchum/AppDelegate.swift:2397
 msgid "Copy"
 msgstr "Copier"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2348
+#: macos/Sources/Textchum/AppDelegate.swift:2399
 msgid "Paste"
 msgstr "Coller"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2350
+#: macos/Sources/Textchum/AppDelegate.swift:2401
 msgid "Select All"
 msgstr "Tout sélectionner"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2451
-#: macos/Sources/Textchum/AppDelegate.swift:2466
+#: macos/Sources/Textchum/AppDelegate.swift:2502
+#: macos/Sources/Textchum/AppDelegate.swift:2517
 msgid "Find"
 msgstr "Rechercher"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2527
+#: macos/Sources/Textchum/AppDelegate.swift:2578
 msgid "View"
 msgstr "Présentation"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2542
+#: macos/Sources/Textchum/AppDelegate.swift:2593
 msgid "Toggle Line Numbers"
 msgstr "Afficher ou masquer les numéros de ligne"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2556
+#: macos/Sources/Textchum/AppDelegate.swift:2607
 msgid "Hover Documentation"
 msgstr "Documentation au survol"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2635
+#: macos/Sources/Textchum/AppDelegate.swift:2686
 msgid "Window"
 msgstr "Fenêtre"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2637
+#: macos/Sources/Textchum/AppDelegate.swift:2688
 msgid "Minimize"
 msgstr "Réduire"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2643
+#: macos/Sources/Textchum/AppDelegate.swift:2694
 msgid "Next Tab"
 msgstr "Onglet suivant"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2649
+#: macos/Sources/Textchum/AppDelegate.swift:2700
 msgid "Previous Tab"
 msgstr "Onglet précédent"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2668
+#: macos/Sources/Textchum/AppDelegate.swift:2719
 msgid "This File in Every Column"
 msgstr "Ce fichier dans chaque colonne"
 
-#: macos/Sources/Textchum/AppDelegate.swift:2672
+#: macos/Sources/Textchum/AppDelegate.swift:2723
 msgid "Move Tab to New Window"
 msgstr "Déplacer l'onglet vers une nouvelle fenêtre"
 
@@ -1255,47 +1255,47 @@ msgstr ""
 "Le repli sur ctags a besoin d'Universal Ctags (installer avec : brew install "
 "universal-ctags)."
 
-#: macos/Sources/Textchum/DocumentController.swift:957
+#: macos/Sources/Textchum/DocumentController.swift:981
 msgid "On the definition"
 msgstr "Sur la définition"
 
-#: macos/Sources/Textchum/DocumentController.swift:958
+#: macos/Sources/Textchum/DocumentController.swift:982
 msgid "Nothing else in the workspace refers to this symbol."
 msgstr "Rien d'autre dans l'espace de travail ne fait référence à ce symbole."
 
-#: macos/Sources/Textchum/DocumentController.swift:996
+#: macos/Sources/Textchum/DocumentController.swift:1020
 msgid "Nothing reported"
 msgstr "Rien de signalé"
 
-#: macos/Sources/Textchum/DocumentController.swift:996
+#: macos/Sources/Textchum/DocumentController.swift:1020
 msgid "No diagnostics for this document."
 msgstr "Aucun diagnostic pour ce document."
 
-#: macos/Sources/Textchum/DocumentController.swift:1013
+#: macos/Sources/Textchum/DocumentController.swift:1037
 msgid "message…"
 msgstr "message…"
 
-#: macos/Sources/Textchum/DocumentController.swift:1054
+#: macos/Sources/Textchum/DocumentController.swift:1078
 msgid "symbol…"
 msgstr "symbole…"
 
-#: macos/Sources/Textchum/DocumentController.swift:1442
+#: macos/Sources/Textchum/DocumentController.swift:1466
 msgid "Nothing on offer"
 msgstr "Rien à proposer"
 
-#: macos/Sources/Textchum/DocumentController.swift:1451
+#: macos/Sources/Textchum/DocumentController.swift:1475
 msgid "action…"
 msgstr "action…"
 
-#: macos/Sources/Textchum/DocumentController.swift:1488
+#: macos/Sources/Textchum/DocumentController.swift:1512
 msgid "Nothing came back"
 msgstr "Rien n'est revenu"
 
-#: macos/Sources/Textchum/DocumentController.swift:1627
+#: macos/Sources/Textchum/DocumentController.swift:1651
 msgid "Save it before asking git who wrote a line."
 msgstr "Enregistrez-le avant de demander à git qui a écrit une ligne."
 
-#: macos/Sources/Textchum/DocumentController.swift:2922
+#: macos/Sources/Textchum/DocumentController.swift:2946
 msgid ""
 "The file was modified by another program, and you have unsaved changes. "
 "Reloading will discard your changes (one Undo brings them back)."
@@ -1303,19 +1303,19 @@ msgstr ""
 "Un autre programme a modifié le fichier, et des modifications ne sont pas "
 "enregistrées. Recharger les abandonne (une annulation les ramène)."
 
-#: macos/Sources/Textchum/DocumentController.swift:2923
+#: macos/Sources/Textchum/DocumentController.swift:2947
 msgid "Keep My Changes"
 msgstr "Garder mes modifications"
 
-#: macos/Sources/Textchum/DocumentController.swift:2924
+#: macos/Sources/Textchum/DocumentController.swift:2948
 msgid "Reload From Disk"
 msgstr "Recharger depuis le disque"
 
-#: macos/Sources/Textchum/DocumentController.swift:2942
+#: macos/Sources/Textchum/DocumentController.swift:2966
 msgid "Revert to the saved version?"
 msgstr "Revenir à la version enregistrée ?"
 
-#: macos/Sources/Textchum/DocumentController.swift:2944
+#: macos/Sources/Textchum/DocumentController.swift:2968
 msgid ""
 "Your unsaved changes will be replaced by the file on disk (one Undo brings "
 "them back)."
@@ -1323,11 +1323,11 @@ msgstr ""
 "Vos modifications non enregistrées seront remplacées par le fichier sur le "
 "disque (une annulation les ramène)."
 
-#: macos/Sources/Textchum/DocumentController.swift:3908
+#: macos/Sources/Textchum/DocumentController.swift:3943
 msgid "Your changes will be lost if you don’t save them."
 msgstr "Vos modifications seront perdues si vous ne les enregistrez pas."
 
-#: macos/Sources/Textchum/DocumentController.swift:4023
+#: macos/Sources/Textchum/DocumentController.swift:4058
 msgid "No Suggestions"
 msgstr "Aucune suggestion"
 
@@ -1674,19 +1674,24 @@ msgstr "Aucun projet n'a encore quoi que ce soit de noté."
 msgid "Forget Selected"
 msgstr "Oublier la sélection"
 
-#: macos/Sources/Textchum/Sidebar.swift:399
+#: macos/Sources/Textchum/Sidebar.swift:463
+#: macos/Sources/Textchum/Sidebar.swift:551
+msgid "Loading…"
+msgstr "Chargement…"
+
+#: macos/Sources/Textchum/Sidebar.swift:474
 msgid "Split into New Window"
 msgstr "Séparer dans une nouvelle fenêtre"
 
-#: macos/Sources/Textchum/Sidebar.swift:402
+#: macos/Sources/Textchum/Sidebar.swift:477
 msgid "Gather Into"
 msgstr "Rassembler dans"
 
-#: macos/Sources/Textchum/Sidebar.swift:447
+#: macos/Sources/Textchum/Sidebar.swift:523
 msgid "File Properties…"
 msgstr "Propriétés du fichier…"
 
-#: macos/Sources/Textchum/Sidebar.swift:496
+#: macos/Sources/Textchum/Sidebar.swift:587
 msgid "No project"
 msgstr "Aucun projet"
 
