@@ -123,6 +123,25 @@ final class FileTreeState: ObservableObject {
         }
     }
 
+    /// The tree flattened to what the expansion set shows: one row per
+    /// visible node, its depth carried for indentation. An outline that
+    /// scales is a plain list underneath — recursion is for building
+    /// the array, never for the view tree.
+    func visibleRows(root: URL, globs: [String]) -> [VisibleTreeRow] {
+        var rows: [VisibleTreeRow] = []
+        func walk(_ url: URL, depth: Int) {
+            guard let children = children(of: url, globs: globs) else { return }
+            for child in children {
+                rows.append(VisibleTreeRow(node: child, depth: depth))
+                if child.isDirectory, expanded.contains(child.url) {
+                    walk(child.url, depth: depth + 1)
+                }
+            }
+        }
+        walk(root, depth: 0)
+        return rows
+    }
+
     /// Forgets every listing, so what shows next reflects the disk;
     /// called when the app comes back to the front, where files may
     /// have changed underneath it. The expanded folders re-read on
@@ -177,18 +196,6 @@ final class FileTreeState: ObservableObject {
     /// once, not per drag tick.
     var onSplitCommitted: (() -> Void)?
 
-    func binding(for url: URL) -> Binding<Bool> {
-        Binding(
-            get: { self.expanded.contains(url) },
-            set: { open in
-                if open {
-                    self.expanded.insert(url)
-                } else {
-                    self.expanded.remove(url)
-                }
-            }
-        )
-    }
 }
 
 /// The one URL form every tree key uses. Directory enumeration hands
@@ -201,40 +208,51 @@ func treeKey(_ path: String, isDirectory: Bool) -> URL {
     URL(fileURLWithPath: (path as NSString).standardizingPath, isDirectory: isDirectory)
 }
 
-/// One row of the project tree; directories recurse via disclosure
-/// groups whose expansion lives in the shared ``FileTreeState``.
+/// One visible line of the flattened tree.
+struct VisibleTreeRow: Identifiable {
+    let node: FileNode
+    let depth: Int
+    var id: URL { node.url }
+}
+
+/// One row of the project tree; the tree is a flat list of these, and
+/// expansion just changes which rows exist.
 struct FileTreeRow: View {
     let node: FileNode
-    @ObservedObject var state: FileTreeState
+    let depth: Int
+    /// Whether this directory row is expanded — plain data, so the row
+    /// re-renders only when its own line changes.
+    let isExpanded: Bool
     let projectRoot: String?
     /// Dirty-by-path for every open file, and the focused file's path,
     /// so a row can say "open", "in front", and "unsaved" at a glance.
     var openFiles: [String: Bool] = [:]
     var currentPath: String?
+    var highlighted: URL?
+    let onToggle: (URL) -> Void
     let onOpenFile: (String) -> Void
 
     var body: some View {
-        if node.isDirectory {
-            DisclosureGroup(isExpanded: state.binding(for: node.url)) {
-                ForEach(state.children(of: node.url, globs: node.hiddenGlobs) ?? []) { child in
-                    FileTreeRow(
-                        node: child, state: state, projectRoot: projectRoot,
-                        openFiles: openFiles, currentPath: currentPath,
-                        onOpenFile: onOpenFile)
+        label
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if node.isDirectory {
+                    onToggle(node.url)
+                } else {
+                    onOpenFile(node.url.path)
                 }
-            } label: {
-                label
             }
-        } else {
-            label
-                .contentShape(Rectangle())
-                .onTapGesture { onOpenFile(node.url.path) }
-        }
     }
 
     private var label: some View {
         HStack(spacing: 4) {
+            Spacer(minLength: 0).frame(width: CGFloat(depth) * 12)
             if node.isDirectory {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: 10)
                 Image(systemName: "folder")
                     .foregroundStyle(.secondary)
             } else {
@@ -263,7 +281,7 @@ struct FileTreeRow: View {
         .background(
             RoundedRectangle(cornerRadius: 4)
                 .fill(
-                    state.highlighted == node.url
+                    highlighted == node.url
                         ? Color.accentColor.opacity(0.22) : Color.clear))
         .contextMenu {
             PathCopyMenu(
@@ -507,13 +525,22 @@ struct SidebarView: View {
                     List {
                         Section((projectRoot as NSString).lastPathComponent) {
                             ForEach(
-                                treeState.children(
-                                    of: rootURL, globs: hiddenGlobs(projectRoot)) ?? []
-                            ) { node in
+                                treeState.visibleRows(
+                                    root: rootURL, globs: hiddenGlobs(projectRoot))
+                            ) { row in
                                 FileTreeRow(
-                                    node: node, state: treeState,
+                                    node: row.node, depth: row.depth,
+                                    isExpanded: treeState.expanded.contains(row.node.url),
                                     projectRoot: projectRoot,
                                     openFiles: openFiles, currentPath: currentPath,
+                                    highlighted: treeState.highlighted,
+                                    onToggle: { url in
+                                        if treeState.expanded.contains(url) {
+                                            treeState.expanded.remove(url)
+                                        } else {
+                                            treeState.expanded.insert(url)
+                                        }
+                                    },
                                     onOpenFile: onOpenFile)
                             }
                         }

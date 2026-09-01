@@ -1190,6 +1190,83 @@ func runSmokeTest() -> Int32 {
         treeBench.window?.close()
         try? FileManager.default.removeItem(at: base)
         print("tree follows ok (the root and the marks move with focus)")
+
+    // Scrolling a big tree must stay cheap: a synthetic monorepo of
+    // 20,000 files, fully expanded, scrolled top to bottom.
+    do {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-bigtree-\(ProcessInfo.processInfo.processIdentifier)")
+        var expanded: Set<URL> = []
+        for directory in 0..<100 {
+            let folder = base.appendingPathComponent(String(format: "pkg%02d", directory))
+            try? FileManager.default.createDirectory(
+                at: folder, withIntermediateDirectories: true)
+            expanded.insert(treeKey(folder.path, isDirectory: true))
+            for file in 0..<200 {
+                FileManager.default.createFile(
+                    atPath: folder.appendingPathComponent("file\(file).go").path,
+                    contents: Data("package x\n".utf8))
+            }
+        }
+        let treeState = FileTreeState()
+        treeState.expanded = expanded
+        let context = WindowSidebarContext()
+        context.projectRoot = base.path
+        let view = SidebarView(
+            model: SidebarModel(),
+            currentDocumentID: ObjectIdentifier(treeState),
+            context: context,
+            treeState: treeState,
+            onSelectDocument: { _ in },
+            onShowProperties: { _ in },
+            onOpenFile: { _ in },
+            hiddenGlobs: { _ in [".*"] },
+            onRevealInTree: { _ in })
+        let host = NSHostingView(rootView: view)
+        host.frame = NSRect(x: 0, y: 0, width: 260, height: 640)
+        let treeWindow = NSWindow(
+            contentRect: host.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        treeWindow.contentView = host
+        treeWindow.makeKeyAndOrderFront(nil)
+        // Let the listings load and the list build.
+        spin(untilTrue: { false }, seconds: 2.0)
+        func findScroller(_ view: NSView) -> NSScrollView? {
+            if let scroller = view as? NSScrollView,
+                scroller.documentView.map({ $0.frame.height > 2000 }) == true
+            {
+                return scroller
+            }
+            for child in view.subviews {
+                if let found = findScroller(child) { return found }
+            }
+            return nil
+        }
+        guard let scroller = findScroller(host) else {
+            print("FAIL: no scroll view under the tree")
+            return 1
+        }
+        let height = scroller.documentView?.frame.height ?? 0
+        let start = Date()
+        var steps = 0
+        var y: CGFloat = 0
+        while y < height - 640 {
+            scroller.contentView.scroll(to: NSPoint(x: 0, y: y))
+            scroller.reflectScrolledClipView(scroller.contentView)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.001))
+            y += 320
+            steps += 1
+        }
+        let milliseconds = Date().timeIntervalSince(start) * 1000
+        print(String(format: "tree scroll: %d steps in %.0fms (%.1fms/step)",
+            steps, milliseconds, milliseconds / Double(max(steps, 1))))
+        guard milliseconds / Double(max(steps, 1)) < 25 else {
+            print("FAIL: a scroll step through the big tree is too slow")
+            return 1
+        }
+        treeWindow.close()
+        try? FileManager.default.removeItem(at: base)
+        print("big tree ok (scrolls without stutter)")
+    }
     }
 
     // A link clicked in the Markdown preview goes to the browser and

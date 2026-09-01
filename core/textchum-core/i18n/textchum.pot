@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: textchum\n"
 "Report-Msgid-Bugs-To: https://github.com/perrito666/textchum/issues\n"
-"POT-Creation-Date: 2026-09-01 20:55+0200\n"
+"POT-Creation-Date: 2026-09-01 21:10+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,8 +30,8 @@ msgstr ""
 #: core/textchum-core/src/i18n.rs:352 linux/src/keyboard.rs:24
 #: linux/src/main.rs:1523 linux/src/main.rs:1538 linux/src/workbench.rs:361
 #: macos/Sources/Textchum/AppDelegate.swift:2269
-#: macos/Sources/Textchum/SmokeTest.swift:1327
-#: macos/Sources/Textchum/SmokeTest.swift:1348
+#: macos/Sources/Textchum/SmokeTest.swift:1404
+#: macos/Sources/Textchum/SmokeTest.swift:1425
 msgid "Close Tab"
 msgstr ""
 
@@ -267,7 +267,7 @@ msgid "Configured grammars: {}"
 msgstr ""
 
 #: linux/src/main.rs:152 linux/src/main.rs:1527 linux/src/workbench.rs:1197
-#: macos/Sources/Textchum/SmokeTest.swift:1331
+#: macos/Sources/Textchum/SmokeTest.swift:1408
 msgid "Save changes to {}?"
 msgstr ""
 
@@ -298,15 +298,15 @@ msgstr ""
 msgid "Save All"
 msgstr ""
 
-#: linux/src/main.rs:1533 macos/Sources/Textchum/SmokeTest.swift:1335
+#: linux/src/main.rs:1533 macos/Sources/Textchum/SmokeTest.swift:1412
 msgid "A phrase nobody has translated"
 msgstr ""
 
 #: linux/src/main.rs:1542 linux/src/main.rs:1547
 #: macos/Sources/Textchum/Settings.swift:2255
-#: macos/Sources/Textchum/SmokeTest.swift:1341
-#: macos/Sources/Textchum/SmokeTest.swift:1342
-#: macos/Sources/Textchum/SmokeTest.swift:1349
+#: macos/Sources/Textchum/SmokeTest.swift:1418
+#: macos/Sources/Textchum/SmokeTest.swift:1419
+#: macos/Sources/Textchum/SmokeTest.swift:1426
 msgid "{} file"
 msgid_plural "{} files"
 msgstr[0] ""
@@ -505,7 +505,7 @@ msgstr ""
 msgid "Plain Text"
 msgstr ""
 
-#: linux/src/workbench.rs:1699 macos/Sources/Textchum/Sidebar.swift:407
+#: linux/src/workbench.rs:1699 macos/Sources/Textchum/Sidebar.swift:425
 msgid "Open Files"
 msgstr ""
 
@@ -1657,19 +1657,19 @@ msgstr ""
 msgid "Forget Selected"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:433
+#: macos/Sources/Textchum/Sidebar.swift:451
 msgid "Split into New Window"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:436
+#: macos/Sources/Textchum/Sidebar.swift:454
 msgid "Gather Into"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:482
+#: macos/Sources/Textchum/Sidebar.swift:500
 msgid "File Properties…"
 msgstr ""
 
-#: macos/Sources/Textchum/Sidebar.swift:533
+#: macos/Sources/Textchum/Sidebar.swift:560
 msgid "No project"
 msgstr ""
 
