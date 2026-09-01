@@ -46,6 +46,10 @@ struct SidebarProjectGroup: Identifiable, Hashable {
 @MainActor
 final class SidebarModel: ObservableObject {
     @Published var groups: [SidebarProjectGroup] = []
+    /// Off until the launch has restored what it is going to restore:
+    /// an empty list before that says "Loading…", after it just says
+    /// nothing is open.
+    @Published var settled = false
 
     /// While on, buffer rows show paths from the project root instead of
     /// names. Session-only by design — a quick look, not a mode, so it is
@@ -112,6 +116,10 @@ final class FileTreeState: ObservableObject {
         requestListing(of: url, globs: globs)
         return nil
     }
+
+    /// Whether a folder's listing has arrived — the difference between
+    /// "empty" and "still reading", which the tree says out loud.
+    func hasListing(of url: URL) -> Bool { listings[url] != nil }
 
     private func requestListing(of url: URL, globs: [String]) {
         guard listings[url] == nil, !pendingListings.contains(url) else { return }
@@ -451,6 +459,10 @@ struct SidebarView: View {
             // the sidebar list style unreliably hides the first pinned
             // section header under the scroll inset.
             List {
+                if model.groups.isEmpty, !model.settled {
+                    Text(t("Loading…"))
+                        .foregroundStyle(.secondary)
+                }
                 ForEach(model.groups) { group in
                     Text(group.name)
                         .font(.caption)
@@ -535,6 +547,10 @@ struct SidebarView: View {
                 ScrollViewReader { proxy in
                     List {
                         Section((projectRoot as NSString).lastPathComponent) {
+                            if !treeState.hasListing(of: rootURL) {
+                                Text(t("Loading…"))
+                                    .foregroundStyle(.secondary)
+                            }
                             ForEach(
                                 treeState.visibleRows(
                                     root: rootURL, globs: hiddenGlobs(projectRoot))
