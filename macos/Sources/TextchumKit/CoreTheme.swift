@@ -219,6 +219,7 @@ public enum CoreIcons {
         }
         defer { tc_string_free(summary) }
         cache.removeAll()
+        imagesByFile.removeAll()
         return String(cString: summary)
     }
 
@@ -226,6 +227,7 @@ public enum CoreIcons {
     public static func clear() {
         tc_icons_clear()
         cache.removeAll()
+        imagesByFile.removeAll()
     }
 
     /// Whether a pack is loaded.
@@ -254,12 +256,23 @@ public enum CoreIcons {
         var image: NSImage?
         if let path {
             defer { tc_string_free(path) }
-            image = NSImage(contentsOfFile: String(cString: path))
-            image?.size = NSSize(width: 16, height: 16)
+            let file = String(cString: path)
+            // A pack maps thousands of filenames onto a handful of
+            // icon files; loading the image once per icon file — not
+            // once per filename — is what keeps the first scroll
+            // through a monorepo from reading the disk per row.
+            if let shared = imagesByFile[file] {
+                image = shared
+            } else {
+                image = NSImage(contentsOfFile: file)
+                image?.size = NSSize(width: 16, height: 16)
+                imagesByFile[file] = image
+            }
         }
         cache[key] = image
         return image
     }
 
     private static var cache: [String: NSImage?] = [:]
+    private static var imagesByFile: [String: NSImage?] = [:]
 }

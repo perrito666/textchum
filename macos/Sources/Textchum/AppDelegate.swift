@@ -70,6 +70,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // language opens, not before the first window. Documents that
         // opened as plain text meanwhile are told again when the
         // grammars arrive.
+        fileTreeState.globsProvider = { [weak self] root in
+            self?.config?.hiddenGlobs(root: root) ?? [".*"]
+        }
         let grammarsJSON = config.grammarsJSON
         DispatchQueue.global(qos: .utility).async {
             let grammarProblems = CoreLanguages.load(grammarsJSON: grammarsJSON)
@@ -722,7 +725,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// freshest positions.
     /// Coming back to the front is when the disk may have changed
     /// underneath the tree; the listings re-read on their next render.
+    /// Not on the first activation, which is the launch itself — the
+    /// tree is loading right then, and forgetting it doubles the work.
+    private var hasActivatedOnce = false
     func applicationDidBecomeActive(_ notification: Notification) {
+        guard hasActivatedOnce else {
+            hasActivatedOnce = true
+            return
+        }
         fileTreeState.refreshListings()
     }
 

@@ -1246,20 +1246,27 @@ func runSmokeTest() -> Int32 {
             return 1
         }
         let height = scroller.documentView?.frame.height ?? 0
-        let start = Date()
-        var steps = 0
-        var y: CGFloat = 0
-        while y < height - 640 {
-            scroller.contentView.scroll(to: NSPoint(x: 0, y: y))
-            scroller.reflectScrolledClipView(scroller.contentView)
-            RunLoop.main.run(until: Date().addingTimeInterval(0.001))
-            y += 320
-            steps += 1
+        // Two passes: the first pays every first-time cost (row
+        // materialization, icons), the second is the steady state, and
+        // both are worth watching.
+        var perStep: [Double] = []
+        for _ in 0..<2 {
+            let start = Date()
+            var steps = 0
+            var y: CGFloat = 0
+            while y < height - 640 {
+                scroller.contentView.scroll(to: NSPoint(x: 0, y: y))
+                scroller.reflectScrolledClipView(scroller.contentView)
+                RunLoop.main.run(until: Date().addingTimeInterval(0.001))
+                y += 320
+                steps += 1
+            }
+            let milliseconds = Date().timeIntervalSince(start) * 1000
+            perStep.append(milliseconds / Double(max(steps, 1)))
         }
-        let milliseconds = Date().timeIntervalSince(start) * 1000
-        print(String(format: "tree scroll: %d steps in %.0fms (%.1fms/step)",
-            steps, milliseconds, milliseconds / Double(max(steps, 1))))
-        guard milliseconds / Double(max(steps, 1)) < 25 else {
+        print(String(format: "tree scroll: first pass %.1fms/step, second %.1fms/step",
+            perStep[0], perStep[1]))
+        guard perStep.allSatisfy({ $0 < 25 }) else {
             print("FAIL: a scroll step through the big tree is too slow")
             return 1
         }
