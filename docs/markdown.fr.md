@@ -20,6 +20,9 @@ et l'affiche.
   défiler l'aperçu.
 - Un clic droit sur l'aperçu propose **Enregistrer en PDF…** — la page
   rendue, écrite droit dans un fichier, sans outil externe.
+- Le code des blocs est coloré par les grammaires mêmes de l'éditeur,
+  dans l'aperçu comme dans le PDF — qui sort toujours dans la palette
+  claire, quel que soit l'air de la fenêtre.
 - Le rendu prend en charge CommonMark plus les tableaux, le barré, les
   listes de tâches et les notes de bas de page, et ses styles suivent
   l'apparence du système (ou celle configurée).

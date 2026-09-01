@@ -21,6 +21,9 @@ Preview** (⌥⌘P) lo oculta y lo muestra.
 - Pulsar la vista previa con el botón derecho ofrece **Guardar como
   PDF…** — la página renderizada, escrita directa a un archivo, sin
   herramientas externas.
+- El código en vallas se colorea con las mismas gramáticas con que
+  colorea el editor, en la vista previa y en el PDF — que sale siempre
+  con la paleta clara, se vea como se vea la ventana.
 - El renderizado admite CommonMark más tablas, tachado, listas de tareas
   y notas al pie, y sus estilos siguen la apariencia del sistema (o la
   configurada).

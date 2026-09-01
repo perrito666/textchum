@@ -2211,20 +2211,29 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("save-as", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let dialog = gtk::FileDialog::new();
-        // Seed the folder from the document itself or, for untitled
-        // ones, from any open file — the user is probably adding a
-        // file to that project.
+        // Seed the folder: the document's own; for untitled ones the
+        // folder the last untitled was saved to, then any open file —
+        // the user is probably adding a file to that project.
+        let untitled = page.path().borrow().is_none();
         let seed = page
             .path()
             .borrow()
             .clone()
+            .and_then(|path| Path::new(&path).parent().map(Path::to_owned))
+            .or_else(|| {
+                if untitled {
+                    crate::session::last_untitled_folder().map(PathBuf::from)
+                } else {
+                    None
+                }
+            })
             .or_else(|| {
                 workbench
                     .all_pages()
                     .iter()
                     .find_map(|other| other.path().borrow().clone())
-            })
-            .and_then(|path| Path::new(&path).parent().map(Path::to_owned));
+                    .and_then(|path| Path::new(&path).parent().map(Path::to_owned))
+            });
         if let Some(folder) = seed {
             dialog.set_initial_folder(Some(&gtk::gio::File::for_path(&folder)));
         }
@@ -4091,6 +4100,7 @@ fn show_server_status(workbench: &Rc<Workbench>) {
 /// pathed open would have had. Returns whether the save landed.
 pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> bool {
     let previous = page.path().borrow().clone();
+    let was_untitled = page.path().borrow().is_none();
     if page.state.borrow_mut().document.save_as(path).is_err() {
         workbench.toast(&tr("Could not save the document."));
         return false;
@@ -4098,6 +4108,9 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
     let key = path.to_string_lossy().into_owned();
     let shell = Shell::instance();
     shell.note_own_save(&key);
+    if was_untitled {
+        crate::session::note_untitled_save(path);
+    }
     *page.path().borrow_mut() = Some(key.clone());
     if let Some(gone) = previous.clone().filter(|previous| *previous != key) {
         shell.pages.borrow_mut().remove(&gone);
