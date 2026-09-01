@@ -73,6 +73,12 @@ struct WindowTarget: Identifiable {
 @MainActor
 final class WindowSidebarContext: ObservableObject {
     @Published var projectRoot: String?
+    /// The focused document, for the marks that follow it: the bold
+    /// row in Open Files, the filled dot in the tree. Focus is the
+    /// window's to say, so it lives here and not in a view frozen at
+    /// window build.
+    @Published var focusedDocumentID: ObjectIdentifier?
+    @Published var focusedPath: String?
 }
 
 /// One view of a document: the text view, the scroll view around it,
@@ -508,8 +514,26 @@ final class DocumentController: NSResponder {
 
     /// The pane showing this document took the keyboard.
     func didTakeFocus() {
+        publishTreeRoot()
         if let path = coreDocument.path {
             followInTree(path)
+        }
+    }
+
+    /// Points the window's tree at this document's project. The
+    /// republish used to ride path changes only, so switching to an
+    /// already-published tab left the previous project's tree up.
+    func publishTreeRoot() {
+        let root =
+            projectRoot
+            ?? coreDocument.path.map { ($0 as NSString).deletingLastPathComponent }
+        guard let context = sidebarContext, context.projectRoot != root else { return }
+        // Off the current turn, for the same reason publishSidebarState
+        // defers: focus moves while AppKit is mid-layout.
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                if context.projectRoot != root { context.projectRoot = root }
+            }
         }
     }
 
