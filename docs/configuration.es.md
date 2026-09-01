@@ -582,7 +582,7 @@ demás.
       "dividers": [0.45],
       "folds": [[12, 48]],
       "language": "rust",
-      "places": [{"caret": 812, "scroll": 240.0}]
+      "places": [{"caret": 812, "scroll": 240.0, "top": 790}]
     }
   }
 }

@@ -18,7 +18,7 @@
 //!       "dividers": [0.45],
 //!       "folds": [[12, 48]],
 //!       "language": "rust",
-//!       "places": [{"caret": 812, "scroll": 240.0}]
+//!       "places": [{"caret": 812, "scroll": 240.0, "top": 790}]
 //!     }
 //!   }
 //! }
@@ -42,6 +42,9 @@ pub struct Place {
     pub caret: usize,
     /// The scroll offset, in points.
     pub scroll: f64,
+    /// The first character shown, in UTF-16 units: the line the view
+    /// was looking at, which survives a reflow where the offset does not.
+    pub top: usize,
 }
 
 /// What one file remembers.
@@ -89,6 +92,7 @@ impl FileState {
                         .map(|item| Place {
                             caret: item["caret"].as_u64().unwrap_or(0) as usize,
                             scroll: item["scroll"].as_f64().unwrap_or(0.0),
+                            top: item["top"].as_u64().unwrap_or(0) as usize,
                         })
                         .collect()
                 })
@@ -118,7 +122,7 @@ impl FileState {
             let places: Vec<Value> = self
                 .places
                 .iter()
-                .map(|place| json!({"caret": place.caret, "scroll": place.scroll}))
+                .map(|place| json!({"caret": place.caret, "scroll": place.scroll, "top": place.top}))
                 .collect();
             entry.insert("places".into(), Value::Array(places));
         }
@@ -140,7 +144,10 @@ impl FileState {
             && self.dividers.is_empty()
             && self.folds.is_empty()
             && self.language.is_none()
-            && self.places.iter().all(|place| place.caret == 0 && place.scroll == 0.0)
+            && self
+                .places
+                .iter()
+                .all(|place| place.caret == 0 && place.scroll == 0.0 && place.top == 0)
     }
 }
 
@@ -421,7 +428,7 @@ mod tests {
                 dividers: vec![0.4],
                 folds: vec![(12, 48)],
                 language: Some("rust".into()),
-                places: vec![Place { caret: 10, scroll: 4.0 }, Place::default()],
+                places: vec![Place { caret: 10, scroll: 4.0, top: 2 }, Place::default()],
             },
         );
         save(&state, &root, &dir, false).unwrap();

@@ -101,6 +101,17 @@ final class DocumentView {
     /// the bar outside Auto Layout, so a constraint cannot see it.
     fileprivate var contextStripTop: NSLayoutConstraint?
     fileprivate var findBarObservation: NSKeyValueObservation?
+    /// The character at the top of the viewport and the width it was
+    /// seen at; a different width means the text has reflowed under it.
+    var viewportAnchor: (offset: Int, width: CGFloat)?
+    var reanchorPending = false
+    /// While set and in the future, the anchor is being held through a
+    /// reflow: the text view's frame changes are answered by putting the
+    /// anchored line back on top, and transient positions are not
+    /// recorded as the new anchor.
+    var anchorHoldUntil: Date?
+    /// Under a trackpad scroll, momentum included.
+    var isLiveScrolling = false
 
     init(scrollView: NSScrollView, textView: NSTextView, gutter: LineNumberGutterView) {
         self.scrollView = scrollView
@@ -378,6 +389,20 @@ final class DocumentController: NSResponder {
             name: NSView.boundsDidChangeNotification,
             object: clipView
         )
+        // After a width change the text reflows, and its frame grows or
+        // shrinks a display cycle later than the clip's bounds moved.
+        textView.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(editorFrameChanged(_:)),
+            name: NSView.frameDidChangeNotification, object: textView)
+        // A trackpad scroll, momentum included, is live from the first
+        // touch to the last drift. Writes that change layout wait it out.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(liveScrollStarted(_:)),
+            name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(liveScrollEnded(_:)),
+            name: NSScrollView.didEndLiveScrollNotification, object: scrollView)
         view.contextStrip.onSelect = { [weak view] line in
             guard let view else { return }
             let offset = view.gutter.lineStart(ofLine: line)
@@ -405,8 +430,12 @@ final class DocumentController: NSResponder {
         views.append(view)
         if isFirst {
             textView.string = coreDocument.text
-            settleLayout(of: textView)
         }
+        // Every view, not only the first: a view made after a tab
+        // switch starts on estimated line heights, and a viewport put
+        // back onto estimates lands wherever they were wrong — an empty
+        // stretch, or a jump once real heights replaced them.
+        settleLayout(of: textView)
         // Every new view's gutter learns the lines: the first from the
         // text just set, later ones from the shared storage. This used
         // to ride the settings pass, which now only restyles on a real
@@ -452,6 +481,12 @@ final class DocumentController: NSResponder {
             self,
             name: NSView.boundsDidChangeNotification,
             object: view.scrollView.contentView)
+        NotificationCenter.default.removeObserver(
+            self, name: NSView.frameDidChangeNotification, object: view.textView)
+        NotificationCenter.default.removeObserver(
+            self, name: NSScrollView.willStartLiveScrollNotification, object: view.scrollView)
+        NotificationCenter.default.removeObserver(
+            self, name: NSScrollView.didEndLiveScrollNotification, object: view.scrollView)
         if let layoutManager = view.textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager,
             views.count > 1
@@ -488,7 +523,7 @@ final class DocumentController: NSResponder {
             views: max(1, state.views),
             dividers: state.dividers,
             places: state.places.map {
-                DocumentLayout.Place(caret: $0.caret, scroll: $0.scroll)
+                DocumentLayout.Place(caret: $0.caret, scroll: $0.scroll, top: $0.top)
             })
         adoptedProjectState = true
     }
@@ -515,7 +550,7 @@ final class DocumentController: NSResponder {
             folds: openDocument.folds.map { (start: $0.start, end: $0.end) },
             language: languageOverride,
             places: layout.places.map {
-                CoreProjectState.FileState.Place(caret: $0.caret, scroll: $0.scroll)
+                CoreProjectState.FileState.Place(caret: $0.caret, scroll: $0.scroll, top: $0.top)
             })
         ProjectState.record(state, forPath: path, projectRoot: root)
     }
@@ -2035,6 +2070,125 @@ final class DocumentController: NSResponder {
         layoutManager.ensureLayout(for: layoutManager.documentRange)
     }
 
+    /// Remembers which character sits at the top of the viewport, and
+    /// when the view's width changes — the sidebar hidden, a divider
+    /// dragged — puts that character back at the top once layout has
+    /// reflowed. Lines wrap to the width, so the same pixel offset is a
+    /// different line after a reflow; the line is what the eye was on.
+    private func keepTopLine(of view: DocumentView) {
+        let clip = view.scrollView.contentView.bounds
+        let width = view.textView.frame.width
+        // A view not yet laid out in a window has no width worth
+        // remembering; its first real one would read as a change.
+        guard width > 0, clip.height > 0, view.textView.window != nil else { return }
+        if let anchor = view.viewportAnchor, anchor.width != width {
+            holdAnchor(of: view, atWidth: width)
+            return
+        }
+        if let until = view.anchorHoldUntil, until > Date() { return }
+        view.viewportAnchor = (topOffset(of: view), width)
+    }
+
+    /// The width changed under the anchor: keep the line, take the new
+    /// width, and put the line back on top now and as the reflow lands.
+    private func holdAnchor(of view: DocumentView, atWidth width: CGFloat) {
+        guard let anchor = view.viewportAnchor else { return }
+        view.viewportAnchor = (anchor.offset, width)
+        view.anchorHoldUntil = Date().addingTimeInterval(0.5)
+        scheduleReanchor(of: view)
+    }
+
+    /// Puts the anchored line back on top a turn from now, once, even
+    /// when asked several times in the same turn.
+    private func scheduleReanchor(of view: DocumentView) {
+        guard !view.reanchorPending else { return }
+        view.reanchorPending = true
+        DispatchQueue.main.async { [weak self, weak view] in
+            MainActor.assumeIsolated {
+                guard let self, let view else { return }
+                view.reanchorPending = false
+                // Read again now: a scroll placed meanwhile — a restore,
+                // a jump — has already moved the anchor.
+                guard let anchor = view.viewportAnchor else { return }
+                self.scroll(view, topOffset: anchor.offset)
+            }
+        }
+    }
+
+    /// The text view's frame changed. A new width is the sidebar or a
+    /// divider moving, and the text reflows to it; the frame's height
+    /// then follows a display cycle later. Either way the anchored line
+    /// goes back on top while the anchor is held.
+    @objc private func editorFrameChanged(_ notification: Notification) {
+        guard let view = views.first(where: { $0.textView === notification.object as? NSTextView }),
+            let anchor = view.viewportAnchor, view.textView.window != nil
+        else { return }
+        let width = view.textView.frame.width
+        if width > 0, anchor.width != width {
+            holdAnchor(of: view, atWidth: width)
+        } else if let until = view.anchorHoldUntil, until > Date() {
+            scheduleReanchor(of: view)
+        }
+    }
+
+    /// The character at the top-left of the viewport.
+    func topOffset(of view: DocumentView) -> Int {
+        let clip = view.scrollView.contentView.bounds
+        return view.textView.characterIndexForInsertion(at: NSPoint(x: 5, y: clip.minY + 1))
+    }
+
+    /// Scrolls so the line holding `offset` is the first one shown,
+    /// clamped to the document. Layout up to there is made real first,
+    /// so the line lands where it is and not where an estimate put it.
+    func scroll(_ view: DocumentView, topOffset offset: Int) {
+        let textView = view.textView
+        guard let layoutManager = textView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            let location = contentManager.location(
+                layoutManager.documentRange.location,
+                offsetBy: min(offset, coreDocument.lengthInUTF16))
+        else { return }
+        // The container's width first: text laid out at a width the view
+        // is about to leave puts every wrapped line in the wrong place.
+        view.container.layoutSubtreeIfNeeded()
+        if coreDocument.lengthInUTF16 < 2_000_000,
+            let upTo = NSTextRange(location: layoutManager.documentRange.location, end: location)
+        {
+            layoutManager.ensureLayout(for: upTo)
+        }
+        // Asking for the fragment by location can hand back one whose
+        // frame is not placed yet; enumerating with layout ensured
+        // gives the line where it is.
+        var lineTop: CGFloat?
+        layoutManager.enumerateTextLayoutFragments(
+            from: location, options: [.ensuresLayout, .ensuresExtraLineFragment]
+        ) { fragment in
+            lineTop = fragment.layoutFragmentFrame.minY
+            return false
+        }
+        guard let lineTop else { return }
+        // The text view's frame follows layout a pass late; the layout
+        // manager knows the laid-out extent now.
+        let clip = view.scrollView.contentView
+        let total = max(
+            view.scrollView.documentView?.frame.height ?? 0,
+            layoutManager.usageBoundsForTextContainer.maxY + textView.textContainerOrigin.y)
+        let y = lineTop + textView.textContainerOrigin.y
+        let target = max(0, min(y, total - clip.bounds.height))
+        clip.scroll(to: NSPoint(x: 0, y: target))
+        view.scrollView.reflectScrolledClipView(clip)
+        // This is the line to keep now.
+        view.viewportAnchor = (offset, textView.frame.width)
+        // Measured mid-reflow, a line can land a few rows off; while the
+        // anchor is held, one more pass after this one settles it.
+        if view.gutter.lineIndex(forOffset: topOffset(of: view))
+            != view.gutter.lineIndex(forOffset: offset),
+            let until = view.anchorHoldUntil, until > Date()
+        {
+            scheduleReanchor(of: view)
+        }
+    }
+
     /// Recomputes the pinned context for one view from its scroll
     /// position: at most five rows, rebuilt only when the lines change.
     func updateContextStrip(for view: DocumentView) {
@@ -2125,11 +2279,32 @@ final class DocumentController: NSResponder {
         return painted
     }
 
+    @objc private func liveScrollStarted(_ notification: Notification) {
+        guard let view = views.first(where: { $0.scrollView === notification.object as? NSScrollView })
+        else { return }
+        view.isLiveScrolling = true
+    }
+
+    @objc private func liveScrollEnded(_ notification: Notification) {
+        guard let view = views.first(where: { $0.scrollView === notification.object as? NSScrollView })
+        else { return }
+        view.isLiveScrolling = false
+        // The bold and italic the scroll held back.
+        if traitFontsOwed, !views.contains(where: { $0.isLiveScrolling }) {
+            traitFontsOwed = false
+            _ = applyHighlights(force: true)
+        }
+    }
+
+    /// True while any view of this document is under a live scroll.
+    var isLiveScrolling: Bool { views.contains { $0.isLiveScrolling } }
+
     @objc private func editorDidScroll(_ notification: Notification) {
         if Self.debugTimers { NSLog("TIMER scroll-tick") }
         if let clipView = notification.object as? NSClipView,
             let view = views.first(where: { $0.scrollView.contentView === clipView })
         {
+            keepTopLine(of: view)
             updateContextStrip(for: view)
         }
         // Spelling is scoped to what is painted; what scrolls in gets
@@ -2813,12 +2988,42 @@ final class DocumentController: NSResponder {
                 appliedFont, bold: traits.bold, italic: traits.italic)
         }
         if wantsTraits, let storage = textView.textStorage {
-            for stretch in toPaint {
-                _ = Self.applyTraitFonts(
-                    wantedFonts, over: stretch, in: storage, plain: appliedFont)
+            if isLiveScrolling {
+                // A font is a layout attribute: writing one under a
+                // live scroll invalidates the lines around the
+                // viewport, and the text system moves the viewport to
+                // fit what it re-lays. The colours go on now; the bold
+                // and italic follow when the scroll ends.
+                traitFontsOwed = true
+            } else {
+                for stretch in toPaint {
+                    let written = Self.applyTraitFonts(
+                        wantedFonts, over: stretch, in: storage, plain: appliedFont)
+                    guard written > 0, coreDocument.lengthInUTF16 < 2_000_000,
+                        let range = layoutTextRange(stretch, in: layoutManager)
+                    else { continue }
+                    // Real layout for what was just invalidated, so no
+                    // estimate is left to be corrected under the eye.
+                    layoutManager.ensureLayout(for: range)
+                }
             }
         }
         return true
+    }
+
+    /// Bold and italic skipped while a view was scrolling, owed to the
+    /// painted stretch when the scroll ends.
+    private var traitFontsOwed = false
+
+    private func layoutTextRange(_ range: NSRange, in layoutManager: NSTextLayoutManager)
+        -> NSTextRange?
+    {
+        guard let contentManager = layoutManager.textContentManager else { return nil }
+        let base = layoutManager.documentRange.location
+        guard let start = contentManager.location(base, offsetBy: range.location),
+            let end = contentManager.location(base, offsetBy: NSMaxRange(range))
+        else { return nil }
+        return NSTextRange(location: start, end: end)
     }
 
     /// Writes the theme's bold and italic into the text storage, and

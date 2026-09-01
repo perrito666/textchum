@@ -30,6 +30,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         stamp("begin")
+        if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_BOUNCE"] != nil {
+            // Watches the first editor's viewport under real scrolling
+            // and logs every reversal: the viewport moving against the
+            // direction it moved a moment ago, which a one-way flick
+            // never asks for. Also logs the window's frame, for a script
+            // that aims scroll events at it.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                MainActor.assumeIsolated {
+                    guard let textView = self.editors.first?.primaryView,
+                        let scrollView = textView.enclosingScrollView,
+                        let window = textView.window
+                    else { return }
+                    let frame = window.frame
+                    let screenHeight = NSScreen.screens.first?.frame.height ?? 0
+                    // Top-left origin, the way CG events are placed.
+                    NSLog("BOUNCE window x=\(frame.minX) y=\(screenHeight - frame.maxY) w=\(frame.width) h=\(frame.height)")
+                    var lastY = scrollView.contentView.bounds.origin.y
+                    var lastDirection = 0.0
+                    var lastAt = Date()
+                    var reversals = 0
+                    var moves = 0
+                    NotificationCenter.default.addObserver(
+                        forName: NSView.boundsDidChangeNotification,
+                        object: scrollView.contentView, queue: nil
+                    ) { _ in
+                        MainActor.assumeIsolated {
+                            let y = scrollView.contentView.bounds.origin.y
+                            let delta = y - lastY
+                            guard abs(delta) > 0.01 else { return }
+                            moves += 1
+                            if moves % 50 == 0 { NSLog("BOUNCE moves=\(moves) y=\(y)") }
+                            let direction: Double = delta > 0 ? 1 : -1
+                            let now = Date()
+                            if lastDirection != 0, direction != lastDirection,
+                                now.timeIntervalSince(lastAt) < 0.4
+                            {
+                                reversals += 1
+                                NSLog("BOUNCE reversal #\(reversals) at y=\(y) by \(delta)pt after \(moves) moves")
+                            }
+                            lastDirection = direction
+                            lastY = y
+                            lastAt = now
+                        }
+                    }
+                }
+            }
+        }
+        if let spec = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_SCROLL"] {
+            // "steps:points": scrolls the first editor down by `points`
+            // every 50ms and logs each time the viewport is found away
+            // from where the previous step left it — something moved it.
+            let parts = spec.split(separator: ":").compactMap { Double($0) }
+            let steps = Int(parts.first ?? 100)
+            let points = CGFloat(parts.count > 1 ? parts[1] : 12)
+            var expected: CGFloat?
+            var drifts = 0
+            for step in 0..<steps {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4 + Double(step) * 0.05) {
+                    MainActor.assumeIsolated {
+                        guard let clip = self.editors.first?.primaryView?.enclosingScrollView?.contentView
+                        else { return }
+                        if let expected, abs(clip.bounds.origin.y - expected) > 0.5 {
+                            drifts += 1
+                            NSLog("DRIFT step \(step) expected \(expected) got \(clip.bounds.origin.y)")
+                        }
+                        clip.scroll(to: NSPoint(x: 0, y: clip.bounds.origin.y + points))
+                        clip.enclosingScrollView?.reflectScrolledClipView(clip)
+                        expected = clip.bounds.origin.y
+                        if step == steps - 1 { NSLog("DRIFT total \(drifts) of \(steps)") }
+                    }
+                }
+            }
+        }
         if let jumps = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_JUMP"] {
             for (index, token) in jumps.split(separator: ",").enumerated() {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 4 + Double(index) * 2.0) {

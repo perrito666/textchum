@@ -20,10 +20,13 @@ public enum CoreProjectState {
         public struct Place: Equatable {
             public var caret: Int
             public var scroll: Double
+            /// The first character shown, in UTF-16 units.
+            public var top: Int
 
-            public init(caret: Int = 0, scroll: Double = 0) {
+            public init(caret: Int = 0, scroll: Double = 0, top: Int = 0) {
                 self.caret = caret
                 self.scroll = scroll
+                self.top = top
             }
         }
 
@@ -161,7 +164,8 @@ public enum CoreProjectState {
             places: (object["places"] as? [[String: Any]] ?? []).map { place in
                 FileState.Place(
                     caret: place["caret"] as? Int ?? 0,
-                    scroll: place["scroll"] as? Double ?? 0)
+                    scroll: place["scroll"] as? Double ?? 0,
+                    top: place["top"] as? Int ?? 0)
             })
     }
 
@@ -171,7 +175,9 @@ public enum CoreProjectState {
         if !state.folds.isEmpty { object["folds"] = state.folds.map { [$0.start, $0.end] } }
         if let language = state.language { object["language"] = language }
         if !state.places.isEmpty {
-            object["places"] = state.places.map { ["caret": $0.caret, "scroll": $0.scroll] }
+            object["places"] = state.places.map {
+                ["caret": $0.caret, "scroll": $0.scroll, "top": $0.top]
+            }
         }
         guard let data = try? JSONSerialization.data(withJSONObject: object),
             let text = String(data: data, encoding: .utf8)

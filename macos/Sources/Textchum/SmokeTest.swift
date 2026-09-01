@@ -1134,6 +1134,90 @@ func runSmokeTest() -> Int32 {
     motionBench.window?.close()
     print("code motion ok (symbol runs are words, closers outdent)")
 
+    // The viewport keeps its top line: across a tab round trip, where
+    // the view coming back is a new one on estimated heights, and
+    // across a width change, where every wrapped line reflows under it.
+    let viewportBench = Workbench(sidebar: nil)
+    viewportBench.window?.setFrame(
+        NSRect(x: 0, y: 0, width: 900, height: 600), display: true)
+    let tall = DocumentController(document: CoreDocument())
+    let other = DocumentController(document: CoreDocument())
+    viewportBench.add(tall)
+    viewportBench.window?.makeKeyAndOrderFront(nil)
+    guard let tallView = tall.primaryView else {
+        print("FAIL: the tall document has no view")
+        return 1
+    }
+    // Long lines, so a narrower window wraps them.
+    tallView.string = (0..<400).map { line in
+        "line \(line) " + String(repeating: "x", count: 110)
+    }.joined(separator: "\n")
+    tall.noteTextReplaced()
+    viewportBench.columns.first?.views.first?.gutter.invalidateLineStarts()
+    func topLine(_ document: DocumentController) -> Int? {
+        guard let column = viewportBench.columns.first(where: { $0.document === document }),
+            let view = column.views.first
+        else { return nil }
+        let clip = view.scrollView.contentView.bounds
+        let offset = view.textView.characterIndexForInsertion(at: NSPoint(x: 5, y: clip.minY + 1))
+        return view.gutter.lineIndex(forOffset: offset)
+    }
+    guard let tallDocumentView = viewportBench.columns.first?.views.first else {
+        print("FAIL: no view to scroll")
+        return 1
+    }
+    // The view has to be its final width before a line's place means
+    // anything: the 110-column lines wrap differently at any other.
+    spin(untilTrue: { tallDocumentView.textView.frame.width > 700 }, seconds: 2)
+    let line200 = tallDocumentView.gutter.lineStart(ofLine: 200)
+    tall.scroll(tallDocumentView, topOffset: line200)
+    spin(untilTrue: { topLine(tall) == 200 }, seconds: 2)
+    guard topLine(tall) == 200 else {
+        print("FAIL: scrolling a line to the top put line \(topLine(tall) ?? -1) there")
+        return 1
+    }
+    // Away and back.
+    viewportBench.add(other)
+    guard viewportBench.focusedDocument === other else {
+        print("FAIL: the other tab did not show")
+        return 1
+    }
+    viewportBench.showInFocusedPane(ObjectIdentifier(tall))
+    spin(untilTrue: { topLine(tall) == 200 }, seconds: 2)
+    guard topLine(tall) == 200 else {
+        print("FAIL: coming back to the tab put line \(topLine(tall) ?? -1) at the top, not 200")
+        return 1
+    }
+    // Narrower: the 110-column lines wrap into two rows each, so the
+    // same pixel is a different line; the same line must stay on top.
+    viewportBench.window?.setFrame(
+        NSRect(x: 0, y: 0, width: 520, height: 600), display: true)
+    spin(untilTrue: { topLine(tall) == 200 }, seconds: 2)
+    guard topLine(tall) == 200 else {
+        print("FAIL: a width change put line \(topLine(tall) ?? -1) at the top, not 200")
+        return 1
+    }
+    // A live scroll is known from its first notification to its last.
+    guard let liveView = viewportBench.columns.first(where: { $0.document === tall })?.views.first
+    else {
+        print("FAIL: no view for the live-scroll check")
+        return 1
+    }
+    NotificationCenter.default.post(
+        name: NSScrollView.willStartLiveScrollNotification, object: liveView.scrollView)
+    guard tall.isLiveScrolling else {
+        print("FAIL: the document did not notice the live scroll starting")
+        return 1
+    }
+    NotificationCenter.default.post(
+        name: NSScrollView.didEndLiveScrollNotification, object: liveView.scrollView)
+    guard !tall.isLiveScrolling else {
+        print("FAIL: the document did not notice the live scroll ending")
+        return 1
+    }
+    viewportBench.window?.close()
+    print("viewport ok (top line kept across a tab round trip and a width change; live scroll tracked)")
+
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
     // where the caret is and what the file is.
