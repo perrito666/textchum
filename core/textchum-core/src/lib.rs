@@ -29,6 +29,7 @@ pub mod indent;
 pub mod keys;
 pub mod markdown;
 pub mod occurrences;
+pub mod motion;
 pub mod pairs;
 pub mod preview;
 pub mod project_state;

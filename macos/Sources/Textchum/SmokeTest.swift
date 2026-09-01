@@ -1066,6 +1066,55 @@ func runSmokeTest() -> Int32 {
     wrapBench.window?.close()
     print("wrapping ok (delimiters nest, letters do not wrap)")
 
+    // Code's own word boundaries, and a closer that takes its opener's
+    // indentation — both through the same doors the keys use. A fresh
+    // document: the wrapping one's window has closed, and with it the
+    // view its text would have to go through.
+    let motionBench = Workbench(sidebar: nil)
+    let motionDocument = DocumentController(document: CoreDocument())
+    motionBench.add(motionDocument)
+    motionBench.window?.makeKeyAndOrderFront(nil)
+    guard let motionView = motionDocument.primaryView as? EditorTextView else {
+        print("FAIL: the editor's text view is not the code-aware one")
+        return 1
+    }
+    motionView.string = "key\")} next"
+    motionDocument.noteTextReplaced()
+    motionView.setSelectedRange(NSRange(location: 3, length: 0))
+    motionView.moveWordForward(nil)
+    guard motionView.selectedRange().location == 6 else {
+        print("FAIL: ⌥→ over a run of symbols landed at \(motionView.selectedRange().location)")
+        return 1
+    }
+    motionView.moveWordBackwardAndModifySelection(nil)
+    guard motionView.selectedRange() == NSRange(location: 3, length: 3) else {
+        print("FAIL: ⌥⇧← did not select the symbol run: \(motionView.selectedRange())")
+        return 1
+    }
+    motionView.string = "fn f() {\n    if x {\n        y();\n        "
+    motionDocument.noteTextReplaced()
+    let tail = (motionView.string as NSString).length
+    motionView.setSelectedRange(NSRange(location: tail, length: 0))
+    // What AppKit does for a typed character, through the many-ranges
+    // door typing uses.
+    let closerAllowed = motionDocument.textView(
+        motionView,
+        shouldChangeTextInRanges: [NSValue(range: NSRange(location: tail, length: 0))],
+        replacementStrings: ["}"])
+    if closerAllowed {
+        motionView.textStorage?.replaceCharacters(in: NSRange(location: tail, length: 0), with: "}")
+    }
+    guard motionView.string.hasSuffix("\n    }") else {
+        print("FAIL: the closer did not take the opener's indentation: \(motionView.string.suffix(12))")
+        return 1
+    }
+    guard motionDocument.coreDocument.text == motionView.string else {
+        print("FAIL: the core did not follow the outdent")
+        return 1
+    }
+    motionBench.window?.close()
+    print("code motion ok (symbol runs are words, closers outdent)")
+
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
     // where the caret is and what the file is.

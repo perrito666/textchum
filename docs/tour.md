@@ -187,6 +187,12 @@ and Line** (`path:line`, which a terminal opens straight to) and
 **Forge URL for Line**, the file's forge URL with the line fragment
 spelled the way that forge does.
 
+Word movement (⌥→/⌥←, Ctrl+arrows on Linux, and their selecting and
+deleting forms) stops at every change of character class — identifier,
+symbol, blank — and at a line break, so a run like `")}` is one stop
+and the caret never skips across lines. A closing bracket typed first
+on its line takes the indentation of the line that opened it.
+
 Completions appear as you type after identifier characters and `.`;
 ↑/↓ choose, ⏎ or ⇥ accept, ⎋ dismisses. A snippet arrives with its
 first placeholder selected, so typing replaces it; ⇥ moves to the next

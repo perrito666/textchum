@@ -358,6 +358,7 @@ impl Page {
         install_change_bar(&page);
         install_indent_keys(&page);
         install_wrap_keys(&page);
+        install_word_motion(&page);
         install_context_strip(&page);
         install_spell_follow(&page);
         install_preview_pdf_menu(&page);
@@ -1640,13 +1641,90 @@ fn install_wrap_keys(page: &Rc<Page>) {
         {
             return glib::Propagation::Proceed;
         }
-        if wrap_selection(&page, key) {
+        if wrap_selection(&page, key) || outdent_closing_bracket(&page, key) {
             glib::Propagation::Stop
         } else {
             glib::Propagation::Proceed
         }
     });
     page.view.add_controller(controller);
+}
+
+/// A closing bracket typed first on its line takes the indentation of
+/// the line that opened it; the blanks before the caret become the
+/// opener's and the bracket follows, as one undo step.
+fn outdent_closing_bracket(page: &Rc<Page>, key: gtk::gdk::Key) -> bool {
+    let Some(closer) = key.to_unicode() else { return false };
+    if !matches!(closer, ')' | ']' | '}') {
+        return false;
+    }
+    let buffer = &page.buffer;
+    if buffer.selection_bounds().is_some() {
+        return false;
+    }
+    let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+    let caret = buffer.iter_at_mark(&buffer.get_insert());
+    let offset = utf16_offset(buffer, caret.offset());
+    let Some((start, end, indent)) =
+        textchum_core::motion::closing_bracket_indent(&text, offset, closer)
+    else {
+        return false;
+    };
+    if start == end && indent.is_empty() {
+        return false;
+    }
+    let mut from = buffer.iter_at_offset(char_offset(&text, start));
+    let mut to = buffer.iter_at_offset(char_offset(&text, end));
+    buffer.begin_user_action();
+    buffer.delete(&mut from, &mut to);
+    let mut at = buffer.iter_at_offset(char_offset(&text, start));
+    buffer.insert(&mut at, &format!("{indent}{closer}"));
+    buffer.end_user_action();
+    true
+}
+
+/// Ctrl+←/→ (and with Shift, the selecting forms) stop at every change
+/// of character class and at a line break, the way code editors do;
+/// GTK's own words lump a run of symbols together.
+fn install_word_motion(page: &Rc<Page>) {
+    let controller = gtk::EventControllerKey::new();
+    controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let weak = Rc::downgrade(page);
+    controller.connect_key_pressed(move |_, key, _, modifiers| {
+        let Some(page) = weak.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
+        if !modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK)
+            || modifiers.contains(gtk::gdk::ModifierType::ALT_MASK)
+        {
+            return glib::Propagation::Proceed;
+        }
+        let forward = match key {
+            gtk::gdk::Key::Right => true,
+            gtk::gdk::Key::Left => false,
+            _ => return glib::Propagation::Proceed,
+        };
+        let buffer = &page.buffer;
+        let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+        let caret = buffer.iter_at_mark(&buffer.get_insert());
+        let from = utf16_offset(buffer, caret.offset());
+        let to = textchum_core::motion::word_boundary(&text, from, forward);
+        let target = buffer.iter_at_offset(char_offset(&text, to));
+        if modifiers.contains(gtk::gdk::ModifierType::SHIFT_MASK) {
+            let anchor = buffer.iter_at_mark(&buffer.selection_bound());
+            buffer.select_range(&target, &anchor);
+        } else {
+            buffer.place_cursor(&target);
+        }
+        page.view.scroll_mark_onscreen(&buffer.get_insert());
+        glib::Propagation::Stop
+    });
+    page.view.add_controller(controller);
+}
+
+/// The outdent, for the smoke test to drive without a key event.
+pub fn outdent_for_test(page: &Rc<Page>, key: gtk::gdk::Key) -> bool {
+    outdent_closing_bracket(page, key)
 }
 
 /// Right-click on the Markdown preview offers Save as PDF… — the

@@ -4136,6 +4136,9 @@ extension DocumentController: NSTextViewDelegate {
             // what was wrapped so the next delimiter nests inside it.
             return false
         }
+        if outdentClosingBracket(in: textView, range: affectedCharRange, typed: replacementString) {
+            return false
+        }
         do {
             try coreDocument.replace(utf16Range: affectedCharRange, with: replacementString)
             selectionChangeIsFromEditing = true
@@ -4153,6 +4156,36 @@ extension DocumentController: NSTextViewDelegate {
             NSLog("edit rejected by core: \(error)")
             return false
         }
+    }
+
+    /// A closing bracket typed first on its line takes the indentation
+    /// of the line that opened it — the blanks before the caret become
+    /// the opener's, and the bracket follows. One edit, one undo step.
+    private func outdentClosingBracket(
+        in textView: NSTextView, range: NSRange, typed: String
+    ) -> Bool {
+        guard range.length == 0, typed.count == 1, let closer = typed.first,
+            ")]}".contains(closer),
+            let answer = CoreMotion.closingBracketIndent(
+                in: textView.string, at: range.location, closer: closer),
+            answer.blanks.length > 0 || !answer.indent.isEmpty
+        else { return false }
+        let replacement = answer.indent + typed
+        coreDocument.beginEditGroup()
+        do {
+            try coreDocument.replace(utf16Range: answer.blanks, with: replacement)
+        } catch {
+            coreDocument.endEditGroup()
+            return false
+        }
+        coreDocument.endEditGroup()
+        textView.textStorage?.replaceCharacters(in: answer.blanks, with: replacement)
+        textView.setSelectedRange(
+            NSRange(
+                location: answer.blanks.location + (replacement as NSString).length, length: 0))
+        selectionChangeIsFromEditing = true
+        textDidChangeFromWrap()
+        return true
     }
 
     /// Wraps the selection in a pair when an opening delimiter is typed

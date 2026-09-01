@@ -190,6 +190,13 @@ se pegan: **Ruta y línea** (`ruta:línea`, que un terminal abre
 directo) y **URL de la forja para la línea**, la URL del archivo en la
 forja con el fragmento de línea escrito como lo escribe esa forja.
 
+Moverse por palabras (⌥→/⌥←, Ctrl+flechas en Linux, y sus formas de
+seleccionar y borrar) se detiene en cada cambio de clase de carácter
+—identificador, símbolo, blanco— y en cada salto de línea, así que una
+tira como `")}` es una parada y el cursor nunca salta de línea. Un
+paréntesis o llave de cierre escrito al principio de su línea toma la
+sangría de la línea que lo abrió.
+
 El autocompletado aparece al escribir tras caracteres de identificador
 y `.`; ↑/↓ eligen, ⏎ o ⇥ aceptan, ⎋ descarta. Un snippet llega con su
 primer marcador seleccionado, así que escribir lo reemplaza; ⇥ pasa al
