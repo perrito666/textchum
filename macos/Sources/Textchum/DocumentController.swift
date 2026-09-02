@@ -110,6 +110,14 @@ final class DocumentView {
     /// anchored line back on top, and transient positions are not
     /// recorded as the new anchor.
     var anchorHoldUntil: Date?
+    /// True while this document is scrolling the view itself to put the
+    /// anchored line back; any other scroll during a hold is someone
+    /// else's — the user, a jump — and ends the hold.
+    var reanchoring = false
+    /// Where the clip was at the last scroll tick, to tell a clamp from
+    /// a scroll: a view whose text is momentarily shorter than its
+    /// scroll position is pulled to the top by the clip view itself.
+    var lastClipY: CGFloat = 0
     /// Under a trackpad scroll, momentum included.
     var isLiveScrolling = false
 
@@ -2088,11 +2096,30 @@ final class DocumentController: NSResponder {
         // A view not yet laid out in a window has no width worth
         // remembering; its first real one would read as a change.
         guard width > 0, clip.height > 0, view.textView.window != nil else { return }
+        defer { view.lastClipY = clip.minY }
         if let anchor = view.viewportAnchor, anchor.width != width {
             holdAnchor(of: view, atWidth: width)
             return
         }
-        if let until = view.anchorHoldUntil, until > Date() { return }
+        // Pulled to the top because the text view is, for the moment,
+        // too short to hold where the clip was: a new view's frame
+        // catches up with its layout a display cycle late. Not a scroll
+        // anyone asked for; the anchored line goes back once it can.
+        let clampedByLayout =
+            clip.minY == 0 && view.lastClipY > 0
+            && view.textView.frame.height < view.lastClipY + clip.height
+        if clampedByLayout, view.viewportAnchor != nil {
+            view.anchorHoldUntil = Date().addingTimeInterval(0.5)
+            scheduleReanchor(of: view)
+            return
+        }
+        if let until = view.anchorHoldUntil, until > Date() {
+            // Our own re-anchoring scroll keeps the hold; anyone else's
+            // — Go to Definition landing, the wheel — is the new place,
+            // and a frame change a moment later must not undo it.
+            guard !view.reanchoring else { return }
+            view.anchorHoldUntil = nil
+        }
         view.viewportAnchor = (topOffset(of: view), width)
     }
 
@@ -2117,7 +2144,9 @@ final class DocumentController: NSResponder {
                 // Read again now: a scroll placed meanwhile — a restore,
                 // a jump — has already moved the anchor.
                 guard let anchor = view.viewportAnchor else { return }
+                view.reanchoring = true
                 self.scroll(view, topOffset: anchor.offset)
+                view.reanchoring = false
             }
         }
     }
@@ -2184,8 +2213,11 @@ final class DocumentController: NSResponder {
         let target = max(0, min(y, total - clip.bounds.height))
         clip.scroll(to: NSPoint(x: 0, y: target))
         view.scrollView.reflectScrolledClipView(clip)
-        // This is the line to keep now.
+        // This is the line to keep now, and where the clip was put —
+        // a new view's first scroll tick can arrive before it has a
+        // height, so the tick itself is not the place to learn this.
         view.viewportAnchor = (offset, textView.frame.width)
+        view.lastClipY = target
         // Measured mid-reflow, a line can land a few rows off; while the
         // anchor is held, one more pass after this one settles it.
         if view.gutter.lineIndex(forOffset: topOffset(of: view))

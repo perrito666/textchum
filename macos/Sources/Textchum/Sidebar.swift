@@ -483,6 +483,13 @@ struct SidebarView: View {
                             }
                         }
                     ForEach(group.documents) { document in
+                        // A button, not a tap gesture: with a drag
+                        // recogniser on the same row, a tap that moved a
+                        // pixel was taken for the start of a drag and
+                        // half the clicks did nothing.
+                        Button {
+                            onSelectDocument(document.id)
+                        } label: {
                         HStack(spacing: 4) {
                             if document.isDirty {
                                 // The dirty dot outranks the badge: unsaved
@@ -510,7 +517,8 @@ struct SidebarView: View {
                             Spacer(minLength: 0)
                         }
                         .contentShape(Rectangle())
-                        .onTapGesture { onSelectDocument(document.id) }
+                        }
+                        .buttonStyle(.plain)
                         // Dragging a row carries the file itself, so a
                         // drop elsewhere — Slack, a mail, the desktop —
                         // copies or attaches it.
