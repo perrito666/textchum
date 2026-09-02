@@ -1900,7 +1900,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The search scope for the key window: its project, else its file's
     /// directory, else home — always shown editable in the panel.
     var currentScope: String {
-        let keyEditor = editors.first { $0.window?.isKeyWindow == true } ?? editors.first
+        Self.scope(
+            focused: (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument,
+            editors: editors)
+    }
+
+    /// The project Open Quickly and Find in Project search: the focused
+    /// tab's — not the first tab's in the key window, which answered
+    /// for every tab when two projects were open side by side — then
+    /// any open document's, then the last scope used, then home.
+    static func scope(focused: DocumentController?, editors: [DocumentController]) -> String {
+        let keyEditor = focused ?? editors.first { $0.window?.isKeyWindow == true } ?? editors.first
         if let root = keyEditor?.projectRoot { return root }
         if let path = keyEditor?.coreDocument.path {
             return (path as NSString).deletingLastPathComponent

@@ -1197,6 +1197,32 @@ func runSmokeTest() -> Int32 {
         print("FAIL: a width change put line \(topLine(tall) ?? -1) at the top, not 200")
         return 1
     }
+    // A second view of the file scrolls like the first: it is made by
+    // hand around the shared storage, and one made without a maximum
+    // size stayed as tall as its clip, with nothing to scroll.
+    viewportBench.addViewToFocusedColumn()
+    guard let tallColumn = viewportBench.columns.first(where: { $0.document === tall }),
+        tallColumn.views.count == 2
+    else {
+        print("FAIL: the tall document did not take a second view")
+        return 1
+    }
+    let secondView = tallColumn.views[1]
+    spin(untilTrue: {
+        (secondView.scrollView.documentView?.frame.height ?? 0) > secondView.scrollView.contentView.bounds.height * 2
+    }, seconds: 2)
+    let secondHeight = secondView.scrollView.documentView?.frame.height ?? 0
+    guard secondHeight > secondView.scrollView.contentView.bounds.height * 2 else {
+        print("FAIL: the second view is \(secondHeight)pt tall for a clip of \(secondView.scrollView.contentView.bounds.height)pt")
+        return 1
+    }
+    tall.scroll(secondView, topOffset: line200)
+    spin(untilTrue: { secondView.scrollView.contentView.bounds.origin.y > 100 }, seconds: 2)
+    guard secondView.scrollView.contentView.bounds.origin.y > 100 else {
+        print("FAIL: the second view did not scroll")
+        return 1
+    }
+    viewportBench.closeFocusedView()
     // A live scroll is known from its first notification to its last.
     guard let liveView = viewportBench.columns.first(where: { $0.document === tall })?.views.first
     else {
@@ -1216,7 +1242,7 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     viewportBench.window?.close()
-    print("viewport ok (top line kept across a tab round trip and a width change; live scroll tracked)")
+    print("viewport ok (top line kept across a tab round trip and a width change; second view scrolls; live scroll tracked)")
 
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
@@ -1337,6 +1363,14 @@ func runSmokeTest() -> Int32 {
         guard treeBench.sidebarContext.projectRoot == projectB.path else {
             print(
                 "FAIL: after switching, the tree shows \(treeBench.sidebarContext.projectRoot ?? "nothing"), not beta")
+            return 1
+        }
+        // Open Quickly and Find in Project search the focused tab's
+        // project — not the first tab's, which answered for every tab
+        // in the window when two projects were open side by side.
+        let scope = AppDelegate.scope(focused: treeBench.focusedDocument, editors: [editorA, editorB])
+        guard scope == projectB.path else {
+            print("FAIL: the finder's scope is \(scope), not the focused tab's project")
             return 1
         }
         treeBench.window?.close()
