@@ -354,6 +354,8 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         guard place.scroll > 0 || place.top > 0 else { return }
         let scroll = { [weak view, weak document] in
             guard let view, let document else { return }
+            view.reanchoring = true
+            defer { view.reanchoring = false }
             if place.top > 0 {
                 // By line: the view is new, laid out at whatever width
                 // it had a moment ago, and a pixel offset into that
@@ -375,11 +377,18 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
                 view.textView.frame.width)
         }
         scroll()
-        // The view was made a moment ago and has no height yet, so the
-        // scroll above clamps to what exists; once layout has run, the
-        // same scroll lands where it was left — the caret survived, the
-        // viewport did not.
-        DispatchQueue.main.async { MainActor.assumeIsolated(scroll) }
+        // The view was made a moment ago and may have no height yet, so
+        // the scroll above can clamp to what exists; once layout has
+        // run, the same scroll lands where it was left. Unless something
+        // else scrolled the view meanwhile — Go to Definition shows the
+        // tab and then reveals its line — in which case that wins.
+        let placed = view.scrollView.contentView.bounds.origin.y
+        DispatchQueue.main.async { [weak view] in
+            MainActor.assumeIsolated {
+                guard let view, view.scrollView.contentView.bounds.origin.y == placed else { return }
+                scroll()
+            }
+        }
     }
 
     /// One more view of what the column shows, stacked under the rest.
@@ -591,8 +600,11 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         let holder = columns[column]
         focusedView = holder.views.indices.contains(view) ? view : 0
         if let textView = holder.views[safe: focusedView]?.textView {
+            // Focus is not a scroll: this used to bring the caret into
+            // view, which put every tab shown back at its caret — the
+            // top of the file, as often as not — instead of where it
+            // was left.
             window?.makeFirstResponder(textView)
-            textView.scrollRangeToVisible(textView.selectedRange())
         }
         if let document = holder.document {
             refreshChrome(for: document)
@@ -779,8 +791,14 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
 
     func windowDidBecomeKey(_ notification: Notification) {
         NotificationCenter.default.post(name: .textchumDocumentsChanged, object: self)
-        if let path = focusedDocument?.coreDocument.path {
-            focusedDocument?.followInTree(path)
+        if let focused = focusedDocument {
+            // Say again what this window shows: its sidebar's tree root
+            // and focus marks come from here, and a window that took
+            // its files before it had a window of its own missed them.
+            refreshChrome(for: focused)
+            if let path = focused.coreDocument.path {
+                focused.followInTree(path)
+            }
         }
     }
 

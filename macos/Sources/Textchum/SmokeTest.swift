@@ -1373,9 +1373,31 @@ func runSmokeTest() -> Int32 {
             print("FAIL: the finder's scope is \(scope), not the focused tab's project")
             return 1
         }
+        // Split into a new window: the file leaves for a fresh window,
+        // whose sidebar must show its project and mark it focused.
+        let splitBench = Workbench(sidebar: sidebar)
+        treeBench.detach(editorB)
+        splitBench.add(editorB)
+        splitBench.showWindow(nil)
+        splitBench.window?.makeKeyAndOrderFront(nil)
+        spin(
+            untilTrue: {
+                splitBench.sidebarContext.projectRoot == projectB.path
+                    && splitBench.sidebarContext.focusedDocumentID == ObjectIdentifier(editorB)
+            }, seconds: 5)
+        guard splitBench.sidebarContext.projectRoot == projectB.path else {
+            print(
+                "FAIL: the new window's tree shows \(splitBench.sidebarContext.projectRoot ?? "nothing"), not beta")
+            return 1
+        }
+        guard splitBench.sidebarContext.focusedDocumentID == ObjectIdentifier(editorB) else {
+            print("FAIL: the new window does not mark its file as focused")
+            return 1
+        }
+        splitBench.window?.close()
         treeBench.window?.close()
         try? FileManager.default.removeItem(at: base)
-        print("tree follows ok (the root and the marks move with focus)")
+        print("tree follows ok (the root and the marks move with focus, into a new window too)")
 
     // Scrolling a big tree must stay cheap. The measurement — a
     // synthetic monorepo of 20,000 files, fully expanded, scrolled top

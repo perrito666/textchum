@@ -30,6 +30,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         stamp("begin")
+        if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_SPLIT"] != nil {
+            // Moves the last tab into a new window the way "Split into
+            // New Window" does, then logs what each window's sidebar
+            // was told: its tree root, its focused file, its groups.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                MainActor.assumeIsolated {
+                    guard let last = self.editors.last else { return }
+                    self.splitIntoNewWindow(documentIDs: [ObjectIdentifier(last)])
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                MainActor.assumeIsolated {
+                    for (index, bench) in Workbench.all.enumerated() {
+                        NSLog(
+                            "SPLIT window \(index) num=\(bench.window?.windowNumber ?? -1) root=\(bench.sidebarContext.projectRoot ?? "nil") focused=\(bench.sidebarContext.focusedPath ?? "nil") groups=\(bench.sidebarModel.groups.count) docs=\(bench.sidebarModel.groups.flatMap(\.documents).count) settled=\(bench.sidebarModel.settled)")
+                    }
+                }
+            }
+        }
         if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_BOUNCE"] != nil {
             // Watches the first editor's viewport under real scrolling
             // and logs every reversal: the viewport moving against the
