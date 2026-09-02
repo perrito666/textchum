@@ -355,6 +355,13 @@ final class DocumentController: NSResponder {
             textView.isVerticallyResizable = true
             textView.isHorizontallyResizable = false
             textView.autoresizingMask = [.width]
+            // A text view made by hand can grow only up to its maxSize,
+            // which starts at its frame — zero here — so the second
+            // view never got taller than its clip and had nothing to
+            // scroll. scrollableTextView() sets these; so does this.
+            textView.minSize = NSSize(width: 0, height: 0)
+            textView.maxSize = NSSize(
+                width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
             scrollView = NSScrollView()
             scrollView.hasVerticalScroller = true
             scrollView.documentView = textView
