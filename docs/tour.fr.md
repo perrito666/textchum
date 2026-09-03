@@ -120,6 +120,21 @@ curseur, ce qui marche même souris désactivée.
 </figure>
 </div>
 
+La même documentation peut vivre dans un panneau plutôt que dans une
+bulle. **Affichage ▸ Panneau d'information** (⌥⌘I) en ancre un sous
+l'éditeur, comme une seconde vue s'empile dans la colonne ; tant qu'il
+est là la bulle ne paraît pas, et le panneau montre la documentation du
+symbole sous le pointeur, et celle du symbole au curseur à mesure qu'il
+se déplace. Sa seconde face liste les diagnostics du document — ligne,
+type, message — et un clic mène à la ligne. Le panneau suit le fichier
+qui a le focus d'un onglet et d'une colonne à l'autre.
+
+**Aller ▸ Historique des sauts…** liste le chemin que Retour suivrait, le
+plus récent d'abord, avec le chemin avant en dessous quand il y en a un,
+dans la même liste que Rechercher les références ; choisir un endroit y
+mène, comme un saut de plus. Les deux listes montrent chaque ligne dans
+les couleurs de son langage.
+
 **Aller à la ligne** (⌘L, Ctrl+L sous Linux) accepte un numéro, ou le
 `src/main.rs:412:8` entier collé depuis un journal de compilation — le
 nom du fichier et le bruit qui suit sont ignorés, la ligne est centrée,

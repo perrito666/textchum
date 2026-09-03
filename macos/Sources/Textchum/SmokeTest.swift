@@ -1244,6 +1244,72 @@ func runSmokeTest() -> Int32 {
     viewportBench.window?.close()
     print("viewport ok (top line kept across a tab round trip and a width change; second view scrolls; live scroll tracked)")
 
+    // Lines shown away from their file carry their language's colours.
+    do {
+        let plainFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        let styled = SnippetRows.styled("fn main() { let x = 1; }", language: "rust", font: plainFont)
+        var colours = Set<String>()
+        styled.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: styled.length)) {
+            value, _, _ in
+            if let color = value as? NSColor { colours.insert(color.description) }
+        }
+        guard colours.count > 1 else {
+            print("FAIL: a Rust snippet came back in one colour")
+            return 1
+        }
+        // The history list: the back trail alone is plain rows; both
+        // trails get their headings.
+        let history = SnippetRows()
+        let here = JumpLocation(path: "/nonexistent/a.rs", line: 3, character: 0)
+        let there = JumpLocation(path: "/nonexistent/b.rs", line: 7, character: 0)
+        let single = AppDelegate.jumpHistoryRows(back: [here], forward: [], lines: history)
+        guard single.rows.count == 1, single.places == [here] else {
+            print("FAIL: a one-place history has \(single.rows.count) rows")
+            return 1
+        }
+        let both = AppDelegate.jumpHistoryRows(back: [here], forward: [there], lines: history)
+        guard both.rows.count == 4, both.places == [here, there] else {
+            print("FAIL: a two-trail history has \(both.rows.count) rows, not 4")
+            return 1
+        }
+    }
+    print("styled rows ok (language colours, jump history rows)")
+
+    // The info panel docks under the focused column's views, takes what
+    // the bubble would have said, lists diagnostics, and goes away.
+    let panelBench = Workbench(sidebar: nil)
+    let panelDocument = DocumentController(document: CoreDocument())
+    panelBench.add(panelDocument)
+    panelBench.window?.makeKeyAndOrderFront(nil)
+    panelBench.toggleInfoPanel()
+    guard let panel = panelBench.infoPanel, panel.superview === panelBench.columns[0].split else {
+        print("FAIL: the info panel did not dock in the focused column")
+        return 1
+    }
+    panelDocument.debugShowHover()
+    guard !panel.documentationText.string.isEmpty, !panelDocument.hasHoverBubble else {
+        print("FAIL: documentation went to a bubble, not the panel")
+        return 1
+    }
+    panel.mode = .diagnostics
+    let reported = try? JSONDecoder().decode(
+        [CoreDiagnostic].self,
+        from: Data(
+            #"[{"line":0,"character":0,"endLine":0,"endCharacter":1,"severity":1,"message":"boom"}]"#
+                .utf8))
+    panelDocument.apply(diagnostics: reported ?? [])
+    guard panel.rows.count == 1 else {
+        print("FAIL: the diagnostics face has \(panel.rows.count) rows, not 1")
+        return 1
+    }
+    panelBench.toggleInfoPanel()
+    guard panelBench.infoPanel == nil, panelBench.columns[0].split.arrangedSubviews.count == 1 else {
+        print("FAIL: the info panel did not go away")
+        return 1
+    }
+    panelBench.window?.close()
+    print("info panel ok (docks, takes the documentation, lists diagnostics, hides)")
+
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
     // where the caret is and what the file is.

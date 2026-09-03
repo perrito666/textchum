@@ -106,10 +106,10 @@ fn highlight_spans(language: &str, code: &str) -> Option<Vec<Option<u32>>> {
     if language.is_empty() {
         return None;
     }
-    let spec = crate::syntax::languages::by_name(language)?;
-    let rope = ropey::Rope::from_str(code);
-    let syntax = crate::syntax::SyntaxState::new(spec, &rope)?;
-    let spans = syntax.highlights(&rope, 0..code.len());
+    let spans = crate::syntax::snippet_highlights(language, code);
+    if spans.is_empty() {
+        return None;
+    }
     let mut styles: Vec<Option<u32>> = vec![None; code.encode_utf16().count()];
     // Application order: a later span wins where they overlap, the
     // same contract the editors paint by.

@@ -30,6 +30,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         stamp("begin")
+        if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_PANEL"] != nil {
+            // Docks the info panel under the first editor and fills it
+            // with known documentation, then logs the window number, so
+            // the panel can be looked at without a language server.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                MainActor.assumeIsolated {
+                    guard let editor = self.editors.first, let bench = editor.workbench else { return }
+                    bench.toggleInfoPanel()
+                    editor.debugShowHover()
+                    NSLog("PANEL window num=\(bench.window?.windowNumber ?? -1) docked=\(bench.infoPanel != nil)")
+                }
+            }
+        }
         if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_SPLIT"] != nil {
             // Moves the last tab into a new window the way "Split into
             // New Window" does, then logs what each window's sidebar
@@ -656,6 +669,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return jumpStack.canGoBack
         case #selector(goForward(_:)):
             return jumpStack.canGoForward
+        case #selector(showJumpHistory(_:)):
+            return jumpStack.canGoBack || jumpStack.canGoForward
         case #selector(toggleHoverDocs(_:)):
             menuItem.state = (settingsModel?.hoverDocs ?? true) ? .on : .off
             return true
@@ -1737,8 +1752,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// The key editor's file and caret, as a jump-stack entry.
     private func currentJumpLocation() -> JumpLocation? {
+        // The focused tab, not the first tab in the key window.
         let editor =
-            editors.first { $0.window?.isKeyWindow == true } ?? editors.first
+            (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument
+            ?? editors.first { $0.window?.isKeyWindow == true } ?? editors.first
         guard let editor, let path = editor.coreDocument.path else { return nil }
         let caret = editor.caretLSPPosition
         return JumpLocation(path: path, line: caret.line, character: caret.character)
@@ -1769,6 +1786,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         navigate(to: target)
+    }
+
+    private let jumpHistoryPanel = ListPanel()
+
+    /// Go → Jump History…: the trail behind and ahead as a list, in the
+    /// panel Find References uses. Choosing a place goes there, and is
+    /// a jump of its own, so Go Back comes back.
+    @objc func showJumpHistory(_ sender: Any?) {
+        let (rows, places) = Self.jumpHistoryRows(
+            back: jumpStack.backTrail, forward: jumpStack.forwardTrail, lines: SnippetRows())
+        guard !places.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        jumpHistoryPanel.show(
+            rows: rows, over: NSApp.keyWindow, title: t("Jump History"),
+            placeholder: t("file or line…"), monospaced: true
+        ) { [weak self] index in
+            guard let self, places.indices.contains(index) else { return }
+            self.recordJumpOrigin()
+            self.navigate(to: places[index])
+        }
+    }
+
+    /// The rows of the history list and, in the same order, the places
+    /// the rows stand for. Headings separate the two trails when both
+    /// are there.
+    static func jumpHistoryRows(
+        back: [JumpLocation], forward: [JumpLocation], lines: SnippetRows
+    ) -> (rows: [ListPanel.Row], places: [JumpLocation]) {
+        var rows: [ListPanel.Row] = []
+        var places: [JumpLocation] = []
+        func append(_ trail: [JumpLocation], heading: String) {
+            guard !trail.isEmpty else { return }
+            if !back.isEmpty, !forward.isEmpty { rows.append(.heading(heading)) }
+            for place in trail {
+                rows.append(lines.row(path: place.path, line: place.line))
+                places.append(place)
+            }
+        }
+        append(back, heading: t("Back ({})", String(back.count)))
+        append(forward, heading: t("Forward ({})", String(forward.count)))
+        return (rows, places)
     }
 
     /// One explorer state for the whole app: the tree looks the same
@@ -2542,6 +2602,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         forwardItem.keyEquivalentModifierMask = [.control, .command]
         editMenu.addItem(forwardItem)
+        let historyItem = NSMenuItem(
+            title: t("Jump History…"),
+            action: #selector(showJumpHistory(_:)),
+            keyEquivalent: "h")
+        historyItem.keyEquivalentModifierMask = [.command, .control, .shift]
+        editMenu.addItem(historyItem)
         let references = NSMenuItem(
             title: t("Find References"),
             action: #selector(DocumentController.findReferences(_:)),
@@ -2734,6 +2800,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         showHoverItem.keyEquivalentModifierMask = [.command, .control]
         viewMenu.addItem(showHoverItem)
+        let infoPanelItem = NSMenuItem(
+            title: t("Info Panel"),
+            action: #selector(DocumentController.toggleInfoPanel(_:)),
+            keyEquivalent: "i")
+        infoPanelItem.keyEquivalentModifierMask = [.command, .option]
+        viewMenu.addItem(infoPanelItem)
         let serverStatusItem = NSMenuItem(
             title: t("Language Server Status"),
             action: #selector(showServerStatus(_:)),

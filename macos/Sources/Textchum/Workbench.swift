@@ -62,13 +62,27 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
             split.autoresizingMask = [.width, .height]
         }
 
-        /// Where each view sits in the column, as fractions of its
-        /// height — what #102 remembers per file.
+        /// Where each view sits in the column, as fractions of the
+        /// height the views share — what #102 remembers per file. An
+        /// info panel docked under them takes its own slice first.
         var dividerFractions: [Double] {
-            guard views.count > 1, split.bounds.height > 1 else { return [] }
+            guard views.count > 1, stackHeight > 1 else { return [] }
             return views.dropLast().map { view in
-                Double(view.container.frame.maxY / split.bounds.height)
+                Double(view.container.frame.maxY / stackHeight)
             }
+        }
+
+        /// The info panel docked in this column, when there is one: the
+        /// arranged subview that is not one of the views.
+        var infoPanel: InfoPanel? {
+            split.arrangedSubviews.lazy.compactMap { $0 as? InfoPanel }.first
+        }
+
+        /// The height the views share: the split's, less the panel and
+        /// the divider above it.
+        var stackHeight: CGFloat {
+            guard let panel = infoPanel else { return split.bounds.height }
+            return max(1, panel.frame.minY - split.dividerThickness)
         }
     }
 
@@ -318,6 +332,7 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         }
         refreshTabs()
         refreshChrome(for: document)
+        if index == focusedColumn { refreshInfoPanel() }
     }
 
     /// Writes down how a column is showing its file: the file is what
@@ -417,16 +432,97 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
 
     /// Shares a column's height between its views.
     private func placeDividers(of column: Column, at fractions: [Double] = []) {
-        guard column.views.count > 1 else { return }
+        let panel = column.infoPanel
+        guard column.views.count > 1 || panel != nil else { return }
         column.split.layoutSubtreeIfNeeded()
         let height = column.split.bounds.height
         guard height > 1 else { return }
-        for divider in 0..<(column.views.count - 1) {
+        // The panel keeps the height it has, or takes its share when it
+        // has none yet; the views split what is left.
+        var stack = height
+        if let panel {
+            let wanted = panel.frame.height > 40 ? panel.frame.height : Self.infoPanelHeight
+            stack = max(height * 0.4, height - wanted - column.split.dividerThickness)
+        }
+        for divider in 0..<max(0, column.views.count - 1) {
             let fraction =
                 divider < fractions.count
                 ? fractions[divider]
                 : Double(divider + 1) / Double(column.views.count)
-            column.split.setPosition(height * CGFloat(fraction), ofDividerAt: divider)
+            column.split.setPosition(stack * CGFloat(fraction), ofDividerAt: divider)
+        }
+        if panel != nil {
+            column.split.setPosition(stack, ofDividerAt: column.views.count - 1)
+        }
+    }
+
+    // MARK: The info panel
+
+    /// The panel's height when it first docks.
+    private static let infoPanelHeight: CGFloat = 180
+
+    /// The docked info panel of this window, in whichever column has
+    /// the keyboard; nil while hidden.
+    private(set) var infoPanel: InfoPanel?
+    /// Which face the panel shows, kept across hide and show.
+    var infoPanelMode: InfoPanel.Mode = .documentation
+
+    var isInfoPanelVisible: Bool { infoPanel != nil }
+
+    /// View ▸ Info Panel: docks the panel under the focused column's
+    /// views, or takes it away.
+    func toggleInfoPanel() {
+        if infoPanel != nil {
+            hideInfoPanel()
+        } else {
+            showInfoPanel()
+        }
+    }
+
+    private func showInfoPanel() {
+        guard infoPanel == nil else { return }
+        let panel = InfoPanel(frame: .zero)
+        panel.mode = infoPanelMode
+        panel.onModeChange = { [weak self] mode in
+            guard let self else { return }
+            self.infoPanelMode = mode
+            self.refreshInfoPanel()
+        }
+        infoPanel = panel
+        refreshInfoPanel()
+    }
+
+    private func hideInfoPanel() {
+        guard let panel = infoPanel else { return }
+        let column = columns.first { $0.infoPanel === panel }
+        panel.removeFromSuperview()
+        infoPanel = nil
+        if let column {
+            column.split.adjustSubviews()
+            placeDividers(of: column)
+        }
+    }
+
+    /// Puts the panel under the focused column and fills it from the
+    /// focused document. Called when focus moves and when the document
+    /// has something new for it.
+    func refreshInfoPanel() {
+        guard let panel = infoPanel, columns.indices.contains(focusedColumn) else { return }
+        let column = columns[focusedColumn]
+        if panel.superview !== column.split {
+            if let previous = columns.first(where: { $0.infoPanel === panel }) {
+                panel.removeFromSuperview()
+                previous.split.adjustSubviews()
+                placeDividers(of: previous)
+            }
+            column.split.addArrangedSubview(panel)
+            placeDividers(of: column)
+        }
+        if let document = column.document {
+            document.fill(infoPanel: panel)
+        } else {
+            panel.showPlaceholder(t("No file here."))
+            panel.showDiagnostics([])
         }
     }
 
@@ -610,6 +706,7 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
             refreshChrome(for: document)
             document.didTakeFocus()
         }
+        refreshInfoPanel()
         refreshTabs()
     }
 
@@ -626,6 +723,7 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
                 refreshChrome(for: document)
                 document.didTakeFocus()
             }
+            refreshInfoPanel()
             refreshTabs()
             return
         }

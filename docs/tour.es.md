@@ -118,6 +118,21 @@ el cursor, lo que funciona incluso con el hover del ratón apagado.
 </figure>
 </div>
 
+La misma documentación puede vivir en un panel en lugar de una burbuja.
+**Ver ▸ Panel de información** (⌥⌘I) acopla uno bajo el editor, como
+una segunda vista se apila en la columna; mientras está visible la
+burbuja no aparece, y el panel muestra la documentación del símbolo
+bajo el puntero, y la del símbolo en el cursor a medida que se mueve.
+Su segunda cara lista los diagnósticos del documento — línea, tipo,
+mensaje — y un clic lleva a la línea. El panel sigue al archivo con el
+foco entre pestañas y columnas.
+
+**Ir ▸ Historial de saltos…** lista el recorrido que Volver seguiría, el
+más reciente primero, con el recorrido hacia adelante debajo cuando lo
+hay, en la misma lista que usa Buscar referencias; elegir un lugar lleva
+allí, como un salto más. Ambas listas muestran cada línea con los
+colores de su lenguaje.
+
 **Ir a la línea** (⌘L, Ctrl+L en Linux) acepta un número, o el
 `src/main.rs:412:8` entero pegado desde un registro de compilación —
 el nombre del archivo y el ruido sobrante se ignoran, la línea queda

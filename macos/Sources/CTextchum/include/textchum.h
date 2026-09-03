@@ -2183,6 +2183,23 @@ bool tc_document_set_language(struct TcDocument *document, const char *name, uin
 char *tc_document_language_name(const struct TcDocument *document);
 
 /**
+ * Styled spans over a snippet of `language`, the way a document of that
+ * language would be painted: for one line shown away from its file. On
+ * success stores the array in `spans_out`/`count_out` (empty is a
+ * success: null/0); release with [`tc_highlight_spans_free`].
+ *
+ * # Safety
+ * `language`/`text` must point to `language_len`/`text_len` readable
+ * bytes; `spans_out` and `count_out` must point to writable slots.
+ */
+bool tc_highlight_snippet(const char *language,
+                          uintptr_t language_len,
+                          const char *text,
+                          uintptr_t text_len,
+                          struct TcHighlightSpan **spans_out,
+                          uintptr_t *count_out);
+
+/**
  * Styled spans over the UTF-16 code unit range `start..end`, in
  * application order — where spans overlap, the later one wins. On success
  * stores the array in `spans_out`/`count_out` (empty is a success:
