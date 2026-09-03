@@ -1353,6 +1353,16 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the diagnostics face has \(shownAgain.rows.count) rows, not 1")
         return 1
     }
+    // A file opened into the column goes above the panel, not under it.
+    let panelOther = DocumentController(document: CoreDocument())
+    panelBench.add(panelOther)
+    let stacked = panelBench.columns[0].split.arrangedSubviews
+    guard stacked.count == 2, stacked.last === shownAgain,
+        stacked.first === panelBench.columns[0].views[0].container
+    else {
+        print("FAIL: a file opened with the panel docked did not go above it")
+        return 1
+    }
     panelBench.toggleInfoPanel()
     guard panelBench.infoPanel == nil, panelBench.columns[0].split.arrangedSubviews.count == 1 else {
         print("FAIL: the info panel did not go away")
@@ -1360,6 +1370,38 @@ func runSmokeTest() -> Int32 {
     }
     panelBench.window?.close()
     print("info panel ok (docks, takes the documentation, lists diagnostics, hides)")
+
+    // Quick Open: Enter opens the selected row once the rows answer
+    // what was typed; while a search is still owed it searches.
+    do {
+        let finderRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-finder-\(ProcessInfo.processInfo.processIdentifier)")
+        try? FileManager.default.createDirectory(at: finderRoot, withIntermediateDirectories: true)
+        try? "a\n".write(to: finderRoot.appendingPathComponent("alpha.txt"), atomically: true, encoding: .utf8)
+        try? "b\n".write(to: finderRoot.appendingPathComponent("beta.txt"), atomically: true, encoding: .utf8)
+        let finder = QuickFinderPanel()
+        var opened: [String] = []
+        finder.onOpen = { path, _ in opened.append(path) }
+        finder.show(mode: .files, scope: finderRoot.path, over: nil)
+        finder.debugType(scope: finderRoot.path, query: "alp")
+        // Typing owes a search: Enter now must not open anything.
+        guard !finder.opensOnReturn else {
+            print("FAIL: Enter would open before the search for the query ran")
+            return 1
+        }
+        spin(untilTrue: { finder.opensOnReturn && finder.rowCount > 0 }, seconds: 5)
+        guard finder.opensOnReturn, finder.rowCount > 0 else {
+            print("FAIL: the finder never answered the query (rows \(finder.rowCount))")
+            return 1
+        }
+        finder.debugReturn()
+        guard opened.count == 1, opened.first?.hasSuffix("alpha.txt") == true else {
+            print("FAIL: Enter on a current result did not open it: \(opened)")
+            return 1
+        }
+        try? FileManager.default.removeItem(at: finderRoot)
+    }
+    print("quick open ok (Enter opens the row once the rows are current)")
 
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows

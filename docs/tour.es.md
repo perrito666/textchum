@@ -277,8 +277,10 @@ refrescado en vivo.
 **⌘T** abre archivos por nombre difuso dentro del proyecto. El ámbito
 se recorre una vez y se filtra en memoria, así que escribir es
 instantáneo; la línea de estado dice cuántos de cuántos archivos
-coinciden y qué hace cada tecla — **⏎ busca, ⌘⏎ abre**, para que
-afinar una consulta nunca abra un archivo por accidente.
+coinciden y qué hace cada tecla — **⏎ abre la fila seleccionada cuando
+las filas ya responden a la consulta, y busca mientras queda una
+pendiente; ⌘⏎ abre siempre** — para que afinar una consulta nunca abra
+un archivo por accidente.
 
 <div class="shots" markdown>
 <figure markdown>

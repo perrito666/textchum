@@ -19,9 +19,11 @@ alphabetically. The same stacked filters as Find in Project apply
 here too — every filter kind refines the matched paths — and the
 status line says how many matches the filters pruned.
 
-**⏎ searches, ⌘⏎ opens** (Ctrl+⏎ on Linux): refining a query should
-never open a file by accident. ↑/↓ move the selection, ⎋ closes, and
-a double-click opens too. The status strip spells this out.
+**⏎ opens the selected row once the rows answer what was typed**; while
+a search is still owed — the query changed a moment ago — it searches
+instead, so refining a query never opens a file by accident. ⌘⏎
+(Ctrl+⏎ on Linux) opens regardless. ↑/↓ move the selection, ⎋ closes,
+and a double-click opens too. The status strip spells this out.
 
 The scope is walked once when the panel opens, then matched in memory
 — typing stays instant on a real repository, and the file count in the
