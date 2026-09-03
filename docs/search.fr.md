@@ -22,10 +22,12 @@ Chercher dans le projet s'appliquent ici — chaque type de filtre
 affine les chemins trouvés — et la ligne d'état dit combien de
 correspondances les filtres ont élaguées.
 
-**⏎ cherche, ⌘⏎ ouvre** (Ctrl+⏎ sous Linux) : affiner une requête ne
-devrait jamais ouvrir un fichier par accident. ↑/↓ déplacent la
-sélection, ⎋ ferme, et le double-clic ouvre aussi. La ligne d'état le
-rappelle.
+**⏎ ouvre la ligne sélectionnée dès que les lignes répondent à ce qui
+est tapé** ; tant qu'une recherche reste due — la requête vient de
+changer — il cherche à la place, pour qu'affiner une requête n'ouvre
+jamais un fichier par accident. ⌘⏎ (Ctrl+⏎ sous Linux) ouvre dans tous
+les cas. ↑/↓ déplacent la sélection, ⎋ ferme, et le double-clic ouvre
+aussi. La ligne d'état le rappelle.
 
 La portée est parcourue une fois à l'ouverture du panneau, puis
 filtrée en mémoire — la frappe reste instantanée sur un vrai dépôt, et

@@ -412,7 +412,15 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         guard let document = column.document else { return nil }
         let view = document.makeView()
         column.views.append(view)
-        column.split.addArrangedSubview(view.container)
+        // Before the info panel, when one is docked: the panel stays
+        // last, or a file opened into the column would sit under it.
+        if let panel = column.infoPanel,
+            let index = column.split.arrangedSubviews.firstIndex(of: panel)
+        {
+            column.split.insertArrangedSubview(view.container, at: index)
+        } else {
+            column.split.addArrangedSubview(view.container)
+        }
         for index in column.views.indices {
             column.split.setHoldingPriority(
                 NSLayoutConstraint.Priority(250), forSubviewAt: index)

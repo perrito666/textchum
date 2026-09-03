@@ -282,8 +282,10 @@ session, rafraîchi en direct.
 **⌘T** ouvre les fichiers par nom flou dans le projet. La portée est
 parcourue une fois puis filtrée en mémoire, donc la frappe reste
 instantanée ; la ligne d'état dit combien de fichiers sur combien
-correspondent et ce que font les touches — **⏎ cherche, ⌘⏎ ouvre**,
-pour qu'affiner une requête n'ouvre jamais un fichier par accident.
+correspondent et ce que font les touches — **⏎ ouvre la ligne
+sélectionnée dès que les lignes répondent à la requête, et cherche tant
+qu'une recherche reste due ; ⌘⏎ ouvre dans tous les cas** — pour
+qu'affiner une requête n'ouvre jamais un fichier par accident.
 
 <div class="shots" markdown>
 <figure markdown>

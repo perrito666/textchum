@@ -269,8 +269,9 @@ runs where, and the session's recent transitions, refreshed live.
 **⌘T** opens files by fuzzy name within the project. The scope is
 walked once and matched in memory, so typing stays instant; the status
 strip says how many of how many files matched, and which keys do what
-— **⏎ searches, ⌘⏎ opens**, so refining a query never opens a file by
-accident.
+— **⏎ opens the selected row once the rows answer the query, and
+searches while one is still owed; ⌘⏎ opens regardless** — so refining
+a query never opens a file by accident.
 
 <div class="shots" markdown>
 <figure markdown>

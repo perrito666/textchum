@@ -41,7 +41,7 @@ final class QuickFinderPanel: NSObject {
     private var panel: NSPanel?
     /// Spelled out in the status strip, because a finder whose ⏎ does
     /// not open is only friendly if it says so.
-    private static let keyHint = "↑↓ select · ⏎ search · ⌘⏎ open · ⎋ close"
+    private static let keyHint = "↑↓ select · ⏎ open · ⌘⏎ open now · ⎋ close"
 
     private var mode: Mode = .files
     /// The scope's file list, walked once when the panel opens (or the
@@ -70,6 +70,19 @@ final class QuickFinderPanel: NSObject {
     private var rows: [(display: String, path: String, line: Int)] = []
     private var searchGeneration = 0
     private var debounce: Timer?
+    /// True once the rows answer the query as typed: Enter then opens
+    /// the selected row instead of searching again.
+    private var resultsCurrent = false
+    /// What plain Enter does right now, for the smoke test to ask.
+    var opensOnReturn: Bool { resultsCurrent && debounce == nil }
+    var rowCount: Int { rows.count }
+
+    /// Debug hook: plain Enter in the query field, the way the field
+    /// editor delivers it.
+    @discardableResult
+    func debugReturn() -> Bool {
+        control(queryField, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:)))
+    }
     /// Opens a result: absolute path, one-based line (0 = just open).
     var onOpen: ((String, Int) -> Void)?
 
@@ -300,6 +313,7 @@ final class QuickFinderPanel: NSObject {
     }
 
     private func scheduleSearch() {
+        resultsCurrent = false
         debounce?.invalidate()
         // .common mode: a timer scheduled while the field editor is
         // tracking would otherwise wait for typing to stop entirely.
@@ -313,6 +327,8 @@ final class QuickFinderPanel: NSObject {
     }
 
     private func runSearch() {
+        debounce = nil
+        resultsCurrent = true
         let scope = (scopeField.stringValue as NSString).expandingTildeInPath
         let query = queryField.stringValue
         let mode = self.mode
@@ -504,8 +520,13 @@ extension QuickFinderPanel: NSTextFieldDelegate {
             moveSelection(by: -1)
             return true
         case #selector(NSResponder.insertNewline(_:)):
-            // Search now (flushing the debounce). ⌘⏎ is what opens —
-            // see the hint in the status line.
+            // With the rows already answering what was typed — after
+            // arrowing to one, say — Enter opens it. Otherwise it
+            // searches now, flushing the debounce; ⌘⏎ opens regardless.
+            if opensOnReturn, !rows.isEmpty {
+                openSelection()
+                return true
+            }
             debounce?.invalidate()
             if mode != .grep, indexedScope
                 != (scopeField.stringValue as NSString).expandingTildeInPath
