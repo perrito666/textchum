@@ -23,7 +23,9 @@ status line says how many matches the filters pruned.
 a search is still owed — the query changed a moment ago — it searches
 instead, so refining a query never opens a file by accident. ⌘⏎
 (Ctrl+⏎ on Linux) opens regardless. ↑/↓ move the selection, ⎋ closes,
-and a double-click opens too. The status strip spells this out.
+and a double-click opens too. The status strip spells this out. The
+panel can be widened, and keeps its size; in a row the directory gives
+way first, losing its head, so the file name is always readable.
 
 The scope is walked once when the panel opens, then matched in memory
 — typing stays instant on a real repository, and the file count in the

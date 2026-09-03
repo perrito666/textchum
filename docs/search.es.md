@@ -27,7 +27,9 @@ escrito**; mientras queda una búsqueda pendiente — la consulta cambió
 hace un instante — busca en su lugar, para que afinar una consulta nunca
 abra un archivo por accidente. ⌘⏎ (Ctrl+⏎ en Linux) abre siempre. ↑/↓
 mueven la selección, ⎋ cierra, y el doble clic también abre. La línea
-de estado lo explica.
+de estado lo explica. El panel se puede ensanchar y recuerda su tamaño;
+en una fila el directorio cede primero, perdiendo su inicio, de modo que
+el nombre del archivo siempre se lee.
 
 El ámbito se recorre una vez al abrir el panel y luego se filtra en
 memoria — escribir es instantáneo en un repositorio real, y el número
