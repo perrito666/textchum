@@ -252,6 +252,20 @@ final class DocumentController: NSResponder {
     private var lastTypedText = ""
     /// Debounces hover requests while the mouse moves.
     private var hoverTimer: Timer?
+    /// The documentation last shown for this document, so the info
+    /// panel has it again when the document comes back into focus.
+    private var lastHoverText: NSAttributedString?
+    /// Asks the server about the caret's symbol once it has rested.
+    private var caretHoverTimer: Timer?
+
+    /// The window's docked info panel, when it is shown.
+    var infoPanel: InfoPanel? { workbench?.infoPanel }
+    /// True while documentation is to go to the panel, not a bubble.
+    private var infoPanelTakesDocumentation: Bool {
+        infoPanel?.mode == .documentation
+    }
+    /// Whether a hover bubble is up — the smoke test asks.
+    var hasHoverBubble: Bool { hoverPopover != nil }
     /// The popover currently showing hover content, if any.
     private var hoverPopover: NSPopover?
     /// The window's split view controller (sidebar · editor · preview),
@@ -734,6 +748,9 @@ final class DocumentController: NSResponder {
         self.diagnostics = diagnostics
         renderMarks()
         updateChrome()
+        if let panel = infoPanel, panel.mode == .diagnostics, workbench?.focusedDocument === self {
+            panel.showDiagnostics(diagnosticRows())
+        }
     }
 
     // MARK: Hover
@@ -782,7 +799,8 @@ final class DocumentController: NSResponder {
             }
             return
         }
-        guard appliedHoverDocs, lspApp != nil, lspOpenPath != nil else { return }
+        guard appliedHoverDocs || infoPanelTakesDocumentation, lspApp != nil, lspOpenPath != nil
+        else { return }
         hoverTimer?.invalidate()
         hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {
             [weak self] _ in
@@ -951,9 +969,14 @@ final class DocumentController: NSResponder {
     }
 
     private func requestHover(at point: NSPoint, deliberate: Bool = false) {
+        guard let textView else { return }
+        let index = textView.characterIndexForInsertion(at: point)
+        requestHover(atIndex: index, point: point, deliberate: deliberate)
+    }
+
+    private func requestHover(atIndex index: Int, point: NSPoint, deliberate: Bool) {
         guard let lspApp, let path = lspOpenPath, let textView else { return }
         let text = textView.string as NSString
-        let index = textView.characterIndexForInsertion(at: point)
         guard index >= 0, index <= text.length else { return }
         // A passive mouse rest only asks the server about symbols:
         // whitespace, punctuation, the void past a line's end, and
@@ -964,6 +987,92 @@ final class DocumentController: NSResponder {
         lspApp.lspHover(path: path, line: line, character: character) { [weak self] json in
             self?.showHover(resultJSON: json, at: point)
         }
+    }
+
+    /// With the panel showing documentation, the caret's symbol is what
+    /// it documents: asked once the caret has rested.
+    private func scheduleCaretHover() {
+        caretHoverTimer?.invalidate()
+        guard infoPanelTakesDocumentation, lspApp != nil, lspOpenPath != nil,
+            workbench?.focusedDocument === self
+        else { return }
+        caretHoverTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, let textView = self.textView else { return }
+                    let index = textView.selectedRange().location
+                    let text = textView.string as NSString
+                    guard self.isHoverableSymbol(at: index, in: text) else { return }
+                    let rect = textView.firstRect(
+                        forCharacterRange: NSRange(location: index, length: 0), actualRange: nil)
+                    let point = textView.convert(
+                        textView.window?.convertPoint(fromScreen: rect.origin) ?? .zero, from: nil)
+                    self.requestHover(atIndex: index, point: point, deliberate: true)
+                }
+            }
+        }
+    }
+
+    /// Fills the panel from this document: the documentation last
+    /// shown, or the diagnostics as rows that jump to their line.
+    func fill(infoPanel panel: InfoPanel) {
+        switch panel.mode {
+        case .documentation:
+            if let lastHoverText {
+                panel.showDocumentation(lastHoverText)
+            } else {
+                panel.showPlaceholder(t("Move the pointer or the caret over a symbol."))
+            }
+            scheduleCaretHover()
+        case .diagnostics:
+            panel.showDiagnostics(diagnosticRows())
+        }
+    }
+
+    /// The diagnostics as rows — line, kind, message — coloured by
+    /// severity, each jumping to its line when chosen.
+    private func diagnosticRows() -> [InfoPanel.Row] {
+        guard let textView else { return [] }
+        let text = textView.string as NSString
+        let ordered = diagnostics.sorted { ($0.line, $0.character) < ($1.line, $1.character) }
+        let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        return ordered.map { diagnostic in
+            let kind = Self.severityName(diagnostic.severity)
+            let message =
+                diagnostic.message.split(separator: "\n", maxSplits: 1).first.map(String.init)
+                ?? diagnostic.message
+            let color: NSColor =
+                switch diagnostic.severity {
+                case 1: .systemRed
+                case 2: .systemOrange
+                default: .secondaryLabelColor
+                }
+            let row = NSMutableAttributedString(
+                string: "\(diagnostic.line + 1)  ",
+                attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor])
+            row.append(
+                NSAttributedString(
+                    string: "\(kind)  ", attributes: [.font: font, .foregroundColor: color]))
+            row.append(
+                NSAttributedString(
+                    string: message, attributes: [.font: font, .foregroundColor: NSColor.textColor]))
+            return InfoPanel.Row(text: row) { [weak self] in
+                guard let self, let textView = self.textView,
+                    let range = self.nsRange(of: diagnostic, in: text)
+                else { return }
+                (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
+                self.selectionChangeIsFromEditing = false
+                textView.setSelectedRange(NSRange(location: range.location, length: 0))
+                textView.scrollRangeToVisible(range)
+                self.window?.makeFirstResponder(textView)
+            }
+        }
+    }
+
+    /// View ▸ Info Panel.
+    @objc func toggleInfoPanel(_ sender: Any?) {
+        workbench?.toggleInfoPanel()
     }
 
     /// Whether `index` sits on an identifier character outside a comment
@@ -1148,20 +1257,11 @@ final class DocumentController: NSResponder {
     /// checks it is the follow-up. All of one or the other gets no
     /// headings — a heading over every row there is says nothing.
     private func showReferences(_ locations: [ReferenceLocation], title: String? = nil) {
-        var lineCache: [String: [Substring]] = [:]
-        func lineText(_ location: ReferenceLocation) -> String {
-            if lineCache[location.path] == nil {
-                let contents = (try? String(contentsOfFile: location.path, encoding: .utf8)) ?? ""
-                lineCache[location.path] = contents.split(
-                    separator: "\n", omittingEmptySubsequences: false)
-            }
-            let lines = lineCache[location.path] ?? []
-            guard lines.indices.contains(location.line) else { return "" }
-            return lines[location.line].trimmingCharacters(in: .whitespaces)
-        }
-        func described(_ location: ReferenceLocation) -> String {
-            let name = (location.path as NSString).lastPathComponent
-            return "\(name):\(location.line + 1): \(lineText(location))"
+        // Each row is the line the way the editor would show it, in the
+        // colours of its file's language.
+        let lines = SnippetRows()
+        func described(_ location: ReferenceLocation) -> ListPanel.Row {
+            lines.row(path: location.path, line: location.line)
         }
 
         let code = locations.filter { !CoreReferences.isTest(path: $0.path) }
@@ -1169,13 +1269,13 @@ final class DocumentController: NSResponder {
         var rows: [ListPanel.Row] = []
         var ordered: [ReferenceLocation] = []
         if code.isEmpty || tests.isEmpty {
-            rows = locations.map { .item(described($0)) }
+            rows = locations.map(described)
             ordered = locations
         } else {
             rows.append(.heading("Code (\(code.count))"))
-            rows.append(contentsOf: code.map { .item(described($0)) })
+            rows.append(contentsOf: code.map(described))
             rows.append(.heading("Tests (\(tests.count))"))
-            rows.append(contentsOf: tests.map { .item(described($0)) })
+            rows.append(contentsOf: tests.map(described))
             ordered = code + tests
         }
         listPanel.show(
@@ -1888,6 +1988,13 @@ final class DocumentController: NSResponder {
     private func showBalloon(_ attributed: NSAttributedString, at point: NSPoint) {
         guard let textView else { return }
         hoverPopover?.close()
+        // With the panel docked, what the bubble would have said goes
+        // there, and the bubble stays away.
+        if let panel = infoPanel, panel.mode == .documentation {
+            lastHoverText = attributed
+            panel.showDocumentation(attributed)
+            return
+        }
 
         // Measured by hand, framed by hand: Auto Layout inside an
         // NSPopover collapsed the wrapping label to a sliver and showed
@@ -4776,6 +4883,7 @@ extension DocumentController: NSTextViewDelegate {
         // A new selection asks a new question, and an edit answers the
         // old one differently; both go through here.
         refreshOccurrences()
+        scheduleCaretHover()
     }
 }
 
@@ -4805,6 +4913,9 @@ extension DocumentController: NSMenuItemValidation {
         case #selector(togglePreview(_:)):
             menuItem.state = previewWebView != nil ? .on : .off
             return coreDocument.languageName == "markdown"
+        case #selector(toggleInfoPanel(_:)):
+            menuItem.state = workbench?.isInfoPanelVisible == true ? .on : .off
+            return workbench != nil
         case #selector(copyFileName(_:)), #selector(copyRelativePath(_:)),
             #selector(copyAbsolutePath(_:)), #selector(revertToSaved(_:)):
             return coreDocument.path != nil

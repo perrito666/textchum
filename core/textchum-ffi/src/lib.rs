@@ -3818,6 +3818,57 @@ pub unsafe extern "C" fn tc_document_language_name(document: *const TcDocument) 
     }
 }
 
+/// Styled spans over a snippet of `language`, the way a document of that
+/// language would be painted: for one line shown away from its file. On
+/// success stores the array in `spans_out`/`count_out` (empty is a
+/// success: null/0); release with [`tc_highlight_spans_free`].
+///
+/// # Safety
+/// `language`/`text` must point to `language_len`/`text_len` readable
+/// bytes; `spans_out` and `count_out` must point to writable slots.
+#[no_mangle]
+pub unsafe extern "C" fn tc_highlight_snippet(
+    language: *const c_char,
+    language_len: usize,
+    text: *const c_char,
+    text_len: usize,
+    spans_out: *mut *mut TcHighlightSpan,
+    count_out: *mut usize,
+) -> bool {
+    if spans_out.is_null() || count_out.is_null() {
+        return false;
+    }
+    unsafe {
+        *spans_out = std::ptr::null_mut();
+        *count_out = 0;
+    }
+    let (Some(language), Some(text)) =
+        (unsafe { str_from_raw(language, language_len) }, unsafe { str_from_raw(text, text_len) })
+    else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let spans = textchum_core::syntax::snippet_highlights(language, text);
+        if spans.is_empty() {
+            return true;
+        }
+        let boxed: Box<[TcHighlightSpan]> = spans
+            .into_iter()
+            .map(|span| TcHighlightSpan {
+                start: span.start_utf16,
+                end: span.end_utf16,
+                style: span.style,
+            })
+            .collect();
+        unsafe {
+            *count_out = boxed.len();
+            *spans_out = Box::into_raw(boxed) as *mut TcHighlightSpan;
+        }
+        true
+    }))
+    .unwrap_or(false)
+}
+
 /// Styled spans over the UTF-16 code unit range `start..end`, in
 /// application order — where spans overlap, the later one wins. On success
 /// stores the array in `spans_out`/`count_out` (empty is a success:

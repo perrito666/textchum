@@ -381,3 +381,17 @@ pub fn point_at(rope: &Rope, byte: usize) -> Point {
 fn byte_to_utf16(rope: &Rope, byte: usize) -> usize {
     rope.char_to_utf16_cu(rope.byte_to_char(byte))
 }
+
+/// Styled spans over a snippet of `language`, the way the editor would
+/// paint it: for a line shown outside its file — a reference, a place in
+/// the jump history. Empty for an unknown language or plain text.
+pub fn snippet_highlights(language: &str, code: &str) -> Vec<HighlightSpan> {
+    let Some(spec) = languages::by_name(language) else {
+        return Vec::new();
+    };
+    let rope = ropey::Rope::from_str(code);
+    let Some(syntax) = SyntaxState::new(spec, &rope) else {
+        return Vec::new();
+    };
+    syntax.highlights(&rope, 0..code.len())
+}

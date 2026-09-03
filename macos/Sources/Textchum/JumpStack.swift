@@ -20,6 +20,10 @@ final class JumpStack {
 
     var canGoBack: Bool { !back.isEmpty }
     var canGoForward: Bool { !forward.isEmpty }
+    /// The places left behind, the most recent first.
+    var backTrail: [JumpLocation] { back.reversed() }
+    /// The places gone back from, the nearest first.
+    var forwardTrail: [JumpLocation] { forward.reversed() }
 
     /// Records `origin` as the place a jump left from.
     func noteJump(from origin: JumpLocation) {

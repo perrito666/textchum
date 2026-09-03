@@ -17,7 +17,9 @@ final class ListPanel: NSObject {
     /// A row: something to choose, or a heading to read past.
     enum Row {
         case heading(String)
-        case item(String)
+        /// `styled`, when given, is what the row shows; `text` is what
+        /// the filter matches and what the row falls back to.
+        case item(String, styled: NSAttributedString? = nil)
     }
 
     /// ⏎ chooses; ⎋ falls through to the panel, which closes.
@@ -108,7 +110,7 @@ final class ListPanel: NSObject {
                 // A heading over a filtered list describes a section
                 // that is no longer there; it goes while filtering.
                 if query.isEmpty { built.append((row, nil)) }
-            case .item(let text):
+            case .item(let text, _):
                 if query.isEmpty || Fuzzy.score(text, query: query) != nil {
                     built.append((row, item))
                 }
@@ -129,8 +131,13 @@ final class ListPanel: NSObject {
 
     private static func text(of row: Row) -> String {
         switch row {
-        case .heading(let text), .item(let text): return text
+        case .heading(let text), .item(let text, _): return text
         }
+    }
+
+    private static func styled(of row: Row) -> NSAttributedString? {
+        if case .item(_, let styled) = row { return styled }
+        return nil
     }
 
     private func selectFirstItem() {
@@ -253,7 +260,11 @@ extension ListPanel: NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDele
                 }
                 return field
             }()
-        cell.stringValue = Self.text(of: shown[row].row)
+        if let styled = Self.styled(of: shown[row].row) {
+            cell.attributedStringValue = styled
+        } else {
+            cell.stringValue = Self.text(of: shown[row].row)
+        }
         return cell
     }
 

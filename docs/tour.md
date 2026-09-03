@@ -115,6 +115,19 @@ with mouse hover switched off.
 </figure>
 </div>
 
+The same documentation can live in a panel instead of a bubble. **View ▸
+Info Panel** (⌥⌘I) docks one under the editor, the way a second view
+stacks in the column; while it is up the bubble stays away, and the
+panel shows the documentation for the symbol under the pointer, and for
+the symbol at the caret as the caret moves. Its second face lists the
+document's diagnostics — line, kind, message — and a click goes to the
+line. The panel follows the focused file across tabs and columns.
+
+**Go ▸ Jump History…** lists the trail Go Back would walk, most recent
+first, with the forward trail beneath when there is one, in the same
+list Find References uses; choosing a place goes there, as a jump of
+its own. Both lists show each line in its language's colours.
+
 **Go to Line** (⌘L, Ctrl+L on Linux) takes a number, or the whole
 `src/main.rs:412:8` pasted straight out of a build log — the file name
 and the trailing noise are ignored, the line is centred, and Go Back
