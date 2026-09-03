@@ -67,7 +67,41 @@ final class QuickFinderPanel: NSObject {
     private let table = NSTableView()
     /// Says what the last search did, so an empty list is never mute.
     private let statusLabel = NSTextField(labelWithString: "")
-    private var rows: [(display: String, path: String, line: Int)] = []
+    /// One result: `display` is the row as one string (what the smoke
+    /// test and the filter see); `directory`, `name` and `tail` are its
+    /// parts as shown — the directory gives way first, abbreviated from
+    /// its head, the name never, the matched text last.
+    struct Row: Equatable {
+        let display: String
+        let path: String
+        let line: Int
+        let directory: String
+        let name: String
+        let tail: String
+
+        /// A file's relative path split into what may shrink and what
+        /// may not: `src/a/b/thing.rs` → (`src/a/b/`, `thing.rs`).
+        static func split(_ relative: String) -> (directory: String, name: String) {
+            guard let slash = relative.lastIndex(of: "/") else { return ("", relative) }
+            return (String(relative[...slash]), String(relative[relative.index(after: slash)...]))
+        }
+
+        static func file(_ relative: String, path: String) -> Row {
+            let parts = split(relative)
+            return Row(
+                display: relative, path: path, line: 0,
+                directory: parts.directory, name: parts.name, tail: "")
+        }
+
+        static func hit(_ relative: String, path: String, line: Int, text: String) -> Row {
+            let parts = split(relative)
+            return Row(
+                display: "\(relative):\(line): \(text)", path: path, line: line,
+                directory: parts.directory, name: "\(parts.name):\(line)", tail: text)
+        }
+    }
+
+    private var rows: [Row] = []
     private var searchGeneration = 0
     private var debounce: Timer?
     /// True once the rows answer the query as typed: Enter then opens
@@ -76,6 +110,7 @@ final class QuickFinderPanel: NSObject {
     /// What plain Enter does right now, for the smoke test to ask.
     var opensOnReturn: Bool { resultsCurrent && debounce == nil }
     var rowCount: Int { rows.count }
+    var isResizable: Bool { panel?.styleMask.contains(.resizable) == true }
 
     /// Debug hook: plain Enter in the query field, the way the field
     /// editor delivers it.
@@ -156,12 +191,15 @@ final class QuickFinderPanel: NSObject {
     private func makePanel() -> NSPanel {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
-            styleMask: [.titled, .closable, .utilityWindow],
+            styleMask: [.titled, .closable, .resizable, .utilityWindow],
             backing: .buffered,
             defer: false
         )
         panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = false
+        // Wide enough for a long path is the user's call, and made once.
+        panel.contentMinSize = NSSize(width: 420, height: 260)
+        panel.setFrameAutosaveName("TextchumQuickFinder")
 
         // ⏎ searches, ⌘⏎ opens: the finder should never open something
         // on the strength of a keystroke meant to refine the query.
@@ -343,7 +381,7 @@ final class QuickFinderPanel: NSObject {
         // Pure core functions, run off the main thread; stale results
         // (an older generation) are dropped on arrival.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            var results: [(String, String, Int)] = []
+            var results: [Row] = []
             var status = ""
             switch mode {
             case .files, .changed:
@@ -356,7 +394,7 @@ final class QuickFinderPanel: NSObject {
                             == filter.include
                     }
                 }
-                results = filtered.prefix(100).map { ($0, "\(scope)/\($0)", 0) }
+                results = filtered.prefix(100).map { Row.file($0, path: "\(scope)/\($0)") }
                 if filtered.isEmpty {
                     status =
                         !names.isEmpty
@@ -388,7 +426,7 @@ final class QuickFinderPanel: NSObject {
                             root: scope, pattern: query, caseInsensitive: smartCase,
                             limit: 200, filters: filters)
                         results = found.hits.map {
-                            ("\($0.path):\($0.line): \($0.text)", "\(scope)/\($0.path)", $0.line)
+                            Row.hit($0.path, path: "\(scope)/\($0.path)", line: $0.line, text: $0.text)
                         }
                         status = Self.status(for: found, scope: scope)
                     } catch let error as CoreIOError {
@@ -555,15 +593,60 @@ extension QuickFinderPanel: NSTableViewDataSource, NSTableViewDelegate {
     ) -> NSView? {
         let identifier = NSUserInterfaceItemIdentifier("cell")
         let cell =
-            tableView.makeView(withIdentifier: identifier, owner: nil) as? NSTextField
+            tableView.makeView(withIdentifier: identifier, owner: nil) as? ResultCell
             ?? {
-                let field = NSTextField(labelWithString: "")
-                field.identifier = identifier
-                field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-                field.lineBreakMode = .byTruncatingMiddle
-                return field
+                let made = ResultCell()
+                made.identifier = identifier
+                return made
             }()
-        cell.stringValue = rows[row].display
+        cell.show(rows[row])
         return cell
+    }
+
+    /// A row in three labels: the directory, which gives way first and
+    /// loses its head; the file name (and line), which never gives way;
+    /// and the matched text, which loses its tail.
+    final class ResultCell: NSView {
+        let directory = NSTextField(labelWithString: "")
+        let name = NSTextField(labelWithString: "")
+        let tail = NSTextField(labelWithString: "")
+
+        init() {
+            super.init(frame: .zero)
+            let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+            for label in [directory, name, tail] {
+                label.font = font
+                label.translatesAutoresizingMaskIntoConstraints = false
+                addSubview(label)
+            }
+            directory.textColor = .secondaryLabelColor
+            directory.lineBreakMode = .byTruncatingHead
+            directory.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            name.lineBreakMode = .byClipping
+            name.setContentCompressionResistancePriority(.required, for: .horizontal)
+            tail.textColor = .secondaryLabelColor
+            tail.lineBreakMode = .byTruncatingTail
+            tail.setContentCompressionResistancePriority(
+                NSLayoutConstraint.Priority(rawValue: 260), for: .horizontal)
+            NSLayoutConstraint.activate([
+                directory.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+                name.leadingAnchor.constraint(equalTo: directory.trailingAnchor),
+                tail.leadingAnchor.constraint(equalTo: name.trailingAnchor, constant: 8),
+                tail.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -2),
+                directory.centerYAnchor.constraint(equalTo: centerYAnchor),
+                name.centerYAnchor.constraint(equalTo: centerYAnchor),
+                tail.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("ResultCell is built in code") }
+
+        func show(_ row: Row) {
+            directory.stringValue = row.directory
+            name.stringValue = row.name
+            tail.stringValue = row.tail
+            tail.isHidden = row.tail.isEmpty
+        }
     }
 }

@@ -1399,6 +1399,19 @@ func runSmokeTest() -> Int32 {
             print("FAIL: Enter on a current result did not open it: \(opened)")
             return 1
         }
+        // The panel can be widened, and a row keeps its file name apart
+        // from the directory that may give way.
+        guard finder.isResizable else {
+            print("FAIL: the finder panel cannot be resized")
+            return 1
+        }
+        let parts = QuickFinderPanel.Row.split("src/deep/nest/thing.rs")
+        guard parts.directory == "src/deep/nest/", parts.name == "thing.rs",
+            QuickFinderPanel.Row.split("thing.rs").directory == ""
+        else {
+            print("FAIL: a path did not split into directory and name: \(parts)")
+            return 1
+        }
         try? FileManager.default.removeItem(at: finderRoot)
     }
     print("quick open ok (Enter opens the row once the rows are current)")

@@ -1029,26 +1029,43 @@ struct TabBarView: View {
     @ObservedObject var model: TabBarModel
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(model.tabs) { tab in
-                    TabChip(
-                        tab: tab,
-                        isSelected: tab.id == model.selected,
-                        onSelect: {
-                            if NSEvent.modifierFlags.contains(.option) {
-                                model.onSelectEverywhere?(tab.id)
-                            } else {
-                                model.onSelect?(tab.id)
-                            }
-                        },
-                        onClose: { model.onClose?(tab.id) }
-                    )
-                    if tab.id != model.tabs.last?.id {
-                        Divider().frame(height: 16)
+        // The selected tab stays in view: the bar scrolls to it whenever
+        // the selection moves, and once the bar has laid out.
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(model.tabs) { tab in
+                        TabChip(
+                            tab: tab,
+                            isSelected: tab.id == model.selected,
+                            onSelect: {
+                                if NSEvent.modifierFlags.contains(.option) {
+                                    model.onSelectEverywhere?(tab.id)
+                                } else {
+                                    model.onSelect?(tab.id)
+                                }
+                            },
+                            onClose: { model.onClose?(tab.id) }
+                        )
+                        .id(tab.id)
+                        if tab.id != model.tabs.last?.id {
+                            Divider().frame(height: 16)
+                        }
                     }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+            }
+            .onChange(of: model.selected) { _, selected in
+                guard let selected else { return }
+                withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(selected) }
+            }
+            .onChange(of: model.tabs) { _, _ in
+                guard let selected = model.selected else { return }
+                DispatchQueue.main.async { proxy.scrollTo(selected) }
+            }
+            .onAppear {
+                guard let selected = model.selected else { return }
+                DispatchQueue.main.async { proxy.scrollTo(selected) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
