@@ -100,6 +100,14 @@ cuando puede, y lo dice cuando no.
 </figure>
 </div>
 
+El margen dice lo mismo: una línea con un hallazgo lleva su número en el
+color de la severidad — rojo, naranja, azul — con un disco al lado para
+un error o una advertencia y un anillo para información y sugerencias.
+El código en la documentación del servidor — una firma, una definición —
+se colorea como el editor colorea ese lenguaje, y el menú contextual del
+editor muestra las mismas teclas que el menú principal para cada
+comando.
+
 Dejar el puntero sobre un símbolo muestra la documentación del
 servidor, con el Markdown que envía ya renderizado — bloques de código
 en monoespaciada, énfasis con estilo. ⌃⌘H la pide para el símbolo bajo

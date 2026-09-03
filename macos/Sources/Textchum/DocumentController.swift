@@ -470,6 +470,7 @@ final class DocumentController: NSResponder {
         // to ride the settings pass, which now only restyles on a real
         // font change.
         gutter.invalidateLineStarts()
+        if !diagnostics.isEmpty { pushDiagnosticsToGutters() }
         if isFirst {
             // A file opens already differing from its committed self as
             // often as not, so the marks are wanted on the first paint.
@@ -747,6 +748,7 @@ final class DocumentController: NSResponder {
     func apply(diagnostics: [CoreDiagnostic]) {
         self.diagnostics = diagnostics
         renderMarks()
+        pushDiagnosticsToGutters()
         updateChrome()
         if let panel = infoPanel, panel.mode == .diagnostics, workbench?.focusedDocument === self {
             panel.showDiagnostics(diagnosticRows())
@@ -807,6 +809,19 @@ final class DocumentController: NSResponder {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.requestHover(at: point) }
             }
+        }
+    }
+
+    /// The worst severity on each line, for the gutter to colour the
+    /// number and mark the level. Lines count from one there.
+    private func pushDiagnosticsToGutters() {
+        var severities: [Int: Int] = [:]
+        for diagnostic in diagnostics {
+            let line = diagnostic.line + 1
+            severities[line] = min(severities[line] ?? Int.max, diagnostic.severity)
+        }
+        for view in views {
+            view.gutter.setDiagnostics(severities)
         }
     }
 
@@ -1920,10 +1935,16 @@ final class DocumentController: NSResponder {
     /// styled text). Block constructs beyond fences degrade gracefully
     /// to their literal text, which is how servers expect unsupporting
     /// clients to behave.
-    static func hoverAttributedText(fromMarkdown content: String) -> NSAttributedString {
+    /// The server's Markdown as attributed text. Fenced code — a
+    /// signature, a definition — is coloured the way the editor colours
+    /// the fence's language, or `language` when the fence names none.
+    static func hoverAttributedText(fromMarkdown content: String, language: String? = nil)
+        -> NSAttributedString
+    {
         let bodyFont = NSFont.systemFont(ofSize: 12)
         let codeFont = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
         let result = NSMutableAttributedString()
+        var fenceLanguage: String?
         let append = { (chunk: String, isCode: Bool) in
             let trimmed = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
@@ -1932,9 +1953,9 @@ final class DocumentController: NSResponder {
                     string: "\n\n", attributes: [.font: bodyFont]))
             }
             if isCode {
-                result.append(NSAttributedString(
-                    string: trimmed,
-                    attributes: [.font: codeFont, .foregroundColor: NSColor.textColor]))
+                let named = fenceLanguage.flatMap { $0.isEmpty ? nil : $0 }
+                result.append(
+                    SnippetRows.styled(trimmed, language: named ?? language, font: codeFont))
                 return
             }
             var options = AttributedString.MarkdownParsingOptions()
@@ -1967,10 +1988,16 @@ final class DocumentController: NSResponder {
         var isCode = false
         var chunk: [Substring] = []
         for line in content.split(separator: "\n", omittingEmptySubsequences: false) {
-            if line.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+            let stripped = line.trimmingCharacters(in: .whitespaces)
+            if stripped.hasPrefix("```") {
                 append(chunk.joined(separator: "\n"), isCode)
                 chunk = []
                 isCode.toggle()
+                // The opening fence may name its language: ```go.
+                fenceLanguage =
+                    isCode
+                    ? String(stripped.dropFirst(3)).trimmingCharacters(in: .whitespaces).lowercased()
+                    : nil
             } else {
                 chunk.append(line)
             }
@@ -1981,7 +2008,9 @@ final class DocumentController: NSResponder {
 
     private func showHover(resultJSON: String, at point: NSPoint) {
         guard let content = Self.hoverText(fromResultJSON: resultJSON) else { return }
-        showBalloon(Self.hoverAttributedText(fromMarkdown: content), at: point)
+        showBalloon(
+            Self.hoverAttributedText(fromMarkdown: content, language: coreDocument.languageName),
+            at: point)
     }
 
     /// The balloon hover documentation and diagnostics both appear in.
@@ -4373,7 +4402,9 @@ extension DocumentController: NSTextViewDelegate {
         ] {
             // No target: the responder chain reaches the text view,
             // which also decides whether the item is enabled.
-            contextMenu.addItem(NSMenuItem(title: title, action: selector, keyEquivalent: ""))
+            let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
+            Self.applyShortcut(to: item, for: selector)
+            contextMenu.addItem(item)
         }
 
         var commands: [(String, Selector)] = []
@@ -4412,9 +4443,19 @@ extension DocumentController: NSTextViewDelegate {
                 title: t(title), action: #selector(runContextCommand(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = ContextCommand(index: charIndex, selector: selector)
+            // The same command in the main menu has a key; the menu
+            // that pops up under the pointer should teach it too.
+            Self.applyShortcut(to: item, for: selector)
             contextMenu.addItem(item)
         }
         return contextMenu
+    }
+
+    /// Copies the main menu's key equivalent for `selector` onto `item`.
+    private static func applyShortcut(to item: NSMenuItem, for selector: Selector) {
+        guard let shortcut = AppDelegate.shortcut(for: selector) else { return }
+        item.keyEquivalent = shortcut.key
+        item.keyEquivalentModifierMask = shortcut.modifiers
     }
 
     /// Runs a context-menu command about the character that was

@@ -97,6 +97,13 @@ when it can, and says so when it cannot.
 </figure>
 </div>
 
+The gutter says the same: a line with a finding has its number in the
+severity's colour — red, orange, blue — with a disc beside it for an
+error or a warning and a ring for information and hints. The code in a
+server's documentation — a signature, a definition — is coloured the
+way the editor colours that language, and the editor's context menu
+shows the same keys the main menu does for every command.
+
 Resting the pointer on a symbol shows the server's documentation, with
 the Markdown it sends rendered — code blocks monospaced, emphasis
 styled. ⌃⌘H asks for the symbol under the caret instead, which works

@@ -102,6 +102,14 @@ serveur : il s'attache quand il peut, et le dit quand il ne peut pas.
 </figure>
 </div>
 
+La marge dit la même chose : une ligne avec un diagnostic porte son
+numéro dans la couleur de la sévérité — rouge, orange, bleu — avec un
+disque à côté pour une erreur ou un avertissement et un anneau pour les
+informations et les indices. Le code dans la documentation du serveur —
+une signature, une définition — est coloré comme l'éditeur colore ce
+langage, et le menu contextuel de l'éditeur montre les mêmes touches que
+le menu principal pour chaque commande.
+
 Laisser le pointeur sur un symbole affiche la documentation du
 serveur, avec le Markdown qu'il envoie déjà rendu — blocs de code en
 chasse fixe, emphase stylée. ⌃⌘H la demande pour le symbole sous le

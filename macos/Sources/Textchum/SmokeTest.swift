@@ -901,6 +901,20 @@ func runSmokeTest() -> Int32 {
         print("FAIL: context commands do not carry the clicked character")
         return 1
     }
+    // The commands show the main menu's keys. There is no main menu
+    // here, so one key is taught by hand and must reach the item.
+    // File Properties is there with or without a language server.
+    AppDelegate.noteShortcut("i", [.command, .shift], for: #selector(DocumentController.showFileProperties(_:)))
+    guard let withKeys = contextEditor.textView(contextView, menu: NSMenu(), for: NSEvent(), at: clicked),
+        let propertiesItem = withKeys.items.first(where: {
+            ($0.representedObject as? DocumentController.ContextCommand)?.selector
+                == #selector(DocumentController.showFileProperties(_:))
+        }),
+        propertiesItem.keyEquivalent == "i", propertiesItem.keyEquivalentModifierMask == [.command, .shift]
+    else {
+        print("FAIL: the context menu does not show the main menu's shortcut")
+        return 1
+    }
     contextBench.window?.close()
     print("context menu ok (editor commands, AppKit's extras left out, clicked position)")
 
@@ -1291,15 +1305,52 @@ func runSmokeTest() -> Int32 {
         print("FAIL: documentation went to a bubble, not the panel")
         return 1
     }
-    panel.mode = .diagnostics
+    // The fenced Go signature in it is coloured.
+    var hoverColours = Set<String>()
+    panel.documentationText.enumerateAttribute(
+        .foregroundColor, in: NSRange(location: 0, length: panel.documentationText.length)
+    ) { value, _, _ in
+        if let color = value as? NSColor { hoverColours.insert(color.description) }
+    }
+    guard hoverColours.count > 2 else {
+        print("FAIL: the hover's code block came back uncoloured (\(hoverColours.count) colours)")
+        return 1
+    }
+    // The panel comes back at the height it was left.
+    let panelSplit = panelBench.columns[0].split
+    panelSplit.setPosition(panelSplit.bounds.height - 120 - panelSplit.dividerThickness, ofDividerAt: 0)
+    spin(untilTrue: { abs(panel.frame.height - 120) < 2 }, seconds: 2)
+    guard abs(panel.frame.height - 120) < 2 else {
+        print("FAIL: could not size the panel for the test (\(panel.frame.height))")
+        return 1
+    }
+    panelBench.toggleInfoPanel()
+    panelBench.toggleInfoPanel()
+    guard let shownAgain = panelBench.infoPanel else {
+        print("FAIL: the panel did not come back")
+        return 1
+    }
+    spin(untilTrue: { abs(shownAgain.frame.height - 120) < 2 }, seconds: 2)
+    guard abs(shownAgain.frame.height - 120) < 2 else {
+        print("FAIL: the panel came back \(shownAgain.frame.height)pt tall, not 120")
+        return 1
+    }
+    // Diagnostics reach the gutter: the line's number takes the colour.
+    let firstView = panelBench.columns[0].views[0]
+    firstView.gutter.setDiagnostics([1: 1])
+    guard firstView.gutter.diagnosticSeverity(ofLine: 1) == 1 else {
+        print("FAIL: the gutter did not keep the diagnostic")
+        return 1
+    }
+    shownAgain.mode = .diagnostics
     let reported = try? JSONDecoder().decode(
         [CoreDiagnostic].self,
         from: Data(
             #"[{"line":0,"character":0,"endLine":0,"endCharacter":1,"severity":1,"message":"boom"}]"#
                 .utf8))
     panelDocument.apply(diagnostics: reported ?? [])
-    guard panel.rows.count == 1 else {
-        print("FAIL: the diagnostics face has \(panel.rows.count) rows, not 1")
+    guard shownAgain.rows.count == 1 else {
+        print("FAIL: the diagnostics face has \(shownAgain.rows.count) rows, not 1")
         return 1
     }
     panelBench.toggleInfoPanel()
