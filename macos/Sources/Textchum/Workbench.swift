@@ -431,17 +431,20 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
     }
 
     /// Shares a column's height between its views.
-    private func placeDividers(of column: Column, at fractions: [Double] = []) {
+    private func placeDividers(
+        of column: Column, at fractions: [Double] = [], panelHeight: CGFloat? = nil
+    ) {
         let panel = column.infoPanel
         guard column.views.count > 1 || panel != nil else { return }
         column.split.layoutSubtreeIfNeeded()
         let height = column.split.bounds.height
         guard height > 1 else { return }
-        // The panel keeps the height it has, or takes its share when it
-        // has none yet; the views split what is left.
+        // The panel keeps the height it has — or the one asked for, when
+        // it has just docked and only measures its minimum; the views
+        // split what is left.
         var stack = height
-        if let panel {
-            let wanted = panel.frame.height > 40 ? panel.frame.height : Self.infoPanelHeight
+        if panel != nil {
+            let wanted = panelHeight ?? panel?.frame.height ?? infoPanelHeightWanted
             stack = max(height * 0.4, height - wanted - column.split.dividerThickness)
         }
         for divider in 0..<max(0, column.views.count - 1) {
@@ -460,6 +463,9 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
 
     /// The panel's height when it first docks.
     private static let infoPanelHeight: CGFloat = 180
+    /// The height the panel had when it was last hidden: what it comes
+    /// back at.
+    private var infoPanelHeightWanted: CGFloat = Workbench.infoPanelHeight
 
     /// The docked info panel of this window, in whichever column has
     /// the keyboard; nil while hidden.
@@ -495,6 +501,7 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
     private func hideInfoPanel() {
         guard let panel = infoPanel else { return }
         let column = columns.first { $0.infoPanel === panel }
+        if panel.frame.height > 40 { infoPanelHeightWanted = panel.frame.height }
         panel.removeFromSuperview()
         infoPanel = nil
         if let column {
@@ -516,7 +523,7 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
                 placeDividers(of: previous)
             }
             column.split.addArrangedSubview(panel)
-            placeDividers(of: column)
+            placeDividers(of: column, panelHeight: infoPanelHeightWanted)
         }
         if let document = column.document {
             document.fill(infoPanel: panel)

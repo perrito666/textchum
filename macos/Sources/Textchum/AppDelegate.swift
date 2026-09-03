@@ -39,6 +39,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     guard let editor = self.editors.first, let bench = editor.workbench else { return }
                     bench.toggleInfoPanel()
                     editor.debugShowHover()
+                    // Two findings, so the gutter's colours and marks can
+                    // be looked at as well.
+                    if let reported = try? JSONDecoder().decode(
+                        [CoreDiagnostic].self,
+                        from: Data(
+                            #"[{"line":0,"character":0,"endLine":0,"endCharacter":5,"severity":1,"message":"an error here"},{"line":1,"character":0,"endLine":1,"endCharacter":5,"severity":2,"message":"a warning here"}]"#
+                                .utf8))
+                    {
+                        editor.apply(diagnostics: reported)
+                    }
                     NSLog("PANEL window num=\(bench.window?.windowNumber ?? -1) docked=\(bench.infoPanel != nil)")
                 }
             }
@@ -1356,7 +1366,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var defaultShortcuts: [String: (String, NSEvent.ModifierFlags)] = [:]
 
     /// Indexes every overridable menu item by a stable name.
+    /// The main menu's key equivalents by action, for menus built
+    /// elsewhere — the editor's context menu — to show the same keys.
+    nonisolated(unsafe) private static var shortcuts:
+        [Selector: (key: String, modifiers: NSEvent.ModifierFlags)] = [:]
+
+    static func shortcut(for selector: Selector) -> (key: String, modifiers: NSEvent.ModifierFlags)? {
+        shortcuts[selector]
+    }
+
+    /// Remembers one key; the main menu walk does this for every item.
+    static func noteShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags, for selector: Selector) {
+        guard !key.isEmpty else { return }
+        shortcuts[selector] = (key, modifiers)
+    }
+
+    private func noteShortcuts(in menu: NSMenu) {
+        for item in menu.items {
+            if let action = item.action {
+                Self.noteShortcut(item.keyEquivalent, item.keyEquivalentModifierMask, for: action)
+            }
+            if let submenu = item.submenu { noteShortcuts(in: submenu) }
+        }
+    }
+
     private func registerMenuActions(in menu: NSMenu) {
+        noteShortcuts(in: menu)
         let bySelector: [Selector: String] = [
             #selector(newDocument(_:)): "new",
             #selector(newDocumentWithFormatPicker(_:)): "newWithFormat",

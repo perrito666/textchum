@@ -22,6 +22,9 @@ final class LineNumberGutterView: NSView {
     /// above. Empty when the file has no committed version to compare
     /// against, which is not an error.
     private var changeKinds: [Int: CoreChanges.Kind] = [:]
+    /// The worst diagnostic on each line, by line number from one:
+    /// 1 error, 2 warning, 3 information, 4 hint.
+    private var diagnosticSeverities: [Int: Int] = [:]
 
     override var isFlipped: Bool { true }
 
@@ -57,6 +60,24 @@ final class LineNumberGutterView: NSView {
         guard kinds != changeKinds else { return }
         changeKinds = kinds
         needsDisplay = true
+    }
+
+    /// The lines with diagnostics and how bad: their numbers take the
+    /// severity's colour and a mark beside them says the level.
+    func setDiagnostics(_ severities: [Int: Int]) {
+        guard severities != diagnosticSeverities else { return }
+        diagnosticSeverities = severities
+        needsDisplay = true
+    }
+
+    func diagnosticSeverity(ofLine line: Int) -> Int? { diagnosticSeverities[line] }
+
+    private static func diagnosticColor(_ severity: Int) -> NSColor {
+        switch severity {
+        case 1: .systemRed
+        case 2: .systemOrange
+        default: .systemBlue
+        }
     }
 
     /// Recomputes the line-start cache; call on every text change.
@@ -215,7 +236,30 @@ final class LineNumberGutterView: NSView {
             if line != lastLine, top >= -frame.height {
                 lastLine = line
                 self.drawChangeMark(forLine: line, top: top, height: frame.height)
-                let label = NSAttributedString(string: String(line), attributes: attributes)
+                var labelAttributes = attributes
+                if let severity = self.diagnosticSeverities[line] {
+                    // The number in the severity's colour, and a mark
+                    // for the level: a disc for an error or warning, a
+                    // ring for information and hints. Centred on the
+                    // number, not the fragment: the file's last
+                    // fragment spans the empty line after it.
+                    let color = Self.diagnosticColor(severity)
+                    labelAttributes[.foregroundColor] = color
+                    let size: CGFloat = 6
+                    let numberHeight = NSAttributedString(string: "0", attributes: attributes).size().height
+                    let dot = NSRect(
+                        x: 6, y: top + 1 + (numberHeight - size) / 2, width: size, height: size)
+                    let path = NSBezierPath(ovalIn: dot)
+                    if severity <= 2 {
+                        color.setFill()
+                        path.fill()
+                    } else {
+                        color.setStroke()
+                        path.lineWidth = 1.2
+                        path.stroke()
+                    }
+                }
+                let label = NSAttributedString(string: String(line), attributes: labelAttributes)
                 let x = self.bounds.maxX - label.size().width - 8
                 label.draw(at: NSPoint(x: x, y: top + 1))
             }
