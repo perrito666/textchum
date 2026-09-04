@@ -101,6 +101,11 @@ final class DocumentView {
     /// the bar outside Auto Layout, so a constraint cannot see it.
     fileprivate var contextStripTop: NSLayoutConstraint?
     fileprivate var findBarObservation: NSKeyValueObservation?
+    /// Covers the gutter beside the find bar: the bar lives inside the
+    /// scroll view and stops at its edge, and the gutter's top showed
+    /// through the hole it left.
+    fileprivate let findBarFiller = NSView()
+    fileprivate var findBarFillerHeight: NSLayoutConstraint?
     /// The character at the top of the viewport and the width it was
     /// seen at; a different width means the text has reflowed under it.
     var viewportAnchor: (offset: Int, width: CGFloat)?
@@ -131,8 +136,19 @@ final class DocumentView {
         contextStrip.isHidden = true
         container.addSubview(gutter)
         container.addSubview(scrollView)
+        findBarFiller.wantsLayer = true
+        findBarFiller.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        findBarFiller.translatesAutoresizingMaskIntoConstraints = false
+        findBarFiller.isHidden = true
+        container.addSubview(findBarFiller)
         container.addSubview(contextStrip)
+        let fillerHeight = findBarFiller.heightAnchor.constraint(equalToConstant: 0)
+        findBarFillerHeight = fillerHeight
         NSLayoutConstraint.activate([
+            findBarFiller.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            findBarFiller.trailingAnchor.constraint(equalTo: gutter.trailingAnchor),
+            findBarFiller.topAnchor.constraint(equalTo: container.topAnchor),
+            fillerHeight,
             gutter.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             gutter.topAnchor.constraint(equalTo: container.topAnchor),
             gutter.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -155,9 +171,13 @@ final class DocumentView {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    self.contextStripTop?.constant =
-                        scrollView.isFindBarVisible
+                    let barHeight = scrollView.isFindBarVisible
                         ? (scrollView.findBarView?.frame.height ?? 30) : 0
+                    self.contextStripTop?.constant = barHeight
+                    self.findBarFillerHeight?.constant = barHeight
+                    self.findBarFiller.isHidden = !scrollView.isFindBarVisible
+                    self.findBarFiller.layer?.backgroundColor =
+                        NSColor.windowBackgroundColor.cgColor
                 }
             }
         }
@@ -1907,6 +1927,18 @@ final class DocumentController: NSResponder {
         textView.setSelectedRange(NSRange(location: target, length: 0))
         textView.scrollRangeToVisible(NSRange(location: target, length: 0))
         window?.makeFirstResponder(textView)
+        // A file opened for this jump has a view with no height yet, and
+        // a scroll into a clip of no height goes nowhere; giving the view
+        // the keyboard used to scroll to the caret afterwards and hid
+        // this. Once layout has run, the same scroll lands.
+        DispatchQueue.main.async { [weak self, weak textView] in
+            MainActor.assumeIsolated {
+                guard let self, let textView, self.textView === textView,
+                    textView.selectedRange().location == target
+                else { return }
+                textView.scrollRangeToVisible(NSRange(location: target, length: 0))
+            }
+        }
     }
 
     /// Extracts human-readable text from an LSP hover result: contents as

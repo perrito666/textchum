@@ -1416,6 +1416,38 @@ func runSmokeTest() -> Int32 {
     }
     print("quick open ok (Enter opens the row once the rows are current)")
 
+    // A jump into a file just opened: the reveal runs before the view
+    // has a height, and the line must still be in view once it has one.
+    let revealBench = Workbench(sidebar: nil)
+    let revealDocument = DocumentController(document: CoreDocument())
+    revealBench.add(revealDocument)
+    revealBench.window?.makeKeyAndOrderFront(nil)
+    guard let revealView = revealDocument.primaryView else {
+        print("FAIL: no view to reveal in")
+        return 1
+    }
+    revealView.string = (0..<400).map { "line \($0)" }.joined(separator: "\n")
+    revealDocument.noteTextReplaced()
+    revealBench.columns[0].views[0].gutter.invalidateLineStarts()
+    revealDocument.reveal(line: 300, character: 0)
+    func caretInView() -> Bool {
+        guard let view = revealBench.columns[0].views.first else { return false }
+        let clip = view.scrollView.contentView.bounds
+        let caretRect = view.textView.firstRect(
+            forCharacterRange: view.textView.selectedRange(), actualRange: nil)
+        guard caretRect.width >= 0, let window = view.textView.window else { return false }
+        let inView = view.textView.convert(window.convertPoint(fromScreen: caretRect.origin), from: nil)
+        return clip.minY <= inView.y && inView.y <= clip.maxY && clip.height > 0
+    }
+    spin(untilTrue: caretInView, seconds: 3)
+    guard caretInView() else {
+        let clip = revealBench.columns[0].views[0].scrollView.contentView.bounds
+        print("FAIL: after revealing line 300 the clip shows y=\(clip.minY)..\(clip.maxY)")
+        return 1
+    }
+    revealBench.window?.close()
+    print("reveal ok (a line revealed before layout is in view after it)")
+
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
     // where the caret is and what the file is.
