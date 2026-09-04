@@ -30,6 +30,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         stamp("begin")
+        if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_FINDBAR"] != nil {
+            // Shows the find bar in the first editor, for a look at how
+            // it sits with the gutter and the pinned context.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                MainActor.assumeIsolated {
+                    guard let textView = self.editors.first?.primaryView else { return }
+                    let sender = NSMenuItem()
+                    sender.tag = Int(NSTextFinder.Action.showFindInterface.rawValue)
+                    textView.performTextFinderAction(sender)
+                    NSLog("FINDBAR window num=\(textView.window?.windowNumber ?? -1)")
+                }
+            }
+        }
+        if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_PANEL_RETURN"] != nil {
+            // With --debug-panel showing results, presses Return on the
+            // first one and then says where the file landed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                MainActor.assumeIsolated { _ = self.quickFinder.debugReturn() }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                MainActor.assumeIsolated {
+                    guard let editor = (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument
+                        ?? self.editors.last,
+                        let view = editor.focusedView
+                    else { return }
+                    let caret = editor.caretLSPPosition.line + 1
+                    let top = view.gutter.lineIndex(forOffset: editor.topOffset(of: view))
+                    let clip = view.scrollView.contentView.bounds
+                    NSLog("RETURN landed file=\((editor.coreDocument.path ?? "?") as NSString).lastPathComponent caretLine=\(caret) topLine=\(top) clipY=\(clip.minY) clipH=\(clip.height)")
+                }
+            }
+        }
         if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_PANEL"] != nil {
             // Docks the info panel under the first editor and fills it
             // with known documentation, then logs the window number, so
@@ -1771,9 +1803,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             existing.workbench?.showInFocusedPane(ObjectIdentifier(existing))
             existing.reveal(line: location.line, character: location.character)
         } else {
-            open(path: location.path)
-            editors.first { $0.coreDocument.path == location.path }?
-                .reveal(line: location.line, character: location.character)
+            // Through open itself: it standardises the path, so looking
+            // the editor up again by the path as given — a symlinked
+            // root, a `..` — missed it, and the file opened at its top.
+            open(
+                path: location.path, revealLine: location.line + 1,
+                revealCharacter: location.character)
         }
     }
 
@@ -2262,7 +2297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// `revealLine` puts the caret on a one-based line.
     private func open(
         path: String, target: CoreOpenTarget? = nil, revealLine: Int? = nil,
-        deferShow: Bool = false
+        revealCharacter: Int = 0, deferShow: Bool = false
     ) {
         // Absolute, standardized paths throughout: relative paths (e.g.
         // from the command line) would corrupt project-root resolution
@@ -2271,7 +2306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let existing = editors.first(where: { $0.coreDocument.path == path }) {
             existing.window?.makeKeyAndOrderFront(nil)
             if let revealLine {
-                existing.reveal(line: revealLine - 1, character: 0)
+                existing.reveal(line: revealLine - 1, character: revealCharacter)
             }
             return
         }
@@ -2299,7 +2334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 editor.apply(settings: model.currentSettings(forRoot: editor.projectRoot))
             }
             if let revealLine {
-                editor.reveal(line: revealLine - 1, character: 0)
+                editor.reveal(line: revealLine - 1, character: revealCharacter)
             }
         } catch {
             let alert = NSAlert()
