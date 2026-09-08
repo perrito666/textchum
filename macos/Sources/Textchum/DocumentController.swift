@@ -554,7 +554,9 @@ final class DocumentController: NSResponder {
     /// Called once the file's project is known, which is the first time
     /// there is anywhere to look.
     func adoptProjectState() {
-        guard let path = coreDocument.path, let root = projectRoot else { return }
+        guard let path = coreDocument.path, let root = projectRoot,
+            !Self.isGitEditorFile(path)
+        else { return }
         guard let state = ProjectState.state(forPath: path, projectRoot: root) else {
             // Nothing recorded for it. A language chosen before records
             // existed still lives in the configuration; it moves the
@@ -591,7 +593,8 @@ final class DocumentController: NSResponder {
     /// whenever something it covers changes.
     func recordProjectState() {
         guard adoptedProjectState || !openDocument.folds.isEmpty || languageOverride != nil,
-            let path = coreDocument.path, let root = projectRoot
+            let path = coreDocument.path, let root = projectRoot,
+            !Self.isGitEditorFile(path)
         else { return }
         let layout = openDocument.layout
         let state = CoreProjectState.FileState(
@@ -3614,7 +3617,18 @@ final class DocumentController: NSResponder {
         info.usesTabs = stored?.spaces.map { !$0 } ?? detectedUsesTabs()
         info.language = coreDocument.languageName
         info.encoding = coreDocument.encodingName
+        if let root = projectRoot {
+            info.branch = GitBranchMonitor.shared.branch(forRoot: root)
+        }
         return info
+    }
+
+    /// A file git hands its editor — COMMIT_EDITMSG, MERGE_MSG, a rebase
+    /// todo, anything under `.git` — starts at the top every time: the
+    /// place to write is the first line, and the place it was last
+    /// closed at is the end of the message before.
+    static func isGitEditorFile(_ path: String) -> Bool {
+        (path as NSString).pathComponents.contains(".git")
     }
 
     var chromeSubtitle: String {

@@ -487,6 +487,53 @@ public enum CoreChanges {
     /// The files the branch touches — committed on it, changed in the
     /// working tree, or not yet tracked. `root` is the repository's
     /// top; nil outside one.
+    /// The repository around `path`: its root, the branch checked out
+    /// (nil when detached), the HEAD file whose change means the branch
+    /// changed, and whether tracked files are modified. Nil outside a
+    /// repository.
+    public struct RepositoryInfo: Equatable {
+        public let root: String
+        public let branch: String?
+        public let headPath: String
+        public let dirty: Bool
+    }
+
+    public static func repositoryInfo(near path: String) -> RepositoryInfo? {
+        let json = path.withCString { pointer in
+            tc_repository_info(pointer, UInt(strlen(pointer)))
+        }
+        guard let json else { return nil }
+        defer { tc_string_free(json) }
+        let data = Data(String(cString: json).utf8)
+        guard let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+            let root = parsed["root"] as? String,
+            let head = parsed["head"] as? String
+        else { return nil }
+        return RepositoryInfo(
+            root: root, branch: parsed["branch"] as? String, headPath: head,
+            dirty: parsed["dirty"] as? Bool ?? false)
+    }
+
+    /// One working tree: where it is, and its branch (nil when detached).
+    public struct Worktree: Equatable {
+        public let path: String
+        public let branch: String?
+    }
+
+    /// The repository's working trees, the main one first.
+    public static func worktrees(near path: String) -> [Worktree] {
+        let json = path.withCString { pointer in tc_worktrees(pointer, UInt(strlen(pointer))) }
+        guard let json else { return [] }
+        defer { tc_string_free(json) }
+        let data = Data(String(cString: json).utf8)
+        guard let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+        else { return [] }
+        return parsed.compactMap { item in
+            guard let path = item["path"] as? String else { return nil }
+            return Worktree(path: path, branch: item["branch"] as? String)
+        }
+    }
+
     public static func branchFiles(
         near path: String, branches: [String]
     ) -> (root: String, files: [BranchFile])? {

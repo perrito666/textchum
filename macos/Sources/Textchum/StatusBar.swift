@@ -18,12 +18,15 @@ final class StatusBar: NSView {
         var usesTabs = false
         var language: String?
         var encoding = ""
+        /// The git branch of the file's project, when it has one.
+        var branch: String?
     }
 
     private let position = NSTextField(labelWithString: "")
     private let indent = makeButton()
     private let language = makeButton()
     private let encoding = NSTextField(labelWithString: "")
+    private let branch = NSTextField(labelWithString: "")
     private var shown = Info()
     /// Opens File Properties for the focused document.
     var onProperties: (() -> Void)?
@@ -34,16 +37,17 @@ final class StatusBar: NSView {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
         let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
-        for label in [position, encoding] {
+        for label in [position, encoding, branch] {
             label.font = font
             label.textColor = .secondaryLabelColor
         }
+        branch.toolTip = t("The git branch checked out in this file's project")
         for button in [indent, language] {
             button.font = font
             button.target = self
             button.action = #selector(openProperties(_:))
         }
-        let row = NSStackView(views: [position, indent, language, encoding])
+        let row = NSStackView(views: [position, indent, language, encoding, branch])
         row.orientation = .horizontal
         row.spacing = 14
         row.translatesAutoresizingMaskIntoConstraints = false
@@ -79,6 +83,8 @@ final class StatusBar: NSView {
             : t("Spaces: {}", info.tabWidth)
         language.title = info.language ?? t("Plain Text")
         encoding.stringValue = info.encoding
+        branch.stringValue = info.branch.map { "⎇ \($0)" } ?? ""
+        branch.isHidden = info.branch == nil
         indent.toolTip = t("How this file is indented — click to change it")
         language.toolTip = t("What this file is treated as — click to change it")
     }

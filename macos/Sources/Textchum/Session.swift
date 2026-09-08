@@ -23,6 +23,10 @@ struct SessionState: Codable {
         /// One entry per pane, from before windows held columns.
         var panes: [String] = []
         var columns: [ColumnLayout]?
+        /// The project the window was opened for, when it was opened
+        /// as a folder; a window with no tabs and a root is a project
+        /// window and comes back as one.
+        var projectRoot: String?
     }
 
     /// One column: the file it showed, how many views of it were

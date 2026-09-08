@@ -1448,6 +1448,114 @@ func runSmokeTest() -> Int32 {
     revealBench.window?.close()
     print("reveal ok (a line revealed before layout is in view after it)")
 
+    // Projects: a folder opens as a window with a tree and no file,
+    // stays when its last tab closes, and its layout survives a
+    // session; the status bar says the branch and hears it change;
+    // git's message files keep no place.
+    do {
+        let repo = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-project-\(ProcessInfo.processInfo.processIdentifier)")
+        try? FileManager.default.removeItem(at: repo)
+        try? FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        @discardableResult
+        func git(_ arguments: [String]) -> Bool {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            process.arguments = ["-C", repo.path] + arguments
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            try? process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        }
+        git(["init", "-q", "-b", "trunk"])
+        git(["config", "user.email", "t@t"])
+        git(["config", "user.name", "t"])
+        try? "one\n".write(to: repo.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
+        git(["add", "."])
+        git(["commit", "-q", "-m", "one"])
+        let root = repo.standardizedFileURL.path
+
+        let projectBench = Workbench(sidebar: nil)
+        projectBench.pinProject(root: root)
+        projectBench.window?.makeKeyAndOrderFront(nil)
+        guard projectBench.sidebarContext.projectRoot == root,
+            projectBench.window?.title == (root as NSString).lastPathComponent
+        else {
+            print("FAIL: a pinned project did not reach the tree or the title")
+            return 1
+        }
+        let projectFile = DocumentController(document: CoreDocument())
+        projectBench.add(projectFile)
+        projectBench.closeTab(ObjectIdentifier(projectFile))
+        guard projectBench.window?.isVisible == true, projectBench.documents.isEmpty else {
+            print("FAIL: closing the last tab of a project window closed the window")
+            return 1
+        }
+        guard AppDelegate.scope(focused: nil, editors: [], pinned: root) == root else {
+            print("FAIL: a project window with no file is not the finder's scope")
+            return 1
+        }
+        projectBench.window?.close()
+
+        var layout = SessionState.Layout(tabs: [])
+        layout.projectRoot = root
+        let encoded = try? JSONEncoder().encode(layout)
+        let decoded = encoded.flatMap { try? JSONDecoder().decode(SessionState.Layout.self, from: $0) }
+        guard decoded?.projectRoot == root, decoded?.tabs.isEmpty == true else {
+            print("FAIL: a project window's layout did not survive the session file")
+            return 1
+        }
+
+        // The branch, and the change of it — from the file git rewrites,
+        // not from a timer.
+        GitBranchMonitor.shared.forget(root: root)
+        guard GitBranchMonitor.shared.branch(forRoot: root) == "trunk" else {
+            print("FAIL: the branch is \(GitBranchMonitor.shared.branch(forRoot: root) ?? "nil"), not trunk")
+            return 1
+        }
+        var heard: [String] = []
+        let token = NotificationCenter.default.addObserver(
+            forName: .textchumBranchChanged, object: nil, queue: .main
+        ) { note in heard.append((note.object as? String) ?? "") }
+        git(["checkout", "-q", "-b", "feature"])
+        spin(untilTrue: { GitBranchMonitor.shared.branch(forRoot: root) == "feature" }, seconds: 5)
+        NotificationCenter.default.removeObserver(token)
+        guard GitBranchMonitor.shared.branch(forRoot: root) == "feature", heard.contains(root) else {
+            print("FAIL: the branch change was not heard: \(GitBranchMonitor.shared.branch(forRoot: root) ?? "nil"), \(heard)")
+            return 1
+        }
+        guard CoreChanges.repositoryInfo(near: root)?.dirty == false else {
+            print("FAIL: a clean repository reads as dirty")
+            return 1
+        }
+
+        // Worktrees: listed, and a window's files map onto another
+        // tree by their relative paths, keeping only what is there.
+        git(["worktree", "add", "-q", repo.appendingPathComponent("other-tree").path, "trunk"])
+        let trees = CoreChanges.worktrees(near: root)
+        // Git reports canonical paths; take the tree's path as git says it.
+        guard trees.count == 2, let other = trees.first(where: { $0.branch == "trunk" })?.path else {
+            print("FAIL: worktrees are \(trees)")
+            return 1
+        }
+        let moved = AppDelegate.remappedFiles(
+            ["\(root)/a.txt", "\(root)/missing.txt", "/elsewhere/a.txt"], from: root, to: other)
+        guard moved == ["\(other)/a.txt"] else {
+            print("FAIL: files did not remap onto the other tree: \(moved)")
+            return 1
+        }
+        guard DocumentController.isGitEditorFile("\(root)/.git/COMMIT_EDITMSG"),
+            !DocumentController.isGitEditorFile("\(root)/src/git.rs")
+        else {
+            print("FAIL: git's message files are not told apart")
+            return 1
+        }
+        GitBranchMonitor.shared.forget(root: root)
+        try? FileManager.default.removeItem(at: repo)
+    }
+    print("projects ok (folder window, branch watched, worktrees listed and remapped, git message files start at the top)")
+
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
     // where the caret is and what the file is.

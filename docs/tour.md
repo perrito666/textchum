@@ -135,6 +135,22 @@ first, with the forward trail beneath when there is one, in the same
 list Find References uses; choosing a place goes there, as a jump of
 its own. Both lists show each line in its language's colours.
 
+A folder opens as a **project**: File ▸ Open takes a directory, and so
+does `chum path/to/folder`. When a tab of that project is open
+somewhere, that tab comes to the front; otherwise a new window opens
+with the project in its tree and no file yet, and it stays open when
+its last tab closes. The status bar says the project's **git branch**,
+read when the file is shown and again when git rewrites HEAD — the
+editor watches that file rather than asking on a timer. **Go ▸
+Worktrees…** lists the repository's working trees: choose one to
+switch this window to it — its files close and the ones the other tree
+also has reopen there, and the language servers start in the new root
+— or to open it as a project of its own. With modified files in the
+current tree, or unsaved ones in the window, only opening is offered;
+a tree that is open already just comes to the front. A file git hands
+the editor — a commit message, a rebase todo — starts at the top every
+time.
+
 **Go to Line** (⌘L, Ctrl+L on Linux) takes a number, or the whole
 `src/main.rs:412:8` pasted straight out of a build log — the file name
 and the trailing noise are ignored, the line is centred, and Go Back
