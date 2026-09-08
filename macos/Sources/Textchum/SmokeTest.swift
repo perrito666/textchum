@@ -1476,20 +1476,36 @@ func runSmokeTest() -> Int32 {
         git(["commit", "-q", "-m", "one"])
         let root = repo.standardizedFileURL.path
 
-        let projectBench = Workbench(sidebar: nil)
+        let sidebarForProject = SidebarConfiguration(
+            treeState: FileTreeState(),
+            resolveProjectRoot: { _ in nil },
+            selectDocument: { _ in },
+            showProperties: { _ in },
+            openFile: { _ in })
+        let projectBench = Workbench(sidebar: sidebarForProject)
+        // A user who hid the navigator gets it back for a project window.
+        projectBench.splitController?.splitViewItems.first?.isCollapsed = true
         projectBench.pinProject(root: root)
         projectBench.window?.makeKeyAndOrderFront(nil)
         guard projectBench.sidebarContext.projectRoot == root,
-            projectBench.window?.title == (root as NSString).lastPathComponent
+            projectBench.window?.title == (root as NSString).lastPathComponent,
+            projectBench.splitController?.splitViewItems.first?.isCollapsed == false,
+            projectBench.showsEmptyHint
         else {
-            print("FAIL: a pinned project did not reach the tree or the title")
+            print("FAIL: a pinned project did not reach the tree, the title, the navigator or the hint")
             return 1
         }
         let projectFile = DocumentController(document: CoreDocument())
         projectBench.add(projectFile)
+        guard !projectBench.showsEmptyHint else {
+            print("FAIL: the empty-project words stayed with a file open")
+            return 1
+        }
         projectBench.closeTab(ObjectIdentifier(projectFile))
-        guard projectBench.window?.isVisible == true, projectBench.documents.isEmpty else {
-            print("FAIL: closing the last tab of a project window closed the window")
+        guard projectBench.window?.isVisible == true, projectBench.documents.isEmpty,
+            projectBench.showsEmptyHint
+        else {
+            print("FAIL: closing the last tab of a project window closed the window, or hid the hint")
             return 1
         }
         guard AppDelegate.scope(focused: nil, editors: [], pinned: root) == root else {

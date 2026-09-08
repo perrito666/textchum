@@ -30,6 +30,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         stamp("begin")
+        if let folder = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_OPENFOLDER"] {
+            // Hides the first window's navigator, then opens `folder` as
+            // a project the way File ▸ Open does, so the new window can
+            // be looked at with the navigator state a user may have.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                MainActor.assumeIsolated {
+                    if let item = Workbench.all.first?.splitController?.splitViewItems.first {
+                        item.isCollapsed = true
+                    }
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                MainActor.assumeIsolated {
+                    self.open(pathOrFolder: folder)
+                    NSLog("OPENFOLDER window num=\(NSApp.keyWindow?.windowNumber ?? -1)")
+                }
+            }
+        }
         if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_FINDBAR"] != nil {
             // Shows the find bar in the first editor, for a look at how
             // it sits with the gutter and the pinned context.

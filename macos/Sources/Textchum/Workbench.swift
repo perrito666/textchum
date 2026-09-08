@@ -241,6 +241,7 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
     /// column.
     func add(_ document: DocumentController, at index: Int? = nil, show: Bool = true) {
         document.workbench = self
+        emptyHint.isHidden = true
         if let index, index <= documents.count {
             documents.insert(document, at: index)
         } else {
@@ -303,6 +304,7 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
                 window?.title = (root as NSString).lastPathComponent
                 refreshStatus()
                 refreshInfoPanel()
+                refreshEmptyHint()
             } else {
                 closingSettled = true
                 window?.close()
@@ -329,6 +331,9 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
     /// when its last tab closes.
     private(set) var pinnedProjectRoot: String?
 
+    /// What the empty editor side of a project window says.
+    private let emptyHint = NSTextField(labelWithString: "")
+
     func pinProject(root: String) {
         pinnedProjectRoot = root
         window?.title = (root as NSString).lastPathComponent
@@ -336,7 +341,38 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         if focusedDocument == nil, sidebarContext.projectRoot != root {
             sidebarContext.projectRoot = root
         }
+        // The navigator's collapsed state is autosaved under one name
+        // for every window, and a project window with its tree hidden
+        // has nothing to show: it shows the tree.
+        if let navigator = splitController?.splitViewItems.first, navigator.isCollapsed {
+            navigator.isCollapsed = false
+        }
+        refreshEmptyHint()
     }
+
+    /// The tree is the way in; with no file open, the editor side says so.
+    private func refreshEmptyHint() {
+        guard pinnedProjectRoot != nil, let contentView = window?.contentView else {
+            emptyHint.isHidden = true
+            return
+        }
+        if emptyHint.superview == nil {
+            emptyHint.stringValue = t("Open a file from the tree, or with ⌘O.")
+            emptyHint.textColor = .secondaryLabelColor
+            emptyHint.font = .systemFont(ofSize: 13)
+            emptyHint.alignment = .center
+            emptyHint.translatesAutoresizingMaskIntoConstraints = false
+            contentView.addSubview(emptyHint)
+            NSLayoutConstraint.activate([
+                emptyHint.centerXAnchor.constraint(equalTo: columnSplit.centerXAnchor),
+                emptyHint.centerYAnchor.constraint(equalTo: columnSplit.centerYAnchor),
+            ])
+        }
+        emptyHint.isHidden = !documents.isEmpty
+    }
+
+    /// For the smoke test: whether the empty-project words are showing.
+    var showsEmptyHint: Bool { !emptyHint.isHidden && emptyHint.superview != nil }
 
     /// Every path this window is about: the pinned project and the
     /// projects of its files.
