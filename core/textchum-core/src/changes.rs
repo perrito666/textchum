@@ -783,7 +783,9 @@ mod repository_tests {
 
     #[test]
     fn repository_info_and_worktrees() {
-        let temp = std::env::temp_dir().join(format!("textchum-repo-{}", std::process::id()));
+        // Its own directory: another test in this process uses the
+        // repository name, and two tests racing over one folder fail.
+        let temp = std::env::temp_dir().join(format!("textchum-worktrees-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&temp);
         std::fs::create_dir_all(&temp).unwrap();
         sh(&temp, &["init", "-q", "-b", "trunk"]);
