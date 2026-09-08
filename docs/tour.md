@@ -136,7 +136,9 @@ list Find References uses; choosing a place goes there, as a jump of
 its own. Both lists show each line in its language's colours.
 
 A folder opens as a **project**: File ▸ Open takes a directory, and so
-does `chum path/to/folder`. When a tab of that project is open
+does `chum path/to/folder`. A path that does not exist yet —
+`chum notes/new.go` — opens a new document named after it, treated as
+the language its name says, and Save writes it there without asking. When a tab of that project is open
 somewhere, that tab comes to the front; otherwise a new window opens
 with the project in its tree and no file yet, and it stays open when
 its last tab closes. The status bar says the project's **git branch**,

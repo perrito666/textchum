@@ -2,6 +2,8 @@
 # chum — open files in Textchum from the terminal.
 #
 # usage: chum [options] [+LINE] file-or-folder...
+#   A file that does not exist opens as a new document of that name,
+#   written there on Save; its folder must exist.
 #   +N             put the caret on line N (applies to following files)
 #   -t, --tab      open as a tab of the current window
 #   -w, --window   open as a separate window
@@ -40,8 +42,8 @@ for arg in "$@"; do
         --wait) wait_mode="yes" ;;
         +[0-9]*) line="${arg#+}" ;;
         *)
-            if [ ! -e "$arg" ]; then
-                echo "chum: no such file: $arg" >&2
+            if [ ! -e "$arg" ] && [ ! -d "$(dirname "$arg")" ]; then
+                echo "chum: no such folder for: $arg" >&2
                 exit 1
             fi
             sentinel=""
