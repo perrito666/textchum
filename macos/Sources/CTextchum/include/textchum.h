@@ -2075,7 +2075,24 @@ char *tc_changes_for_file(const char *path,
  *
  * # Safety
  * `path` and `branches_json` must be valid UTF-8 for their lengths.
+ * The repository around `path` as JSON: root, branch (null when
+ * detached), the HEAD file to watch, and whether tracked files are
+ * modified. `{}` outside a repository. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `path` must point to `path_len` readable bytes.
  */
+char *tc_repository_info(const char *path, uintptr_t path_len);
+
+/**
+ * The repository's working trees as JSON, `[{"path", "branch"}, …]`.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `path` must point to `path_len` readable bytes.
+ */
+char *tc_worktrees(const char *path, uintptr_t path_len);
+
 char *tc_branch_files(const char *path,
                       uintptr_t path_len,
                       const char *branches_json,

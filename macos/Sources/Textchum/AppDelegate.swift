@@ -352,13 +352,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard !argument.hasPrefix("--"), !flagValueIndexes.contains(index) else {
                     return false
                 }
-                var isDirectory: ObjCBool = false
-                return FileManager.default.fileExists(atPath: argument, isDirectory: &isDirectory)
-                    && !isDirectory.boolValue
+                // A folder on the command line opens as a project.
+                return FileManager.default.fileExists(atPath: argument)
             }
             .map(\.element)
         for path in fileArguments {
-            open(path: path)
+            open(pathOrFolder: path)
         }
         let skipRestore =
             !fileArguments.isEmpty
@@ -366,7 +365,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             || NSEvent.modifierFlags.contains(.shift)
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, self.editors.isEmpty else { return }
+                // No windows at all — a project window with no file yet
+                // is a window.
+                guard let self, self.editors.isEmpty, Workbench.all.isEmpty else { return }
                 SessionStore.lastUntitledSaveFolder =
                     SessionStore.load()?.lastUntitledSaveFolder
                 if !skipRestore {
@@ -374,7 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.restoreSession()
                     self.stamp("restore-end")
                 }
-                if self.editors.isEmpty {
+                if self.editors.isEmpty, Workbench.all.isEmpty {
                     self.newDocument(nil)
                 }
                 self.announceGrammarProblems()
@@ -656,7 +657,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let path else { return }
         NSApp.activate(ignoringOtherApps: true)
         recordJumpOrigin()
-        open(path: path, target: target, revealLine: line)
+        // `chum some/folder` opens the folder as a project.
+        open(pathOrFolder: path, target: target, revealLine: line)
         // `chum --wait` blocks on this sentinel file; deleting it when
         // the document's window closes is what lets tools like
         // GIT_EDITOR read the edited file at the right moment.
@@ -733,7 +735,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var state = SessionState()
         state.lastUntitledSaveFolder = SessionStore.lastUntitledSaveFolder
         for editor in editors {
-            guard let path = editor.coreDocument.path else { continue }
+            guard let path = editor.coreDocument.path, !DocumentController.isGitEditorFile(path)
+            else { continue }
             let position = editor.sessionPosition
             state.windows.append(
                 SessionState.Window(
@@ -751,7 +754,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         file: file,
                         views: column.views.count,
                         dividers: column.dividerFractions)
-                }
+                },
+                projectRoot: workbench.pinnedProjectRoot
             )
         }
         state.frontmost =
@@ -817,10 +821,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let layout =
             state.layout?.filter { group in
                 group.tabs.contains { FileManager.default.fileExists(atPath: $0) }
+                    || group.projectRoot.map { FileManager.default.fileExists(atPath: $0) } == true
             }
             ?? [SessionState.Layout(tabs: state.windows.map(\.path), panes: [])]
         for group in layout {
             var workbench: Workbench?
+            // A project window with no files comes back as one.
+            if group.tabs.isEmpty, let root = group.projectRoot {
+                let project = makeWorkbench()
+                project.pinProject(root: root)
+                project.showWindow(nil)
+                continue
+            }
             // Tabs come back as documents only — parsed, listed, but
             // not shown: showing each in passing would build and paint
             // a set of views per tab for a window about to show one.
@@ -878,6 +890,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         caret: savedPlace.caret, scroll: savedPlace.scroll)
                 }
             }
+            if let root = group.projectRoot { workbench?.pinProject(root: root) }
             workbench?.showWindow(nil)
             workbench?.window?.makeKeyAndOrderFront(nil)
             stamp("restore-window")
@@ -1859,6 +1872,136 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private let jumpHistoryPanel = ListPanel()
+    private let worktreePanel = ListPanel()
+
+    /// Go → Worktrees…: the repository's working trees, to switch the
+    /// open project to one or open one as a project of its own.
+    @objc func showWorktrees(_ sender: Any?) {
+        let scope = currentScope
+        guard let info = CoreChanges.repositoryInfo(near: scope) else {
+            NSSound.beep()
+            return
+        }
+        let trees = CoreChanges.worktrees(near: info.root)
+        guard trees.count > 1 else {
+            let alert = NSAlert()
+            alert.messageText = t("No other worktrees")
+            alert.informativeText = t("This repository has one working tree.")
+            alert.runModal()
+            return
+        }
+        let current = info.root
+        let rows: [ListPanel.Row] = trees.map { tree in
+            let name = (tree.path as NSString).lastPathComponent
+            let branch = tree.branch ?? t("detached")
+            let mark = tree.path == current ? "  " + t("(current)") : ""
+            return .item("\(branch)  \(name)\(mark)  \(tree.path)")
+        }
+        worktreePanel.show(
+            rows: rows, over: NSApp.keyWindow, title: t("Worktrees"),
+            placeholder: t("branch or folder…"), monospaced: true
+        ) { [weak self] index in
+            guard let self, trees.indices.contains(index) else { return }
+            self.chooseWorktree(trees[index].path, from: current)
+        }
+    }
+
+    /// The user picked a worktree. One that is open already is brought
+    /// to the front. Otherwise: switch — the window's files close and
+    /// reopen in the other tree where they exist — or open it as a
+    /// project. With modified files in the current tree, or unsaved
+    /// ones in the window, only opening is offered.
+    func chooseWorktree(_ chosen: String, from current: String) {
+        let chosen = URL(fileURLWithPath: chosen, isDirectory: true).standardizedFileURL.path
+        if chosen == current
+            || editors.contains(where: { $0.projectRoot == chosen })
+            || Workbench.all.contains(where: { $0.pinnedProjectRoot == chosen })
+        {
+            openProject(root: chosen)
+            return
+        }
+        let workbench = NSApp.keyWindow?.windowController as? Workbench
+        let unsaved = workbench?.documents.contains { $0.coreDocument.isDirty } ?? false
+        let dirty = CoreChanges.repositoryInfo(near: current)?.dirty ?? false
+        let name = (chosen as NSString).lastPathComponent
+        let alert = NSAlert()
+        if dirty || unsaved {
+            alert.messageText = t("Open {} as a project?", name)
+            alert.informativeText =
+                dirty
+                ? t("{} has modified files, so switching is not offered.", (current as NSString).lastPathComponent)
+                : t("This window has unsaved files, so switching is not offered.")
+            alert.addButton(withTitle: t("Open"))
+            alert.addButton(withTitle: t("Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            openProject(root: chosen)
+            return
+        }
+        alert.messageText = t("Switch to {}, or open it as a project?", name)
+        alert.informativeText = t(
+            "Switch closes this window's files and reopens the ones {} also has. Open leaves this window as it is.",
+            name)
+        alert.addButton(withTitle: t("Switch"))
+        alert.addButton(withTitle: t("Open"))
+        alert.addButton(withTitle: t("Cancel"))
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            guard let workbench else {
+                openProject(root: chosen)
+                return
+            }
+            switchProject(of: workbench, from: current, to: chosen)
+        case .alertSecondButtonReturn:
+            openProject(root: chosen)
+        default:
+            return
+        }
+    }
+
+    /// The window's files under `from`, as the same relative paths
+    /// under `to`, keeping only those that exist there.
+    static func remappedFiles(_ paths: [String], from: String, to: String) -> [String] {
+        let prefix = from.hasSuffix("/") ? from : from + "/"
+        return paths.compactMap { path in
+            guard path.hasPrefix(prefix) else { return nil }
+            let moved = to + "/" + String(path.dropFirst(prefix.count))
+            return FileManager.default.fileExists(atPath: moved) ? moved : nil
+        }
+    }
+
+    /// Exchanges the window's project for `to`: its files under `from`
+    /// close and the same relative files open under `to` where they
+    /// exist, the language servers of `from` retire, and the tree and
+    /// the branch follow.
+    func switchProject(of workbench: Workbench, from: String, to: String) {
+        let paths = workbench.documents.compactMap(\.coreDocument.path)
+        let focused = workbench.focusedDocument?.coreDocument.path
+        let moved = Self.remappedFiles(paths, from: from, to: to)
+        let focusedMoved = focused.flatMap { Self.remappedFiles([$0], from: from, to: to).first }
+        // Pinned first: the window stays open while it is emptied.
+        workbench.pinProject(root: to)
+        for document in workbench.documents
+        where document.coreDocument.path.map({ $0.hasPrefix(from) }) == true {
+            workbench.closeTab(ObjectIdentifier(document))
+        }
+        if let app = coreApp {
+            for running in app.lspRunning() where running.root == from {
+                app.lspRetire(server: running.server, root: running.root)
+            }
+        }
+        workbench.window?.makeKeyAndOrderFront(nil)
+        for path in moved {
+            open(path: path, target: .tab)
+        }
+        if let focusedMoved,
+            let editor = editors.first(where: { $0.coreDocument.path == focusedMoved })
+        {
+            workbench.showInFocusedPane(ObjectIdentifier(editor))
+        }
+        GitBranchMonitor.shared.forget(root: from)
+        workbench.refreshStatus()
+        scheduleSessionSave()
+    }
 
     /// Go → Jump History…: the trail behind and ahead as a list, in the
     /// panel Find References uses. Choosing a place goes there, and is
@@ -2049,18 +2192,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The search scope for the key window: its project, else its file's
     /// directory, else home — always shown editable in the panel.
     var currentScope: String {
-        Self.scope(
-            focused: (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument,
-            editors: editors)
+        let key = NSApp.keyWindow?.windowController as? Workbench
+        return Self.scope(
+            focused: key?.focusedDocument, editors: editors, pinned: key?.pinnedProjectRoot)
     }
 
     /// The project Open Quickly and Find in Project search: the focused
     /// tab's — not the first tab's in the key window, which answered
     /// for every tab when two projects were open side by side — then
     /// any open document's, then the last scope used, then home.
-    static func scope(focused: DocumentController?, editors: [DocumentController]) -> String {
+    static func scope(
+        focused: DocumentController?, editors: [DocumentController], pinned: String? = nil
+    ) -> String {
         let keyEditor = focused ?? editors.first { $0.window?.isKeyWindow == true } ?? editors.first
         if let root = keyEditor?.projectRoot { return root }
+        // A project window with no file yet is still about its project.
+        if let pinned { return pinned }
         if let path = keyEditor?.coreDocument.path {
             return (path as NSString).deletingLastPathComponent
         }
@@ -2273,11 +2420,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func openDocument(_ sender: Any?) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         guard panel.runModal() == .OK else { return }
         for url in panel.urls {
-            open(path: url.path)
+            open(pathOrFolder: url.path)
         }
+    }
+
+    /// A file opens as a file; a folder opens as a project.
+    func open(pathOrFolder path: String, target: CoreOpenTarget? = nil, revealLine: Int? = nil) {
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+            isDirectory.boolValue
+        {
+            openProject(root: path)
+        } else {
+            open(path: path, target: target, revealLine: revealLine)
+        }
+    }
+
+    /// Opens a folder as a project: a window whose tree shows it. When
+    /// a tab of that project is open somewhere already, that is the
+    /// place to go — the first such tab comes to the front — and no
+    /// second window opens.
+    @discardableResult
+    func openProject(root: String) -> Workbench {
+        let root = URL(fileURLWithPath: root, isDirectory: true).standardizedFileURL.path
+        if let existing = editors.first(where: { $0.projectRoot == root }),
+            let workbench = existing.workbench
+        {
+            workbench.window?.makeKeyAndOrderFront(nil)
+            workbench.showInFocusedPane(ObjectIdentifier(existing))
+            return workbench
+        }
+        if let pinned = Workbench.all.first(where: { $0.pinnedProjectRoot == root }) {
+            pinned.window?.makeKeyAndOrderFront(nil)
+            return pinned
+        }
+        let workbench = makeWorkbench()
+        workbench.pinProject(root: root)
+        workbench.showWindow(nil)
+        workbench.window?.makeKeyAndOrderFront(nil)
+        noteRecent(path: root)
+        scheduleSessionSave()
+        return workbench
     }
 
     /// Untitled windows that were never touched: pathless, clean, empty.
@@ -2678,6 +2864,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyEquivalent: "h")
         historyItem.keyEquivalentModifierMask = [.command, .control, .shift]
         editMenu.addItem(historyItem)
+        let worktreesItem = NSMenuItem(
+            title: t("Worktrees…"),
+            action: #selector(showWorktrees(_:)),
+            keyEquivalent: "")
+        editMenu.addItem(worktreesItem)
         let references = NSMenuItem(
             title: t("Find References"),
             action: #selector(DocumentController.findReferences(_:)),

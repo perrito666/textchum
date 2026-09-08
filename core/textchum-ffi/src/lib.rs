@@ -3609,6 +3609,39 @@ pub unsafe extern "C" fn tc_changes_for_file(
 ///
 /// # Safety
 /// `path` and `branches_json` must be valid UTF-8 for their lengths.
+/// The repository around `path` as JSON: root, branch (null when
+/// detached), the HEAD file to watch, and whether tracked files are
+/// modified. `{}` outside a repository. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `path` must point to `path_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_repository_info(path: *const c_char, path_len: usize) -> *mut c_char {
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(textchum_core::changes::repository_info_json(std::path::Path::new(path)))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// The repository's working trees as JSON, `[{"path", "branch"}, …]`.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `path` must point to `path_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_worktrees(path: *const c_char, path_len: usize) -> *mut c_char {
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(textchum_core::changes::worktrees_json(std::path::Path::new(path)))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn tc_branch_files(
     path: *const c_char,

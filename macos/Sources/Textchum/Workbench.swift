@@ -212,6 +212,12 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         columns = [column]
         columnSplit.addArrangedSubview(column.split)
         Self.all.append(self)
+        // The status bar says the branch; when it changes, say it again.
+        NotificationCenter.default.addObserver(
+            forName: .textchumBranchChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshStatus() }
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -287,10 +293,20 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         document.workbench = nil
         onDocumentClosed?(document)
         refreshTabs()
-        // A window with nothing left in it has nothing to show.
+        // A window with nothing left in it has nothing to show — unless
+        // it is a project's window, which keeps its tree.
         if documents.isEmpty {
-            closingSettled = true
-            window?.close()
+            if let root = pinnedProjectRoot {
+                sidebarContext.projectRoot = root
+                sidebarContext.focusedDocumentID = nil
+                sidebarContext.focusedPath = nil
+                window?.title = (root as NSString).lastPathComponent
+                refreshStatus()
+                refreshInfoPanel()
+            } else {
+                closingSettled = true
+                window?.close()
+            }
         }
         return true
     }
@@ -307,6 +323,28 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
     /// The document with the keyboard — what the menu commands and the
     /// window's chrome are about.
     var focusedDocument: DocumentController? { document(inColumn: focusedColumn) }
+
+    /// A project this window shows on its own account: opened as a
+    /// folder, it has a tree before it has a file, and it stays open
+    /// when its last tab closes.
+    private(set) var pinnedProjectRoot: String?
+
+    func pinProject(root: String) {
+        pinnedProjectRoot = root
+        window?.title = (root as NSString).lastPathComponent
+        window?.representedURL = URL(fileURLWithPath: root, isDirectory: true)
+        if focusedDocument == nil, sidebarContext.projectRoot != root {
+            sidebarContext.projectRoot = root
+        }
+    }
+
+    /// Every path this window is about: the pinned project and the
+    /// projects of its files.
+    var projectRoots: Set<String> {
+        var roots = Set(documents.compactMap(\.projectRoot))
+        if let pinned = pinnedProjectRoot { roots.insert(pinned) }
+        return roots
+    }
 
     /// Shows a document in a column, in as many views as the column had.
     ///

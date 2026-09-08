@@ -143,6 +143,23 @@ dans la même liste que Rechercher les références ; choisir un endroit y
 mène, comme un saut de plus. Les deux listes montrent chaque ligne dans
 les couleurs de son langage.
 
+Un dossier s'ouvre comme **projet** : Fichier ▸ Ouvrir accepte un
+répertoire, et `chum chemin/vers/dossier` aussi. Quand un onglet de ce
+projet est ouvert quelque part, cet onglet passe devant ; sinon une
+nouvelle fenêtre s'ouvre avec le projet dans son arbre et sans fichier
+encore, et elle reste ouverte quand son dernier onglet se ferme. La
+barre d'état dit la **branche git** du projet, lue quand le fichier est
+montré et de nouveau quand git réécrit HEAD — l'éditeur surveille ce
+fichier plutôt que d'interroger git à intervalle. **Aller ▸ Arbres de
+travail…** liste les arbres de travail du dépôt : choisissez-en un pour
+y basculer cette fenêtre — ses fichiers se ferment et ceux que l'autre
+arbre a aussi s'y rouvrent, et les serveurs de langage démarrent dans
+la nouvelle racine — ou pour l'ouvrir comme projet à part. Avec des
+fichiers modifiés dans l'arbre courant, ou non enregistrés dans la
+fenêtre, seule l'ouverture est proposée ; un arbre déjà ouvert passe
+simplement devant. Un fichier que git confie à l'éditeur — un message
+de commit, la liste d'un rebase — commence toujours en haut.
+
 **Aller à la ligne** (⌘L, Ctrl+L sous Linux) accepte un numéro, ou le
 `src/main.rs:412:8` entier collé depuis un journal de compilation — le
 nom du fichier et le bruit qui suit sont ignorés, la ligne est centrée,

@@ -141,6 +141,23 @@ hay, en la misma lista que usa Buscar referencias; elegir un lugar lleva
 allí, como un salto más. Ambas listas muestran cada línea con los
 colores de su lenguaje.
 
+Una carpeta se abre como **proyecto**: Archivo ▸ Abrir acepta un
+directorio, y también `chum ruta/a/carpeta`. Si hay una pestaña de ese
+proyecto abierta en algún sitio, esa pestaña pasa al frente; si no, se
+abre una ventana nueva con el proyecto en su árbol y sin archivo aún, y
+sigue abierta cuando se cierra su última pestaña. La barra de estado
+dice la **rama de git** del proyecto, leída al mostrar el archivo y de
+nuevo cuando git reescribe HEAD — el editor vigila ese archivo en vez
+de preguntar con un temporizador. **Ir ▸ Árboles de trabajo…** lista
+los árboles de trabajo del repositorio: elige uno para cambiar esta
+ventana a él — sus archivos se cierran y los que el otro árbol también
+tiene se vuelven a abrir allí, y los servidores de lenguaje arrancan en
+la nueva raíz — o para abrirlo como proyecto propio. Con archivos
+modificados en el árbol actual, o sin guardar en la ventana, solo se
+ofrece abrir; un árbol ya abierto simplemente pasa al frente. Un
+archivo que git entrega al editor — un mensaje de commit, la lista de
+un rebase — empieza siempre arriba.
+
 **Ir a la línea** (⌘L, Ctrl+L en Linux) acepta un número, o el
 `src/main.rs:412:8` entero pegado desde un registro de compilación —
 el nombre del archivo y el ruido sobrante se ignoran, la línea queda

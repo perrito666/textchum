@@ -446,6 +446,104 @@ pub fn branch_files_json(start: &Path, priorities: &[String]) -> String {
     serde_json::json!({"root": root, "files": items}).to_string()
 }
 
+/// What a shell wants to know about the repository around `start`, in
+/// one question: its root, the branch checked out (`None` when HEAD is
+/// detached), the file whose change means the branch changed — HEAD in
+/// the gitdir, which a worktree keeps elsewhere — and whether tracked
+/// files are modified. `None` outside a repository.
+pub struct RepositoryInfo {
+    pub root: String,
+    pub branch: Option<String>,
+    pub head_path: String,
+    pub dirty: bool,
+}
+
+pub fn repository_info(start: &Path) -> Option<RepositoryInfo> {
+    let start = start.canonicalize().ok()?;
+    let directory = if start.is_dir() {
+        start.as_path()
+    } else {
+        start.parent()?
+    };
+    let root = git(directory, &["rev-parse", "--show-toplevel"])?.trim().to_string();
+    let branch = git(directory, &["symbolic-ref", "--short", "-q", "HEAD"])
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty());
+    let head_path = git(
+        directory,
+        &["rev-parse", "--path-format=absolute", "--git-path", "HEAD"],
+    )?
+    .trim()
+    .to_string();
+    let dirty = git(directory, &["status", "--porcelain", "--untracked-files=no"])
+        .map(|status| !status.trim().is_empty())
+        .unwrap_or(false);
+    Some(RepositoryInfo { root, branch, head_path, dirty })
+}
+
+/// [`repository_info`] as JSON — `{"root", "branch", "head", "dirty"}`,
+/// `branch` null when detached — for shells on the C ABI. `{}` outside
+/// a repository.
+pub fn repository_info_json(start: &Path) -> String {
+    let Some(info) = repository_info(start) else {
+        return "{}".into();
+    };
+    serde_json::json!({
+        "root": info.root,
+        "branch": info.branch,
+        "head": info.head_path,
+        "dirty": info.dirty,
+    })
+    .to_string()
+}
+
+/// One working tree of the repository: where it is and what it has
+/// checked out (`None` when detached).
+pub struct Worktree {
+    pub path: String,
+    pub branch: Option<String>,
+}
+
+/// Every working tree of the repository around `start`, the main one
+/// first, as `git worktree list` reports them. `None` outside a
+/// repository.
+pub fn worktrees(start: &Path) -> Option<Vec<Worktree>> {
+    let start = start.canonicalize().ok()?;
+    let directory = if start.is_dir() {
+        start.as_path()
+    } else {
+        start.parent()?
+    };
+    let listed = git(directory, &["worktree", "list", "--porcelain"])?;
+    let mut trees: Vec<Worktree> = Vec::new();
+    for line in listed.lines() {
+        if let Some(path) = line.strip_prefix("worktree ") {
+            trees.push(Worktree { path: path.to_string(), branch: None });
+        } else if let Some(reference) = line.strip_prefix("branch ") {
+            if let Some(last) = trees.last_mut() {
+                last.branch = Some(
+                    reference
+                        .strip_prefix("refs/heads/")
+                        .unwrap_or(reference)
+                        .to_string(),
+                );
+            }
+        }
+    }
+    Some(trees)
+}
+
+/// [`worktrees`] as JSON — `[{"path", "branch"}, …]`, `branch` null when
+/// detached — for shells on the C ABI. `[]` outside a repository.
+pub fn worktrees_json(start: &Path) -> String {
+    let trees = worktrees(start).unwrap_or_default();
+    let items: Vec<serde_json::Value> = trees
+        .iter()
+        .map(|tree| serde_json::json!({"path": tree.path, "branch": tree.branch}))
+        .collect();
+    serde_json::Value::Array(items).to_string()
+}
+
 /// The marks as JSON, which is how they cross the FFI.
 pub fn to_json(changes: &[LineChange]) -> String {
     let items: Vec<serde_json::Value> = changes
@@ -665,5 +763,50 @@ mod tests {
     fn json_carries_the_line_and_the_kind() {
         let json = to_json(&line_changes("a\nb\n", "a\nB\n"));
         assert_eq!(json, r#"[{"kind":"modified","line":1}]"#);
+    }
+}
+
+#[cfg(test)]
+mod repository_tests {
+    use super::*;
+    use std::process::Command;
+
+    fn sh(directory: &Path, arguments: &[&str]) {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(directory)
+            .args(arguments)
+            .status()
+            .expect("git runs");
+        assert!(status.success(), "git {:?}", arguments);
+    }
+
+    #[test]
+    fn repository_info_and_worktrees() {
+        let temp = std::env::temp_dir().join(format!("textchum-repo-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&temp).unwrap();
+        sh(&temp, &["init", "-q", "-b", "trunk"]);
+        sh(&temp, &["config", "user.email", "t@t"]);
+        sh(&temp, &["config", "user.name", "t"]);
+        std::fs::write(temp.join("a.txt"), "one\n").unwrap();
+        sh(&temp, &["add", "."]);
+        sh(&temp, &["commit", "-q", "-m", "one"]);
+
+        let info = repository_info(&temp).expect("a repository");
+        assert_eq!(info.branch.as_deref(), Some("trunk"));
+        assert!(info.head_path.ends_with("HEAD"));
+        assert!(!info.dirty, "a clean tree is not dirty");
+        std::fs::write(temp.join("a.txt"), "two\n").unwrap();
+        assert!(repository_info(&temp).unwrap().dirty, "a modified tracked file is");
+
+        let other = temp.join("other-tree");
+        sh(&temp, &["worktree", "add", "-q", "-b", "feature", other.to_str().unwrap()]);
+        let trees = worktrees(&temp).expect("worktrees");
+        assert_eq!(trees.len(), 2);
+        assert_eq!(trees[1].branch.as_deref(), Some("feature"));
+        assert!(worktrees_json(&temp).contains("\"feature\""));
+        assert_eq!(repository_info_json(Path::new("/")), "{}");
+        let _ = std::fs::remove_dir_all(&temp);
     }
 }
