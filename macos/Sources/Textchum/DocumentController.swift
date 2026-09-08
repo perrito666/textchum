@@ -323,6 +323,17 @@ final class DocumentController: NSResponder {
     /// folder of the file that was frontmost when it was created — the
     /// user was probably adding a file to that project.
     var suggestedSaveDirectory: URL?
+    /// Where a new document is to be written: `chum notes/new.go` on a
+    /// file that does not exist opens a document named after it, of its
+    /// language, in its project, and Save writes it there — the path
+    /// was already given. Nil once the document has a path of its own.
+    var intendedPath: String? {
+        didSet {
+            guard coreDocument.path == nil else { return }
+            projectRoot = intendedPath.flatMap(resolveProjectRoot)
+            updateChrome()
+        }
+    }
 
     init(
         document: CoreDocument,
@@ -347,7 +358,7 @@ final class DocumentController: NSResponder {
         completionPopup.onAccept = { [weak self] item in
             self?.accept(completion: item)
         }
-        projectRoot = coreDocument.path.flatMap { self.resolveProjectRoot($0) }
+        projectRoot = (coreDocument.path ?? intendedPath).flatMap { self.resolveProjectRoot($0) }
         // Before any view is made: how this file is shown is what the
         // first column asks for.
         adoptProjectState()
@@ -3565,7 +3576,7 @@ final class DocumentController: NSResponder {
     /// What this document is called on the tab and, while it has the
     /// keyboard, in the title bar.
     var chromeTitle: String {
-        guard let path = coreDocument.path else { return t("Untitled") }
+        guard let path = coreDocument.path ?? intendedPath else { return t("Untitled") }
         return displayTitle ?? URL(fileURLWithPath: path).lastPathComponent
     }
 
@@ -3685,7 +3696,7 @@ final class DocumentController: NSResponder {
     /// Recomputes the project root under the current workspace settings
     /// (called when those settings change).
     func refreshProjectRoot() {
-        projectRoot = coreDocument.path.flatMap(resolveProjectRoot)
+        projectRoot = (coreDocument.path ?? intendedPath).flatMap(resolveProjectRoot)
         let treeRoot =
             projectRoot
             ?? coreDocument.path.map { ($0 as NSString).deletingLastPathComponent }
@@ -4058,8 +4069,33 @@ final class DocumentController: NSResponder {
     /// Saves, asking for a location if the document has none. Returns
     /// whether the document ended up saved.
     @discardableResult
+    /// Writes a new document where it was meant to go, making the
+    /// folder when it is missing. False when that cannot be done, and
+    /// the panel takes over.
+    private func saveToIntendedPath(_ path: String) -> Bool {
+        guard preprocessBeforeSave() else { return false }
+        let folder = (path as NSString).deletingLastPathComponent
+        do {
+            try FileManager.default.createDirectory(
+                atPath: folder, withIntermediateDirectories: true)
+            try coreDocument.save(to: path)
+        } catch {
+            return false
+        }
+        intendedPath = nil
+        noteOwnSave()
+        updateChrome()
+        refreshDecorations()
+        syncLSPOpenState()
+        refreshProjectRoot()
+        return true
+    }
+
     func saveInteractively() -> Bool {
-        guard coreDocument.path != nil else { return saveAsInteractively() }
+        guard coreDocument.path != nil else {
+            if let intendedPath, saveToIntendedPath(intendedPath) { return true }
+            return saveAsInteractively()
+        }
         guard preprocessBeforeSave() else { return false }
         do {
             try coreDocument.save()
@@ -4078,9 +4114,14 @@ final class DocumentController: NSResponder {
     func saveAsInteractively() -> Bool {
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
-        // An untitled document starts where the last untitled was
-        // saved; failing a memory, wherever the window suggests.
-        if coreDocument.path == nil {
+        // A document meant for a path starts in that path's folder; an
+        // untitled one where the last untitled was saved, failing a
+        // memory, wherever the window suggests.
+        if coreDocument.path == nil, let intendedPath {
+            panel.directoryURL = URL(
+                fileURLWithPath: (intendedPath as NSString).deletingLastPathComponent,
+                isDirectory: true)
+        } else if coreDocument.path == nil {
             if let remembered = SessionStore.lastUntitledSaveFolder {
                 panel.directoryURL = URL(fileURLWithPath: remembered, isDirectory: true)
             } else if let suggestedSaveDirectory {
@@ -4096,7 +4137,8 @@ final class DocumentController: NSResponder {
             .first { $0.name == coreDocument.languageName && !$0.fileExtension.isEmpty }
             .map { "Untitled.\($0.fileExtension)" } ?? "Untitled.txt"
         panel.nameFieldStringValue =
-            coreDocument.path.map { ($0 as NSString).lastPathComponent } ?? untitledName
+            (coreDocument.path ?? intendedPath).map { ($0 as NSString).lastPathComponent }
+            ?? untitledName
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         guard preprocessBeforeSave() else { return false }
         let wasUntitled = coreDocument.path == nil

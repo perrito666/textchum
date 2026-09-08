@@ -1572,6 +1572,40 @@ func runSmokeTest() -> Int32 {
     }
     print("projects ok (folder window, branch watched, worktrees listed and remapped, git message files start at the top)")
 
+    // A new document meant for a path: named after it, treated as its
+    // language, and written there on Save, folder and all.
+    do {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-new-\(ProcessInfo.processInfo.processIdentifier)")
+        try? FileManager.default.removeItem(at: folder)
+        let intended = folder.appendingPathComponent("deeper/new.go").path
+        let newDocument = CoreDocument()
+        if let language = CoreLanguages.detected(forPath: intended) {
+            _ = newDocument.setLanguage(language)
+        }
+        let newEditor = DocumentController(document: newDocument)
+        newEditor.intendedPath = intended
+        let newBench = Workbench(sidebar: nil)
+        newBench.add(newEditor)
+        newBench.window?.makeKeyAndOrderFront(nil)
+        guard newEditor.chromeTitle == "new.go", newDocument.languageName == "go" else {
+            print("FAIL: a new file for a path is called \(newEditor.chromeTitle), language \(newDocument.languageName ?? "nil")")
+            return 1
+        }
+        newEditor.primaryView?.string = "package main\n"
+        newEditor.noteTextReplaced()
+        guard newEditor.saveInteractively(), newDocument.path == intended,
+            (try? String(contentsOfFile: intended, encoding: .utf8)) == "package main\n",
+            newEditor.intendedPath == nil
+        else {
+            print("FAIL: Save did not write the new file where it was meant to go: \(newDocument.path ?? "nil")")
+            return 1
+        }
+        newBench.window?.close()
+        try? FileManager.default.removeItem(at: folder)
+    }
+    print("new file ok (named, typed and saved where chum pointed)")
+
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
     // where the caret is and what the file is.

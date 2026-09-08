@@ -370,8 +370,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard !argument.hasPrefix("--"), !flagValueIndexes.contains(index) else {
                     return false
                 }
-                // A folder on the command line opens as a project.
-                return FileManager.default.fileExists(atPath: argument)
+                // A folder on the command line opens as a project, and a
+                // path that is not there yet — its folder is — opens as
+                // a new document of that name.
+                if FileManager.default.fileExists(atPath: argument) { return true }
+                var parentIsDirectory: ObjCBool = false
+                let parent = (argument as NSString).deletingLastPathComponent
+                return !parent.isEmpty
+                    && FileManager.default.fileExists(atPath: parent, isDirectory: &parentIsDirectory)
+                    && parentIsDirectory.boolValue
             }
             .map(\.element)
         for path in fileArguments {
@@ -2445,15 +2452,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// A file opens as a file; a folder opens as a project.
+    /// A file opens as a file; a folder opens as a project; a path that
+    /// does not exist opens as a new document of that name.
     func open(pathOrFolder path: String, target: CoreOpenTarget? = nil, revealLine: Int? = nil) {
         var isDirectory: ObjCBool = false
-        if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
-            isDirectory.boolValue
-        {
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            openNew(at: path, target: target)
+            return
+        }
+        if isDirectory.boolValue {
             openProject(root: path)
         } else {
             open(path: path, target: target, revealLine: revealLine)
+        }
+    }
+
+    /// `chum notes/new.go` on a file that is not there yet: a new
+    /// document named after it, treated as the language its name says,
+    /// shown in its project, written to that path on Save. One already
+    /// open for the same path comes to the front instead.
+    func openNew(at path: String, target: CoreOpenTarget? = nil) {
+        let path = URL(fileURLWithPath: path).standardizedFileURL.path
+        if let existing = editors.first(where: { $0.intendedPath == path }) {
+            existing.window?.makeKeyAndOrderFront(nil)
+            existing.workbench?.showInFocusedPane(ObjectIdentifier(existing))
+            return
+        }
+        let document = CoreDocument()
+        if let language = CoreLanguages.detected(forPath: path) {
+            _ = document.setLanguage(language)
+        }
+        closeUntouchedUntitledWindows()
+        let editor = DocumentController(
+            document: document,
+            settings: currentSettings,
+            sidebar: sidebarConfiguration,
+            lspApp: coreApp,
+            openLocation: { [weak self] path, line, character in
+                self?.openLocation(path: path, line: line, character: character)
+            })
+        editor.intendedPath = path
+        editor.suggestedSaveDirectory = URL(fileURLWithPath: path).deletingLastPathComponent()
+        show(editor: editor, placeAsConfigured: true, target: target)
+        if let model = settingsModel, editor.projectRoot != nil {
+            editor.apply(settings: model.currentSettings(forRoot: editor.projectRoot))
         }
     }
 

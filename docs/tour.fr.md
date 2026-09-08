@@ -144,7 +144,10 @@ mène, comme un saut de plus. Les deux listes montrent chaque ligne dans
 les couleurs de son langage.
 
 Un dossier s'ouvre comme **projet** : Fichier ▸ Ouvrir accepte un
-répertoire, et `chum chemin/vers/dossier` aussi. Quand un onglet de ce
+répertoire, et `chum chemin/vers/dossier` aussi. Un chemin qui n'existe
+pas encore — `chum notes/nouveau.go` — ouvre un nouveau document de ce
+nom, traité comme le langage que son nom indique, et Enregistrer
+l'écrit là sans demander. Quand un onglet de ce
 projet est ouvert quelque part, cet onglet passe devant ; sinon une
 nouvelle fenêtre s'ouvre avec le projet dans son arbre et sans fichier
 encore, et elle reste ouverte quand son dernier onglet se ferme. La

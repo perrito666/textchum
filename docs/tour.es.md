@@ -142,7 +142,10 @@ allí, como un salto más. Ambas listas muestran cada línea con los
 colores de su lenguaje.
 
 Una carpeta se abre como **proyecto**: Archivo ▸ Abrir acepta un
-directorio, y también `chum ruta/a/carpeta`. Si hay una pestaña de ese
+directorio, y también `chum ruta/a/carpeta`. Una ruta que aún no existe
+— `chum notas/nuevo.go` — abre un documento nuevo con ese nombre,
+tratado como el lenguaje que su nombre indica, y Guardar lo escribe ahí
+sin preguntar. Si hay una pestaña de ese
 proyecto abierta en algún sitio, esa pestaña pasa al frente; si no, se
 abre una ventana nueva con el proyecto en su árbol y sin archivo aún, y
 sigue abierta cuando se cierra su última pestaña. La barra de estado
