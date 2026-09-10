@@ -1606,6 +1606,46 @@ func runSmokeTest() -> Int32 {
     }
     print("new file ok (named, typed and saved where chum pointed)")
 
+    // Selecting a word marks its other occurrences, on the layout the
+    // view draws from.
+    do {
+        let markBench = Workbench(sidebar: nil)
+        let markDocument = DocumentController(document: CoreDocument())
+        markBench.add(markDocument)
+        markBench.window?.makeKeyAndOrderFront(nil)
+        guard let markView = markDocument.primaryView else {
+            print("FAIL: no view to select in")
+            return 1
+        }
+        markView.string = "item = item + items\nitem\n"
+        markDocument.noteTextReplaced()
+        markBench.window?.makeFirstResponder(markView)
+        markView.setSelectedRange(NSRange(location: 0, length: 4))
+        spin(untilTrue: { markDocument.occurrenceRangesForDebug.count == 2 }, seconds: 3)
+        let marked = markDocument.occurrenceRangesForDebug
+        guard marked == [NSRange(location: 7, length: 4), NSRange(location: 20, length: 4)] else {
+            print("FAIL: the selected word's occurrences are marked as \(marked)")
+            return 1
+        }
+        var painted = false
+        if let layoutManager = markView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            let inside = contentManager.location(layoutManager.documentRange.location, offsetBy: 8)
+        {
+            layoutManager.enumerateRenderingAttributes(from: inside, reverse: false) {
+                _, attributes, _ in
+                painted = attributes[.backgroundColor] != nil
+                return false
+            }
+        }
+        guard painted else {
+            print("FAIL: the second occurrence carries no background on the layout")
+            return 1
+        }
+        markBench.window?.close()
+    }
+    print("occurrences ok (the selected word's others are marked and painted)")
+
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
     // where the caret is and what the file is.
