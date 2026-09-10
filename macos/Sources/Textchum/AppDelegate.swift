@@ -30,6 +30,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         stamp("begin")
+        if let spec = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_SELECT"] {
+            // "from:length": selects that range in the first editor, so
+            // the other occurrences of the word can be looked at.
+            let parts = spec.split(separator: ":").compactMap { Int($0) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                MainActor.assumeIsolated {
+                    guard parts.count == 2, let editor = self.editors.first,
+                        let view = editor.primaryView
+                    else { return }
+                    view.window?.makeFirstResponder(view)
+                    view.setSelectedRange(NSRange(location: parts[0], length: parts[1]))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                        MainActor.assumeIsolated {
+                            NSLog("SELECT window num=\(view.window?.windowNumber ?? -1) occurrences=\(editor.occurrenceRangesForDebug)")
+                        }
+                    }
+                }
+            }
+        }
         if let folder = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_OPENFOLDER"] {
             // Hides the first window's navigator, then opens `folder` as
             // a project the way File ▸ Open does, so the new window can

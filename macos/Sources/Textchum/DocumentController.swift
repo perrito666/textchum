@@ -2850,6 +2850,12 @@ final class DocumentController: NSResponder {
     }
 
     /// Clears the occurrence marks. Escape says "I am done looking".
+    /// For the smoke test: the ranges marked as the selection's other
+    /// occurrences.
+    var occurrenceRangesForDebug: [NSRange] { occurrenceRanges }
+    /// What the last pass marked, to be laid out again when it changes.
+    private var markedRanges: [NSRange] = []
+
     func clearOccurrences() {
         guard !occurrenceRanges.isEmpty else { return }
         occurrenceRanges = []
@@ -2895,6 +2901,24 @@ final class DocumentController: NSResponder {
         func inScope(_ range: NSRange) -> Bool {
             NSIntersectionRange(range, scope).length > 0
         }
+        // A line fragment keeps the attributes it was laid out with, so
+        // a mark shows — and a cleared one goes — only once its line is
+        // laid out again. Everything marked last time and this time is
+        // invalidated, and nothing else: the painted stretch as a whole
+        // would be a relayout per scroll tick.
+        var touched: [NSRange] = markedRanges
+        defer {
+            markedRanges = touched.filter(inScope)
+            for range in touched where inScope(range) && NSMaxRange(range) <= length {
+                guard let start = contentManager.location(
+                    documentRange.location, offsetBy: range.location),
+                    let end = contentManager.location(start, offsetBy: range.length),
+                    let textRange = NSTextRange(location: start, end: end)
+                else { continue }
+                for target in paintTargets { target.invalidateLayout(for: textRange) }
+            }
+            for view in views { view.textView.needsDisplay = true }
+        }
 
         let text: NSString = textView.textStorage?.mutableString ?? (textView.string as NSString)
         for occurrence in occurrenceRanges where inScope(occurrence) {
@@ -2909,6 +2933,7 @@ final class DocumentController: NSResponder {
                     .backgroundColor,
                     value: NSColor.systemGray.withAlphaComponent(0.30), for: textRange)
             }
+            touched.append(occurrence)
         }
         for spelling in spellingRanges where inScope(spelling) {
             guard NSMaxRange(spelling) <= text.length,
@@ -2922,6 +2947,7 @@ final class DocumentController: NSResponder {
                     .backgroundColor,
                     value: NSColor.systemPurple.withAlphaComponent(0.18), for: textRange)
             }
+            touched.append(spelling)
         }
         // One walk of the file for every diagnostic together: the old
         // converter walked from the top once per diagnostic, which a
@@ -2967,6 +2993,7 @@ final class DocumentController: NSResponder {
                 target.addRenderingAttribute(
                     .backgroundColor, value: color.withAlphaComponent(0.15), for: textRange)
             }
+            touched.append(range)
         }
     }
 
