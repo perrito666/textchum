@@ -212,7 +212,11 @@ separados entre los importados aquí y los abiertos donde están;
 original no se lleva los iconos. **Open…** apunta a un paquete donde
 está y lo recuerda, que es lo adecuado para uno que mantienes tú. Ambos
 aceptan el archivo JSON del tema de iconos o la carpeta de extensión
-que lo contiene (su `package.json` dice cuál es). **Delete** borra un
+que lo contiene (su `package.json` dice cuál es). Un paquete puesto a
+mano en la carpeta de Textchum también aparece en la lista — una
+carpeta de extensión, o el archivo JSON del tema por sí solo — y el
+icono del archivo en la barra de título sigue al paquete, como el
+árbol. **Delete** borra un
 paquete importado; uno abierto desde otro sitio es de quien lo puso
 ahí, así que solo se puede quitar de la lista.
 
