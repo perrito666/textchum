@@ -1606,6 +1606,33 @@ func runSmokeTest() -> Int32 {
     }
     print("new file ok (named, typed and saved where chum pointed)")
 
+    // A file closed and opened again reads the disk again: git rewrites
+    // its message file for every commit, and the tab must not come back
+    // with the previous message.
+    do {
+        let messageFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-reclaim-\(ProcessInfo.processInfo.processIdentifier).txt")
+        try? "first commit\n".write(to: messageFile, atomically: true, encoding: .utf8)
+        guard let first = try? CoreDocument(contentsOf: messageFile.path) else {
+            print("FAIL: the message file did not open")
+            return 1
+        }
+        let opened = DocumentStore.shared.open(first, path: messageFile.path)
+        DocumentStore.shared.close(opened.id)
+        try? "second commit\n".write(to: messageFile, atomically: true, encoding: .utf8)
+        guard let again = DocumentStore.shared.reclaim(path: messageFile.path) else {
+            print("FAIL: the closed message file was not reclaimed")
+            return 1
+        }
+        guard again.core.text == "second commit\n" else {
+            print("FAIL: the reclaimed file kept its old text: \(again.core.text.debugDescription)")
+            return 1
+        }
+        DocumentStore.shared.close(again.id)
+        try? FileManager.default.removeItem(at: messageFile)
+    }
+    print("reclaim ok (a file opened again reads the disk again)")
+
     // Selecting a word marks its other occurrences, on the layout the
     // view draws from.
     do {
