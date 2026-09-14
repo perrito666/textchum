@@ -1633,6 +1633,38 @@ func runSmokeTest() -> Int32 {
     }
     print("reclaim ok (a file opened again reads the disk again)")
 
+    // Coming back to the app reads the tree's folders again without
+    // forgetting them: the rows stay, and only a folder that changed on
+    // disk is replaced.
+    do {
+        let treeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-refresh-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
+        try? FileManager.default.removeItem(at: treeRoot)
+        try? FileManager.default.createDirectory(at: treeRoot, withIntermediateDirectories: true)
+        try? "a\n".write(to: treeRoot.appendingPathComponent("one.txt"), atomically: true, encoding: .utf8)
+        let refreshState = FileTreeState()
+        let rootKey = URL(fileURLWithPath: treeRoot.path, isDirectory: true)
+        _ = refreshState.children(of: rootKey, globs: [".*"])
+        spin(untilTrue: { refreshState.hasListing(of: rootKey) }, seconds: 3)
+        guard refreshState.children(of: rootKey, globs: [".*"])?.count == 1 else {
+            print("FAIL: the folder did not list")
+            return 1
+        }
+        try? "b\n".write(to: treeRoot.appendingPathComponent("two.txt"), atomically: true, encoding: .utf8)
+        refreshState.refreshListings()
+        guard refreshState.hasListing(of: rootKey) else {
+            print("FAIL: refreshing forgot the listing")
+            return 1
+        }
+        spin(untilTrue: { refreshState.children(of: rootKey, globs: [".*"])?.count == 2 }, seconds: 3)
+        guard refreshState.children(of: rootKey, globs: [".*"])?.count == 2 else {
+            print("FAIL: the refreshed listing does not show the new file")
+            return 1
+        }
+        try? FileManager.default.removeItem(at: treeRoot)
+    }
+    print("tree refresh ok (listings read again in place, never forgotten)")
+
     // Selecting a word marks its other occurrences, on the layout the
     // view draws from.
     do {
