@@ -132,11 +132,18 @@ final class DocumentStore {
 
     /// Takes a closed document back out of the cache and opens it
     /// again, or answers nil when the file was not closed recently.
+    /// A clean one reads its file again first: the disk may have moved
+    /// on while it was put aside — git rewrites its message file for
+    /// every commit — and the text it had is not the file. Unsaved
+    /// changes are kept.
     func reclaim(path: String) -> OpenDocument? {
         guard let at = closed.firstIndex(where: { $0.path == path }) else {
             return nil
         }
         let document = closed.remove(at: at)
+        if !document.core.isDirty {
+            _ = try? document.core.reload()
+        }
         documents[document.id] = document
         byPath[path] = document.id
         return document

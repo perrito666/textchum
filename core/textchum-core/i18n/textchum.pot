@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: textchum\n"
 "Report-Msgid-Bugs-To: https://github.com/perrito666/textchum/issues\n"
-"POT-Creation-Date: 2026-09-14 20:10+0200\n"
+"POT-Creation-Date: 2026-09-14 20:15+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,8 +30,8 @@ msgstr ""
 #: core/textchum-core/src/i18n.rs:352 linux/src/keyboard.rs:24
 #: linux/src/main.rs:1541 linux/src/main.rs:1556 linux/src/workbench.rs:361
 #: macos/Sources/Textchum/AppDelegate.swift:2856
-#: macos/Sources/Textchum/SmokeTest.swift:2125
-#: macos/Sources/Textchum/SmokeTest.swift:2146
+#: macos/Sources/Textchum/SmokeTest.swift:2152
+#: macos/Sources/Textchum/SmokeTest.swift:2173
 msgid "Close Tab"
 msgstr ""
 
@@ -268,7 +268,7 @@ msgid "Configured grammars: {}"
 msgstr ""
 
 #: linux/src/main.rs:152 linux/src/main.rs:1545 linux/src/workbench.rs:1197
-#: macos/Sources/Textchum/SmokeTest.swift:2129
+#: macos/Sources/Textchum/SmokeTest.swift:2156
 msgid "Save changes to {}?"
 msgstr ""
 
@@ -301,15 +301,15 @@ msgstr ""
 msgid "Save All"
 msgstr ""
 
-#: linux/src/main.rs:1551 macos/Sources/Textchum/SmokeTest.swift:2133
+#: linux/src/main.rs:1551 macos/Sources/Textchum/SmokeTest.swift:2160
 msgid "A phrase nobody has translated"
 msgstr ""
 
 #: linux/src/main.rs:1560 linux/src/main.rs:1565
 #: macos/Sources/Textchum/Settings.swift:2289
-#: macos/Sources/Textchum/SmokeTest.swift:2139
-#: macos/Sources/Textchum/SmokeTest.swift:2140
-#: macos/Sources/Textchum/SmokeTest.swift:2147
+#: macos/Sources/Textchum/SmokeTest.swift:2166
+#: macos/Sources/Textchum/SmokeTest.swift:2167
+#: macos/Sources/Textchum/SmokeTest.swift:2174
 msgid "{} file"
 msgid_plural "{} files"
 msgstr[0] ""
