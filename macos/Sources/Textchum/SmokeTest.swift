@@ -1660,11 +1660,15 @@ func runSmokeTest() -> Int32 {
         findView.string = "foo bar\nFoo baz\nfood\n"
         findDocument.noteTextReplaced()
         findDocument.showFindReplace(nil)
+        // The bar takes its height once layout runs; the text sits below it.
+        let findDocumentView = findBench.columns[0].views[0]
+        spin(untilTrue: { findDocumentView.findBar.frame.height >= FindReplaceBar.height - 1 }, seconds: 2)
         guard findDocument.findBarShown,
-            findBench.columns[0].views[0].scrollView.frame.minY >= FindReplaceBar.height - 1
-                || findBench.columns[0].views[0].findBar.frame.height >= FindReplaceBar.height - 1
+            findDocumentView.findBar.frame.height >= FindReplaceBar.height - 1,
+            findDocumentView.scrollView.frame.maxY
+                <= findDocumentView.container.bounds.maxY - FindReplaceBar.height + 1
         else {
-            print("FAIL: the find bar did not dock above the text")
+            print("FAIL: the find bar did not dock above the text (bar \(findDocumentView.findBar.frame.height)pt, text top \(findDocumentView.scrollView.frame.maxY) of \(findDocumentView.container.bounds.maxY))")
             return 1
         }
         // Literal, any case, whole word: foo and Foo, not food.
