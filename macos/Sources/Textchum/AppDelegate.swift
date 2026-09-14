@@ -1782,6 +1782,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for editor in editors {
             editor.workbench?.sidebarModel.objectWillChange.send()
         }
+        // The title bars follow the pack too.
+        for workbench in Workbench.all {
+            if let focused = workbench.focusedDocument {
+                workbench.refreshChrome(for: focused)
+            }
+        }
     }
 
     /// Applies the configured theme: a user file of that name (which

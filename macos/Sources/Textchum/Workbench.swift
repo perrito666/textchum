@@ -920,6 +920,17 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         }
         if let path = document.coreDocument.path {
             window.representedURL = URL(fileURLWithPath: path)
+            // The proxy icon is the desktop's for the file's type unless
+            // an icon pack is chosen, in which case it is the pack's, as
+            // in the tree. Set after the URL: setting the URL resets it.
+            let light =
+                window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) != .darkAqua
+            if let packed = CoreIcons.icon(
+                forFilename: (path as NSString).lastPathComponent,
+                language: document.coreDocument.languageName, light: light)
+            {
+                window.standardWindowButton(.documentIconButton)?.image = packed
+            }
         } else {
             window.representedURL = nil
         }

@@ -234,9 +234,25 @@ pub fn available(dir: &Path, elsewhere: &[String], current: Option<&str>) -> Vec
         let mut imported: Vec<Pack> = entries
             .flatten()
             .filter_map(|entry| {
-                let theme = imported_theme(&entry.path())?;
+                let path = entry.path();
+                // A folder — imported, or an extension dropped in — or
+                // an icon theme's JSON file dropped in on its own.
+                let theme = if path.is_dir() {
+                    imported_theme(&path)?
+                } else if path.extension().and_then(|e| e.to_str()) == Some("json")
+                    && resolve_pack_path(&path).is_ok()
+                {
+                    path.clone()
+                } else {
+                    return None;
+                };
+                let name = if path.is_dir() {
+                    entry.file_name().to_string_lossy().into_owned()
+                } else {
+                    pack_name(&path)
+                };
                 Some(Pack {
-                    name: entry.file_name().to_string_lossy().into_owned(),
+                    name,
                     path: theme.to_string_lossy().into_owned(),
                     imported: true,
                 })
@@ -701,5 +717,28 @@ mod tests {
         // A pack that is gone is dropped, not listed as a trap.
         std::fs::remove_dir_all(file.parent().unwrap()).unwrap();
         assert!(available(&library, &[outside], None).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod dropped_tests {
+    use super::*;
+
+    #[test]
+    fn a_theme_file_dropped_in_the_folder_is_listed() {
+        let dir = std::env::temp_dir().join(format!("textchum-icons-drop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("my-icons.json"),
+            r#"{"iconDefinitions": {"_f": {"iconPath": "./f.svg"}}, "file": "_f"}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.join("notes.txt"), "not a pack").unwrap();
+        let packs = available(&dir, &[], None);
+        assert_eq!(packs.len(), 1, "{packs:?}");
+        assert!(packs[0].path.ends_with("my-icons.json"));
+        assert!(packs[0].imported);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
