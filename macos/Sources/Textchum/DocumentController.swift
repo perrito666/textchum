@@ -4264,7 +4264,6 @@ final class DocumentController: NSResponder {
 
     /// Saves, asking for a location if the document has none. Returns
     /// whether the document ended up saved.
-    @discardableResult
     /// Writes a new document where it was meant to go, making the
     /// folder when it is missing. False when that cannot be done, and
     /// the panel takes over.
@@ -4287,6 +4286,7 @@ final class DocumentController: NSResponder {
         return true
     }
 
+    @discardableResult
     func saveInteractively() -> Bool {
         guard coreDocument.path != nil else {
             if let intendedPath, saveToIntendedPath(intendedPath) { return true }
