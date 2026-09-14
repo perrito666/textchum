@@ -204,7 +204,10 @@ back.
 original cannot take the icons away. **Open…** points at a pack where
 it sits and remembers it, which is right for one you maintain
 yourself. Either takes the icon theme's JSON file or the extension
-folder holding it (its `package.json` says which file). **Delete**
+folder holding it (its `package.json` says which file). A pack put
+into Textchum's folder by hand is listed as well — an extension folder,
+or the theme's JSON file on its own — and the title bar's file icon
+follows the pack, as the tree does. **Delete**
 removes an imported pack; a pack opened from elsewhere belongs to
 whoever put it there, so it can only be dropped from the list.
 

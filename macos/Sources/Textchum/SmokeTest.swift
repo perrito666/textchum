@@ -2743,8 +2743,47 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the deleted pack is still listed")
         return 1
     }
+    // A theme file dropped into the folder on its own is listed too,
+    // and once loaded the title bar shows the pack's icon for the file.
+    let droppedIcons = URL(fileURLWithPath: packLibrary).appendingPathComponent("icons")
+    try? FileManager.default.createDirectory(at: droppedIcons, withIntermediateDirectories: true)
+    try? "<svg/>".write(to: droppedIcons.appendingPathComponent("rust.svg"), atomically: true, encoding: .utf8)
+    let dropped = URL(fileURLWithPath: packLibrary).appendingPathComponent("dropped.json")
+    try? (try? String(contentsOf: packTheme, encoding: .utf8))?.write(to: dropped, atomically: true, encoding: .utf8)
+    let listedDrop = packConfig.iconPacks(in: packLibrary)
+    guard listedDrop.count == 1, listedDrop[0].path == dropped.path else {
+        print("FAIL: a theme file dropped into the folder is not listed: \(listedDrop)")
+        return 1
+    }
+    do {
+        _ = try CoreIcons.load(at: dropped.path)
+        let rustFile = packScratch.appendingPathComponent("thing.rs")
+        try? "fn main() {}\n".write(to: rustFile, atomically: true, encoding: .utf8)
+        guard let rustDocument = try? CoreDocument(contentsOf: rustFile.path) else {
+            print("FAIL: the Rust file did not open")
+            return 1
+        }
+        let iconBench = Workbench(sidebar: nil)
+        let iconEditor = DocumentController(document: rustDocument)
+        iconBench.add(iconEditor)
+        iconBench.window?.makeKeyAndOrderFront(nil)
+        iconBench.refreshChrome(for: iconEditor)
+        let light = iconBench.window?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) != .darkAqua
+        let expected = CoreIcons.icon(forFilename: "thing.rs", language: rustDocument.languageName, light: light)
+        guard let expected,
+            iconBench.window?.standardWindowButton(.documentIconButton)?.image === expected
+        else {
+            print("FAIL: the title bar does not show the pack's icon")
+            return 1
+        }
+        iconBench.window?.close()
+        CoreIcons.clear()
+    } catch {
+        print("FAIL: the dropped pack did not load: \(error)")
+        return 1
+    }
     try? FileManager.default.removeItem(at: packScratch)
-    print("icon packs ok (imported, listed as ours, refused twice, deleted)")
+    print("icon packs ok (imported, listed as ours, refused twice, deleted, dropped file listed, title bar follows)")
 
     // --data-dir moves the whole profile, so a run can be given one
     // built for the occasion. What matters is that every path follows
