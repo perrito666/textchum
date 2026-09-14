@@ -217,7 +217,10 @@ l'original n'emporte donc pas les icônes. **Open…** pointe vers un pack
 là où il est et s'en souvient, ce qui convient à un pack que vous
 maintenez vous-même. Les deux acceptent le fichier JSON du thème
 d'icônes ou le dossier d'extension qui le contient (son `package.json`
-dit lequel). **Delete** supprime un pack importé ; un pack ouvert
+dit lequel). Un pack déposé à la main dans le dossier de Textchum est
+listé aussi — un dossier d'extension, ou le fichier JSON du thème seul
+— et l'icône du fichier dans la barre de titre suit le pack, comme
+l'arbre. **Delete** supprime un pack importé ; un pack ouvert
 ailleurs appartient à qui l'a mis là, il ne peut donc que sortir de la
 liste.
 
