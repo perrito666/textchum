@@ -12,6 +12,7 @@
 
 mod app;
 pub mod blame;
+pub mod vimregex;
 mod buffer;
 pub mod changes;
 pub mod code_action;

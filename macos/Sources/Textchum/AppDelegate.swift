@@ -1498,6 +1498,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(goBack(_:)): "goBack",
             #selector(goForward(_:)): "goForward",
             #selector(DocumentController.findReferences(_:)): "findReferences",
+            #selector(DocumentController.showFindReplace(_:)): "findAndReplace",
             #selector(DocumentController.showCodeActions(_:)): "codeActions",
             #selector(DocumentController.newColumn(_:)): "newColumn",
             #selector(DocumentController.closeColumn(_:)): "closeColumn",
@@ -1538,7 +1539,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ]
         let finderNames: [Int: String] = [
             NSTextFinder.Action.showFindInterface.rawValue: "find",
-            NSTextFinder.Action.showReplaceInterface.rawValue: "findAndReplace",
             NSTextFinder.Action.nextMatch.rawValue: "findNext",
             NSTextFinder.Action.previousMatch.rawValue: "findPrevious",
             NSTextFinder.Action.setSearchString.rawValue: "useSelectionForFind",
@@ -3026,7 +3026,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let findMenu = NSMenu(title: t("Find"))
         findMenu.addItem(finderItem("Find…", .showFindInterface, "f"))
         findMenu.addItem(
-            finderItem("Find and Replace…", .showReplaceInterface, "f", [.command, .option]))
+            {
+                // Ours, not the text system's: a regular-expression
+                // switch in Vim's dialect, and groups in the replacement.
+                let item = NSMenuItem(
+                    title: t("Find and Replace…"),
+                    action: #selector(DocumentController.showFindReplace(_:)),
+                    keyEquivalent: "f")
+                item.keyEquivalentModifierMask = [.command, .option]
+                return item
+            }())
         findMenu.addItem(finderItem("Find Next", .nextMatch, "g"))
         findMenu.addItem(finderItem("Find Previous", .previousMatch, "g", [.command, .shift]))
         findMenu.addItem(finderItem("Use Selection for Find", .setSearchString, "e"))

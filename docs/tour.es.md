@@ -161,6 +161,16 @@ ofrece abrir; un árbol ya abierto simplemente pasa al frente. Un
 archivo que git entrega al editor — un mensaje de commit, la lista de
 un rebase — empieza siempre arriba.
 
+**Buscar y reemplazar** (⌥⌘F) acopla una barra sobre el texto con el
+patrón, el reemplazo y tres interruptores: expresión regular,
+distinguir mayúsculas, palabra completa. Las expresiones son las de
+Vim — grupos `\(` `\)`, `\|`, `\+`, `\?`, `\{n,m}`, `\<` `\>`, `\v` y
+`\V`, `\c` — y el reemplazo admite `\1`…`\9`, `&` o `\0` para la
+coincidencia, `\n`, y `\u` `\l` `\U` `\L` `\E` para las mayúsculas. ⏎
+en el patrón va a la siguiente coincidencia, ⇧⏎ a la anterior, ⏎ en el
+reemplazo reemplaza la actual y sigue; Todo reemplaza todas como un
+solo paso de deshacer.
+
 **Ir a la línea** (⌘L, Ctrl+L en Linux) acepta un número, o el
 `src/main.rs:412:8` entero pegado desde un registro de compilación —
 el nombre del archivo y el ruido sobrante se ignoran, la línea queda

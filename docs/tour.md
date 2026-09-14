@@ -153,6 +153,15 @@ a tree that is open already just comes to the front. A file git hands
 the editor — a commit message, a rebase todo — starts at the top every
 time.
 
+**Find and Replace** (⌥⌘F) docks a bar above the text with the
+pattern, the replacement and three switches: regular expression,
+match case, whole word. The expressions are Vim's — `\(` `\)` groups,
+`\|`, `\+`, `\?`, `\{n,m}`, `\<` `\>`, `\v` and `\V`, `\c` — and the
+replacement takes `\1`…`\9`, `&` or `\0` for the match, `\n`, and
+`\u` `\l` `\U` `\L` `\E` for case. ⏎ in the pattern goes to the next
+match, ⇧⏎ to the previous, ⏎ in the replacement replaces the current
+one and moves on; All replaces every match as one undo step.
+
 **Go to Line** (⌘L, Ctrl+L on Linux) takes a number, or the whole
 `src/main.rs:412:8` pasted straight out of a build log — the file name
 and the trailing noise are ignored, the line is centred, and Go Back
