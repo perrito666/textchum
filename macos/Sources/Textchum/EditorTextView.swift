@@ -8,12 +8,51 @@ final class EditorTextView: NSTextView {
     /// invalidates only what changed.
     private var tintedLine: NSRect = .zero
 
+    /// Backgrounds behind ranges of text — the selected word's other
+    /// occurrences, find matches, spelling, diagnostics — drawn by the
+    /// view from the layout's segment rectangles. The text system's
+    /// own rendering-attribute backgrounds were not reliable for a
+    /// range inside a line.
+    struct BackgroundMark {
+        let range: NSRange
+        let color: NSColor
+    }
+
+    var backgroundMarks: [BackgroundMark] = [] {
+        didSet { needsDisplay = true }
+    }
+
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
-        guard let line = caretLineRect(), line.intersects(rect) else { return }
-        NSColor.textColor.withAlphaComponent(0.045).setFill()
-        line.fill()
-        tintedLine = line
+        if let line = caretLineRect(), line.intersects(rect) {
+            NSColor.textColor.withAlphaComponent(0.045).setFill()
+            line.fill()
+            tintedLine = line
+        }
+        drawBackgroundMarks(in: rect)
+    }
+
+    private func drawBackgroundMarks(in rect: NSRect) {
+        guard !backgroundMarks.isEmpty, let layoutManager = textLayoutManager,
+            let contentManager = layoutManager.textContentManager
+        else { return }
+        let origin = textContainerOrigin
+        let length = (string as NSString).length
+        for mark in backgroundMarks {
+            guard mark.range.length > 0, NSMaxRange(mark.range) <= length,
+                let start = contentManager.location(
+                    layoutManager.documentRange.location, offsetBy: mark.range.location),
+                let end = contentManager.location(start, offsetBy: mark.range.length),
+                let textRange = NSTextRange(location: start, end: end)
+            else { continue }
+            mark.color.setFill()
+            layoutManager.enumerateTextSegments(in: textRange, type: .highlight, options: [.rangeNotRequired]) {
+                _, frame, _, _ in
+                let box = frame.offsetBy(dx: origin.x, dy: origin.y)
+                if box.intersects(rect) { box.fill() }
+                return true
+            }
+        }
     }
 
     // MARK: Word movement by code's boundaries

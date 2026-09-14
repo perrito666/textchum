@@ -38,8 +38,6 @@ final class FindReplaceBar: NSView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
         patternField.placeholderString = t("Find")
         replacementField.placeholderString = t("Replace")
@@ -55,6 +53,8 @@ final class FindReplaceBar: NSView {
             toggle.font = font
             toggle.target = self
             toggle.action = #selector(optionChanged(_:))
+            toggle.setContentHuggingPriority(.required, for: .horizontal)
+            toggle.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
         let previous = NSButton(title: "‹", target: self, action: #selector(previousPressed))
         let next = NSButton(title: "›", target: self, action: #selector(nextPressed))
@@ -65,6 +65,8 @@ final class FindReplaceBar: NSView {
             button.font = font
             button.bezelStyle = .rounded
             button.controlSize = .small
+            button.setContentHuggingPriority(.required, for: .horizontal)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
         status.font = font
         status.textColor = .secondaryLabelColor
@@ -92,6 +94,15 @@ final class FindReplaceBar: NSView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("FindReplaceBar is built in code") }
+
+    /// Drawn, not a layer colour: the window colour follows the
+    /// appearance, and a colour taken once at build stays light.
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.windowBackgroundColor.setFill()
+        bounds.fill()
+        NSColor.separatorColor.withAlphaComponent(0.5).setFill()
+        NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
+    }
 
     /// Puts the bar to use: the pattern to start from, and the keyboard.
     func begin(with pattern: String?) {

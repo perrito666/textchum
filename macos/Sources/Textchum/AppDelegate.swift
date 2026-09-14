@@ -67,6 +67,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
+        if let spec = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_FINDREPLACE"] {
+            // "pattern|replacement": opens the find-and-replace bar on
+            // the first editor with a Vim pattern typed, for a look.
+            let parts = spec.split(separator: "|", maxSplits: 1).map(String.init)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                MainActor.assumeIsolated {
+                    guard let editor = self.editors.first else { return }
+                    editor.showFindReplace(nil)
+                    editor.debugFind(
+                        pattern: parts.first ?? "", replacement: parts.count > 1 ? parts[1] : "",
+                        options: CoreFind.Options(regex: true, caseSensitive: false, wholeWord: false))
+                    NSLog("FINDREPLACE window num=\(editor.window?.windowNumber ?? -1) matches=\(editor.findMatches.count)")
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+                MainActor.assumeIsolated {
+                    guard let editor = self.editors.first, let view = editor.primaryView,
+                        editor.findMatches.count > 1,
+                        let layoutManager = view.textLayoutManager,
+                        let contentManager = layoutManager.textContentManager,
+                        let inside = contentManager.location(
+                            layoutManager.documentRange.location, offsetBy: editor.findMatches[1].location + 1)
+                    else {
+                        NSLog("FINDREPLACE later: matches=\(self.editors.first?.findMatches.count ?? -1)")
+                        return
+                    }
+                    var attributes: [NSAttributedString.Key: Any] = [:]
+                    layoutManager.enumerateRenderingAttributes(from: inside, reverse: false) { _, found, _ in
+                        attributes = found
+                        return false
+                    }
+                    NSLog("FINDREPLACE later: matches=\(editor.findMatches) second has background=\(attributes[.backgroundColor] != nil) keys=\(attributes.keys.map(\.rawValue))")
+                }
+            }
+        }
         if ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_FINDBAR"] != nil {
             // Shows the find bar in the first editor, for a look at how
             // it sits with the gutter and the pinned context.
