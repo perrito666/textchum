@@ -1646,6 +1646,77 @@ func runSmokeTest() -> Int32 {
     }
     print("occurrences ok (the selected word's others are marked and painted)")
 
+    // Find and replace: the bar docks above the text, the core finds in
+    // Vim's dialect, and the replacement takes groups.
+    do {
+        let findBench = Workbench(sidebar: nil)
+        let findDocument = DocumentController(document: CoreDocument())
+        findBench.add(findDocument)
+        findBench.window?.makeKeyAndOrderFront(nil)
+        guard let findView = findDocument.primaryView else {
+            print("FAIL: no view to find in")
+            return 1
+        }
+        findView.string = "foo bar\nFoo baz\nfood\n"
+        findDocument.noteTextReplaced()
+        findDocument.showFindReplace(nil)
+        guard findDocument.findBarShown,
+            findBench.columns[0].views[0].scrollView.frame.minY >= FindReplaceBar.height - 1
+                || findBench.columns[0].views[0].findBar.frame.height >= FindReplaceBar.height - 1
+        else {
+            print("FAIL: the find bar did not dock above the text")
+            return 1
+        }
+        // Literal, any case, whole word: foo and Foo, not food.
+        findDocument.debugFind(
+            pattern: "foo", replacement: "x", options: CoreFind.Options(regex: false, caseSensitive: false, wholeWord: true))
+        guard findDocument.findMatches == [NSRange(location: 0, length: 3), NSRange(location: 8, length: 3)] else {
+            print("FAIL: literal whole-word matches are \(findDocument.findMatches)")
+            return 1
+        }
+        // Vim's dialect, with a group in the replacement.
+        findDocument.debugFind(
+            pattern: #"\<fo\(o\)\>"#, replacement: #"\u\1-\0"#,
+            options: CoreFind.Options(regex: true, caseSensitive: true, wholeWord: false))
+        guard findDocument.findMatches == [NSRange(location: 0, length: 3)] else {
+            print("FAIL: the Vim pattern matched \(findDocument.findMatches)")
+            return 1
+        }
+        findDocument.debugReplaceCurrent()
+        guard findView.string == "O-foo bar\nFoo baz\nfood\n" else {
+            print("FAIL: replacing the current match gave \(findView.string.debugDescription)")
+            return 1
+        }
+        findDocument.debugFind(
+            pattern: #"\v(fo)(o)"#, replacement: #"\2\1"#,
+            options: CoreFind.Options(regex: true, caseSensitive: false, wholeWord: false))
+        findDocument.debugReplaceAll()
+        guard findView.string == "O-ofo bar\noFo baz\nofod\n" else {
+            print("FAIL: replace all gave \(findView.string.debugDescription)")
+            return 1
+        }
+        guard findDocument.coreDocument.text == findView.string else {
+            print("FAIL: the core did not follow the replacement")
+            return 1
+        }
+        // A pattern the dialect cannot read says so instead of matching.
+        findDocument.debugFind(
+            pattern: #"\("#, replacement: "", options: CoreFind.Options(regex: true, caseSensitive: true, wholeWord: false))
+        guard findDocument.findMatches.isEmpty,
+            CoreFind.problem(pattern: #"\("#, options: CoreFind.Options(regex: true, caseSensitive: true, wholeWord: false)) != nil
+        else {
+            print("FAIL: an unreadable pattern did not say so")
+            return 1
+        }
+        findDocument.hideFindReplace()
+        guard !findDocument.findBarShown else {
+            print("FAIL: the find bar did not go away")
+            return 1
+        }
+        findBench.window?.close()
+    }
+    print("find and replace ok (docked bar, Vim's dialect, groups in the replacement)")
+
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
     // where the caret is and what the file is.

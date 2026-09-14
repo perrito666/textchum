@@ -96,6 +96,9 @@ final class DocumentView {
     let gutter: LineNumberGutterView
     /// The pinned context, laid over the top of the scroll view.
     let contextStrip = ContextStrip()
+    /// Find and replace, above the text while it is shown.
+    let findBar = FindReplaceBar()
+    fileprivate var findBarHeight: NSLayoutConstraint?
     /// The strip's distance from the scroll view's top: zero, or the
     /// find bar's height while one is shown — the scroll view tiles
     /// the bar outside Auto Layout, so a constraint cannot see it.
@@ -134,6 +137,11 @@ final class DocumentView {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         contextStrip.translatesAutoresizingMaskIntoConstraints = false
         contextStrip.isHidden = true
+        findBar.translatesAutoresizingMaskIntoConstraints = false
+        findBar.isHidden = true
+        container.addSubview(findBar)
+        let barHeight = findBar.heightAnchor.constraint(equalToConstant: 0)
+        findBarHeight = barHeight
         container.addSubview(gutter)
         container.addSubview(scrollView)
         findBarFiller.wantsLayer = true
@@ -145,15 +153,19 @@ final class DocumentView {
         let fillerHeight = findBarFiller.heightAnchor.constraint(equalToConstant: 0)
         findBarFillerHeight = fillerHeight
         NSLayoutConstraint.activate([
+            findBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            findBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            findBar.topAnchor.constraint(equalTo: container.topAnchor),
+            barHeight,
             findBarFiller.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             findBarFiller.trailingAnchor.constraint(equalTo: gutter.trailingAnchor),
-            findBarFiller.topAnchor.constraint(equalTo: container.topAnchor),
+            findBarFiller.topAnchor.constraint(equalTo: findBar.bottomAnchor),
             fillerHeight,
             gutter.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            gutter.topAnchor.constraint(equalTo: container.topAnchor),
+            gutter.topAnchor.constraint(equalTo: findBar.bottomAnchor),
             gutter.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: container.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: findBar.bottomAnchor),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             // Over the gutter too: the numbers under the pins belong
@@ -2853,6 +2865,195 @@ final class DocumentController: NSResponder {
     /// For the smoke test: the ranges marked as the selection's other
     /// occurrences.
     var occurrenceRangesForDebug: [NSRange] { occurrenceRanges }
+
+    // MARK: Find and replace
+
+    /// The matches of the bar's pattern, in order, and which one the
+    /// selection is on. Painted like the occurrences, in another colour.
+    private(set) var findMatches: [NSRange] = []
+    private var findCurrent: Int?
+    var findBarShown: Bool { focusedView?.findBar.isHidden == false }
+
+    /// Edit ▸ Find ▸ Find and Replace… (⌥⌘F): the bar, started from the
+    /// selection when there is one.
+    @objc func showFindReplace(_ sender: Any?) {
+        guard let view = focusedView else { return }
+        let bar = view.findBar
+        if bar.onRequest == nil {
+            bar.onRequest = { [weak self] request in self?.handleFind(request) }
+        }
+        if bar.isHidden {
+            bar.isHidden = false
+            view.findBarHeight?.constant = FindReplaceBar.height
+        }
+        let selected = view.textView.selectedRange()
+        let initial =
+            selected.length > 0 && selected.length < 200
+            ? (view.textView.string as NSString).substring(with: selected) : nil
+        bar.begin(with: initial)
+        refreshFindMatches(selectCurrent: false)
+    }
+
+    func hideFindReplace() {
+        guard let view = focusedView, !view.findBar.isHidden else { return }
+        view.findBar.isHidden = true
+        view.findBarHeight?.constant = 0
+        findMatches = []
+        findCurrent = nil
+        renderMarks()
+        window?.makeFirstResponder(view.textView)
+    }
+
+    private func handleFind(_ request: FindReplaceBar.Request) {
+        switch request {
+        case .changed: refreshFindMatches(selectCurrent: true)
+        case .next: findStep(1)
+        case .previous: findStep(-1)
+        case .replace: replaceCurrentMatch()
+        case .replaceAll: replaceAllMatches()
+        case .close: hideFindReplace()
+        }
+    }
+
+    /// Asks the core for the matches and shows the count; with
+    /// `selectCurrent`, the first match at or after the caret is
+    /// selected, so typing a pattern walks to it.
+    func refreshFindMatches(selectCurrent: Bool) {
+        guard let view = focusedView, !view.findBar.isHidden else { return }
+        let bar = view.findBar
+        let text = view.textView.string
+        let pattern = bar.pattern
+        guard !pattern.isEmpty else {
+            findMatches = []
+            findCurrent = nil
+            bar.show(found: 0, current: nil, problem: nil)
+            renderMarks()
+            return
+        }
+        guard let found = CoreFind.matches(in: text, pattern: pattern, options: bar.options) else {
+            findMatches = []
+            findCurrent = nil
+            bar.show(found: 0, current: nil, problem: CoreFind.problem(pattern: pattern, options: bar.options))
+            renderMarks()
+            return
+        }
+        findMatches = found
+        let caret = view.textView.selectedRange().location
+        if let onCaret = found.firstIndex(where: { $0 == view.textView.selectedRange() }) {
+            findCurrent = onCaret
+        } else if selectCurrent, let ahead = found.firstIndex(where: { $0.location >= caret }) ?? (found.isEmpty ? nil : 0) {
+            findCurrent = ahead
+            select(match: ahead)
+        } else {
+            findCurrent = nil
+        }
+        bar.show(found: found.count, current: findCurrent, problem: nil)
+        renderMarks()
+    }
+
+    /// Matches follow the text: an edit re-asks while the bar is up.
+    func refreshFindMatchesIfShown() {
+        guard findBarShown else { return }
+        refreshFindMatches(selectCurrent: false)
+    }
+
+    private func select(match index: Int) {
+        guard let textView, findMatches.indices.contains(index) else { return }
+        let range = findMatches[index]
+        selectionChangeIsFromEditing = false
+        textView.setSelectedRange(range)
+        textView.scrollRangeToVisible(range)
+    }
+
+    private func findStep(_ step: Int) {
+        guard let view = focusedView else { return }
+        if findMatches.isEmpty { refreshFindMatches(selectCurrent: false) }
+        guard !findMatches.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        let caret = view.textView.selectedRange()
+        let next: Int
+        if let current = findCurrent, findMatches.indices.contains(current), findMatches[current] == caret {
+            next = (current + step + findMatches.count) % findMatches.count
+        } else if step > 0 {
+            next = findMatches.firstIndex(where: { $0.location >= caret.location }) ?? 0
+        } else {
+            next = findMatches.lastIndex(where: { $0.location < caret.location }) ?? findMatches.count - 1
+        }
+        findCurrent = next
+        select(match: next)
+        view.findBar.show(found: findMatches.count, current: next, problem: nil)
+        renderMarks()
+    }
+
+    /// Replaces the match the selection is on — with the groups and case
+    /// specials of the replacement filled in for it — and moves to the
+    /// next; on no current match, moves to one first.
+    private func replaceCurrentMatch() {
+        guard let view = focusedView, let textView else { return }
+        let bar = view.findBar
+        guard let current = findCurrent, findMatches.indices.contains(current),
+            findMatches[current] == textView.selectedRange()
+        else {
+            findStep(1)
+            return
+        }
+        let range = findMatches[current]
+        guard
+            let expanded = CoreFind.expansion(
+                in: textView.string, pattern: bar.pattern, replacement: bar.replacement,
+                options: bar.options, matchIndex: current)
+        else { return }
+        guard textView.shouldChangeText(in: range, replacementString: expanded) else { return }
+        textView.textStorage?.replaceCharacters(in: range, with: expanded)
+        textView.didChangeText()
+        refreshFindMatches(selectCurrent: false)
+        // The one after the replaced text, by position.
+        let after = range.location + (expanded as NSString).length
+        if let next = findMatches.firstIndex(where: { $0.location >= after }) ?? (findMatches.isEmpty ? nil : 0) {
+            findCurrent = next
+            select(match: next)
+        }
+        bar.show(found: findMatches.count, current: findCurrent, problem: nil)
+        renderMarks()
+    }
+
+    /// Every match at once, as one edit and one undo step.
+    private func replaceAllMatches() {
+        guard let view = focusedView, let textView else { return }
+        let bar = view.findBar
+        guard !bar.pattern.isEmpty,
+            let result = CoreFind.replaceAll(
+                in: textView.string, pattern: bar.pattern, replacement: bar.replacement,
+                options: bar.options),
+            result.count > 0
+        else {
+            NSSound.beep()
+            return
+        }
+        let whole = NSRange(location: 0, length: (textView.string as NSString).length)
+        guard textView.shouldChangeText(in: whole, replacementString: result.text) else { return }
+        let caret = textView.selectedRange().location
+        textView.textStorage?.replaceCharacters(in: whole, with: result.text)
+        textView.didChangeText()
+        let length = (result.text as NSString).length
+        textView.setSelectedRange(NSRange(location: min(caret, length), length: 0))
+        refreshFindMatches(selectCurrent: false)
+        bar.show(found: findMatches.count, current: nil, problem: nil)
+    }
+
+    /// For the smoke test: the bar's fields, set the way typing would.
+    func debugFind(pattern: String, replacement: String, options: CoreFind.Options) {
+        guard let view = focusedView else { return }
+        view.findBar.patternField.stringValue = pattern
+        view.findBar.replacementField.stringValue = replacement
+        view.findBar.setOptions(options)
+        refreshFindMatches(selectCurrent: true)
+    }
+
+    func debugReplaceAll() { replaceAllMatches() }
+    func debugReplaceCurrent() { replaceCurrentMatch() }
     /// What the last pass marked, to be laid out again when it changes.
     private var markedRanges: [NSRange] = []
 
@@ -2934,6 +3135,21 @@ final class DocumentController: NSResponder {
                     value: NSColor.systemGray.withAlphaComponent(0.30), for: textRange)
             }
             touched.append(occurrence)
+        }
+        for (index, match) in findMatches.enumerated() where inScope(match) {
+            guard NSMaxRange(match) <= text.length,
+                let start = contentManager.location(
+                    documentRange.location, offsetBy: match.location),
+                let end = contentManager.location(start, offsetBy: match.length),
+                let textRange = NSTextRange(location: start, end: end)
+            else { continue }
+            let strength: CGFloat = index == findCurrent ? 0.55 : 0.3
+            for target in paintTargets {
+                target.addRenderingAttribute(
+                    .backgroundColor,
+                    value: NSColor.systemYellow.withAlphaComponent(strength), for: textRange)
+            }
+            touched.append(match)
         }
         for spelling in spellingRanges where inScope(spelling) {
             guard NSMaxRange(spelling) <= text.length,
@@ -4804,6 +5020,7 @@ extension DocumentController: NSTextViewDelegate {
         scheduleLSPChange()
         scheduleChangeMarks()
         schedulePreviewUpdate()
+        refreshFindMatchesIfShown()
         if let edit = pendingLineEdit {
             pendingLineEdit = nil
             for view in views {

@@ -163,6 +163,16 @@ fenêtre, seule l'ouverture est proposée ; un arbre déjà ouvert passe
 simplement devant. Un fichier que git confie à l'éditeur — un message
 de commit, la liste d'un rebase — commence toujours en haut.
 
+**Rechercher et remplacer** (⌥⌘F) ancre une barre au-dessus du texte
+avec le motif, le remplacement et trois interrupteurs : expression
+régulière, respecter la casse, mot entier. Les expressions sont celles
+de Vim — groupes `\(` `\)`, `\|`, `\+`, `\?`, `\{n,m}`, `\<` `\>`, `\v`
+et `\V`, `\c` — et le remplacement accepte `\1`…`\9`, `&` ou `\0` pour
+la correspondance, `\n`, et `\u` `\l` `\U` `\L` `\E` pour la casse. ⏎
+dans le motif va à la correspondance suivante, ⇧⏎ à la précédente, ⏎
+dans le remplacement remplace la courante et continue ; Tout remplace
+toutes en une seule étape d'annulation.
+
 **Aller à la ligne** (⌘L, Ctrl+L sous Linux) accepte un numéro, ou le
 `src/main.rs:412:8` entier collé depuis un journal de compilation — le
 nom du fichier et le bruit qui suit sont ignorés, la ligne est centrée,

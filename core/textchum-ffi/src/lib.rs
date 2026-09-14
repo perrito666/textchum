@@ -3642,6 +3642,182 @@ pub unsafe extern "C" fn tc_worktrees(path: *const c_char, path_len: usize) -> *
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// A range of UTF-16 code units, `start..end`.
+#[repr(C)]
+pub struct TcRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+/// Releases an array handed out by [`tc_find_matches`].
+///
+/// # Safety
+/// `ranges`/`count` must be what that function stored, once.
+#[no_mangle]
+pub unsafe extern "C" fn tc_ranges_free(ranges: *mut TcRange, count: usize) {
+    if !ranges.is_null() {
+        unsafe {
+            drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(ranges, count)));
+        }
+    }
+}
+
+unsafe fn find_options(regex: bool, case_sensitive: bool, whole_word: bool) -> textchum_core::vimregex::Options {
+    textchum_core::vimregex::Options { regex, case_sensitive, whole_word }
+}
+
+/// Every match of `pattern` in `text` — Vim's dialect when `regex` — as
+/// UTF-16 ranges in order. Stores the array in `ranges_out`/`count_out`
+/// (empty is a success: null/0); release with [`tc_ranges_free`]. False
+/// when the pattern cannot be read; [`tc_find_problem`] says why.
+///
+/// # Safety
+/// The strings must point to their lengths of readable bytes; the out
+/// pointers must be writable.
+#[no_mangle]
+pub unsafe extern "C" fn tc_find_matches(
+    text: *const c_char,
+    text_len: usize,
+    pattern: *const c_char,
+    pattern_len: usize,
+    regex: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+    ranges_out: *mut *mut TcRange,
+    count_out: *mut usize,
+) -> bool {
+    if ranges_out.is_null() || count_out.is_null() {
+        return false;
+    }
+    unsafe {
+        *ranges_out = std::ptr::null_mut();
+        *count_out = 0;
+    }
+    let (Some(text), Some(pattern)) =
+        (unsafe { str_from_raw(text, text_len) }, unsafe { str_from_raw(pattern, pattern_len) })
+    else {
+        return false;
+    };
+    let options = unsafe { find_options(regex, case_sensitive, whole_word) };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::vimregex::find_all(text, pattern, options) {
+            Ok(found) if found.is_empty() => true,
+            Ok(found) => {
+                let boxed: Box<[TcRange]> = found
+                    .into_iter()
+                    .map(|(start, end)| TcRange { start, end })
+                    .collect();
+                unsafe {
+                    *count_out = boxed.len();
+                    *ranges_out = Box::into_raw(boxed) as *mut TcRange;
+                }
+                true
+            }
+            Err(_) => false,
+        }
+    }))
+    .unwrap_or(false)
+}
+
+/// What is wrong with `pattern`, or null when nothing is. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `pattern` must point to `pattern_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_find_problem(
+    pattern: *const c_char,
+    pattern_len: usize,
+    regex: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+) -> *mut c_char {
+    let Some(pattern) = (unsafe { str_from_raw(pattern, pattern_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let options = unsafe { find_options(regex, case_sensitive, whole_word) };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::vimregex::compile(pattern, options) {
+            Ok(_) => std::ptr::null_mut(),
+            Err(problem) => owned_c_string(problem),
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// What `replacement` says for the `index`-th match — groups and case
+/// specials filled in when `regex` — or null when there is no such
+/// match or the pattern cannot be read. Release with [`tc_string_free`].
+///
+/// # Safety
+/// The strings must point to their lengths of readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_find_expansion(
+    text: *const c_char,
+    text_len: usize,
+    pattern: *const c_char,
+    pattern_len: usize,
+    replacement: *const c_char,
+    replacement_len: usize,
+    regex: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+    index: usize,
+) -> *mut c_char {
+    let (Some(text), Some(pattern), Some(replacement)) = (
+        unsafe { str_from_raw(text, text_len) },
+        unsafe { str_from_raw(pattern, pattern_len) },
+        unsafe { str_from_raw(replacement, replacement_len) },
+    ) else {
+        return std::ptr::null_mut();
+    };
+    let options = unsafe { find_options(regex, case_sensitive, whole_word) };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::vimregex::expansion_for_match(text, pattern, replacement, options, index) {
+            Ok(Some(expanded)) => owned_c_string(expanded),
+            _ => std::ptr::null_mut(),
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// `text` with every match replaced, as JSON `{"text": …, "count": n}`,
+/// or null when the pattern cannot be read. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// The strings must point to their lengths of readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_find_replace_all(
+    text: *const c_char,
+    text_len: usize,
+    pattern: *const c_char,
+    pattern_len: usize,
+    replacement: *const c_char,
+    replacement_len: usize,
+    regex: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+) -> *mut c_char {
+    let (Some(text), Some(pattern), Some(replacement)) = (
+        unsafe { str_from_raw(text, text_len) },
+        unsafe { str_from_raw(pattern, pattern_len) },
+        unsafe { str_from_raw(replacement, replacement_len) },
+    ) else {
+        return std::ptr::null_mut();
+    };
+    let options = unsafe { find_options(regex, case_sensitive, whole_word) };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::vimregex::replace_all(text, pattern, replacement, options) {
+            Ok((replaced, count)) => owned_c_string(
+                serde_json::json!({"text": replaced, "count": count}).to_string(),
+            ),
+            Err(_) => std::ptr::null_mut(),
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn tc_branch_files(
     path: *const c_char,

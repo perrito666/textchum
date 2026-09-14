@@ -170,6 +170,14 @@ typedef struct TcStyle {
 } TcStyle;
 
 /**
+ * A range of UTF-16 code units, `start..end`.
+ */
+typedef struct TcRange {
+  uintptr_t start;
+  uintptr_t end;
+} TcRange;
+
+/**
  * One styled span, in UTF-16 code units. `style` indexes the table from
  * [`tc_style_table`].
  */
@@ -2092,6 +2100,84 @@ char *tc_repository_info(const char *path, uintptr_t path_len);
  * `path` must point to `path_len` readable bytes.
  */
 char *tc_worktrees(const char *path, uintptr_t path_len);
+
+/**
+ * Releases an array handed out by [`tc_find_matches`].
+ *
+ * # Safety
+ * `ranges`/`count` must be what that function stored, once.
+ */
+void tc_ranges_free(struct TcRange *ranges, uintptr_t count);
+
+/**
+ * Every match of `pattern` in `text` — Vim's dialect when `regex` — as
+ * UTF-16 ranges in order. Stores the array in `ranges_out`/`count_out`
+ * (empty is a success: null/0); release with [`tc_ranges_free`]. False
+ * when the pattern cannot be read; [`tc_find_problem`] says why.
+ *
+ * # Safety
+ * The strings must point to their lengths of readable bytes; the out
+ * pointers must be writable.
+ */
+bool tc_find_matches(const char *text,
+                     uintptr_t text_len,
+                     const char *pattern,
+                     uintptr_t pattern_len,
+                     bool regex,
+                     bool case_sensitive,
+                     bool whole_word,
+                     struct TcRange **ranges_out,
+                     uintptr_t *count_out);
+
+/**
+ * What is wrong with `pattern`, or null when nothing is. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `pattern` must point to `pattern_len` readable bytes.
+ */
+char *tc_find_problem(const char *pattern,
+                      uintptr_t pattern_len,
+                      bool regex,
+                      bool case_sensitive,
+                      bool whole_word);
+
+/**
+ * What `replacement` says for the `index`-th match — groups and case
+ * specials filled in when `regex` — or null when there is no such
+ * match or the pattern cannot be read. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * The strings must point to their lengths of readable bytes.
+ */
+char *tc_find_expansion(const char *text,
+                        uintptr_t text_len,
+                        const char *pattern,
+                        uintptr_t pattern_len,
+                        const char *replacement,
+                        uintptr_t replacement_len,
+                        bool regex,
+                        bool case_sensitive,
+                        bool whole_word,
+                        uintptr_t index);
+
+/**
+ * `text` with every match replaced, as JSON `{"text": …, "count": n}`,
+ * or null when the pattern cannot be read. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * The strings must point to their lengths of readable bytes.
+ */
+char *tc_find_replace_all(const char *text,
+                          uintptr_t text_len,
+                          const char *pattern,
+                          uintptr_t pattern_len,
+                          const char *replacement,
+                          uintptr_t replacement_len,
+                          bool regex,
+                          bool case_sensitive,
+                          bool whole_word);
 
 char *tc_branch_files(const char *path,
                       uintptr_t path_len,

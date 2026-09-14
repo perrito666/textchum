@@ -705,6 +705,7 @@ dependencies = [
  "libloading",
  "nucleo-matcher",
  "pulldown-cmark",
+ "regex",
  "ropey",
  "serde_json",
  "tree-sitter",
