@@ -1659,6 +1659,9 @@ func runSmokeTest() -> Int32 {
         }
         findView.string = "foo bar\nFoo baz\nfood\n"
         findDocument.noteTextReplaced()
+        // Text set from outside the editor: the gutter's line table has
+        // to be rebuilt before an edit can patch it.
+        findBench.columns[0].views[0].gutter.invalidateLineStarts()
         findDocument.showFindReplace(nil)
         // The bar takes its height once layout runs; the text sits below it.
         let findDocumentView = findBench.columns[0].views[0]
