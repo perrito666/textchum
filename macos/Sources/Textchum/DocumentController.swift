@@ -3054,8 +3054,10 @@ final class DocumentController: NSResponder {
 
     func debugReplaceAll() { replaceAllMatches() }
     func debugReplaceCurrent() { replaceCurrentMatch() }
-    /// What the last pass marked, to be laid out again when it changes.
-    private var markedRanges: [NSRange] = []
+    /// For the smoke test: what the views draw behind text right now.
+    var backgroundMarksForDebug: [EditorTextView.BackgroundMark] {
+        (focusedView?.textView as? EditorTextView)?.backgroundMarks ?? []
+    }
 
     func clearOccurrences() {
         guard !occurrenceRanges.isEmpty else { return }
@@ -3079,11 +3081,6 @@ final class DocumentController: NSResponder {
             let contentManager = layoutManager.textContentManager
         else { return }
         let documentRange = layoutManager.documentRange
-        // Scoped to the painted stretch, like the colours: clearing and
-        // redrawing marks across the whole document on every scroll
-        // turn is what a far jump spent its time on. Marks outside the
-        // stretch are repainted when scrolling brings them in, by this
-        // same pass.
         let length = coreDocument.lengthInUTF16
         let scope = paintedRange ?? NSRange(location: 0, length: length)
         let clearRange: NSTextRange? = {
@@ -3097,77 +3094,35 @@ final class DocumentController: NSResponder {
             let range = clearRange ?? documentRange
             target.removeRenderingAttribute(.underlineStyle, for: range)
             target.removeRenderingAttribute(.underlineColor, for: range)
-            target.removeRenderingAttribute(.backgroundColor, for: range)
         }
         func inScope(_ range: NSRange) -> Bool {
             NSIntersectionRange(range, scope).length > 0
         }
-        // A line fragment keeps the attributes it was laid out with, so
-        // a mark shows — and a cleared one goes — only once its line is
-        // laid out again. Everything marked last time and this time is
-        // invalidated, and nothing else: the painted stretch as a whole
-        // would be a relayout per scroll tick.
-        var touched: [NSRange] = markedRanges
-        defer {
-            markedRanges = touched.filter(inScope)
-            for range in touched where inScope(range) && NSMaxRange(range) <= length {
-                guard let start = contentManager.location(
-                    documentRange.location, offsetBy: range.location),
-                    let end = contentManager.location(start, offsetBy: range.length),
-                    let textRange = NSTextRange(location: start, end: end)
-                else { continue }
-                for target in paintTargets { target.invalidateLayout(for: textRange) }
-            }
-            for view in views { view.textView.needsDisplay = true }
-        }
 
+        // Backgrounds are the views' to draw, from the layout's segment
+        // rectangles; the text system's rendering-attribute backgrounds
+        // did not show for a range inside a line. Underlines stay
+        // rendering attributes, which it does draw.
+        var marks: [EditorTextView.BackgroundMark] = []
         let text: NSString = textView.textStorage?.mutableString ?? (textView.string as NSString)
         for occurrence in occurrenceRanges where inScope(occurrence) {
-            guard NSMaxRange(occurrence) <= text.length,
-                let start = contentManager.location(
-                    documentRange.location, offsetBy: occurrence.location),
-                let end = contentManager.location(start, offsetBy: occurrence.length),
-                let textRange = NSTextRange(location: start, end: end)
-            else { continue }
-            for target in paintTargets {
-                target.addRenderingAttribute(
-                    .backgroundColor,
-                    value: NSColor.systemGray.withAlphaComponent(0.30), for: textRange)
-            }
-            touched.append(occurrence)
+            guard NSMaxRange(occurrence) <= text.length else { continue }
+            marks.append(
+                .init(range: occurrence, color: NSColor.systemGray.withAlphaComponent(0.30)))
         }
         for (index, match) in findMatches.enumerated() where inScope(match) {
-            guard NSMaxRange(match) <= text.length,
-                let start = contentManager.location(
-                    documentRange.location, offsetBy: match.location),
-                let end = contentManager.location(start, offsetBy: match.length),
-                let textRange = NSTextRange(location: start, end: end)
-            else { continue }
-            let strength: CGFloat = index == findCurrent ? 0.55 : 0.3
-            for target in paintTargets {
-                target.addRenderingAttribute(
-                    .backgroundColor,
-                    value: NSColor.systemYellow.withAlphaComponent(strength), for: textRange)
-            }
-            touched.append(match)
+            guard NSMaxRange(match) <= text.length else { continue }
+            let strength: CGFloat = index == findCurrent ? 0.6 : 0.35
+            marks.append(
+                .init(
+                    range: match,
+                    color: NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.1, alpha: strength)))
         }
         for spelling in spellingRanges where inScope(spelling) {
-            guard NSMaxRange(spelling) <= text.length,
-                let start = contentManager.location(
-                    documentRange.location, offsetBy: spelling.location),
-                let end = contentManager.location(start, offsetBy: spelling.length),
-                let textRange = NSTextRange(location: start, end: end)
-            else { continue }
-            for target in paintTargets {
-                target.addRenderingAttribute(
-                    .backgroundColor,
-                    value: NSColor.systemPurple.withAlphaComponent(0.18), for: textRange)
-            }
-            touched.append(spelling)
+            guard NSMaxRange(spelling) <= text.length else { continue }
+            marks.append(
+                .init(range: spelling, color: NSColor.systemPurple.withAlphaComponent(0.18)))
         }
-        // One walk of the file for every diagnostic together: the old
-        // converter walked from the top once per diagnostic, which a
-        // server with plenty to say turned into seconds.
         var lineStarts: [Int] = [0]
         if !diagnostics.isEmpty {
             var index = 0
@@ -3199,17 +3154,15 @@ final class DocumentController: NSResponder {
                 case 2: .systemOrange
                 default: .systemBlue
                 }
-            // The background tint is the marker TextKit 2 actually renders
-            // from this layer; the underline attributes ride along for the
-            // day rendering attributes honor them.
             for target in paintTargets {
                 target.addRenderingAttribute(
                     .underlineStyle, value: NSUnderlineStyle.thick.rawValue, for: textRange)
                 target.addRenderingAttribute(.underlineColor, value: color, for: textRange)
-                target.addRenderingAttribute(
-                    .backgroundColor, value: color.withAlphaComponent(0.15), for: textRange)
             }
-            touched.append(range)
+            marks.append(.init(range: range, color: color.withAlphaComponent(0.15)))
+        }
+        for view in views {
+            (view.textView as? EditorTextView)?.backgroundMarks = marks
         }
     }
 

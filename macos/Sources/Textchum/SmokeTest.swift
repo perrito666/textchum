@@ -1627,19 +1627,8 @@ func runSmokeTest() -> Int32 {
             print("FAIL: the selected word's occurrences are marked as \(marked)")
             return 1
         }
-        var painted = false
-        if let layoutManager = markView.textLayoutManager,
-            let contentManager = layoutManager.textContentManager,
-            let inside = contentManager.location(layoutManager.documentRange.location, offsetBy: 8)
-        {
-            layoutManager.enumerateRenderingAttributes(from: inside, reverse: false) {
-                _, attributes, _ in
-                painted = attributes[.backgroundColor] != nil
-                return false
-            }
-        }
-        guard painted else {
-            print("FAIL: the second occurrence carries no background on the layout")
+        guard markDocument.backgroundMarksForDebug.contains(where: { $0.range == NSRange(location: 7, length: 4) }) else {
+            print("FAIL: the second occurrence is not among what the view draws")
             return 1
         }
         markBench.window?.close()
@@ -1679,6 +1668,11 @@ func runSmokeTest() -> Int32 {
             pattern: "foo", replacement: "x", options: CoreFind.Options(regex: false, caseSensitive: false, wholeWord: true))
         guard findDocument.findMatches == [NSRange(location: 0, length: 3), NSRange(location: 8, length: 3)] else {
             print("FAIL: literal whole-word matches are \(findDocument.findMatches)")
+            return 1
+        }
+        // The second match is among what the view draws.
+        guard findDocument.backgroundMarksForDebug.contains(where: { $0.range == NSRange(location: 8, length: 3) }) else {
+            print("FAIL: the second find match is not among what the view draws")
             return 1
         }
         // Vim's dialect, with a group in the replacement.
