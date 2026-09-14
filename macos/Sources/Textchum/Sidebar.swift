@@ -106,6 +106,9 @@ final class FileTreeState: ObservableObject {
     /// thread when a folder is first needed. A folder that is not
     /// expanded is never read — no listing, no stat, nothing.
     @Published private(set) var listings: [URL: [FileNode]] = [:]
+    /// The globs each listing was read with, so it can be read again
+    /// the same way.
+    private var listingGlobs: [URL: [String]] = [:]
     private var pendingListings: Set<URL> = []
 
     /// The cached listing, or nil while the first read is in flight —
@@ -124,6 +127,7 @@ final class FileTreeState: ObservableObject {
     private func requestListing(of url: URL, globs: [String]) {
         guard listings[url] == nil, !pendingListings.contains(url) else { return }
         pendingListings.insert(url)
+        listingGlobs[url] = globs
         DispatchQueue.global(qos: .userInitiated).async {
             let children = FileNode.read(directory: url, globs: globs)
             DispatchQueue.main.async {
@@ -154,13 +158,31 @@ final class FileTreeState: ObservableObject {
         return rows
     }
 
-    /// Forgets every listing, so what shows next reflects the disk;
-    /// called when the app comes back to the front, where files may
-    /// have changed underneath it. The expanded folders re-read on
-    /// their next render.
+    /// Reads every listed folder again, in the background, and replaces
+    /// a listing only where the disk differs from it; called when the
+    /// app comes back to the front, where files may have changed
+    /// underneath it. A tree that did not change is left as it is —
+    /// forgetting the listings instead redrew it from nothing, rows
+    /// saying Loading… in between.
     func refreshListings() {
         guard !listings.isEmpty else { return }
-        listings = [:]
+        let snapshot = listings
+        let globs = listingGlobs
+        DispatchQueue.global(qos: .utility).async {
+            var fresh: [URL: [FileNode]] = [:]
+            for (url, current) in snapshot {
+                let read = FileNode.read(directory: url, globs: globs[url] ?? [".*"])
+                if read != current { fresh[url] = read }
+            }
+            guard !fresh.isEmpty else { return }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    for (url, children) in fresh where self.listings[url] != nil {
+                        self.listings[url] = children
+                    }
+                }
+            }
+        }
     }
     /// The file last revealed in the tree, briefly emphasized.
     @Published var highlighted: URL?
