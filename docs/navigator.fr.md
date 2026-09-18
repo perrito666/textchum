@@ -77,7 +77,7 @@ onglet et il l'est dans tous (et dans toute fenêtre montrant le même
 projet).
 
 L'arbre suit le fichier : changer d'onglet déplie le chemin du
-document courant et le met en évidence (désactivable dans Réglages ▸
+document courant, le met en évidence et le fait défiler à la vue (désactivable dans Réglages ▸
 Général ▸ « Reveal the current file in the tree »), et
 **Présentation ▸ Révéler dans l'arbre** (⇧⌘J, nom d'action
 `revealInTree`, aussi dans le menu contextuel des lignes de tampons)
