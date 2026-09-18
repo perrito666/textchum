@@ -330,7 +330,8 @@ qu'affiner une requête n'ouvre jamais un fichier par accident.
 </figure>
 </div>
 
-**⇧⌘F** cherche dans le contenu avec une expression régulière, avec
+**⇧⌘F** cherche dans le contenu le texte tel qu'il est tapé — ou une
+expression régulière, avec la bascule `.*` à côté de la requête — avec
 des filtres empilés qui affinent par texte de ligne ou par chemin. La
 ligne d'état dit toujours ce que la recherche a fait.
 

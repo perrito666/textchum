@@ -325,7 +325,8 @@ un archivo por accidente.
 </figure>
 </div>
 
-**⇧⌘F** busca en el contenido con una expresión regular, con filtros
+**⇧⌘F** busca en el contenido el texto tal como se escribe — o una
+expresión regular, con el conmutador `.*` junto a la consulta — con filtros
 apilados que refinan por texto de línea o por ruta. La línea de estado
 siempre dice qué hizo la búsqueda.
 

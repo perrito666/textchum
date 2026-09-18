@@ -4939,13 +4939,36 @@ fn wire_escape(dialog: &adw::Window, entry: &gtk::SearchEntry) {
 
 // MARK: Find in Project
 
-/// Project-wide content search over the core's grep: the query is a
-/// regex with ripgrep's smart-case rule, results are `path:line: text`,
+thread_local! {
+    /// Whether Find in Project last read its query as a regex.
+    static GREP_READS_REGEX: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Project-wide content search over the core's grep: the query is the
+/// text to find — a regex when the `.*` toggle beside it is on — with
+/// ripgrep's smart-case rule, results are `path:line: text`,
 /// ⏎ jumps, and a status line says what the search did — matches and
 /// files searched, or the reason nothing was (bad pattern quoted).
 fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
     let entry = gtk::SearchEntry::new();
-    entry.set_placeholder_text(Some(&tr("regular expression…")));
+    entry.set_hexpand(true);
+    // Beside the query: read it as a regular expression rather than as
+    // the text to find. Kept for the run of the app — someone who
+    // searches by regex does so every time.
+    let regex_toggle = gtk::ToggleButton::with_label(".*");
+    regex_toggle.set_tooltip_text(Some(&tr("Read the query as a regular expression")));
+    regex_toggle.set_active(GREP_READS_REGEX.with(|reads| reads.get()));
+    let placeholder = |regex: bool| {
+        if regex {
+            tr("regular expression…")
+        } else {
+            tr("text to find…")
+        }
+    };
+    entry.set_placeholder_text(Some(&placeholder(regex_toggle.is_active())));
+    let query_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    query_row.append(&entry);
+    query_row.append(&regex_toggle);
     let filters_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
     let add_button = gtk::Button::with_label("＋ Add Filter");
     add_button.set_halign(gtk::Align::Start);
@@ -4967,7 +4990,7 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
     content.set_margin_bottom(10);
     content.set_margin_start(10);
     content.set_margin_end(10);
-    content.append(&entry);
+    content.append(&query_row);
     content.append(&filters_box);
     content.append(&add_row);
     content.append(&scrolled);
@@ -4990,6 +5013,7 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
         let root = root.clone();
         let hits = Rc::clone(&hits);
         let filters_box = filters_box.clone();
+        let regex_toggle = regex_toggle.clone();
         move |query: &str| {
             while let Some(child) = list.first_child() {
                 list.remove(&child);
@@ -5002,7 +5026,12 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
             // Smart case: lowercase queries match any case.
             let smart_case = query == query.to_lowercase();
             match textchum_core::search::grep_with_stats(
-                &root, query, smart_case, 200, &grep_filters(&filters_box),
+                &root,
+                query,
+                regex_toggle.is_active(),
+                smart_case,
+                200,
+                &grep_filters(&filters_box),
             ) {
                 Ok((found, stats)) => {
                     for hit in &found {
@@ -5068,6 +5097,17 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
     {
         let rerun = Rc::clone(&rerun);
         entry.connect_search_changed(move |_| rerun());
+    }
+    {
+        let rerun = Rc::clone(&rerun);
+        let entry = entry.clone();
+        regex_toggle.connect_toggled(move |toggle| {
+            GREP_READS_REGEX.with(|reads| reads.set(toggle.is_active()));
+            entry.set_placeholder_text(Some(&placeholder(toggle.is_active())));
+            rerun();
+            // The toggle is a detour from typing, not a place to stay.
+            entry.grab_focus();
+        });
     }
     {
         let filters_box = filters_box.clone();

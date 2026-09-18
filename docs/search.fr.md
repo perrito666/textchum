@@ -7,6 +7,13 @@ courant par défaut — et élargir la recherche, c'est littéralement éditer
 ce chemin (jusqu'à `~` ou `/` si l'on veut). La recherche ne regarde
 jamais en silence là où on ne l'attend pas.
 
+Étant un chemin, la portée se complète comme tel sur macOS : en tapant
+vers l'avant, les dossiers qui terminent le composant sous le curseur
+sont proposés, `~` compris. Une portée qui n'existe pas le dit, et nomme
+le dossier le plus proche qui existe — d'ordinaire à une faute de frappe
+de celui qu'on voulait. Les blancs autour d'un chemin collé sont
+ignorés.
+
 Les deux parcours respectent `.gitignore`, sautent les fichiers cachés et
 plafonnent la taille des fichiers, grâce au moteur de ripgrep lui-même
 embarqué dans le noyau — pas un sous-processus.
@@ -37,8 +44,11 @@ le nombre de fichiers en ligne d'état dit ce qui est cherché.
 
 ## Chercher dans le projet (⇧⌘F)
 
-La requête est une expression régulière ; les résultats arrivent en
-`chemin:ligne: texte`. ⏎ saute directement à la ligne correspondante.
+La requête est le texte à chercher, tel qu'il est tapé — ce qu'on colle
+dans une recherche est du code, et le code est plein de `(`, `.` et
+`[`. La bascule **`.*`** à côté de la requête la lit comme une
+expression régulière, et reste comme on l'a laissée jusqu'à ce que
+l'éditeur quitte. Les résultats arrivent en `chemin:ligne: texte`. ⏎ saute directement à la ligne correspondante.
 Les résultats sont plafonnés (200) pour rester instantanés ; affinez le
 motif plutôt que de faire défiler.
 
@@ -105,3 +115,6 @@ après un changement atterrit près, pas perdu.
 - Les bascules casse/mot entier dans le panneau (le motif lui-même peut
   exprimer les deux).
 - L'historique des recherches persistant.
+- L'édition de la portée dans l'interface GTK, dont les panneaux ne
+  cherchent que dans le projet courant ; la complétion des chemins
+  viendra avec.

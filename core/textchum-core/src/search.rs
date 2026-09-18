@@ -111,9 +111,6 @@ pub fn fuzzy_files(root: &Path, query: &str, limit: usize) -> Vec<String> {
     match_files(&walk(root), query, limit)
 }
 
-/// Searches file contents under `root` for `pattern` (a regex), returning
-/// up to `limit` hits. Binary files quit at the first NUL; unreadable
-/// files are skipped. Errors are bad patterns, phrased for humans.
 /// What a search actually did, so an empty result can explain itself:
 /// "no matches in 4,000 files" is a query problem, "0 files" is a scope
 /// or permission problem.
@@ -131,29 +128,39 @@ pub struct SearchStats {
 pub fn grep_with_stats(
     root: &Path,
     pattern: &str,
+    regex: bool,
     case_insensitive: bool,
     limit: usize,
     filters: &[Filter],
 ) -> Result<(Vec<SearchHit>, SearchStats), String> {
     let mut stats = SearchStats::default();
-    let hits = grep_inner(root, pattern, case_insensitive, limit, filters, &mut stats)?;
+    let hits = grep_inner(root, pattern, regex, case_insensitive, limit, filters, &mut stats)?;
     Ok((hits, stats))
 }
 
+/// Searches file contents under `root` for `pattern`, returning up to
+/// `limit` hits. The pattern is the text to find, character for
+/// character, unless `regex` says to read it as a regular expression:
+/// what people paste into a search is code, and code is full of `(`,
+/// `.` and `[`. Binary files quit at the first NUL; unreadable files
+/// are skipped. Errors are bad patterns, phrased for humans — a literal
+/// search has none.
 pub fn grep(
     root: &Path,
     pattern: &str,
+    regex: bool,
     case_insensitive: bool,
     limit: usize,
     filters: &[Filter],
 ) -> Result<Vec<SearchHit>, String> {
     let mut stats = SearchStats::default();
-    grep_inner(root, pattern, case_insensitive, limit, filters, &mut stats)
+    grep_inner(root, pattern, regex, case_insensitive, limit, filters, &mut stats)
 }
 
 fn grep_inner(
     root: &Path,
     pattern: &str,
+    regex: bool,
     case_insensitive: bool,
     limit: usize,
     filters: &[Filter],
@@ -161,6 +168,7 @@ fn grep_inner(
 ) -> Result<Vec<SearchHit>, String> {
     let matcher = grep_regex::RegexMatcherBuilder::new()
         .case_insensitive(case_insensitive)
+        .fixed_strings(!regex)
         .build(pattern)
         .map_err(|e| format!("bad pattern: {e}"))?;
     let mut searcher = SearcherBuilder::new()
@@ -278,7 +286,7 @@ mod tests {
     #[test]
     fn grep_finds_lines_with_numbers_and_respects_ignores() {
         let root = project("grep_finds_lines_with_numbers_and_respects_ignores");
-        let hits = grep(&root, "needle", false, 10, &[]).unwrap();
+        let hits = grep(&root, "needle", true, false, 10, &[]).unwrap();
         let mut paths: Vec<_> = hits.iter().map(|h| h.path.as_str()).collect();
         paths.sort();
         assert_eq!(paths, ["README.md", "src/main.rs"]);
@@ -290,9 +298,9 @@ mod tests {
     #[test]
     fn grep_case_flag_and_limit() {
         let root = project("grep_case_flag_and_limit");
-        assert!(grep(&root, "NEEDLE", false, 10, &[]).unwrap().is_empty());
-        assert_eq!(grep(&root, "NEEDLE", true, 10, &[]).unwrap().len(), 2);
-        assert_eq!(grep(&root, "needle", true, 1, &[]).unwrap().len(), 1);
+        assert!(grep(&root, "NEEDLE", true, false, 10, &[]).unwrap().is_empty());
+        assert_eq!(grep(&root, "NEEDLE", true, true, 10, &[]).unwrap().len(), 2);
+        assert_eq!(grep(&root, "needle", true, true, 1, &[]).unwrap().len(), 1);
     }
 
     #[test]
@@ -319,7 +327,7 @@ mod tests {
                 pattern: "test".into(),
             },
         ];
-        let hits = grep(&root, "foo", false, 50, &filters).unwrap();
+        let hits = grep(&root, "foo", true, false, 50, &filters).unwrap();
         assert_eq!(hits.len(), 1, "{hits:?}");
         assert_eq!(hits[0].path, "src/lib.rs");
         assert_eq!(hits[0].text, "foo with bar");
@@ -330,7 +338,7 @@ mod tests {
             include: true,
             pattern: "BAR".into(),
         }];
-        assert_eq!(grep(&root, "foo", false, 50, &case).unwrap().len(), 2);
+        assert_eq!(grep(&root, "foo", true, false, 50, &case).unwrap().len(), 2);
 
         // File include narrows to matching paths.
         let only_tests = [Filter {
@@ -338,7 +346,7 @@ mod tests {
             include: true,
             pattern: "test".into(),
         }];
-        let hits = grep(&root, "foo", false, 50, &only_tests).unwrap();
+        let hits = grep(&root, "foo", true, false, 50, &only_tests).unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].path, "src/lib_test.rs");
     }
@@ -346,8 +354,26 @@ mod tests {
     #[test]
     fn grep_rejects_bad_patterns_gracefully() {
         let root = project("grep_rejects_bad_patterns_gracefully");
-        let error = grep(&root, "unclosed(", false, 10, &[]).unwrap_err();
+        let error = grep(&root, "unclosed(", true, false, 10, &[]).unwrap_err();
         assert!(error.contains("bad pattern"), "got: {error}");
+    }
+
+    #[test]
+    fn grep_reads_the_pattern_as_text_unless_told_it_is_a_regex() {
+        let root = project("grep_reads_the_pattern_as_text_unless_told_it_is_a_regex");
+        // What gets pasted into a search is code. As text, `needle()`
+        // finds the call; as a regex the empty group matches nothing
+        // more than `needle`, so the prose line comes back too.
+        let literal = grep(&root, "needle()", false, false, 10, &[]).unwrap();
+        assert_eq!(literal.len(), 1);
+        assert_eq!(literal[0].path, "src/main.rs");
+        assert_eq!(grep(&root, "needle()", true, false, 10, &[]).unwrap().len(), 2);
+        // No text is a bad pattern, and a metacharacter is only itself.
+        assert!(grep(&root, "unclosed(", false, false, 10, &[]).unwrap().is_empty());
+        assert!(grep(&root, "n.edle", false, false, 10, &[]).unwrap().is_empty());
+        assert_eq!(grep(&root, "n.edle", true, false, 10, &[]).unwrap().len(), 2);
+        // Smart case still applies to text.
+        assert_eq!(grep(&root, "NEEDLE()", false, true, 10, &[]).unwrap().len(), 1);
     }
 
     #[test]
@@ -355,7 +381,7 @@ mod tests {
         let root = project("stats_separate_no_matches_from_nothing_searched");
         // A query that matches nothing still reports the files it read.
         let (hits, stats) =
-            grep_with_stats(&root, "zzz-not-here-zzz", false, 10, &[]).unwrap();
+            grep_with_stats(&root, "zzz-not-here-zzz", true, false, 10, &[]).unwrap();
         assert!(hits.is_empty());
         assert!(stats.files_searched > 0, "files were searched: {stats:?}");
         assert_eq!(stats.files_seen, stats.files_searched, "no filters, no pruning");
@@ -364,7 +390,7 @@ mod tests {
         // indistinguishable from "no matches".
         let empty = root.join("empty-dir");
         std::fs::create_dir_all(&empty).unwrap();
-        let (hits, stats) = grep_with_stats(&empty, "anything", false, 10, &[]).unwrap();
+        let (hits, stats) = grep_with_stats(&empty, "anything", true, false, 10, &[]).unwrap();
         assert!(hits.is_empty());
         assert_eq!(stats.files_searched, 0, "nothing to search: {stats:?}");
 
@@ -374,7 +400,7 @@ mod tests {
             include: true,
             pattern: "no-such-name".into(),
         }];
-        let (_, stats) = grep_with_stats(&root, "fn", false, 10, &filters).unwrap();
+        let (_, stats) = grep_with_stats(&root, "fn", true, false, 10, &filters).unwrap();
         assert!(stats.files_seen > 0 && stats.files_searched == 0, "{stats:?}");
     }
 }

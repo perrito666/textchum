@@ -4287,7 +4287,8 @@ pub unsafe extern "C" fn tc_match_files(
     .unwrap_or(std::ptr::null_mut())
 }
 
-/// Searches file contents under `root` for the regex `pattern`. Returns
+/// Searches file contents under `root` for `pattern` — the text to find
+/// as written, or a regular expression when `regex` is set. Returns
 /// one string (release with [`tc_string_free`]) of `\n`-joined records:
 /// the **first line is always statistics** —
 /// `files_seen \x1f files_searched \x1f unreadable` — and each line after
@@ -4310,6 +4311,7 @@ pub unsafe extern "C" fn tc_grep(
     root_len: usize,
     pattern: *const c_char,
     pattern_len: usize,
+    regex: bool,
     case_insensitive: bool,
     limit: usize,
     filters: *const c_char,
@@ -4334,6 +4336,7 @@ pub unsafe extern "C" fn tc_grep(
         match textchum_core::search::grep_with_stats(
             std::path::Path::new(root),
             pattern,
+            regex,
             case_insensitive,
             limit,
             &filters,

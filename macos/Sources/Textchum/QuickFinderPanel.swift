@@ -26,10 +26,12 @@ final class QuickFinderPanel: NSObject {
             }
         }
 
-        var placeholder: String {
+        /// What the query field asks for. Find in Project looks for
+        /// the text as typed unless it was told to read a regex.
+        func placeholder(regex: Bool) -> String {
             switch self {
             case .files, .changed: t("fuzzy file name…")
-            case .grep: t("regular expression…")
+            case .grep: regex ? t("regular expression…") : t("text to find…")
             }
         }
     }
@@ -58,7 +60,16 @@ final class QuickFinderPanel: NSObject {
     private var indexedScope: String?
     private var isIndexing = false
     private let scopeField = NSTextField()
+    /// The scope is a path, so typing it completes like one.
+    private let scopeCompletion = PathCompletion()
     private let queryField = NSTextField()
+    /// Beside the query (grep mode): read it as a regular expression
+    /// rather than as the text to find.
+    private let regexSwitch = NSButton(checkboxWithTitle: ".*", target: nil, action: nil)
+    /// Kept for the run of the app: someone who searches by regex does
+    /// so every time, and the panel is rebuilt from scratch per showing.
+    private static var readsRegex = false
+    var readsRegex: Bool { regexSwitch.state == .on }
     /// Stacked refinements (grep mode): one row per filter, below the
     /// query, narrowing by line content or file name.
     private let filtersStack = NSStackView()
@@ -129,7 +140,9 @@ final class QuickFinderPanel: NSObject {
         panel.title = mode.title
         scopeField.stringValue = scope
         Self.lastScope = scope
-        queryField.placeholderString = mode.placeholder
+        regexSwitch.isHidden = mode != .grep
+        regexSwitch.state = Self.readsRegex ? .on : .off
+        queryField.placeholderString = mode.placeholder(regex: Self.readsRegex)
         queryField.stringValue = ""
         rows = []
         table.reloadData()
@@ -158,7 +171,7 @@ final class QuickFinderPanel: NSObject {
     /// against the fresh list. Cheap to call: it no-ops when the scope
     /// is already indexed and `force` is false.
     private func refreshFileIndex(force: Bool) {
-        let scope = (scopeField.stringValue as NSString).expandingTildeInPath
+        let scope = scopePath
         guard force || indexedScope != scope else { return }
         indexedScope = scope
         fileIndex = []
@@ -188,6 +201,37 @@ final class QuickFinderPanel: NSObject {
         }
     }
 
+    /// The scope as a path: what the field says, less the blanks and
+    /// the newline a paste brings along — a path that names a real
+    /// folder followed by a space names nothing — with `~` expanded
+    /// and any trailing slash or `..` settled.
+    private var scopePath: String {
+        let typed = scopeField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !typed.isEmpty else { return "" }
+        return ((typed as NSString).expandingTildeInPath as NSString).standardizingPath
+    }
+
+    /// Why a scope that is not a folder yields nothing, and the nearest
+    /// folder that is there — which is usually one typo away from the
+    /// one that was meant. The scope itself is not repeated: it is in
+    /// the field above, and the strip has one line to say this in.
+    nonisolated static func missingScopeMessage(_ scope: String) -> String? {
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: scope, isDirectory: &isDirectory) {
+            return isDirectory.boolValue
+                ? nil : "That scope is a file; it has to be a folder."
+        }
+        guard scope.hasPrefix("/") else {
+            return "The scope has to be a full path, starting at / or ~."
+        }
+        var nearest = (scope as NSString).deletingLastPathComponent
+        while nearest != "/", !FileManager.default.fileExists(atPath: nearest) {
+            nearest = (nearest as NSString).deletingLastPathComponent
+        }
+        return "No such folder — the nearest one is "
+            + "\((nearest as NSString).abbreviatingWithTildeInPath)."
+    }
+
     private func makePanel() -> NSPanel {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
@@ -215,9 +259,21 @@ final class QuickFinderPanel: NSObject {
 
         scopeField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         scopeField.placeholderString = "scope path"
+        // Of a path too long for the field, the end is the part that
+        // says where.
+        scopeField.lineBreakMode = .byTruncatingHead
         scopeField.delegate = self
         queryField.font = .systemFont(ofSize: 15)
         queryField.delegate = self
+        regexSwitch.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        regexSwitch.toolTip = t("Read the query as a regular expression")
+        regexSwitch.target = self
+        regexSwitch.action = #selector(regexSwitched)
+        regexSwitch.setContentHuggingPriority(.required, for: .horizontal)
+        regexSwitch.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let queryRow = NSStackView(views: [queryField, regexSwitch])
+        queryRow.orientation = .horizontal
+        queryRow.spacing = 8
 
         table.addTableColumn(NSTableColumn(identifier: .init("result")))
         table.headerView = nil
@@ -242,9 +298,12 @@ final class QuickFinderPanel: NSObject {
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.lineBreakMode = .byTruncatingTail
+        // A long line loses its tail; it does not widen the panel, which
+        // remembers its size.
+        statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         let stack = NSStackView(views: [
-            scopeField, queryField, filtersStack, addRow, scroll, statusLabel,
+            scopeField, queryRow, filtersStack, addRow, scroll, statusLabel,
         ])
         stack.orientation = .vertical
         stack.spacing = 6
@@ -253,6 +312,14 @@ final class QuickFinderPanel: NSObject {
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
         panel.contentView = stack
         return panel
+    }
+
+    @objc private func regexSwitched() {
+        Self.readsRegex = readsRegex
+        queryField.placeholderString = mode.placeholder(regex: readsRegex)
+        scheduleSearch()
+        // The switch is a detour from typing, not a place to stay.
+        panel?.makeFirstResponder(queryField)
     }
 
     // MARK: Filters
@@ -367,8 +434,9 @@ final class QuickFinderPanel: NSObject {
     private func runSearch() {
         debounce = nil
         resultsCurrent = true
-        let scope = (scopeField.stringValue as NSString).expandingTildeInPath
+        let scope = scopePath
         let query = queryField.stringValue
+        let regex = readsRegex
         let mode = self.mode
         let filters = currentFilters()
         let index = fileIndex
@@ -400,9 +468,7 @@ final class QuickFinderPanel: NSObject {
                         !names.isEmpty
                         ? "\(names.count) files matched, all filtered out."
                         : index.isEmpty
-                            ? (FileManager.default.fileExists(atPath: scope)
-                                ? "No files under this scope."
-                                : "That scope does not exist.")
+                            ? (Self.missingScopeMessage(scope) ?? "No files under this scope.")
                             : "No files match \u{201c}\(query)\u{201d} in \(index.count) files."
                 } else if filtered.count < names.count {
                     status =
@@ -423,8 +489,8 @@ final class QuickFinderPanel: NSObject {
                         // uppercase letter is taken literally.
                         let smartCase = query == query.lowercased()
                         let found = try CoreSearch.grep(
-                            root: scope, pattern: query, caseInsensitive: smartCase,
-                            limit: 200, filters: filters)
+                            root: scope, pattern: query, regex: regex,
+                            caseInsensitive: smartCase, limit: 200, filters: filters)
                         results = found.hits.map {
                             Row.hit($0.path, path: "\(scope)/\($0.path)", line: $0.line, text: $0.text)
                         }
@@ -473,8 +539,8 @@ final class QuickFinderPanel: NSObject {
             return "\(results.hits.count) matches in \(files) "
                 + "file\(files == 1 ? "" : "s") · \(stats.filesSearched) searched"
         }
-        if !FileManager.default.fileExists(atPath: scope) {
-            return "That scope does not exist."
+        if let missing = missingScopeMessage(scope) {
+            return missing
         }
         if stats.filesSearched == 0 {
             return stats.unreadable > 0
@@ -501,9 +567,24 @@ final class QuickFinderPanel: NSObject {
         }
     }
 
-    func debugSet(scope: String, query: String, filters: [String] = []) {
+    /// Debug hook: a click on the regex switch, through its action.
+    func debugClickRegex() {
+        regexSwitch.performClick(nil)
+    }
+
+    /// What the status strip says, for the tests to read.
+    var statusText: String { statusLabel.stringValue }
+
+    func debugSet(
+        scope: String, query: String, filters: [String] = [], regex: Bool? = nil
+    ) {
         scopeField.stringValue = scope
         queryField.stringValue = query
+        if let regex {
+            regexSwitch.state = regex ? .on : .off
+            Self.readsRegex = regex
+            queryField.placeholderString = mode.placeholder(regex: regex)
+        }
         clearFilters()
         for spec in filters {
             guard spec.count > 5 else { continue }
@@ -539,6 +620,7 @@ extension QuickFinderPanel: NSTextFieldDelegate {
     func controlTextDidChange(_ notification: Notification) {
         // A new scope needs a new walk; a new query only re-matches.
         if notification.object as AnyObject? === scopeField {
+            scopeCompletion.textDidChange(in: scopeField)
             scheduleIndexRefresh()
         } else {
             scheduleSearch()
@@ -566,9 +648,7 @@ extension QuickFinderPanel: NSTextFieldDelegate {
                 return true
             }
             debounce?.invalidate()
-            if mode != .grep, indexedScope
-                != (scopeField.stringValue as NSString).expandingTildeInPath
-            {
+            if mode != .grep, indexedScope != scopePath {
                 refreshFileIndex(force: true)
             } else {
                 runSearch()
@@ -580,6 +660,18 @@ extension QuickFinderPanel: NSTextFieldDelegate {
         default:
             return false
         }
+    }
+
+    func control(
+        _ control: NSControl, textView: NSTextView, completions words: [String],
+        forPartialWordRange charRange: NSRange,
+        indexOfSelectedItem index: UnsafeMutablePointer<Int>
+    ) -> [String] {
+        // Only the scope is a path; the query completes to nothing,
+        // rather than to the dictionary words AppKit would offer.
+        guard control === scopeField else { return [] }
+        index.pointee = -1
+        return PathCompletion.completions(in: textView.string, forPartialWordRange: charRange)
     }
 }
 

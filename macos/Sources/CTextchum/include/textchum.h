@@ -2396,7 +2396,8 @@ char *tc_match_files(const char *paths,
                      uintptr_t limit);
 
 /**
- * Searches file contents under `root` for the regex `pattern`. Returns
+ * Searches file contents under `root` for `pattern` — the text to find
+ * as written, or a regular expression when `regex` is set. Returns
  * one string (release with [`tc_string_free`]) of `\n`-joined records:
  * the **first line is always statistics** —
  * `files_seen \x1f files_searched \x1f unreadable` — and each line after
@@ -2418,6 +2419,7 @@ char *tc_grep(const char *root,
               uintptr_t root_len,
               const char *pattern,
               uintptr_t pattern_len,
+              bool regex,
               bool case_insensitive,
               uintptr_t limit,
               const char *filters,

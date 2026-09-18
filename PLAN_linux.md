@@ -15,8 +15,8 @@ feature ledger.
 - Tabs (AdwTabView) with focus-not-duplicate opens; the drawer's both
   halves — open buffers grouped by project over the project file tree.
 - Open/save with dirty marks; language + problem counts in the title.
-- Find in Project: regex, smart case, stacked line/file filters, the
-  says-what-it-did status line. Open Quickly over the core's matcher.
+- Find in Project: text by default with a `.*` regex toggle, smart
+  case, stacked line/file filters, the says-what-it-did status line. Open Quickly over the core's matcher.
 - LSP through the shared pool (one instance per project, crash restart,
   idle shutdown): diagnostics as squiggles with counts, completion as
   you type, hover, jump to definition with not-working-says-why toasts.
@@ -92,6 +92,10 @@ Ordered roughly by how much daily pain each gap causes.
 18. **Packaging.** `make install-linux` now installs the binary,
     a `.desktop` entry, and the icon into the XDG home directories
     (release tarballs already existed). Flatpak remains unplanned.
+19. **An editable search scope.** The Mac's finder panels show the
+    scope as a path that can be edited, with folder completion and a
+    message naming the nearest real folder when it is wrong; the GTK
+    panels search the current project and show it in the title.
 
 ## Behavioral differences that are choices, not gaps
 
