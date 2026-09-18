@@ -2066,6 +2066,21 @@ func runSmokeTest() -> Int32 {
         try? FileManager.default.removeItem(at: base)
         print("tree follows ok (the root and the marks move with focus, into a new window too)")
 
+    // The system's file icons are told apart in the background: asking
+    // for one never waits, and the rows hear when the answers are in.
+    do {
+        let began = Date()
+        _ = SystemFileIcon.icon(forFilename: "main.rs")
+        _ = SystemFileIcon.icon(forFilename: "archive.textchum-unknown")
+        let asked = Date().timeIntervalSince(began)
+        spin(untilTrue: { SystemFileIcon.isWarm }, seconds: 30)
+        guard asked < 0.1, SystemFileIcon.isWarm else {
+            print("FAIL: file icons: asking took \(asked)s, answered \(SystemFileIcon.isWarm)")
+            return 1
+        }
+    }
+    print("file icons ok (asked without waiting, answered in the background)")
+
     // Scrolling a big tree must stay cheap. The measurement — a
     // synthetic monorepo of 20,000 files, fully expanded, scrolled top
     // to bottom — runs under TEXTCHUM_SMOKE_PERF=1, where the machine

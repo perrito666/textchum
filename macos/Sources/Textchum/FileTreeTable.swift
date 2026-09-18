@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import TextchumKit
 
@@ -162,6 +163,21 @@ struct FileTreeTable: NSViewRepresentable {
             guard table.numberOfRows > 0 else { return }
             let padding = table.rect(ofRow: 0).minY
             if scrollTop?.constant != -padding { scrollTop?.constant = -padding }
+        }
+
+        private var iconNews: AnyCancellable?
+
+        /// A file type's system icon is worked out in the background; a
+        /// row drawn before the answer wears its badge until told.
+        func followIconNews() {
+            iconNews = FileIconNews.shared.$edition.dropFirst().sink { [weak self] _ in
+                guard let self, let table = self.table else { return }
+                table.enumerateAvailableRowViews { rowView, row in
+                    guard let cell = rowView.view(atColumn: 0) as? FileTreeCell else { return }
+                    cell.forgetWhatIsShown()
+                    self.configure(cell, row: row)
+                }
+            }
         }
 
         /// The table has been laid out, which is when its first row is
@@ -334,6 +350,10 @@ final class FileTreeCell: NSTableCellView {
     private var nameLimit: NSLayoutConstraint!
     private static let inset: CGFloat = 7
     private var shown: Line?
+    /// Makes the next `show` draw from scratch: the line is the same
+    /// and what it resolves to — its icon — is not.
+    func forgetWhatIsShown() { shown = nil }
+
     /// The name on the row, for the tests to read.
     var shownName: String? { shown?.name }
 
@@ -430,7 +450,7 @@ final class FileTreeCell: NSTableCellView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         if let line = shown {
-            shown = nil
+            forgetWhatIsShown()
             show(line)
         }
     }
