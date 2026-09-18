@@ -144,6 +144,13 @@ final class DocumentStore {
         if !document.core.isDirty {
             _ = try? document.core.reload()
         }
+        // A message git hands over is a new message in the same file:
+        // where the last one was closed is the end of other text, and
+        // the place to write this one is the top.
+        if DocumentController.isGitEditorFile(path) {
+            document.layout = DocumentLayout()
+            document.folds = []
+        }
         documents[document.id] = document
         byPath[path] = document.id
         return document

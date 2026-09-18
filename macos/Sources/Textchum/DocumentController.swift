@@ -502,6 +502,13 @@ final class DocumentController: NSResponder {
         views.append(view)
         if isFirst {
             textView.string = coreDocument.text
+            // Setting the text leaves the caret after its last
+            // character. A file with a remembered place is put back
+            // there afterwards; one without — a file never seen, and
+            // every message git asks for — starts at the top, where
+            // reading and writing both begin.
+            selectionChangeIsFromEditing = false
+            textView.setSelectedRange(NSRange(location: 0, length: 0))
         }
         // Every view, not only the first: a view made after a tab
         // switch starts on estimated line heights, and a viewport put

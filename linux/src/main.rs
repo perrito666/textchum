@@ -580,6 +580,14 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         return 1;
     };
     let buffer = handles.document.buffer.clone();
+    // A file with no remembered place opens with the cursor at the
+    // top. Loading the text leaves it at the end, which is where git's
+    // commit message used to open.
+    let cursor = buffer.iter_at_mark(&buffer.get_insert()).offset();
+    if cursor != 0 {
+        eprintln!("FAIL: a newly opened file has its cursor at {cursor}, not at the top");
+        return 1;
+    }
 
     // Type through the buffer; the signals must carry it into the core.
     let mut end = buffer.end_iter();
