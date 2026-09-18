@@ -19,7 +19,6 @@ mod workbench;
 use adw::prelude::*;
 use gtk::gio;
 use workbench::Workbench;
-use textchum_core::t;
 use textchum_core::i18n::{fill, tr, tr_n};
 
 const APP_ID: &str = "to.perri.textchum";

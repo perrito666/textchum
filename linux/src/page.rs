@@ -22,8 +22,7 @@ use textchum_core::{changes::ChangeKind, indent, theme, Document};
 use webkit6::prelude::*;
 
 use crate::shell::{PageHandles, Shell};
-use textchum_core::t;
-use textchum_core::i18n::{fill, n_, tr};
+use textchum_core::i18n::{n_, tr};
 
 pub struct State {
     pub document: Document,
