@@ -9,7 +9,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 use sourceview5::prelude::*;
-use textchum_core::{blame, goto, icons, references, t, theme_import, workspace, Appearance};
+use textchum_core::{blame, goto, icons, references, theme_import, workspace, Appearance};
 
 use crate::page::{self, Page};
 use crate::shell::{PageHandles, Shell};
@@ -5391,8 +5391,6 @@ fn finish_theme_import(
 
 // MARK: Preferences
 
-/// The preferences window, over the same config.json contract as
-/// everywhere else: every change applies immediately and saves.
 thread_local! {
     /// The one Preferences window. Settings are application-wide, so a
     /// second copy of the screen is never a second thing to look at —
@@ -5401,6 +5399,8 @@ thread_local! {
     static PREFERENCES: RefCell<Option<adw::PreferencesWindow>> = const { RefCell::new(None) };
 }
 
+/// The preferences window, over the same config.json contract as
+/// everywhere else: every change applies immediately and saves.
 fn show_preferences(parent: &adw::ApplicationWindow) {
     if let Some(existing) = PREFERENCES.with(|slot| slot.borrow().clone()) {
         existing.present();
