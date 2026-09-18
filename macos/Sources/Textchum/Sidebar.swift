@@ -256,83 +256,6 @@ struct VisibleTreeRow: Identifiable {
     var id: URL { node.url }
 }
 
-/// One row of the project tree; the tree is a flat list of these, and
-/// expansion just changes which rows exist.
-struct FileTreeRow: View {
-    let node: FileNode
-    let depth: Int
-    /// Whether this directory row is expanded — plain data, so the row
-    /// re-renders only when its own line changes.
-    let isExpanded: Bool
-    let projectRoot: String?
-    /// Dirty-by-path for every open file, and the focused file's path,
-    /// so a row can say "open", "in front", and "unsaved" at a glance.
-    var openFiles: [String: Bool] = [:]
-    var currentPath: String?
-    var highlighted: URL?
-    let onToggle: (URL) -> Void
-    let onOpenFile: (String) -> Void
-
-    var body: some View {
-        label
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if node.isDirectory {
-                    onToggle(node.url)
-                } else {
-                    onOpenFile(node.url.path)
-                }
-            }
-    }
-
-    private var label: some View {
-        HStack(spacing: 4) {
-            Spacer(minLength: 0).frame(width: CGFloat(depth) * 12)
-            if node.isDirectory {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: 10)
-                Image(systemName: "folder")
-                    .foregroundStyle(.secondary)
-            } else {
-                FileTypeIcon(filename: node.name)
-            }
-            Text(node.name)
-            Spacer(minLength: 0)
-            // The file in front wears a filled dot, other open files a
-            // hollow one, and unsaved changes the same dot the Open
-            // Files list marks them with.
-            if !node.isDirectory, let dirty = openFiles[node.url.path] {
-                if dirty {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 7))
-                        .foregroundStyle(.primary)
-                }
-                Image(systemName: node.url.path == currentPath ? "circle.fill" : "circle")
-                    .font(.system(size: 6))
-                    .foregroundStyle(
-                        node.url.path == currentPath
-                            ? AnyShapeStyle(Color.accentColor)
-                            : AnyShapeStyle(.tertiary))
-            }
-        }
-        .padding(.horizontal, 3)
-        .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(
-                    highlighted == node.url
-                        ? Color.accentColor.opacity(0.22) : Color.clear))
-        .contextMenu {
-            PathCopyMenu(
-                path: node.url.path, projectRoot: projectRoot,
-                isDirectory: node.isDirectory)
-        }
-        .id(node.url)
-    }
-}
-
 /// A file-system node of the project tree. Children are read lazily from
 /// disk on expansion; hidden files are skipped.
 struct FileNode: Identifiable, Hashable {
@@ -574,44 +497,37 @@ struct SidebarView: View {
         Group {
             if let projectRoot {
                 let rootURL = treeKey(projectRoot, isDirectory: true)
-                ScrollViewReader { proxy in
-                    List {
-                        Section((projectRoot as NSString).lastPathComponent) {
-                            if !treeState.hasListing(of: rootURL) {
-                                Text(t("Loading…"))
-                                    .foregroundStyle(.secondary)
-                            }
-                            ForEach(
-                                treeState.visibleRows(
-                                    root: rootURL, globs: hiddenGlobs(projectRoot))
-                            ) { row in
-                                FileTreeRow(
-                                    node: row.node, depth: row.depth,
-                                    isExpanded: treeState.expanded.contains(row.node.url),
-                                    projectRoot: projectRoot,
-                                    openFiles: openFiles, currentPath: currentPath,
-                                    highlighted: treeState.highlighted,
-                                    onToggle: { url in
-                                        if treeState.expanded.contains(url) {
-                                            treeState.expanded.remove(url)
-                                        } else {
-                                            treeState.expanded.insert(url)
-                                        }
-                                    },
-                                    onOpenFile: onOpenFile)
-                            }
-                        }
+                VStack(alignment: .leading, spacing: 0) {
+                    // The project's name stays put above the rows, where
+                    // the List's pinned section header used to float.
+                    Text((projectRoot as NSString).lastPathComponent)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 13)
+                        .padding(.bottom, 7)
+                    if !treeState.hasListing(of: rootURL) {
+                        Text(t("Loading…"))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 6)
                     }
-                    .listStyle(.sidebar)
-                    .onChange(of: treeState.highlighted) { _, highlighted in
-                        if let highlighted {
-                            // The ancestors were just expanded; let the
-                            // rows exist before scrolling to one.
-                            DispatchQueue.main.async {
-                                withAnimation { proxy.scrollTo(highlighted) }
+                    FileTreeTable(
+                        rows: treeState.visibleRows(
+                            root: rootURL, globs: hiddenGlobs(projectRoot)),
+                        expanded: treeState.expanded,
+                        projectRoot: projectRoot,
+                        openFiles: openFiles, currentPath: currentPath,
+                        highlighted: treeState.highlighted,
+                        onToggle: { url in
+                            if treeState.expanded.contains(url) {
+                                treeState.expanded.remove(url)
+                            } else {
+                                treeState.expanded.insert(url)
                             }
-                        }
-                    }
+                        },
+                        onOpenFile: onOpenFile)
                 }
             } else {
                 Text(t("No project"))

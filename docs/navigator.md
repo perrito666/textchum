@@ -68,7 +68,7 @@ Expanded folders are shared state: open a folder in one tab and it is
 open in every tab (and in any window showing the same project).
 
 The tree follows the file: switching tabs expands the path to the
-current document and highlights it (turn it off in Settings ▸ General ▸
+current document, highlights it and scrolls it into view (turn it off in Settings ▸ General ▸
 "Reveal the current file in the tree"), and **View ▸ Reveal in Tree**
 (⇧⌘J, action name `revealInTree`, also in a buffer row's right-click
 menu) does it on demand — uncollapsing the navigator if needed.

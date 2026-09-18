@@ -80,7 +80,7 @@ pestaña y estará abierta en todas (y en cualquier ventana que muestre el
 mismo proyecto).
 
 El árbol sigue al archivo: cambiar de pestaña expande la ruta del
-documento actual y lo resalta (se apaga en Ajustes ▸ General ▸ «Reveal
+documento actual, lo resalta y lo trae a la vista (se apaga en Ajustes ▸ General ▸ «Reveal
 the current file in the tree»), y **Vista ▸ Revelar en el árbol**
 (⇧⌘J, nombre de acción `revealInTree`, también en el menú contextual
 de las filas de búferes) lo hace a demanda — desplegando el navegador
