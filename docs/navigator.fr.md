@@ -76,6 +76,13 @@ Les dossiers dépliés sont un état partagé : dépliez un dossier dans un
 onglet et il l'est dans tous (et dans toute fenêtre montrant le même
 projet).
 
+Une application, un bundle, un projet Xcode — un dossier que macOS
+présente comme une seule chose — est ici aussi une seule ligne, avec son
+icône du Finder et triée parmi les fichiers. Un clic la laisse fermée ;
+**Afficher le contenu du paquet**, dans son menu contextuel, l'ouvre
+comme n'importe quel dossier, et révéler un fichier qu'elle contient
+l'ouvre aussi.
+
 L'arbre suit le fichier : changer d'onglet déplie le chemin du
 document courant, le met en évidence et le fait défiler à la vue (désactivable dans Réglages ▸
 Général ▸ « Reveal the current file in the tree »), et

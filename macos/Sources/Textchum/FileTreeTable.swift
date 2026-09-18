@@ -61,6 +61,7 @@ struct FileTreeTable: NSViewRepresentable {
         }
         table.onAppearanceChange = { [weak table] in table?.reloadData() }
         context.coordinator.table = table
+        context.coordinator.followIconNews()
         table.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(
             context.coordinator, selector: #selector(Coordinator.tableFrameChanged(_:)),
@@ -219,6 +220,7 @@ struct FileTreeTable: NSViewRepresentable {
                     name: line.node.name,
                     depth: line.depth,
                     isDirectory: line.node.isDirectory,
+                    packagePath: line.node.isPackage ? path : nil,
                     isExpanded: tree.expanded.contains(line.node.url),
                     // nil: not open. Otherwise whether it has unsaved
                     // changes.
@@ -233,7 +235,12 @@ struct FileTreeTable: NSViewRepresentable {
         func activate(row: Int) {
             guard let tree, tree.rows.indices.contains(row) else { return }
             let node = tree.rows[row].node
-            if node.isDirectory {
+            if node.isPackage {
+                // An application is not something to open in an editor,
+                // and a click should not take it apart. Shut, it stays
+                // shut — its menu opens it; open, a click shuts it.
+                if tree.expanded.contains(node.url) { tree.onToggle(node.url) }
+            } else if node.isDirectory {
                 tree.onToggle(node.url)
             } else {
                 tree.onOpenFile(node.url.path)
@@ -244,6 +251,15 @@ struct FileTreeTable: NSViewRepresentable {
             guard let tree, tree.rows.indices.contains(row) else { return nil }
             let node = tree.rows[row].node
             let menu = NSMenu()
+            if node.isPackage {
+                let shown = tree.expanded.contains(node.url)
+                let toggle = tree.onToggle
+                menu.addItem(
+                    ClosureMenuItem(
+                        title: shown ? t("Hide Package Contents") : t("Show Package Contents")
+                    ) { toggle(node.url) })
+                menu.addItem(.separator())
+            }
             for entry in PathActions.menuEntries(
                 path: node.url.path, projectRoot: tree.projectRoot,
                 isDirectory: node.isDirectory)
@@ -329,6 +345,8 @@ final class FileTreeCell: NSTableCellView {
         let name: String
         let depth: Int
         let isDirectory: Bool
+        /// Set for a package, which wears its own Finder icon.
+        let packagePath: String?
         let isExpanded: Bool
         let openAndDirty: Bool?
         let isInFront: Bool
@@ -410,7 +428,18 @@ final class FileTreeCell: NSTableCellView {
         shown = line
         name.stringValue = line.name
         indent.constant = Self.inset + CGFloat(line.depth) * 12
-        if line.isDirectory {
+        if let packagePath = line.packagePath {
+            // As Finder shows it: one item, its own icon. The chevron
+            // appears only while its contents have been asked for.
+            chevron.isHidden = !line.isExpanded
+            chevron.image = line.isExpanded
+                ? Self.symbol("chevron.down", size: 9, weight: .semibold) : nil
+            chevron.contentTintColor = .secondaryLabelColor
+            iconLeading.constant = line.isExpanded ? 4 : -10
+            nameLeading.constant = 4
+            icon.image = Self.packageIcon(at: packagePath)
+            icon.contentTintColor = nil
+        } else if line.isDirectory {
             chevron.isHidden = false
             chevron.image = Self.symbol(
                 line.isExpanded ? "chevron.down" : "chevron.right", size: 9, weight: .semibold)
@@ -470,6 +499,18 @@ final class FileTreeCell: NSTableCellView {
     }
 
     private static var badges: [String: NSImage] = [:]
+    private static var packageIcons: [String: NSImage] = [:]
+
+    /// A package's own icon, as Finder draws it. The image comes back
+    /// at once and reads its artwork when drawn, so this costs a row
+    /// nothing worth putting off.
+    private static func packageIcon(at path: String) -> NSImage {
+        if let cached = packageIcons[path] { return cached }
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        icon.size = NSSize(width: 16, height: 16)
+        packageIcons[path] = icon
+        return icon
+    }
 
     /// The icon for a file, in the order FileTypeIcon settles it: the
     /// icon pack, the system's icon where it says something, the

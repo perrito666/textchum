@@ -2105,6 +2105,11 @@ func runSmokeTest() -> Int32 {
                     contents: Data("package x\n".utf8))
             }
         }
+        // An application beside the folders: a directory the system
+        // presents as one thing, and so does the tree.
+        let package = base.appendingPathComponent("Zed.app")
+        try? FileManager.default.createDirectory(
+            at: package.appendingPathComponent("Contents"), withIntermediateDirectories: true)
         let treeState = FileTreeState()
         treeState.expanded = expanded
         var openedFromTree: [String] = []
@@ -2189,7 +2194,7 @@ func runSmokeTest() -> Int32 {
         // call back into itself under the List this replaced.
         // The folders are read one by one, off the main thread; the
         // count is asked for once they have all arrived.
-        let everyRow = directories * (filesPerDirectory + 1)
+        let everyRow = directories * (filesPerDirectory + 1) + 1
         spin(
             untilTrue: { (scroller.documentView as? NSTableView)?.numberOfRows == everyRow },
             seconds: 30)
@@ -2253,6 +2258,53 @@ func runSmokeTest() -> Int32 {
             print("FAIL: a tree row's menu is \(titles)")
             return 1
         }
+        // The package sorts after the folders, as a file would, and is
+        // one row: a click leaves it shut, its menu opens and shuts it.
+        let listed = FileNode.read(directory: base, globs: [".*"])
+        guard listed.last?.name == "Zed.app", listed.last?.isPackage == true,
+            listed.dropLast().allSatisfy({ $0.isDirectory && !$0.isPackage })
+        else {
+            print("FAIL: the package is not told apart from the folders: \(listed.map(\.name).suffix(3))")
+            return 1
+        }
+        let packageRow = everyRow - 1
+        let packageKey = treeKey(package.path, isDirectory: true)
+        click(row: packageRow)
+        spin(untilTrue: { false }, seconds: 0.2)
+        guard table.numberOfRows == everyRow, !treeState.expanded.contains(packageKey) else {
+            print("FAIL: a click took a package apart")
+            return 1
+        }
+        func packageMenu() -> NSMenu? {
+            let rect = table.rect(ofRow: packageRow)
+            return NSEvent.mouseEvent(
+                with: .rightMouseDown,
+                location: table.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil),
+                modifierFlags: [], timestamp: 0, windowNumber: treeWindow.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+            ).flatMap { table.menu(for: $0) }
+        }
+        table.scrollRowToVisible(packageRow)
+        guard let showContents = packageMenu(),
+            showContents.items.first?.title == t("Show Package Contents")
+        else {
+            print("FAIL: a package's menu does not offer its contents")
+            return 1
+        }
+        showContents.performActionForItem(at: 0)
+        spin(untilTrue: { table.numberOfRows == everyRow + 1 }, seconds: 5)
+        guard table.numberOfRows == everyRow + 1,
+            packageMenu()?.items.first?.title == t("Hide Package Contents")
+        else {
+            print("FAIL: Show Package Contents did not open the package (rows \(table.numberOfRows))")
+            return 1
+        }
+        click(row: packageRow)
+        spin(untilTrue: { table.numberOfRows == everyRow }, seconds: 5)
+        guard table.numberOfRows == everyRow else {
+            print("FAIL: a click did not shut an open package")
+            return 1
+        }
         // A reveal scrolls to its file, from the top of the tree to a
         // row far below the view.
         table.scrollRowToVisible(0)
@@ -2276,7 +2328,7 @@ func runSmokeTest() -> Int32 {
         }
         treeWindow.close()
         try? FileManager.default.removeItem(at: base)
-        print("big tree ok (scrolls without stutter; fixed rows, clicks open and close, the path menu, a reveal scrolls)")
+        print("big tree ok (scrolls without stutter; fixed rows, clicks open and close, the path menu, a package is one row, a reveal scrolls)")
     }
     }
 
