@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Telling the system's file icons apart takes most of a second;
+        // it starts now, in the background, so the rows find it done.
+        SystemFileIcon.warmUp()
         stamp("begin")
         if let spec = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_SELECT"] {
             // "from:length": selects that range in the first editor, so
