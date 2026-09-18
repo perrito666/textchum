@@ -261,6 +261,10 @@ struct VisibleTreeRow: Identifiable {
 struct FileNode: Identifiable, Hashable {
     let url: URL
     let isDirectory: Bool
+    /// A directory the system presents as one thing — an application,
+    /// a bundle, an Xcode project. The tree shows it as Finder does,
+    /// as an item with its own icon, and opens it up only when asked.
+    var isPackage = false
     /// The project's effective hidden-name globs, passed down the tree.
     let hiddenGlobs: [String]
 
@@ -274,24 +278,27 @@ struct FileNode: Identifiable, Hashable {
     static func read(directory url: URL, globs hiddenGlobs: [String]) -> [FileNode] {
         let entries = (try? FileManager.default.contentsOfDirectory(
             at: url,
-            includingPropertiesForKeys: [.isDirectoryKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .isPackageKey],
             options: []
         )) ?? []
         return entries
             .filter { !CoreWorkspace.isHidden(name: $0.lastPathComponent, globs: hiddenGlobs) }
             .map { url in
-                let isDirectory =
-                    (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory
-                    ?? false
+                let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+                let isDirectory = values?.isDirectory ?? false
                 return FileNode(
                     url: treeKey(url.path, isDirectory: isDirectory),
                     isDirectory: isDirectory,
+                    isPackage: isDirectory && values?.isPackage == true,
                     hiddenGlobs: hiddenGlobs
                 )
             }
             .sorted {
-                // Directories first, then case-insensitive by name.
-                if $0.isDirectory != $1.isDirectory { return $0.isDirectory }
+                // Directories first, then case-insensitive by name. A
+                // package sorts with the files, which is what it looks
+                // like.
+                let folders = ($0.isDirectory && !$0.isPackage, $1.isDirectory && !$1.isPackage)
+                if folders.0 != folders.1 { return folders.0 }
                 return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
     }

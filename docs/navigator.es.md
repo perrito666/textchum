@@ -79,6 +79,12 @@ Las carpetas expandidas son estado compartido: abra una carpeta en una
 pestaña y estará abierta en todas (y en cualquier ventana que muestre el
 mismo proyecto).
 
+Una aplicación, un bundle, un proyecto de Xcode — una carpeta que macOS
+presenta como una sola cosa — es también aquí una sola fila, con su
+icono del Finder y ordenada entre los archivos. Un clic la deja cerrada;
+**Mostrar contenido del paquete**, en su menú contextual, la abre como
+cualquier carpeta, y revelar un archivo de su interior también.
+
 El árbol sigue al archivo: cambiar de pestaña expande la ruta del
 documento actual, lo resalta y lo trae a la vista (se apaga en Ajustes ▸ General ▸ «Reveal
 the current file in the tree»), y **Vista ▸ Revelar en el árbol**

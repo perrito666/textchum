@@ -632,6 +632,7 @@ msgid "Copy Name"
 msgstr "Copiar el nombre"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/PathActions.swift
+#: macos/Sources/Textchum/SmokeTest.swift
 msgid "Copy Relative Path"
 msgstr "Copiar la ruta relativa"
 
@@ -1404,6 +1405,16 @@ msgstr "Los cambios se perderán si no se guardan."
 msgid "No Suggestions"
 msgstr "Sin sugerencias"
 
+#: macos/Sources/Textchum/FileTreeTable.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Hide Package Contents"
+msgstr "Ocultar contenido del paquete"
+
+#: macos/Sources/Textchum/FileTreeTable.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Show Package Contents"
+msgstr "Mostrar contenido del paquete"
+
 #: macos/Sources/Textchum/FindReplaceBar.swift
 msgid "Replace"
 msgstr "Reemplazar"
@@ -1442,6 +1453,7 @@ msgid "Documentation"
 msgstr "Documentación"
 
 #: macos/Sources/Textchum/PathActions.swift
+#: macos/Sources/Textchum/SmokeTest.swift
 msgid "Reveal in Finder"
 msgstr "Mostrar en Finder"
 
