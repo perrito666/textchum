@@ -100,12 +100,14 @@ public enum CoreSearch {
         public var stats = Stats()
     }
 
-    /// Searches file contents under `root` for the regex `pattern`,
-    /// narrowed by `filters`. Throws a ``CoreIOError`` with the core's
-    /// message on a bad pattern.
+    /// Searches file contents under `root` for `pattern`, narrowed by
+    /// `filters`. The pattern is the text to find as written; `regex`
+    /// reads it as a regular expression instead, and only then can it
+    /// be a bad one — reported by throwing a ``CoreIOError`` with the
+    /// core's message.
     public static func grep(
-        root: String, pattern: String, caseInsensitive: Bool = false, limit: Int = 200,
-        filters: [Filter] = []
+        root: String, pattern: String, regex: Bool = false, caseInsensitive: Bool = false,
+        limit: Int = 200, filters: [Filter] = []
     ) throws -> Results {
         let filtersJSON =
             (try? JSONEncoder().encode(filters)).flatMap { String(data: $0, encoding: .utf8) }
@@ -116,7 +118,7 @@ public enum CoreSearch {
                 withUTF8(filtersJSON) { filters, filtersLen in
                     guard
                         let cString = tc_grep(
-                            root, rootLen, pattern, patternLen, caseInsensitive,
+                            root, rootLen, pattern, patternLen, regex, caseInsensitive,
                             UInt(limit), filters, filtersLen, &error)
                     else { return nil }
                     defer { tc_string_free(cString) }

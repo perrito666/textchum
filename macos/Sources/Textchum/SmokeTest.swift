@@ -1412,9 +1412,89 @@ func runSmokeTest() -> Int32 {
             print("FAIL: a path did not split into directory and name: \(parts)")
             return 1
         }
+
+        // Find in Project looks for the text as typed; the switch
+        // beside the query is what makes it a regular expression.
+        try? "call(x)\n".write(
+            to: finderRoot.appendingPathComponent("code.txt"), atomically: true, encoding: .utf8)
+        let asText = try? CoreSearch.grep(root: finderRoot.path, pattern: "call(")
+        guard asText?.hits.map(\.path) == ["code.txt"] else {
+            print("FAIL: searching for text did not find it: \(String(describing: asText))")
+            return 1
+        }
+        guard (try? CoreSearch.grep(root: finderRoot.path, pattern: "call(", regex: true)) == nil,
+            (try? CoreSearch.grep(root: finderRoot.path, pattern: "c.ll", regex: true))?.hits.count == 1,
+            (try? CoreSearch.grep(root: finderRoot.path, pattern: "c.ll"))?.hits.isEmpty == true
+        else {
+            print("FAIL: the regex flag does not decide how the pattern is read")
+            return 1
+        }
+        finder.show(mode: .grep, scope: finderRoot.path, over: nil)
+        guard !finder.readsRegex else {
+            print("FAIL: Find in Project opens reading regular expressions")
+            return 1
+        }
+        finder.debugSet(scope: finderRoot.path, query: "call(")
+        spin(untilTrue: { finder.rowCount == 1 }, seconds: 5)
+        guard finder.rowCount == 1 else {
+            print("FAIL: the panel did not find the text as typed (rows \(finder.rowCount))")
+            return 1
+        }
+        // As a regex the same query is an unclosed group: no rows, and
+        // the status strip says why.
+        finder.debugClickRegex()
+        spin(untilTrue: { finder.rowCount == 0 && finder.statusText.contains("bad pattern") }, seconds: 5)
+        guard finder.readsRegex, finder.rowCount == 0, finder.statusText.contains("bad pattern") else {
+            print("FAIL: the regex switch did not change how the query is read: \(finder.statusText)")
+            return 1
+        }
+        // A scope pasted with a blank after it is still that folder.
+        finder.debugSet(scope: finderRoot.path + " \n", query: "call(", regex: false)
+        spin(untilTrue: { finder.rowCount == 1 }, seconds: 5)
+        guard finder.rowCount == 1 else {
+            print("FAIL: blanks around the scope made it a different path")
+            return 1
+        }
+
+        // The scope completes as a path, phrased for the range the
+        // field editor replaces: it breaks words at "-", and just past
+        // a slash it reaches back over the folder before it.
+        for name in ["my-project", "my-other", ".hidden"] {
+            try? FileManager.default.createDirectory(
+                at: finderRoot.appendingPathComponent(name), withIntermediateDirectories: true)
+        }
+        let base = finderRoot.path
+        let baseLength = (base as NSString).length
+        let rootName = finderRoot.lastPathComponent
+        let rootNameLength = (rootName as NSString).length
+        let whole = PathCompletion.completions(
+            in: "\(base)/MY", forPartialWordRange: NSRange(location: baseLength + 1, length: 2))
+        let afterHyphen = PathCompletion.completions(
+            in: "\(base)/my-pr", forPartialWordRange: NSRange(location: baseLength + 4, length: 2))
+        let afterSlash = PathCompletion.completions(
+            in: "\(base)/",
+            forPartialWordRange: NSRange(
+                location: baseLength - rootNameLength, length: rootNameLength + 1))
+        let hidden = PathCompletion.completions(
+            in: "\(base)/.h", forPartialWordRange: NSRange(location: baseLength + 2, length: 1))
+        guard whole == ["my-other", "my-project"], afterHyphen == ["project"],
+            afterSlash == ["\(rootName)/my-other", "\(rootName)/my-project"], hidden == ["hidden"]
+        else {
+            print("FAIL: path completion: \(whole) \(afterHyphen) \(afterSlash) \(hidden)")
+            return 1
+        }
+        let missing = QuickFinderPanel.missingScopeMessage("\(base)/nope/deeper")
+        guard QuickFinderPanel.missingScopeMessage(base) == nil,
+            missing?.hasSuffix(
+                "the nearest one is \((base as NSString).abbreviatingWithTildeInPath).") == true,
+            QuickFinderPanel.missingScopeMessage("\(base)/code.txt")?.contains("is a file") == true
+        else {
+            print("FAIL: a missing scope does not explain itself: \(missing ?? "nil")")
+            return 1
+        }
         try? FileManager.default.removeItem(at: finderRoot)
     }
-    print("quick open ok (Enter opens the row once the rows are current)")
+    print("quick open ok (Enter opens the row once the rows are current; text by default, regex on request; the scope completes and explains itself)")
 
     // A jump into a file just opened: the reveal runs before the view
     // has a height, and the line must still be in view once it has one.

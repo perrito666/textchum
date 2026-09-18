@@ -6,6 +6,12 @@ they look — the current document's project by default — and widening the
 search is literally editing that path (up to `~` or `/` if you like).
 Search never silently looks somewhere you did not expect.
 
+Being a path, the scope completes like one on macOS: typing forward
+offers the folders that finish the component under the caret, `~`
+included. A scope that is not there says so, and names the nearest
+folder that is — usually one typo away from the one that was meant.
+Blanks around a pasted path are ignored.
+
 Both walks are gitignore-aware, skip hidden files, and cap file sizes,
 courtesy of ripgrep's own engine embedded in the core — not a subprocess.
 
@@ -35,7 +41,10 @@ than a guess.
 
 ## Find in Project (⇧⌘F)
 
-The query is a regular expression; results stream in as
+The query is the text to find, exactly as typed — what gets pasted into
+a search is code, and code is full of `(`, `.` and `[`. The **`.*`**
+toggle beside the query reads it as a regular expression instead, and
+stays as you left it until the editor quits. Results stream in as
 `path:line: text`. ⏎ jumps straight to the matching line. Results are
 capped (200) to stay instant; refine the pattern rather than scrolling.
 
@@ -97,3 +106,5 @@ as line/column, so going back after a change lands close, not lost.
 - Explicit case/whole-word toggles in the panel (smart case covers the
   common case, and the pattern itself can express both).
 - Persisted search history.
+- Editing the scope in the GTK shell, whose panels search the current
+  project only; path completion comes with it.

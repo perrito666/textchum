@@ -313,7 +313,8 @@ a query never opens a file by accident.
 </figure>
 </div>
 
-**⇧⌘F** searches contents with a regular expression, with stacked
+**⇧⌘F** searches contents for the text as typed — or for a regular
+expression, with the `.*` toggle beside the query — with stacked
 filters that refine the results by line text or file path. The status
 line always says what the search did — matches, files searched, or why
 nothing was read.

@@ -7,6 +7,12 @@ defecto — y ampliar la búsqueda es literalmente editar esa ruta (hasta
 `~` o `/` si se quiere). La búsqueda nunca mira en silencio donde no se
 espera.
 
+Por ser una ruta, el ámbito se completa como tal en macOS: al escribir
+hacia adelante se ofrecen las carpetas que terminan el componente bajo
+el cursor, `~` incluido. Un ámbito que no existe lo dice, y nombra la
+carpeta más cercana que sí existe — normalmente a un error de tipeo de
+la que se quería. Los espacios alrededor de una ruta pegada se ignoran.
+
 Ambos recorridos respetan `.gitignore`, omiten archivos ocultos y limitan
 el tamaño de archivo, cortesía del motor del propio ripgrep incrustado en
 el núcleo — no un subproceso.
@@ -37,8 +43,11 @@ de archivos en la línea de estado dice qué se está buscando.
 
 ## Buscar en el proyecto (⇧⌘F)
 
-La consulta es una expresión regular; los resultados llegan como
-`ruta:línea: texto`. ⏎ salta directamente a la línea coincidente. Los
+La consulta es el texto a buscar, tal como se escribe — lo que se pega
+en una búsqueda es código, y el código está lleno de `(`, `.` y `[`. El
+conmutador **`.*`** junto a la consulta la lee como expresión regular, y
+queda como se dejó hasta que el editor se cierra. Los resultados llegan
+como `ruta:línea: texto`. ⏎ salta directamente a la línea coincidente. Los
 resultados tienen tope (200) para seguir siendo instantáneos; refine el
 patrón en lugar de desplazarse.
 
@@ -105,3 +114,5 @@ perdido.
 - Conmutadores de mayúsculas/palabra completa en el panel (el propio
   patrón puede expresar ambos).
 - Historial de búsquedas persistente.
+- Editar el ámbito en la interfaz GTK, cuyos paneles buscan solo en el
+  proyecto actual; el completado de rutas llegará con ello.
