@@ -1010,6 +1010,10 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         eprintln!("FAIL: no selected page for the snippet check");
         return 1;
     };
+    // A snippet expands where the caret is, and a caret anywhere else
+    // ends its session. The file opened with the cursor at the top, so
+    // it is taken to the end, where the snippet goes.
+    buffer.place_cursor(&buffer.end_iter());
     let origin = buffer
         .text(&buffer.start_iter(), &buffer.end_iter(), true)
         .encode_utf16()
