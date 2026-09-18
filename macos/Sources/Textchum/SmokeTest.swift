@@ -1633,6 +1633,60 @@ func runSmokeTest() -> Int32 {
     }
     print("reclaim ok (a file opened again reads the disk again)")
 
+    // A file with no remembered place opens with the caret at the top —
+    // setting a view's text leaves it at the end, which is where git's
+    // commit message used to open — and a message file opened again
+    // does not come back to where the previous message was closed.
+    do {
+        let gitDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-message-\(ProcessInfo.processInfo.processIdentifier)")
+            .appendingPathComponent(".git")
+        try? FileManager.default.createDirectory(at: gitDirectory, withIntermediateDirectories: true)
+        let messagePath = gitDirectory.appendingPathComponent("COMMIT_EDITMSG").path
+        let template = "\n# Please enter the commit message for your changes.\n# On branch main\n"
+        try? template.write(toFile: messagePath, atomically: true, encoding: .utf8)
+        guard let message = try? CoreDocument(contentsOf: messagePath) else {
+            print("FAIL: the commit message did not open")
+            return 1
+        }
+        let messageBench = Workbench(sidebar: nil)
+        let messageDocument = DocumentController(document: message)
+        messageBench.add(messageDocument)
+        guard let messageView = messageDocument.primaryView,
+            messageView.selectedRange() == NSRange(location: 0, length: 0)
+        else {
+            print("FAIL: a newly opened file has its caret at \(messageDocument.primaryView?.selectedRange().location ?? -1), not at the top")
+            return 1
+        }
+        messageBench.window?.close()
+
+        for (path, keepsPlace) in [
+            (messagePath, false),
+            (gitDirectory.deletingLastPathComponent().appendingPathComponent("notes.txt").path, true),
+        ] {
+            try? template.write(toFile: path, atomically: true, encoding: .utf8)
+            guard let core = try? CoreDocument(contentsOf: path) else {
+                print("FAIL: \(path) did not open")
+                return 1
+            }
+            let entry = DocumentStore.shared.open(core, path: path)
+            entry.layout = DocumentLayout(
+                views: 1, dividers: [], places: [DocumentLayout.Place(caret: 9, scroll: 0, top: 0)])
+            DocumentStore.shared.close(entry.id)
+            guard let back = DocumentStore.shared.reclaim(path: path) else {
+                print("FAIL: \(path) was not reclaimed")
+                return 1
+            }
+            guard back.layout.places.isEmpty != keepsPlace else {
+                print("FAIL: \(path) opened again with places \(back.layout.places), expected them \(keepsPlace ? "kept" : "forgotten")")
+                return 1
+            }
+            DocumentStore.shared.close(back.id)
+        }
+        try? FileManager.default.removeItem(at: gitDirectory.deletingLastPathComponent())
+    }
+    print("caret ok (a file without a place opens at the top; git's messages forget theirs)")
+
     // Coming back to the app reads the tree's folders again without
     // forgetting them: the rows stay, and only a folder that changed on
     // disk is replaced.

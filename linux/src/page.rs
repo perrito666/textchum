@@ -158,6 +158,10 @@ impl Page {
             buffer.set_text(&state.document.text());
             state.syncing = false;
         }
+        // Setting the text leaves the cursor after its last character.
+        // A session or a jump moves it afterwards; a file that has
+        // neither — every message git asks for — starts at the top.
+        buffer.place_cursor(&buffer.start_iter());
 
         // --- The choke point -------------------------------------------
         let last_typed: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
