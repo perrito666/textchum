@@ -33,10 +33,16 @@ xgettext \
     --keyword=tr --keyword=t --keyword=n_ \
     --keyword=tr_n:1,2 --keyword=t_n:1,2 --keyword=tn:1,2 \
     --from-code=UTF-8 --language=C --add-comments=TRANSLATORS \
+    --add-location=file \
     --package-name=textchum \
     --msgid-bugs-address=https://github.com/perrito666/textchum/issues \
     --output="$POT" \
     $(git ls-files '*.rs' '*.swift') 2> >(quiet >&2)
+# References at file granularity and no creation date: with line
+# numbers in every reference, two branches that each added one string
+# conflicted on hundreds of unrelated lines, and the date differed on
+# every run. What is left changes only where a string does.
+sed -i.bak '/^"POT-Creation-Date: /d' "$POT" && rm -f "$POT.bak"
 
 if [[ "${1:-}" == "--check" ]]; then
     status=0
@@ -52,6 +58,7 @@ if [[ "${1:-}" == "--check" ]]; then
 fi
 
 for po in "$CATALOGUES"/*.po; do
-    msgmerge --update --backup=none --quiet "$po" "$POT"
+    msgmerge --update --backup=none --quiet --add-location=file "$po" "$POT"
+    sed -i.bak '/^"POT-Creation-Date: /d' "$po" && rm -f "$po.bak"
     msgfmt --check --statistics "$po" -o /dev/null
 done
