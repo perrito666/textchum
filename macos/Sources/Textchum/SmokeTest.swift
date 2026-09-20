@@ -1626,6 +1626,27 @@ func runSmokeTest() -> Int32 {
             return 1
         }
 
+        // A path as the repository names it, from a project nested in
+        // it: the row menus offer it, and it is not the project's path.
+        let nested = repo.appendingPathComponent("crates/inner/src")
+        try? FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let nestedFile = nested.appendingPathComponent("lib.rs").path
+        try? "".write(toFile: nestedFile, atomically: true, encoding: .utf8)
+        let fromRoot = CoreChanges.pathFromRepositoryRoot(nestedFile)
+        let offered = PathActions.menuEntries(
+            path: nestedFile, projectRoot: "\(root)/crates/inner", isDirectory: false
+        ).compactMap { $0?.title }
+        guard fromRoot == "crates/inner/src/lib.rs",
+            PathActions.relativePath(nestedFile, projectRoot: "\(root)/crates/inner") == "src/lib.rs",
+            offered.contains(t("Copy Path from Git Root")),
+            CoreChanges.pathFromRepositoryRoot("\(root)/crates/missing.rs") == nil,
+            !PathActions.menuEntries(path: "/etc/hosts", projectRoot: nil, isDirectory: false)
+                .contains(where: { $0?.title == t("Copy Path from Git Root") })
+        else {
+            print("FAIL: the path from the git root: \(fromRoot ?? "nil"), offered \(offered)")
+            return 1
+        }
+
         // Worktrees: listed, and a window's files map onto another
         // tree by their relative paths, keeping only what is there.
         git(["worktree", "add", "-q", repo.appendingPathComponent("other-tree").path, "trunk"])
@@ -1650,7 +1671,7 @@ func runSmokeTest() -> Int32 {
         GitBranchMonitor.shared.forget(root: root)
         try? FileManager.default.removeItem(at: repo)
     }
-    print("projects ok (folder window, branch watched, worktrees listed and remapped, git message files start at the top)")
+    print("projects ok (folder window, branch watched, the path from the git root, worktrees listed and remapped, git message files start at the top)")
 
     // A new document meant for a path: named after it, treated as its
     // language, and written there on Save, folder and all.

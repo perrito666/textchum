@@ -2919,6 +2919,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             withTitle: t("Absolute Path"),
             action: #selector(DocumentController.copyAbsolutePath(_:)), keyEquivalent: "")
         copyPath.addItem(
+            withTitle: t("Path from Git Root"),
+            action: #selector(DocumentController.copyPathFromGitRoot(_:)), keyEquivalent: "")
+        copyPath.addItem(
             withTitle: t("Forge URL"),
             action: #selector(DocumentController.copyForgeURL(_:)), keyEquivalent: "")
         copyPath.addItem(.separator())

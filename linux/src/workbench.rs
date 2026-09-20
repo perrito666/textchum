@@ -2759,7 +2759,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     // The copy-path family: each takes the document path as its
     // parameter and puts one shape of it on the clipboard.
     {
-        let copies: [(&str, fn(&str) -> Option<String>); 4] = [
+        let copies: [(&str, fn(&str) -> Option<String>); 5] = [
             ("copy-name", |path| {
                 Path::new(path)
                     .file_name()
@@ -2771,6 +2771,12 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 Some(crate::path_actions::relative_path(path, root.as_deref()))
             }),
             ("copy-absolute", |path| Some(path.to_owned())),
+            // As the repository names it, from the top of the working
+            // tree: the project root is a crate or a package as often
+            // as it is the repository.
+            ("copy-git-root", |path| {
+                textchum_core::changes::path_from_repository_root(Path::new(path))
+            }),
             ("copy-forge", |path| crate::path_actions::forge_url(path)),
         ];
         for (name, shape) in copies {
@@ -2783,6 +2789,11 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 };
                 match shape(&path) {
                     Some(text) => workbench.window.clipboard().set_text(&text),
+                    // Only the forge's URL needs a remote; the path from
+                    // the top needs the repository alone.
+                    None if name == "copy-git-root" => {
+                        workbench.toast(&tr("Not in a git repository."))
+                    }
                     None => workbench.toast(&tr("Not in a git repository with a remote.")),
                 }
             });
@@ -3258,6 +3269,12 @@ fn copy_menu(current: &Workbench, path: &str) -> gtk::gio::Menu {
         Some(&tr("Copy Absolute Path")),
         Some(&format!("win.copy-absolute('{escaped}')")),
     );
+    if textchum_core::changes::path_from_repository_root(Path::new(path)).is_some() {
+        copies.append(
+            Some(&tr("Copy Path from Git Root")),
+            Some(&format!("win.copy-git-root('{escaped}')")),
+        );
+    }
     copies.append(
         Some(&tr("Open Containing Folder")),
         Some(&format!("win.open-folder('{escaped}')")),

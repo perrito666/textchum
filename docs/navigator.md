@@ -44,8 +44,11 @@ session.
 
 Right-clicking a buffer row or a tree entry offers the file's location
 in every useful spelling: the bare name, the path relative to the
-project root, the absolute path, and — inside a git repository with a
-remote — the file's URL on its forge, speaking GitHub's, GitLab's, and
+project root, the absolute path, inside a git repository the path from
+the top of the repository — the one a commit, a review or a CI log names
+the file by, which is not the project's when the project is a crate or
+a package within it — and, when the repository has a
+remote, the file's URL on its forge, speaking GitHub's, GitLab's, and
 Forgejo's URL shapes natively. The same items act on the front tab from
 **File → Copy Path**.
 

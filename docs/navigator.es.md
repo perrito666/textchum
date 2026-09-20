@@ -52,8 +52,11 @@ mueve en todas, y se recuerda con la sesión.
 
 Un clic derecho sobre una fila de la lista o una entrada del árbol
 ofrece la ubicación del archivo en todas sus formas útiles: el nombre a
-secas, la ruta relativa a la raíz del proyecto, la ruta absoluta y —
-dentro de un repositorio git con remoto — la URL del archivo en su
+secas, la ruta relativa a la raíz del proyecto, la ruta absoluta, dentro
+de un repositorio git la ruta desde la raíz del repositorio — la que
+nombran un commit, una revisión o un registro de CI, que no es la del
+proyecto cuando este es un crate o un paquete dentro de aquel — y,
+cuando el repositorio tiene remoto, la URL del archivo en su
 forja, hablando con naturalidad las formas de URL de GitHub, GitLab y
 Forgejo. Los mismos elementos actúan sobre la pestaña frontal desde
 **File → Copy Path**.

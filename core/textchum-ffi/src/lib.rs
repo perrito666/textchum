@@ -3626,6 +3626,28 @@ pub unsafe extern "C" fn tc_repository_info(path: *const c_char, path_len: usize
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// A path as its repository names it, from the top of the working tree
+/// (`.` for the top itself). Null outside a repository and for a path
+/// that does not exist. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `path` must point to `path_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_path_from_repository_root(
+    path: *const c_char,
+    path_len: usize,
+) -> *mut c_char {
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::changes::path_from_repository_root(std::path::Path::new(path))
+            .map(owned_c_string)
+            .unwrap_or(std::ptr::null_mut())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// The repository's working trees as JSON, `[{"path", "branch"}, …]`.
 /// Release with [`tc_string_free`].
 ///

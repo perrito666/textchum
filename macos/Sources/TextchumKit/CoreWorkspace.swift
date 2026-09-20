@@ -514,6 +514,18 @@ public enum CoreChanges {
             dirty: parsed["dirty"] as? Bool ?? false)
     }
 
+    /// A path as its repository names it, from the top of the working
+    /// tree (`.` for the top itself); nil outside a repository and for
+    /// a path that does not exist.
+    public static func pathFromRepositoryRoot(_ path: String) -> String? {
+        let answer = path.withCString { pointer in
+            tc_path_from_repository_root(pointer, UInt(strlen(pointer)))
+        }
+        guard let answer else { return nil }
+        defer { tc_string_free(answer) }
+        return String(cString: answer)
+    }
+
     /// One working tree: where it is, and its branch (nil when detached).
     public struct Worktree: Equatable {
         public let path: String

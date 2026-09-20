@@ -51,8 +51,11 @@ onglet le déplace dans tous, et il est retenu avec la session.
 
 Un clic droit sur une ligne de la liste ou une entrée de l'arbre
 propose l'emplacement du fichier sous toutes ses formes utiles : le nom
-nu, le chemin relatif à la racine du projet, le chemin absolu et — dans
-un dépôt git avec un remote — l'URL du fichier sur sa forge, parlant
+nu, le chemin relatif à la racine du projet, le chemin absolu, dans un
+dépôt git le chemin depuis la racine du dépôt — celui par lequel un
+commit, une revue ou un journal de CI nomment le fichier, qui n'est pas
+celui du projet quand le projet est un crate ou un paquet à l'intérieur
+— et, quand le dépôt a un remote, l'URL du fichier sur sa forge, parlant
 nativement les formes d'URL de GitHub, GitLab et Forgejo. Les mêmes
 éléments agissent sur l'onglet de devant via **File → Copy Path**.
 

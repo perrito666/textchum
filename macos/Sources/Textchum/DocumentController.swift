@@ -5252,7 +5252,8 @@ extension DocumentController: NSMenuItemValidation {
         case #selector(copyFileName(_:)), #selector(copyRelativePath(_:)),
             #selector(copyAbsolutePath(_:)), #selector(revertToSaved(_:)):
             return coreDocument.path != nil
-        case #selector(copyForgeURL(_:)), #selector(copyForgeURLForLine(_:)):
+        case #selector(copyForgeURL(_:)), #selector(copyForgeURLForLine(_:)),
+            #selector(copyPathFromGitRoot(_:)):
             return coreDocument.path.map(PathActions.isInGitRepository) ?? false
         case #selector(copyPathAndLine(_:)):
             return coreDocument.path != nil
@@ -5278,6 +5279,16 @@ extension DocumentController {
     @objc func copyAbsolutePath(_ sender: Any?) {
         guard let path = coreDocument.path else { return }
         PathActions.copy(path)
+    }
+
+    @objc func copyPathFromGitRoot(_ sender: Any?) {
+        guard let path = coreDocument.path,
+            let fromRoot = CoreChanges.pathFromRepositoryRoot(path)
+        else {
+            NSSound.beep()
+            return
+        }
+        PathActions.copy(fromRoot)
     }
 
     @objc func copyForgeURL(_ sender: Any?) {
