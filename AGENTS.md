@@ -104,6 +104,11 @@ push.
 ## House rules
 
 - Third-party GitHub Actions are pinned to a commit SHA.
+- There are two lock files, `core/Cargo.lock` and `linux/Cargo.lock`,
+  and the core's dependencies are in both. A dependency added to the
+  core updates the second too (`cargo metadata --manifest-path
+  linux/Cargo.toml` is enough); CI builds `--locked` and says so when
+  it was forgotten.
 - The main branch takes reviewed, green pull requests.
 - Releases are tagged `vX.Y.Z`; the macOS build is signed and
   notarized, and the release notes are written by hand rather than

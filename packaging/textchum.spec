@@ -64,7 +64,7 @@ your PATH.
 %autosetup
 
 %build
-cargo build --release --manifest-path linux/Cargo.toml
+cargo build --locked --release --manifest-path linux/Cargo.toml
 
 %install
 install -Dm755 linux/target/release/textchum-gtk \

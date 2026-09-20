@@ -148,7 +148,7 @@ jobs:
           # the smoke test. Headless CI only — never set for users.
           WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
         run: |
-          cargo build --release --manifest-path linux/Cargo.toml
+          cargo build --locked --release --manifest-path linux/Cargo.toml
           xvfb-run -a linux/target/release/textchum-gtk --smoke-test
       - name: Package and upload
         env:

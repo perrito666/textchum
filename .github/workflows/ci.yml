@@ -34,8 +34,10 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: core
+      # --locked: a dependency added without its lock entry fails here,
+      # rather than being resolved afresh on every machine that builds.
       - name: Rust test suite
-        run: cargo test --manifest-path core/Cargo.toml
+        run: cargo test --locked --manifest-path core/Cargo.toml
       - name: Header drift check
         run: make header-check
 
@@ -52,10 +54,14 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -yq libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libwebkitgtk-6.0-dev xvfb hunspell hunspell-en-us universal-ctags
+      # --locked: the shell has a lock file of its own, and the core's
+      # dependencies are in it too. One added to the core and not here
+      # used to go unnoticed — the build filled it in — until a package
+      # that builds offline from this lock could not.
       - name: Build
-        run: cargo build --manifest-path linux/Cargo.toml
+        run: cargo build --locked --manifest-path linux/Cargo.toml
       - name: Shell unit tests
-        run: cargo test --manifest-path linux/Cargo.toml
+        run: cargo test --locked --manifest-path linux/Cargo.toml
       - name: Smoke test (headless)
         env:
           # WebKit's bubblewrap sandbox needs unprivileged user
