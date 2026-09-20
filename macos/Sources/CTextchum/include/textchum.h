@@ -2093,6 +2093,16 @@ char *tc_changes_for_file(const char *path,
 char *tc_repository_info(const char *path, uintptr_t path_len);
 
 /**
+ * A path as its repository names it, from the top of the working tree
+ * (`.` for the top itself). Null outside a repository and for a path
+ * that does not exist. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `path` must point to `path_len` readable bytes.
+ */
+char *tc_path_from_repository_root(const char *path, uintptr_t path_len);
+
+/**
  * The repository's working trees as JSON, `[{"path", "branch"}, …]`.
  * Release with [`tc_string_free`].
  *

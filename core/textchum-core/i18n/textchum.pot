@@ -586,6 +586,10 @@ msgid "The text moved — nothing was replaced."
 msgstr ""
 
 #: linux/src/workbench.rs
+msgid "Not in a git repository."
+msgstr ""
+
+#: linux/src/workbench.rs
 msgid "No file browser answered."
 msgstr ""
 
@@ -644,6 +648,11 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/PathActions.swift
 msgid "Copy Absolute Path"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/PathActions.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Copy Path from Git Root"
 msgstr ""
 
 #: linux/src/workbench.rs
@@ -1203,6 +1212,10 @@ msgstr ""
 
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Absolute Path"
+msgstr ""
+
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Path from Git Root"
 msgstr ""
 
 #: macos/Sources/Textchum/AppDelegate.swift

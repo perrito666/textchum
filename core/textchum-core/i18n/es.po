@@ -580,6 +580,10 @@ msgid "The text moved — nothing was replaced."
 msgstr "El texto se movió: no se reemplazó nada."
 
 #: linux/src/workbench.rs
+msgid "Not in a git repository."
+msgstr "No está en un repositorio git."
+
+#: linux/src/workbench.rs
 msgid "No file browser answered."
 msgstr "Ningún explorador de archivos respondió."
 
@@ -639,6 +643,11 @@ msgstr "Copiar la ruta relativa"
 #: linux/src/workbench.rs macos/Sources/Textchum/PathActions.swift
 msgid "Copy Absolute Path"
 msgstr "Copiar la ruta absoluta"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/PathActions.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Copy Path from Git Root"
+msgstr "Copiar ruta desde la raíz de git"
 
 #: linux/src/workbench.rs
 msgid "Open Containing Folder"
@@ -1203,6 +1212,10 @@ msgstr "Ruta relativa"
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Absolute Path"
 msgstr "Ruta absoluta"
+
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Path from Git Root"
+msgstr "Ruta desde la raíz de git"
 
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Forge URL"

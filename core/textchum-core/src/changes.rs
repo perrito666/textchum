@@ -484,6 +484,29 @@ pub fn repository_info(start: &Path) -> Option<RepositoryInfo> {
 /// [`repository_info`] as JSON — `{"root", "branch", "head", "dirty"}`,
 /// `branch` null when detached — for shells on the C ABI. `{}` outside
 /// a repository.
+/// A path as its repository names it: from the top of the working
+/// tree, which is how a commit, a review comment, a CI log and
+/// `git log -- <path>` all spell it. The project root is not always
+/// that place — a crate or a package nested in a repository is a
+/// project of its own — so the path from there is a different string.
+///
+/// The top itself is `.`. `None` outside a repository, and for a path
+/// that does not exist: a file never saved has no place in one yet.
+/// Only asks git where the top is; nothing here reads the index.
+pub fn path_from_repository_root(path: &Path) -> Option<String> {
+    let path = path.canonicalize().ok()?;
+    let directory = if path.is_dir() { path.as_path() } else { path.parent()? };
+    let top = git(directory, &["rev-parse", "--show-toplevel"])?;
+    // Git answers with the real path; so must the file, or a checkout
+    // reached through a symlink (/tmp, on a Mac) is never under its top.
+    let top = Path::new(top.trim()).canonicalize().ok()?;
+    let relative = path.strip_prefix(&top).ok()?;
+    if relative.as_os_str().is_empty() {
+        return Some(".".into());
+    }
+    Some(relative.to_string_lossy().into_owned())
+}
+
 pub fn repository_info_json(start: &Path) -> String {
     let Some(info) = repository_info(start) else {
         return "{}".into();
@@ -801,6 +824,23 @@ mod repository_tests {
         assert!(!info.dirty, "a clean tree is not dirty");
         std::fs::write(temp.join("a.txt"), "two\n").unwrap();
         assert!(repository_info(&temp).unwrap().dirty, "a modified tracked file is");
+
+        // A path from the top of the repository, however deep the
+        // project that holds it; nothing for what is not there, or is
+        // not in a repository at all.
+        std::fs::create_dir_all(temp.join("crates/inner/src")).unwrap();
+        std::fs::write(temp.join("crates/inner/src/lib.rs"), "").unwrap();
+        assert_eq!(
+            path_from_repository_root(&temp.join("crates/inner/src/lib.rs")).as_deref(),
+            Some("crates/inner/src/lib.rs")
+        );
+        assert_eq!(
+            path_from_repository_root(&temp.join("crates/inner")).as_deref(),
+            Some("crates/inner")
+        );
+        assert_eq!(path_from_repository_root(&temp).as_deref(), Some("."));
+        assert_eq!(path_from_repository_root(&temp.join("crates/missing.rs")), None);
+        assert_eq!(path_from_repository_root(Path::new("/")), None);
 
         let other = temp.join("other-tree");
         sh(&temp, &["worktree", "add", "-q", "-b", "feature", other.to_str().unwrap()]);

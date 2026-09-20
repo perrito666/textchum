@@ -139,6 +139,17 @@ enum PathActions {
             })
         entries.append(MenuEntry(title: t("Copy Absolute Path")) { copy(path) })
         if isInGitRepository(path) {
+            // The path a commit, a review or a CI log names the file
+            // by, which is not the project's when the project is a
+            // crate or a package inside the repository.
+            entries.append(
+                MenuEntry(title: t("Copy Path from Git Root")) {
+                    if let fromRoot = CoreChanges.pathFromRepositoryRoot(path) {
+                        copy(fromRoot)
+                    } else {
+                        NSSound.beep()
+                    }
+                })
             entries.append(
                 MenuEntry(title: t("Copy Forge URL")) {
                     if let url = forgeURL(forPath: path, isDirectory: isDirectory) {
