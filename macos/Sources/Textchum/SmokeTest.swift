@@ -1534,6 +1534,23 @@ func runSmokeTest() -> Int32 {
     do {
         let view = revealBench.columns[0].views[0]
         let clip = view.scrollView.contentView
+        // The document is measured at the width the view ended up with,
+        // not the one it was made at: what is out of view is otherwise
+        // an estimate, and a trackpad scroll over estimates is what
+        // threw the view back to the top.
+        spin(untilTrue: { view.settledWidth == view.textView.frame.width }, seconds: 3)
+        let measured = view.textView.frame.height
+        guard view.settledWidth > 0, view.settledWidth == view.textView.frame.width else {
+            print("FAIL: the document was not laid out at the view's width (\(view.settledWidth) against \(view.textView.frame.width))")
+            return 1
+        }
+        clip.scroll(to: NSPoint(x: 0, y: clip.bounds.minY + 200))
+        view.scrollView.reflectScrolledClipView(clip)
+        spin(untilTrue: { !view.scrollTickOwed }, seconds: 2)
+        guard abs(view.textView.frame.height - measured) < 1 else {
+            print("FAIL: the document's height was still a guess: \(measured) became \(view.textView.frame.height) on scrolling")
+            return 1
+        }
         spin(untilTrue: { !view.scrollTickOwed }, seconds: 2)
         let before = view.viewportAnchor?.offset
         let target = max(0, clip.bounds.minY - 1500)
@@ -1552,7 +1569,7 @@ func runSmokeTest() -> Int32 {
         }
     }
     revealBench.window?.close()
-    print("reveal ok (a line revealed before layout is in view after it; a scroll is read a turn later)")
+    print("reveal ok (a line revealed before layout is in view after it; measured at its width; a scroll is read a turn later)")
 
     // Projects: a folder opens as a window with a tree and no file,
     // stays when its last tab closes, and its layout survives a
