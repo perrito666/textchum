@@ -1525,8 +1525,34 @@ func runSmokeTest() -> Int32 {
         print("FAIL: after revealing line 300 the clip shows y=\(clip.minY)..\(clip.maxY)")
         return 1
     }
+    // A scroll is looked at a turn later, never from inside it. Asking
+    // the text view which line is on top lays the viewport out, and
+    // doing that from the clip's bounds notification — in the middle of
+    // a trackpad scroll AppKit was still applying — had the text view
+    // put the clip back where it last knew it to be: scrolling down from
+    // the top of a file snapped back to the top.
+    do {
+        let view = revealBench.columns[0].views[0]
+        let clip = view.scrollView.contentView
+        spin(untilTrue: { !view.scrollTickOwed }, seconds: 2)
+        let before = view.viewportAnchor?.offset
+        let target = max(0, clip.bounds.minY - 1500)
+        clip.scroll(to: NSPoint(x: 0, y: target))
+        view.scrollView.reflectScrolledClipView(clip)
+        guard view.scrollTickOwed, view.viewportAnchor?.offset == before else {
+            print("FAIL: the scroll tick read the layout from inside the scroll (owed \(view.scrollTickOwed))")
+            return 1
+        }
+        spin(untilTrue: { !view.scrollTickOwed }, seconds: 2)
+        guard !view.scrollTickOwed, let after = view.viewportAnchor?.offset, after != before,
+            after == revealDocument.topOffset(of: view), clip.bounds.minY == target
+        else {
+            print("FAIL: a turn after the scroll the top line was not taken: \(String(describing: view.viewportAnchor)), clip \(clip.bounds.minY) wanted \(target)")
+            return 1
+        }
+    }
     revealBench.window?.close()
-    print("reveal ok (a line revealed before layout is in view after it)")
+    print("reveal ok (a line revealed before layout is in view after it; a scroll is read a turn later)")
 
     // Projects: a folder opens as a window with a tree and no file,
     // stays when its last tab closes, and its layout survives a

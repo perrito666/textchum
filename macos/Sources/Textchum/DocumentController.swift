@@ -128,6 +128,12 @@ final class DocumentView {
     var lastClipY: CGFloat = 0
     /// Under a trackpad scroll, momentum included.
     var isLiveScrolling = false
+    /// A scroll has happened and has not been looked at yet, and
+    /// whether any scroll since the last look was someone else's — the
+    /// user's, a jump's — rather than this document putting its anchored
+    /// line back. See `noteScrollTick`.
+    var scrollTickOwed = false
+    var owedTickIsForeign = false
 
     init(scrollView: NSScrollView, textView: NSTextView, gutter: LineNumberGutterView) {
         self.scrollView = scrollView
@@ -2291,7 +2297,7 @@ final class DocumentController: NSResponder {
     /// dragged — puts that character back at the top once layout has
     /// reflowed. Lines wrap to the width, so the same pixel offset is a
     /// different line after a reflow; the line is what the eye was on.
-    private func keepTopLine(of view: DocumentView) {
+    private func keepTopLine(of view: DocumentView, scrolledByOthers: Bool) {
         let clip = view.scrollView.contentView.bounds
         let width = view.textView.frame.width
         // A view not yet laid out in a window has no width worth
@@ -2318,7 +2324,7 @@ final class DocumentController: NSResponder {
             // Our own re-anchoring scroll keeps the hold; anyone else's
             // — Go to Definition landing, the wheel — is the new place,
             // and a frame change a moment later must not undo it.
-            guard !view.reanchoring else { return }
+            guard scrolledByOthers else { return }
             view.anchorHoldUntil = nil
         }
         view.viewportAnchor = (topOffset(of: view), width)
@@ -2544,8 +2550,7 @@ final class DocumentController: NSResponder {
         if let clipView = notification.object as? NSClipView,
             let view = views.first(where: { $0.scrollView.contentView === clipView })
         {
-            keepTopLine(of: view)
-            updateContextStrip(for: view)
+            noteScrollTick(of: view)
         }
         // Spelling is scoped to what is painted; what scrolls in gets
         // its turn once the scroll settles.
@@ -2567,6 +2572,40 @@ final class DocumentController: NSResponder {
         let fraction = max(0, min(1, visible.origin.y / maximum))
         lastScrollSync = (false, Date())
         previewWebView.evaluateJavaScript("scrollToFraction(\(fraction))")
+    }
+
+    /// Looks at where a scroll left a view — a turn later, and never
+    /// from inside the scroll.
+    ///
+    /// Which line is on top is asked of the text view, and asking lays
+    /// the viewport out. Asked from the clip view's bounds notification,
+    /// that layout ran in the middle of AppKit's own scroll, before the
+    /// text view had heard of it; finishing, the text view put the clip
+    /// back where the viewport it knew about was. A trackpad scroll runs
+    /// ahead of the main thread, and with the main thread busy — a
+    /// language server starting up is enough — it gets a few hundred
+    /// points ahead: scrolling down from the top of a file, the view
+    /// snapped back to the top, again and again.
+    ///
+    /// So the tick only writes down that it happened, and whose scroll
+    /// it was, which cannot be told afterwards: `reanchoring` is true
+    /// only while this document is itself scrolling. Ticks in one turn
+    /// are looked at once.
+    private func noteScrollTick(of view: DocumentView) {
+        if !view.reanchoring { view.owedTickIsForeign = true }
+        guard !view.scrollTickOwed else { return }
+        view.scrollTickOwed = true
+        DispatchQueue.main.async { [weak self, weak view] in
+            MainActor.assumeIsolated {
+                guard let self, let view else { return }
+                view.scrollTickOwed = false
+                let scrolledByOthers = view.owedTickIsForeign
+                view.owedTickIsForeign = false
+                guard self.views.contains(where: { $0 === view }) else { return }
+                self.keepTopLine(of: view, scrolledByOthers: scrolledByOthers)
+                self.updateContextStrip(for: view)
+            }
+        }
     }
 
     /// The preview scrolled (user-driven); mirror it in the editor.
