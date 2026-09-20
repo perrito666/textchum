@@ -134,6 +134,11 @@ final class DocumentView {
     /// line back. See `noteScrollTick`.
     var scrollTickOwed = false
     var owedTickIsForeign = false
+    /// The width the whole document was last laid out at. Another width
+    /// reflows the text, and everything out of view is an estimate
+    /// again. See `settleLayoutAtWidth`.
+    var settledWidth: CGFloat = 0
+    var settleTimer: Timer?
 
     init(scrollView: NSScrollView, textView: NSTextView, gutter: LineNumberGutterView) {
         self.scrollView = scrollView
@@ -563,6 +568,8 @@ final class DocumentController: NSResponder {
     /// Takes a view back — the pane showing it has gone, or is showing
     /// another document now.
     func drop(_ view: DocumentView) {
+        view.settleTimer?.invalidate()
+        view.settleTimer = nil
         NotificationCenter.default.removeObserver(
             self,
             name: NSView.boundsDidChangeNotification,
@@ -2364,14 +2371,59 @@ final class DocumentController: NSResponder {
     /// goes back on top while the anchor is held.
     @objc private func editorFrameChanged(_ notification: Notification) {
         guard let view = views.first(where: { $0.textView === notification.object as? NSTextView }),
-            let anchor = view.viewportAnchor, view.textView.window != nil
+            view.textView.window != nil
         else { return }
+        settleLayoutAtWidth(of: view)
+        guard let anchor = view.viewportAnchor else { return }
         let width = view.textView.frame.width
         if width > 0, anchor.width != width {
             holdAnchor(of: view, atWidth: width)
         } else if let until = view.anchorHoldUntil, until > Date() {
             scheduleReanchor(of: view)
         }
+    }
+
+    /// Lays the whole document out again once its width is known, and
+    /// whenever the width changes.
+    ///
+    /// `settleLayout` runs when a view is made, which is before it is in
+    /// a window: the width it measured at is not the one it ends up
+    /// with, the text reflows, and every line out of view is back to an
+    /// estimate. The height said so — 32,264.5 for a file that measures
+    /// 35,005.5. Scrolled with a trackpad in that state, the text view
+    /// corrects the estimates as it goes and moves the clip to
+    /// compensate, and with the scroll ahead of the main thread it
+    /// compensated back to the top of the file, until enough had been
+    /// measured for it to stop. Measured up front there is nothing to
+    /// correct.
+    ///
+    /// A beat after the last change, since a divider being dragged is a
+    /// width a frame; and not under a live scroll, which is the one time
+    /// a layout pass is what causes the trouble — the scroll's end asks
+    /// again.
+    private func settleLayoutAtWidth(of view: DocumentView) {
+        let width = view.textView.frame.width
+        guard width > 0, width != view.settledWidth else { return }
+        view.settleTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.15, repeats: false) { [weak self, weak view] _ in
+            MainActor.assumeIsolated {
+                guard let self, let view, self.views.contains(where: { $0 === view }) else { return }
+                view.settleTimer = nil
+                let width = view.textView.frame.width
+                guard width > 0, width != view.settledWidth, !view.isLiveScrolling else { return }
+                view.settledWidth = width
+                self.settleLayout(of: view.textView)
+                // The lines above the viewport may have changed height;
+                // the one on top stays on top.
+                if let anchor = view.viewportAnchor, view.scrollView.contentView.bounds.minY > 0 {
+                    view.reanchoring = true
+                    self.scroll(view, topOffset: anchor.offset)
+                    view.reanchoring = false
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        view.settleTimer = timer
     }
 
     /// The character at the top-left of the viewport.
@@ -2535,6 +2587,8 @@ final class DocumentController: NSResponder {
         guard let view = views.first(where: { $0.scrollView === notification.object as? NSScrollView })
         else { return }
         view.isLiveScrolling = false
+        // A width that arrived mid-scroll was not measured at.
+        settleLayoutAtWidth(of: view)
         // The bold and italic the scroll held back.
         if traitFontsOwed, !views.contains(where: { $0.isLiveScrolling }) {
             traitFontsOwed = false
