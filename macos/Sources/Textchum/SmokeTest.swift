@@ -2066,6 +2066,21 @@ func runSmokeTest() -> Int32 {
         try? FileManager.default.removeItem(at: base)
         print("tree follows ok (the root and the marks move with focus, into a new window too)")
 
+    // The system's file icons are told apart in the background: asking
+    // for one never waits, and the rows hear when the answers are in.
+    do {
+        let began = Date()
+        _ = SystemFileIcon.icon(forFilename: "main.rs")
+        _ = SystemFileIcon.icon(forFilename: "archive.textchum-unknown")
+        let asked = Date().timeIntervalSince(began)
+        spin(untilTrue: { SystemFileIcon.isWarm }, seconds: 30)
+        guard asked < 0.1, SystemFileIcon.isWarm else {
+            print("FAIL: file icons: asking took \(asked)s, answered \(SystemFileIcon.isWarm)")
+            return 1
+        }
+    }
+    print("file icons ok (asked without waiting, answered in the background)")
+
     // Scrolling a big tree must stay cheap. The measurement — a
     // synthetic monorepo of 20,000 files, fully expanded, scrolled top
     // to bottom — runs under TEXTCHUM_SMOKE_PERF=1, where the machine
@@ -2090,8 +2105,14 @@ func runSmokeTest() -> Int32 {
                     contents: Data("package x\n".utf8))
             }
         }
+        // An application beside the folders: a directory the system
+        // presents as one thing, and so does the tree.
+        let package = base.appendingPathComponent("Zed.app")
+        try? FileManager.default.createDirectory(
+            at: package.appendingPathComponent("Contents"), withIntermediateDirectories: true)
         let treeState = FileTreeState()
         treeState.expanded = expanded
+        var openedFromTree: [String] = []
         let context = WindowSidebarContext()
         context.projectRoot = base.path
         let view = SidebarView(
@@ -2101,7 +2122,7 @@ func runSmokeTest() -> Int32 {
             treeState: treeState,
             onSelectDocument: { _ in },
             onShowProperties: { _ in },
-            onOpenFile: { _ in },
+            onOpenFile: { openedFromTree.append($0) },
             hiddenGlobs: { _ in [".*"] },
             onRevealInTree: { _ in })
         let host = NSHostingView(rootView: view)
@@ -2168,9 +2189,146 @@ func runSmokeTest() -> Int32 {
             print("FAIL: a scroll step through the big tree is too slow")
             return 1
         }
+        // The rows are a table of ours, every row one height: a height
+        // delegate or measured rows are what made AppKit's height cache
+        // call back into itself under the List this replaced.
+        // The folders are read one by one, off the main thread; the
+        // count is asked for once they have all arrived.
+        let everyRow = directories * (filesPerDirectory + 1) + 1
+        spin(
+            untilTrue: { (scroller.documentView as? NSTableView)?.numberOfRows == everyRow },
+            seconds: 30)
+        guard let table = scroller.documentView as? NSTableView,
+            !table.usesAutomaticRowHeights,
+            table.delegate?.responds(
+                to: #selector(NSTableViewDelegate.tableView(_:heightOfRow:))) != true,
+            table.numberOfRows == everyRow
+        else {
+            print("FAIL: the tree is not a table of fixed rows showing every file (\((scroller.documentView as? NSTableView)?.numberOfRows ?? -1) of \(everyRow))")
+            return 1
+        }
+        // A click, as the mouse makes one: down and up on the row. The
+        // release is handed over rather than queued — nothing here is
+        // running the application's event loop to deliver it.
+        func click(row: Int) {
+            table.scrollRowToVisible(row)
+            let rect = table.rect(ofRow: row)
+            let point = table.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil)
+            func event(_ type: NSEvent.EventType) -> NSEvent? {
+                NSEvent.mouseEvent(
+                    with: type, location: point, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: treeWindow.windowNumber, context: nil, eventNumber: 0,
+                    clickCount: 1, pressure: 1)
+            }
+            guard let down = event(.leftMouseDown), let up = event(.leftMouseUp) else { return }
+            table.mouseDown(with: down)
+            table.mouseUp(with: up)
+        }
+        let firstFolder = treeKey(base.appendingPathComponent("pkg00").path, isDirectory: true)
+        click(row: 0)
+        spin(untilTrue: { table.numberOfRows == everyRow - filesPerDirectory }, seconds: 5)
+        guard !treeState.expanded.contains(firstFolder),
+            table.numberOfRows == everyRow - filesPerDirectory,
+            table.selectedRow == -1
+        else {
+            print("FAIL: a click on a folder did not close it (rows \(table.numberOfRows), selected \(table.selectedRow))")
+            return 1
+        }
+        click(row: 0)
+        spin(untilTrue: { table.numberOfRows == everyRow }, seconds: 5)
+        click(row: 1)
+        guard treeState.expanded.contains(firstFolder),
+            openedFromTree.count == 1,
+            openedFromTree.first.map({ ($0 as NSString).deletingLastPathComponent })
+                == (firstFolder.path as NSString).standardizingPath
+        else {
+            print("FAIL: a click did not open the folder again, or the file under it: \(openedFromTree)")
+            return 1
+        }
+        // The row's menu is the path menu the other rows offer.
+        let rowOne = table.rect(ofRow: 1)
+        let menuEvent = NSEvent.mouseEvent(
+            with: .rightMouseDown,
+            location: table.convert(NSPoint(x: rowOne.midX, y: rowOne.midY), to: nil),
+            modifierFlags: [], timestamp: 0, windowNumber: treeWindow.windowNumber,
+            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+        let titles = menuEvent.flatMap { table.menu(for: $0) }?.items.map(\.title) ?? []
+        guard titles.first == t("Reveal in Finder"), titles.contains(t("Copy Relative Path")) else {
+            print("FAIL: a tree row's menu is \(titles)")
+            return 1
+        }
+        // The package sorts after the folders, as a file would, and is
+        // one row: a click leaves it shut, its menu opens and shuts it.
+        let listed = FileNode.read(directory: base, globs: [".*"])
+        guard listed.last?.name == "Zed.app", listed.last?.isPackage == true,
+            listed.dropLast().allSatisfy({ $0.isDirectory && !$0.isPackage })
+        else {
+            print("FAIL: the package is not told apart from the folders: \(listed.map(\.name).suffix(3))")
+            return 1
+        }
+        let packageRow = everyRow - 1
+        let packageKey = treeKey(package.path, isDirectory: true)
+        click(row: packageRow)
+        spin(untilTrue: { false }, seconds: 0.2)
+        guard table.numberOfRows == everyRow, !treeState.expanded.contains(packageKey) else {
+            print("FAIL: a click took a package apart")
+            return 1
+        }
+        func packageMenu() -> NSMenu? {
+            let rect = table.rect(ofRow: packageRow)
+            return NSEvent.mouseEvent(
+                with: .rightMouseDown,
+                location: table.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil),
+                modifierFlags: [], timestamp: 0, windowNumber: treeWindow.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+            ).flatMap { table.menu(for: $0) }
+        }
+        table.scrollRowToVisible(packageRow)
+        guard let showContents = packageMenu(),
+            showContents.items.first?.title == t("Show Package Contents")
+        else {
+            print("FAIL: a package's menu does not offer its contents")
+            return 1
+        }
+        showContents.performActionForItem(at: 0)
+        spin(untilTrue: { table.numberOfRows == everyRow + 1 }, seconds: 5)
+        guard table.numberOfRows == everyRow + 1,
+            packageMenu()?.items.first?.title == t("Hide Package Contents")
+        else {
+            print("FAIL: Show Package Contents did not open the package (rows \(table.numberOfRows))")
+            return 1
+        }
+        click(row: packageRow)
+        spin(untilTrue: { table.numberOfRows == everyRow }, seconds: 5)
+        guard table.numberOfRows == everyRow else {
+            print("FAIL: a click did not shut an open package")
+            return 1
+        }
+        // A reveal scrolls to its file, from the top of the tree to a
+        // row far below the view.
+        table.scrollRowToVisible(0)
+        let farFile = base.appendingPathComponent(
+            String(format: "pkg%02d", directories - 1)).appendingPathComponent("file7.go").path
+        treeState.reveal(path: farFile, under: base.path)
+        let farKey = treeKey(farFile, isDirectory: false)
+        func farRowShows() -> Bool {
+            let visible = table.rows(in: table.visibleRect)
+            guard visible.length > 0 else { return false }
+            return (visible.location..<NSMaxRange(visible)).contains { row in
+                (table.view(atColumn: 0, row: row, makeIfNecessary: false) as? FileTreeCell)?
+                    .shownName == "file7.go"
+                    && treeState.highlighted == farKey
+            }
+        }
+        spin(untilTrue: farRowShows, seconds: 5)
+        guard farRowShows() else {
+            print("FAIL: the revealed file was not scrolled into view")
+            return 1
+        }
         treeWindow.close()
         try? FileManager.default.removeItem(at: base)
-        print("big tree ok (scrolls without stutter)")
+        print("big tree ok (scrolls without stutter; fixed rows, clicks open and close, the path menu, a package is one row, a reveal scrolls)")
     }
     }
 

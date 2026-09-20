@@ -110,6 +110,47 @@ enum PathActions {
         return (host, repo)
     }
 
+    /// One item of the path menu.
+    struct MenuEntry {
+        let title: String
+        let run: () -> Void
+    }
+
+    /// The path menu's items, nil where a divider goes. One list, so
+    /// the SwiftUI rows and the tree's AppKit rows offer the same menu.
+    static func menuEntries(
+        path: String, projectRoot: String?, isDirectory: Bool,
+        onReveal: ((String) -> Void)? = nil
+    ) -> [MenuEntry?] {
+        var entries: [MenuEntry?] = []
+        if let onReveal {
+            entries.append(MenuEntry(title: t("Reveal in Tree")) { onReveal(path) })
+        }
+        entries.append(
+            MenuEntry(title: t("Reveal in Finder")) {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            })
+        entries.append(nil)
+        entries.append(
+            MenuEntry(title: t("Copy File Name")) { copy((path as NSString).lastPathComponent) })
+        entries.append(
+            MenuEntry(title: t("Copy Relative Path")) {
+                copy(relativePath(path, projectRoot: projectRoot))
+            })
+        entries.append(MenuEntry(title: t("Copy Absolute Path")) { copy(path) })
+        if isInGitRepository(path) {
+            entries.append(
+                MenuEntry(title: t("Copy Forge URL")) {
+                    if let url = forgeURL(forPath: path, isDirectory: isDirectory) {
+                        copy(url)
+                    } else {
+                        NSSound.beep()
+                    }
+                })
+        }
+        return entries
+    }
+
     private static func git(in directory: String, _ arguments: String...) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
@@ -137,30 +178,13 @@ struct PathCopyMenu: View {
     var onReveal: ((String) -> Void)? = nil
 
     var body: some View {
-        if let onReveal {
-            Button(t("Reveal in Tree")) { onReveal(path) }
-        }
-        Button(t("Reveal in Finder")) {
-            NSWorkspace.shared.activateFileViewerSelecting(
-                [URL(fileURLWithPath: path)])
-        }
-        Divider()
-        Button(t("Copy File Name")) {
-            PathActions.copy((path as NSString).lastPathComponent)
-        }
-        Button(t("Copy Relative Path")) {
-            PathActions.copy(PathActions.relativePath(path, projectRoot: projectRoot))
-        }
-        Button(t("Copy Absolute Path")) {
-            PathActions.copy(path)
-        }
-        if PathActions.isInGitRepository(path) {
-            Button(t("Copy Forge URL")) {
-                if let url = PathActions.forgeURL(forPath: path, isDirectory: isDirectory) {
-                    PathActions.copy(url)
-                } else {
-                    NSSound.beep()
-                }
+        let entries = PathActions.menuEntries(
+            path: path, projectRoot: projectRoot, isDirectory: isDirectory, onReveal: onReveal)
+        ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+            if let entry {
+                Button(entry.title, action: entry.run)
+            } else {
+                Divider()
             }
         }
     }

@@ -17,6 +17,8 @@ struct FileTypeIcon: View {
     /// language was set by hand should get the icon it was told about.
     var language: String? = nil
     @Environment(\.colorScheme) private var colorScheme
+    /// Drawn again when a type's system icon has been worked out.
+    @ObservedObject private var iconNews = FileIconNews.shared
 
     var body: some View {
         if let packed = CoreIcons.icon(
@@ -42,63 +44,140 @@ struct FileTypeIcon: View {
 /// own document icon on everything it claims (an IDE claiming .py,
 /// .md, and .yml alike) — identical everywhere and misleading, so it
 /// counts as nothing too. Only genuinely type-specific icons survive.
+///
+/// Telling icons apart means comparing their TIFF data, and that is
+/// dear: three quarters of a second for the known types together, and
+/// some twenty milliseconds for each extension met after them. It used
+/// to be paid by the first row that drew a file, on the main thread,
+/// which is where a window opening on a project stood still. It is
+/// worked out in the background now: until an answer is in, a file
+/// wears its badge, and the rows are told when there is a better one.
 @MainActor
 enum SystemFileIcon {
-    private static var extras: [String: NSImage?] = [:]
+    /// What is known so far, by extension: an icon, or nil for "the
+    /// system has nothing to say". An extension not here has not been
+    /// answered yet.
+    private static var answers: [String: NSImage?] = [:]
+    private static var asked: Set<String> = []
+    /// The generic icons' data, once the known types have been worked
+    /// out; extensions met before then wait for it.
+    private static var baselines: [Data]?
+    private static var waiting: Set<String> = []
+    /// Whether the known types have been answered, for the tests.
+    static var isWarm: Bool { baselines != nil }
+    private static let work = DispatchQueue(label: "textchum.file-icons", qos: .utility)
 
-    private static let baselines: [Data] = {
-        [UTType.data, .item, .plainText, .sourceCode, .text].compactMap {
-            NSWorkspace.shared.icon(for: $0).tiffRepresentation
-        }
-    }()
+    private static let knownExtensions = [
+        "rs", "py", "go", "js", "ts", "json", "yaml", "yml", "toml",
+        "html", "css", "md", "sh", "c", "h", "swift", "zig", "mk",
+    ]
 
-    /// The badge-known extensions resolved together, keeping only icons
-    /// that are non-generic AND unique to their type.
-    private static let knownIcons: [String: NSImage] = {
-        let extensions = [
-            "rs", "py", "go", "js", "ts", "json", "yaml", "yml", "toml",
-            "html", "css", "md", "sh", "c", "h", "swift", "zig", "mk",
-        ]
-        var byData: [Data: [(String, NSImage)]] = [:]
-        for ext in extensions {
-            guard let type = UTType(filenameExtension: ext) else { continue }
-            let icon = NSWorkspace.shared.icon(for: type)
-            guard let data = icon.tiffRepresentation, !baselines.contains(data) else {
-                continue
+    /// Starts working out the known types' icons. Called at launch, so
+    /// the answers are usually in before the first row asks; harmless
+    /// to call again.
+    static func warmUp() {
+        guard baselines == nil, asked.isEmpty else { return }
+        asked.formUnion(knownExtensions)
+        let extensions = knownExtensions
+        work.async {
+            let generic = [UTType.data, .item, .plainText, .sourceCode, .text].compactMap {
+                NSWorkspace.shared.icon(for: $0).tiffRepresentation
             }
-            byData[data, default: []].append((ext, icon))
+            // The badge-known extensions resolved together, keeping
+            // only icons that are non-generic AND unique to their type.
+            var byData: [Data: [(String, NSImage)]] = [:]
+            for ext in extensions {
+                guard let type = UTType(filenameExtension: ext) else { continue }
+                let icon = NSWorkspace.shared.icon(for: type)
+                guard let data = icon.tiffRepresentation, !generic.contains(data) else {
+                    continue
+                }
+                byData[data, default: []].append((ext, icon))
+            }
+            var unique: [String: NSImage] = [:]
+            for owners in byData.values where owners.count == 1 {
+                let (ext, icon) = owners[0]
+                icon.size = NSSize(width: 16, height: 16)
+                unique[ext] = icon
+            }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    baselines = generic
+                    for ext in extensions { answers[ext] = .some(unique[ext]) }
+                    let held = waiting
+                    waiting = []
+                    for ext in held { resolve(ext, against: generic) }
+                    FileIconNews.shared.announce()
+                }
+            }
         }
-        var unique: [String: NSImage] = [:]
-        for owners in byData.values where owners.count == 1 {
-            let (ext, icon) = owners[0]
-            icon.size = NSSize(width: 16, height: 16)
-            unique[ext] = icon
-        }
-        return unique
-    }()
+    }
 
+    /// The icon for a file's type, as far as it is known right now.
+    /// Never waits: an extension not yet answered gets nil, is looked
+    /// into, and `FileIconNews` says when the answer is in.
     static func icon(forFilename filename: String) -> NSImage? {
         let ext = (filename as NSString).pathExtension.lowercased()
         guard !ext.isEmpty else { return nil }
-        if let known = knownIcons[ext] { return known }
+        if let answer = answers[ext] { return answer }
+        warmUp()
+        guard !asked.contains(ext) else { return nil }
         guard LanguageBadge.badge(for: filename) == nil else {
             // A known language whose system icon failed the filters:
             // the badge is the more honest picture.
+            answers[ext] = .some(nil)
             return nil
         }
         // Unknown-to-us types have no badge to offer, so any
         // non-generic system icon is an upgrade over the plain glyph.
-        if let cached = extras[ext] { return cached }
-        var result: NSImage?
-        if let type = UTType(filenameExtension: ext) {
-            let icon = NSWorkspace.shared.icon(for: type)
-            if let data = icon.tiffRepresentation, !baselines.contains(data) {
-                icon.size = NSSize(width: 16, height: 16)
-                result = icon
+        asked.insert(ext)
+        if let baselines {
+            resolve(ext, against: baselines)
+        } else {
+            waiting.insert(ext)
+        }
+        return nil
+    }
+
+    private static func resolve(_ ext: String, against generic: [Data]) {
+        work.async {
+            var result: NSImage?
+            if let type = UTType(filenameExtension: ext) {
+                let icon = NSWorkspace.shared.icon(for: type)
+                if let data = icon.tiffRepresentation, !generic.contains(data) {
+                    icon.size = NSSize(width: 16, height: 16)
+                    result = icon
+                }
+            }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    answers[ext] = .some(result)
+                    // Only an icon changes what a row shows.
+                    if result != nil { FileIconNews.shared.announce() }
+                }
             }
         }
-        extras[ext] = result
-        return result
+    }
+}
+
+/// Says when a file type's icon has been worked out, so rows drawn
+/// before it can draw again. Announcements made in one turn of the
+/// runloop arrive as one.
+@MainActor
+final class FileIconNews: ObservableObject {
+    static let shared = FileIconNews()
+    @Published private(set) var edition = 0
+    private var owed = false
+
+    func announce() {
+        guard !owed else { return }
+        owed = true
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                self.owed = false
+                self.edition += 1
+            }
+        }
     }
 }
 
