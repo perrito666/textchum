@@ -1177,7 +1177,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         ?? editor.coreDocument.path.map {
                             ($0 as NSString).deletingLastPathComponent
                         }
-                    if documentRoot == root {
+                    // Its own project's server, or the server of a
+                    // project it is nested in: a recursive root serves
+                    // the projects inside it.
+                    if let documentRoot,
+                        documentRoot == root || documentRoot.hasPrefix(root + "/")
+                    {
                         editor.reannounceLSP()
                     }
                 }
@@ -2073,7 +2078,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             workbench.closeTab(ObjectIdentifier(document))
         }
         if let app = coreApp {
-            for running in app.lspRunning() where running.root == from {
+            // The old tree's servers, and those of the projects nested
+            // in it that run their own.
+            for running in app.lspRunning()
+            where running.root == from || running.root.hasPrefix(from + "/") {
                 app.lspRetire(server: running.server, root: running.root)
             }
         }

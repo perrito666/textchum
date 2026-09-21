@@ -6219,6 +6219,16 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
                 })
             })
             .unwrap_or_default();
+    // A project's entry can reach the projects nested in it. The two
+    // switches are the project's own (they are on the Projects page
+    // too), shown here because this is where their effect on servers is
+    // looked for.
+    let mut entry_roots: Vec<String> = Vec::new();
+    for (root, _, _) in &project_entries {
+        if !entry_roots.contains(root) {
+            entry_roots.push(root.clone());
+        }
+    }
     for (root, language, command) in project_entries {
         let row = adw::EntryRow::new();
         let basename = std::path::Path::new(&root)
@@ -6242,6 +6252,61 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             shell.reconfigure_pool();
         });
         projects_group.add(&row);
+    }
+    {
+        let workspace: serde_json::Value =
+            serde_json::from_str(&shell.config.borrow().workspace_json())
+                .unwrap_or(serde_json::Value::Null);
+        for root in entry_roots {
+            let basename = std::path::Path::new(&root)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| root.clone());
+            // The root's own flag where it has one, the default
+            // otherwise: the rule the core reads them by.
+            let flag = |key: &str| {
+                workspace["projects"][&root][key]
+                    .as_bool()
+                    .unwrap_or_else(|| workspace[key].as_bool().unwrap_or(false))
+            };
+            let mut rows: Vec<adw::SwitchRow> = Vec::new();
+            for (key, title, subtitle) in [
+                (
+                    "recursive_config",
+                    tr("Nested projects too"),
+                    tr("Projects nested in this one use its entries. The same switch as Projects ▸ Recursive config."),
+                ),
+                (
+                    "separate_nested_servers",
+                    tr("A server each"),
+                    tr("Off: this project's server looks after the nested ones. On: each nested project runs the command for itself, in its own folder."),
+                ),
+            ] {
+                let row = adw::SwitchRow::new();
+                row.set_title(&format!("{basename} — {title}"));
+                row.set_subtitle(&subtitle);
+                row.set_tooltip_text(Some(&root));
+                row.set_active(flag(key));
+                let shell = Rc::clone(&shell);
+                let root = root.clone();
+                row.connect_active_notify(move |row| {
+                    shell.config.borrow_mut().set_workspace_flag(
+                        Some(&root),
+                        key,
+                        Some(row.is_active()),
+                    );
+                    shell.save_config();
+                    shell.reconfigure_pool();
+                });
+                projects_group.add(&row);
+                rows.push(row);
+            }
+            // A server each means nothing without the nesting.
+            rows[0]
+                .bind_property("active", &rows[1], "sensitive")
+                .sync_create()
+                .build();
+        }
     }
     let add_root = adw::EntryRow::new();
     add_root.set_title(&tr("project root path"));
@@ -6423,7 +6488,9 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     workspace_defaults.set_title(&tr("Defaults (all projects)"));
     workspace_defaults.set_description(Some(
         "Manifest projects splits a repository at language manifests; \
-         recursive config cascades a root's settings into nested projects.",
+         recursive config cascades a root's settings into nested projects, \
+         its language server included — which then serves them too, unless \
+         separate nested servers gives each its own.",
     ));
     let workspace: serde_json::Value =
         serde_json::from_str(&shell.config.borrow().workspace_json())
@@ -6431,10 +6498,16 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     for (key, title) in [
         ("manifest_projects", "Manifest projects"),
         ("recursive_config", "Recursive config"),
+        ("separate_nested_servers", "Separate nested servers"),
         ("ctags_fallback", "Ctags fallback"),
     ] {
         let row = adw::SwitchRow::new();
         row.set_title(title);
+        if key == "separate_nested_servers" {
+            row.set_subtitle(&tr(
+                "Under recursive config: a server per nested project, rather than the root's serving them all",
+            ));
+        }
         row.set_active(workspace[key].as_bool().unwrap_or(false));
         let shell = Rc::clone(&shell);
         row.connect_active_notify(move |row| {
@@ -6516,10 +6589,16 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
             for (key, title) in [
                 ("manifest_projects", "Manifest projects"),
                 ("recursive_config", "Recursive config"),
+                ("separate_nested_servers", "Separate nested servers"),
                 ("ctags_fallback", "Ctags fallback"),
             ] {
                 let row = adw::SwitchRow::new();
                 row.set_title(title);
+                if key == "separate_nested_servers" {
+                    row.set_subtitle(&tr(
+                        "Under recursive config: a server per nested project, rather than the root's serving them all",
+                    ));
+                }
                 row.set_active(flags[key].as_bool().unwrap_or(false));
                 let shell = Rc::clone(&shell);
                 let root = root.clone();

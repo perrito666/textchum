@@ -258,10 +258,20 @@ for that root only.
   project, however many `Cargo.toml` or `pyproject.toml` files sit in
   between. Switching this on splits a root at language manifests again,
   so nested modules become projects of their own.
-- **Recursive config** — makes a root's per-project settings (its
-  language-server commands, and these very switches) apply to the nested
-  projects inside it, closest ancestor first. Useful for monorepos: one
-  configuration at the top, many projects underneath.
+- **Recursive config** — makes a root's language-server entries apply to
+  the nested projects inside it, closest ancestor first, and has the
+  root's server look after them: a nested project with no entry of its
+  own is served by the instance running at the root, which sees the
+  whole tree. Useful for monorepos: one configuration, and one server,
+  at the top; many projects underneath. The Language Servers tab shows
+  the same switch beside each project entry, as **Nested projects
+  too**.
+- **Separate nested servers** — under recursive config, gives each
+  nested project a server of its own instead: the root's command line,
+  started in the nested project, with `{project}` naming *it*. For
+  members that each carry their own environment — a `.venv` per
+  package — where one server at the top would see none of them. **A
+  server each**, in the Language Servers tab.
 - **Ctags fallback** — answers Jump to Definition from a Universal
   Ctags index when no language server is available; see
   [language servers](language-servers.md).
@@ -273,6 +283,7 @@ In the file, these live in a `workspace` section:
   "workspace": {
     "manifest_projects": false,
     "recursive_config": false,
+    "separate_nested_servers": false,
     "ctags_fallback": false,
     "projects": {
       "/Users/you/code/monorepo": {

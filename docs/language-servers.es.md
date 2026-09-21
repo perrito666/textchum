@@ -21,6 +21,19 @@ Los archivos fuera de todo proyecto reciben una instancia por directorio,
 así que los archivos sueltos tampoco se suman al espacio de trabajo de
 nadie.
 
+Los proyectos anidados en otro — los miembros de un workspace de uv o de
+Cargo, una vez que **manifest projects** los hizo proyectos — son el
+único caso con elección. Cuando el proyecto exterior tiene **recursive
+config**, toman sus entradas de servidor y los atiende *su* instancia:
+un servidor arriba, iniciado allí, que ve a todos los miembros y el
+entorno que comparten. Con **separate nested servers** además, conservan
+las entradas y cada uno las corre por su cuenta, en su propia carpeta,
+para miembros que llevan cada uno su entorno. Un proyecto anidado con
+entrada propia es siempre independiente. Ambos interruptores existen por
+proyecto y por defecto, en Settings ▸ Projects y junto a cada entrada de
+proyecto en Settings ▸ Language Servers; véase
+[configuración](configuration.md#proyectos).
+
 ## Lo que se ve
 
 - Los hallazgos llegan mientras se escribe (enviados en lotes con

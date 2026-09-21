@@ -17,6 +17,18 @@ built over your whole home directory — cannot happen by construction.
 Files outside any project get a per-directory instance, so loose files
 never join someone else's workspace either.
 
+Projects nested in another — the members of a uv or Cargo workspace,
+once **manifest projects** has made them projects — are the one case
+with a choice. When the outer project has **recursive config** on, they
+take its server entries and are looked after by *its* instance: one
+server at the top, started there, seeing every member and the one
+environment they share. With **separate nested servers** as well, they
+keep the entries and each runs them for itself, in its own folder, for
+members that carry an environment each. A nested project with an entry
+of its own is always its own. Both switches are per project and by
+default, in Settings ▸ Projects and beside each project entry in
+Settings ▸ Language Servers; see [configuration](configuration.md#projects).
+
 ## What you see
 
 - Findings arrive as you type (sent in debounced batches) and mark the

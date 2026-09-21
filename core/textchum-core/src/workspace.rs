@@ -36,8 +36,8 @@ pub const MANIFEST_MARKERS: &[&str] = &[
 
 /// User-configurable workspace behavior, parsed from the configuration's
 /// `workspace` section: `{"manifest_projects": bool, "recursive_config":
-/// bool, "projects": {root: {same flags}}}`. Missing flags default to
-/// false.
+/// bool, "separate_nested_servers": bool, "projects": {root: {same
+/// flags}}}`. Missing flags default to false.
 #[derive(Debug, Clone, Default)]
 pub struct WorkspaceSettings {
     parsed: serde_json::Value,
@@ -69,6 +69,17 @@ impl WorkspaceSettings {
     /// the nested projects beneath it.
     pub fn recursive_config(&self, root: &Path) -> bool {
         self.flag(root, "recursive_config")
+    }
+
+    /// Whether the nested projects a recursive `root` configures each
+    /// get a language server of their own. Off, which is the default,
+    /// they are served by `root`'s: a workspace with one environment at
+    /// the top wants one server that sees all of it. On, they share the
+    /// configuration and nothing else — one server per nested project,
+    /// started in it, for members that each carry their own
+    /// environment.
+    pub fn separate_nested_servers(&self, root: &Path) -> bool {
+        self.flag(root, "separate_nested_servers")
     }
 }
 
