@@ -899,6 +899,26 @@ msgstr ""
 msgid "Per-project overrides"
 msgstr ""
 
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Nested projects too"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid ""
+"Projects nested in this one use its entries. The same switch as Projects ▸ "
+"Recursive config."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "A server each"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid ""
+"Off: this project's server looks after the nested ones. On: each nested "
+"project runs the command for itself, in its own folder."
+msgstr ""
+
 #: linux/src/workbench.rs
 msgid "project root path"
 msgstr ""
@@ -937,6 +957,12 @@ msgstr ""
 
 #: linux/src/workbench.rs
 msgid "Defaults (all projects)"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid ""
+"Under recursive config: a server per nested project, rather than the root's "
+"serving them all"
 msgstr ""
 
 #: linux/src/workbench.rs
@@ -1657,6 +1683,10 @@ msgstr ""
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "Recursive config"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "Separate nested servers"
 msgstr ""
 
 #: macos/Sources/Textchum/Settings.swift

@@ -20,6 +20,19 @@ Les fichiers hors de tout projet reçoivent une instance par répertoire ;
 les fichiers isolés ne rejoignent donc jamais l'espace de travail de
 quelqu'un d'autre.
 
+Les projets imbriqués dans un autre — les membres d'un workspace uv ou
+Cargo, une fois que **manifest projects** en a fait des projets — sont
+le seul cas où l'on choisit. Quand le projet extérieur a **recursive
+config**, ils prennent ses entrées de serveur et c'est *son* instance
+qui s'en occupe : un serveur en haut, lancé là, qui voit tous les
+membres et l'environnement qu'ils partagent. Avec **separate nested
+servers** en plus, ils gardent les entrées et chacun les exécute pour
+lui-même, dans son dossier, pour des membres qui portent chacun leur
+environnement. Un projet imbriqué qui a sa propre entrée reste toujours
+à part. Les deux interrupteurs existent par projet et par défaut, dans
+Settings ▸ Projects et à côté de chaque entrée de projet dans Settings ▸
+Language Servers ; voir [configuration](configuration.md#projets).
+
 ## Ce que l'on voit
 
 - Les résultats arrivent pendant la frappe (envoyés par lots avec

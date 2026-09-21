@@ -896,6 +896,22 @@ msgstr "Comandos de servidor por defecto"
 msgid "Per-project overrides"
 msgstr "Ajustes por proyecto"
 
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Nested projects too"
+msgstr "También los proyectos anidados"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Projects nested in this one use its entries. The same switch as Projects ▸ Recursive config."
+msgstr "Los proyectos anidados en este usan sus entradas. Es el mismo interruptor que Projects ▸ Recursive config."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "A server each"
+msgstr "Un servidor para cada uno"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Off: this project's server looks after the nested ones. On: each nested project runs the command for itself, in its own folder."
+msgstr "Apagado: el servidor de este proyecto atiende a los anidados. Encendido: cada proyecto anidado corre el comando por su cuenta, en su propia carpeta."
+
 #: linux/src/workbench.rs
 msgid "project root path"
 msgstr "ruta de la raíz del proyecto"
@@ -935,6 +951,10 @@ msgstr "Proyectos"
 #: linux/src/workbench.rs
 msgid "Defaults (all projects)"
 msgstr "Por defecto (todos los proyectos)"
+
+#: linux/src/workbench.rs
+msgid "Under recursive config: a server per nested project, rather than the root's serving them all"
+msgstr "Con recursive config: un servidor por proyecto anidado, en lugar de que el de la raíz los atienda a todos"
 
 #: linux/src/workbench.rs
 msgid "copy settings from this project"
@@ -1666,6 +1686,10 @@ msgstr "Proyectos por manifiesto"
 #: macos/Sources/Textchum/Settings.swift
 msgid "Recursive config"
 msgstr "Configuración recursiva"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "Separate nested servers"
+msgstr "Servidores anidados separados"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "Ctags fallback"

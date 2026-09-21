@@ -241,36 +241,63 @@ fn workspace_toggles_split_projects_and_cascade_config() {
     let module = module.canonicalize().unwrap();
     let file = file.canonicalize().unwrap();
 
-    let (tx, events) = mpsc::channel();
-    let mut pool = Pool::new(tx);
-    // manifest_projects splits the repo; recursive_config lets the repo's
-    // server entry serve the nested module project.
-    pool.configure(&format!(
-        r#"{{
+    // A second nested project, so "one instance" has something to mean.
+    let sibling = repo.join("pkg/sibling");
+    std::fs::create_dir_all(&sibling).unwrap();
+    std::fs::write(sibling.join("Cargo.toml"), "").unwrap();
+    let sibling_file = sibling.join("lib.rs");
+    std::fs::write(&sibling_file, "fn y() {}\n").unwrap();
+
+    let configuration = |separate: bool| {
+        format!(
+            r#"{{
             "lsp": {{"projects": {{"{repo}": {{"rust": "python3 {script}"}}}}}},
             "workspace": {{"projects": {{"{repo}": {{
-                "manifest_projects": true, "recursive_config": true}}}}}}
+                "manifest_projects": true, "recursive_config": true,
+                "separate_nested_servers": {separate}}}}}}}
         }}"#,
-        repo = repo.display(),
-        script = script.display()
-    ));
-
-    pool.did_open(&file, "rust", "fn x() {}\n");
-    let mut seen = Vec::new();
-    collect_until(&events, "nested project running repo's server", &mut seen, |seen| {
+            repo = repo.display(),
+            script = script.display()
+        )
+    };
+    let running_at = |seen: &[Event], root: &std::path::Path| {
         seen.iter().any(|e| {
-            matches!(e, Event::ServerStatus { status, server, root, .. }
+            matches!(e, Event::ServerStatus { status, server, root: at, .. }
                 if status == "running" && server.starts_with("custom:python3")
-                    && PathBuf::from(root) == module)
+                    && PathBuf::from(at) == root)
         })
+    };
+
+    // manifest_projects splits the repo; recursive_config has the repo's
+    // entry, and the repo's one instance, serve the projects nested in it.
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.configure(&configuration(false));
+    pool.did_open(&file, "rust", "fn x() {}\n");
+    pool.did_open(&sibling_file, "rust", "fn y() {}\n");
+    let mut seen = Vec::new();
+    collect_until(&events, "the repo's server running for a nested project", &mut seen, |seen| {
+        running_at(seen, &repo)
     });
     let running = pool.running();
-    assert_eq!(running.len(), 1);
-    assert_eq!(
-        PathBuf::from(&running[0].1),
-        module,
-        "manifest_projects must scope the instance to the nested project"
-    );
+    assert_eq!(running.len(), 1, "two nested projects, one instance: {running:?}");
+    assert_eq!(PathBuf::from(&running[0].1), repo, "and it is the repository's");
+    drop(pool);
+
+    // Asked for separate servers, each nested project runs the repo's
+    // command line for itself.
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.configure(&configuration(true));
+    pool.did_open(&file, "rust", "fn x() {}\n");
+    pool.did_open(&sibling_file, "rust", "fn y() {}\n");
+    let mut seen = Vec::new();
+    collect_until(&events, "a server per nested project", &mut seen, |seen| {
+        running_at(seen, &module) && running_at(seen, &sibling.canonicalize().unwrap())
+    });
+    let mut roots: Vec<PathBuf> = pool.running().into_iter().map(|(_, root)| root.into()).collect();
+    roots.sort();
+    assert_eq!(roots, vec![module.clone(), sibling.canonicalize().unwrap()]);
 }
 
 #[test]
