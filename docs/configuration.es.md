@@ -271,11 +271,20 @@ defecto solo para esa raíz.
   `pyproject.toml` que haya en medio. Activarlo vuelve a dividir una
   raíz por manifiestos de lenguaje, de modo que los módulos anidados son
   proyectos propios.
-- **Recursive config** — hace que los ajustes por proyecto de una raíz
-  (sus comandos de servidor de lenguaje y estos mismos interruptores) se
-  apliquen a los proyectos anidados dentro de ella, con prioridad para
-  el ancestro más cercano. Útil en monorepos: una configuración arriba,
-  muchos proyectos debajo.
+- **Recursive config** — hace que las entradas de servidor de lenguaje
+  de una raíz se apliquen a los proyectos anidados dentro de ella, con
+  prioridad para el ancestro más cercano, y que el servidor de la raíz
+  se ocupe de ellos: un proyecto anidado sin entrada propia lo atiende
+  la instancia que corre en la raíz, que ve el árbol entero. Útil en
+  monorepos: una configuración, y un servidor, arriba; muchos proyectos
+  debajo. La pestaña Language Servers muestra el mismo interruptor junto
+  a cada entrada de proyecto, como **Nested projects too**.
+- **Separate nested servers** — bajo recursive config, da a cada
+  proyecto anidado un servidor propio: la línea de comando de la raíz,
+  iniciada en el proyecto anidado, con `{project}` nombrándolo a *él*.
+  Para miembros que llevan cada uno su entorno — un `.venv` por paquete
+  — donde un servidor arriba no vería ninguno. **A server each**, en la
+  pestaña Language Servers.
 - **Ctags fallback** — responde Ir a la Definición desde un índice de
   Universal Ctags cuando no hay servidor de lenguaje disponible; véase
   [servidores de lenguaje](language-servers.es.md).
@@ -287,6 +296,7 @@ En el archivo, esto vive en una sección `workspace`:
   "workspace": {
     "manifest_projects": false,
     "recursive_config": false,
+    "separate_nested_servers": false,
     "ctags_fallback": false,
     "projects": {
       "/Users/you/code/monorepo": {

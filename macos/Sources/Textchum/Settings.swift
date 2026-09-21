@@ -204,6 +204,9 @@ final class SettingsModel: ObservableObject {
         let scope: String
         var manifestProjects: Bool
         var recursiveConfig: Bool
+        /// Under recursion: a server per nested project, rather than
+        /// this root's serving them all.
+        var separateNestedServers: Bool = false
         var ctagsFallback: Bool
         var fontFamily: String = ""
         var fontSize: String = ""
@@ -231,6 +234,14 @@ final class SettingsModel: ObservableObject {
             guard !isLoading else { return }
             config.setWorkspaceFlag(
                 root: nil, key: "recursive_config", value: recursiveConfigDefault)
+            persistLSPChange()
+        }
+    }
+    @Published var separateNestedServersDefault = false {
+        didSet {
+            guard !isLoading else { return }
+            config.setWorkspaceFlag(
+                root: nil, key: "separate_nested_servers", value: separateNestedServersDefault)
             persistLSPChange()
         }
     }
@@ -395,6 +406,8 @@ final class SettingsModel: ObservableObject {
             hideGlobsDefault =
                 (parsed["hide"] as? [String])?.joined(separator: " ") ?? ".*"
             recursiveConfigDefault = parsed["recursive_config"] as? Bool ?? false
+            separateNestedServersDefault =
+                parsed["separate_nested_servers"] as? Bool ?? false
             ctagsFallbackDefault = parsed["ctags_fallback"] as? Bool ?? false
             for (root, raw) in parsed["projects"] as? [String: [String: Any]] ?? [:] {
                 let editor = raw["editor"] as? [String: Any] ?? [:]
@@ -406,6 +419,8 @@ final class SettingsModel: ObservableObject {
                             ?? manifestProjectsDefault,
                         recursiveConfig: raw["recursive_config"] as? Bool
                             ?? recursiveConfigDefault,
+                        separateNestedServers: raw["separate_nested_servers"] as? Bool
+                            ?? separateNestedServersDefault,
                         ctagsFallback: raw["ctags_fallback"] as? Bool
                             ?? ctagsFallbackDefault,
                         fontFamily: editor["font_family"] as? String ?? "",
@@ -566,6 +581,8 @@ final class SettingsModel: ObservableObject {
         config.setWorkspaceFlag(
             root: scope, key: "recursive_config", value: recursiveConfigDefault)
         config.setWorkspaceFlag(
+            root: scope, key: "separate_nested_servers", value: separateNestedServersDefault)
+        config.setWorkspaceFlag(
             root: scope, key: "ctags_fallback", value: ctagsFallbackDefault)
         persistWorkspaceChange()
     }
@@ -594,8 +611,22 @@ final class SettingsModel: ObservableObject {
     func removeWorkspaceEntry(_ entry: WorkspaceEntry) {
         config.setWorkspaceFlag(root: entry.scope, key: "manifest_projects", value: nil)
         config.setWorkspaceFlag(root: entry.scope, key: "recursive_config", value: nil)
+        config.setWorkspaceFlag(root: entry.scope, key: "separate_nested_servers", value: nil)
         config.setWorkspaceFlag(root: entry.scope, key: "ctags_fallback", value: nil)
         persistWorkspaceChange()
+    }
+
+    /// A project root's recursion, as the Language Servers tab shows it:
+    /// the root's own flag where it has one, the default otherwise. The
+    /// flags live with the project; that tab is where their effect on
+    /// servers is looked for.
+    func recursiveConfig(forScope scope: String) -> Bool {
+        workspaceEntries.first { $0.scope == scope }?.recursiveConfig ?? recursiveConfigDefault
+    }
+
+    func separateNestedServers(forScope scope: String) -> Bool {
+        workspaceEntries.first { $0.scope == scope }?.separateNestedServers
+            ?? separateNestedServersDefault
     }
 
     /// Whether a configured project's directory is still there.
@@ -1559,7 +1590,9 @@ private struct ProjectsTab: View {
                         + "\"manifest projects\" lets nested language manifests (pyproject.toml, "
                         + "Cargo.toml, …) split it into sub-projects, and \"recursive config\" "
                         + "makes a root's per-project settings apply to the nested projects "
-                        + "beneath it. \"Ctags fallback\" answers Jump to Definition from a "
+                        + "beneath it — its language server included, which then serves "
+                        + "them too, unless \"separate nested servers\" gives each its own. "
+                        + "\"Ctags fallback\" answers Jump to Definition from a "
                         + "Universal Ctags index when no language server is available."
                 )
                 .font(.callout)
@@ -1568,10 +1601,19 @@ private struct ProjectsTab: View {
 
                 GroupBox("Defaults (all projects)") {
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 24) {
+                        HStack(spacing: 18) {
                             Toggle(t("Manifest projects"), isOn: $model.manifestProjectsDefault)
+                                .fixedSize()
                             Toggle(t("Recursive config"), isOn: $model.recursiveConfigDefault)
+                                .fixedSize()
+                            Toggle(
+                                t("Separate nested servers"),
+                                isOn: $model.separateNestedServersDefault
+                            )
+                            .fixedSize()
+                            .disabled(!model.recursiveConfigDefault)
                             Toggle(t("Ctags fallback"), isOn: $model.ctagsFallbackDefault)
+                                .fixedSize()
                             Spacer()
                         }
                         HStack(spacing: 8) {
@@ -1635,6 +1677,17 @@ private struct ProjectsTab: View {
                                 .frame(width: 120)
                                 .disabled(model.workspaceEntries.count < 2)
                                 Spacer()
+                                Button {
+                                    model.removeWorkspaceEntry(entry)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                            // The switches on a line of their own: four
+                            // of them beside the name left no room for
+                            // either.
+                            HStack(spacing: 16) {
                                 Toggle(
                                     "Manifest projects",
                                     isOn: Binding(
@@ -1645,6 +1698,7 @@ private struct ProjectsTab: View {
                                                 value: $0)
                                         }
                                     ))
+                                .fixedSize()
                                 Toggle(
                                     "Recursive config",
                                     isOn: Binding(
@@ -1655,6 +1709,20 @@ private struct ProjectsTab: View {
                                                 value: $0)
                                         }
                                     ))
+                                .fixedSize()
+                                Toggle(
+                                    t("Separate nested servers"),
+                                    isOn: Binding(
+                                        get: { entry.separateNestedServers },
+                                        set: {
+                                            model.setWorkspaceFlag(
+                                                scope: entry.scope,
+                                                key: "separate_nested_servers", value: $0)
+                                        }
+                                    )
+                                )
+                                .fixedSize()
+                                .disabled(!entry.recursiveConfig)
                                 Toggle(
                                     "Ctags fallback",
                                     isOn: Binding(
@@ -1665,12 +1733,8 @@ private struct ProjectsTab: View {
                                                 value: $0)
                                         }
                                     ))
-                                Button {
-                                    model.removeWorkspaceEntry(entry)
-                                } label: {
-                                    Image(systemName: "minus.circle")
-                                }
-                                .buttonStyle(.borderless)
+                                .fixedSize()
+                                Spacer()
                             }
                             // Editor overrides for windows inside this root.
                             // An empty field inherits, and says what it
@@ -1858,7 +1922,7 @@ private struct LanguageServersTab: View {
         // nobody can reach.
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Override which server command runs per language — for every project (Default) or for one project root. Project entries win over defaults; unlisted languages use the built-in registry.")
+                Text("Override which server command runs per language — for every project (Default) or for one project root. Project entries win over defaults; unlisted languages use the built-in registry. A project's entry can reach the projects nested inside it: they take its command and are looked after by its server, or — with a server each — run the same command for themselves, in their own folder.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1882,6 +1946,40 @@ private struct LanguageServersTab: View {
                                 // identity and stay fixed.
                                 CommandField(entry: entry) { command in
                                     model.updateLSPEntry(entry, command: command)
+                                }
+                                // The project's own switches (they are
+                                // in Projects too), shown where their
+                                // effect on servers is looked for.
+                                if !entry.scope.isEmpty {
+                                    HStack(spacing: 16) {
+                                        Toggle(
+                                            t("Nested projects too"),
+                                            isOn: Binding(
+                                                get: { model.recursiveConfig(forScope: entry.scope) },
+                                                set: {
+                                                    model.setWorkspaceFlag(
+                                                        scope: entry.scope,
+                                                        key: "recursive_config", value: $0)
+                                                }
+                                            )
+                                        )
+                                        .help(t("Projects nested in this one use its entries. The same switch as Projects ▸ Recursive config."))
+                                        Toggle(
+                                            t("A server each"),
+                                            isOn: Binding(
+                                                get: { model.separateNestedServers(forScope: entry.scope) },
+                                                set: {
+                                                    model.setWorkspaceFlag(
+                                                        scope: entry.scope,
+                                                        key: "separate_nested_servers", value: $0)
+                                                }
+                                            )
+                                        )
+                                        .disabled(!model.recursiveConfig(forScope: entry.scope))
+                                        .help(t("Off: this project's server looks after the nested ones. On: each nested project runs the command for itself, in its own folder."))
+                                    }
+                                    .toggleStyle(.checkbox)
+                                    .font(.caption)
                                 }
                             }
                             .help(entry.scope.isEmpty ? "All projects" : entry.scope)

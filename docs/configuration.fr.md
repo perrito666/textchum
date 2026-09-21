@@ -276,11 +276,21 @@ Browse…) remplace les valeurs par défaut pour cette racine seulement.
   entre les deux. L'activer redécoupe une racine aux manifestes de
   langage, si bien que les modules imbriqués redeviennent des projets à
   part entière.
-- **Recursive config** — fait que les réglages par projet d'une racine
-  (ses commandes de serveur de langage et ces interrupteurs eux-mêmes)
-  s'appliquent aux projets imbriqués qu'elle contient, l'ancêtre le plus
-  proche d'abord. Utile pour les monorepos : une configuration en haut,
-  beaucoup de projets en dessous.
+- **Recursive config** — fait que les entrées de serveur de langage
+  d'une racine s'appliquent aux projets imbriqués qu'elle contient,
+  l'ancêtre le plus proche d'abord, et que le serveur de la racine s'en
+  occupe : un projet imbriqué sans entrée propre est servi par l'instance
+  qui tourne à la racine, laquelle voit tout l'arbre. Utile pour les
+  monorepos : une configuration, et un serveur, en haut ; beaucoup de
+  projets en dessous. L'onglet Language Servers montre le même
+  interrupteur à côté de chaque entrée de projet : **Nested projects
+  too**.
+- **Separate nested servers** — sous recursive config, donne à chaque
+  projet imbriqué un serveur à lui : la ligne de commande de la racine,
+  lancée dans le projet imbriqué, `{project}` le désignant *lui*. Pour
+  des membres qui portent chacun leur environnement — un `.venv` par
+  paquet — là où un serveur en haut n'en verrait aucun. **A server
+  each**, dans l'onglet Language Servers.
 - **Ctags fallback** — répond à Aller à la Définition depuis un index
   Universal Ctags quand aucun serveur de langage n'est disponible ; voir
   [serveurs de langage](language-servers.fr.md).
@@ -292,6 +302,7 @@ Dans le fichier, tout cela vit dans une section `workspace` :
   "workspace": {
     "manifest_projects": false,
     "recursive_config": false,
+    "separate_nested_servers": false,
     "ctags_fallback": false,
     "projects": {
       "/Users/you/code/monorepo": {

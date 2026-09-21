@@ -389,6 +389,54 @@ impl Pool {
             .or_else(|| server_for_language(language).map(ServerConfig::from))
     }
 
+    /// The root whose server instance looks after the project at `root`.
+    ///
+    /// A project with an entry of its own for the language is its own.
+    /// Otherwise the nearest ancestor that configures it — one that has
+    /// recursive configuration on, and either an entry for the language
+    /// or the standing of being the project `root` would belong to if
+    /// manifests did not split it (the repository, as a rule). That
+    /// ancestor's instance serves the nested project too, unless it asks
+    /// for separate servers, in which case the nested project keeps the
+    /// inherited configuration and runs it for itself.
+    ///
+    /// One server at the top is what a workspace with one environment
+    /// wants — a uv workspace has a single `.venv`, and a server started
+    /// inside a member cannot see it, nor the other members. Separate
+    /// servers are for members that each carry their own.
+    fn serving_root(&self, root: &Path, language: &str) -> PathBuf {
+        let has_entry = |dir: &Path| {
+            self.configured["projects"][dir.to_string_lossy().as_ref()][language].is_string()
+        };
+        if has_entry(root) {
+            return root.to_owned();
+        }
+        // Where the project would be rooted with manifests left alone:
+        // an explicit `.textchum.json`, or the outermost repository.
+        let base = workspace::project_root_with(root, &WorkspaceSettings::default());
+        if base.as_deref() == Some(root) {
+            // Not nested in anything: a directory further up may lend a
+            // repository its configuration, never its server.
+            return root.to_owned();
+        }
+        let mut ancestor = root.parent();
+        while let Some(dir) = ancestor {
+            let is_base = base.as_deref() == Some(dir);
+            if self.workspace_settings.recursive_config(dir) && (has_entry(dir) || is_base) {
+                return if self.workspace_settings.separate_nested_servers(dir) {
+                    root.to_owned()
+                } else {
+                    dir.to_owned()
+                };
+            }
+            if is_base {
+                break;
+            }
+            ancestor = dir.parent();
+        }
+        root.to_owned()
+    }
+
     /// The project root that scopes `path`'s server instance: the
     /// workspace model's answer (under the configured workspace
     /// settings), or the containing directory for loose files.
@@ -401,11 +449,17 @@ impl Pool {
     /// Announces an opened document, spawning the (server, root) instance
     /// on first use.
     pub fn did_open(&mut self, path: &Path, language: &str, text: &str) {
-        let root = self.root_for(path);
+        let project = self.root_for(path);
+        let root = self.serving_root(&project, language);
         crate::log::log(&format!(
-            "open {} language={language} root={}",
+            "open {} language={language} root={}{}",
             path.display(),
-            root.display()
+            root.display(),
+            if root == project {
+                String::new()
+            } else {
+                format!(" (serving the nested project {})", project.display())
+            }
         ));
         let Some(config) = self.config_for(&root, language) else {
             crate::log::log(&format!(
@@ -703,6 +757,131 @@ mod tests {
         let mut pool = Pool::new(events);
         pool.configure(config);
         pool
+    }
+
+    /// A repository with two members, each with a manifest of its own.
+    fn workspace_on_disk(name: &str) -> PathBuf {
+        let repo = std::env::temp_dir()
+            .join(format!("textchum-pool-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&repo);
+        for member in ["svc-a", "svc-b"] {
+            std::fs::create_dir_all(repo.join(member).join("src")).unwrap();
+            std::fs::write(repo.join(member).join("pyproject.toml"), "").unwrap();
+            std::fs::write(repo.join(member).join("src/app.py"), "").unwrap();
+        }
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        // Temporary directories are reached through a symlink on a Mac.
+        repo.canonicalize().unwrap()
+    }
+
+    fn settings(repo: &Path, flags: &str, lsp: &str) -> String {
+        format!(
+            r#"{{"workspace": {{"projects": {{"{root}": {{{flags}}}}}}}, "lsp": {lsp}}}"#,
+            root = repo.display()
+        )
+    }
+
+    #[test]
+    fn a_recursive_project_serves_its_nested_projects_from_one_instance() {
+        let repo = workspace_on_disk("shared");
+        let lsp = format!(
+            r#"{{"projects": {{"{}": {{"python": "{{project}}/.venv/bin/server --stdio"}}}}}}"#,
+            repo.display()
+        );
+        let pool = pool_with(&settings(
+            &repo,
+            r#""manifest_projects": true, "recursive_config": true"#,
+            &lsp,
+        ));
+        let file = repo.join("svc-a/src/app.py");
+        let project = pool.root_for(&file);
+        assert_eq!(project, repo.join("svc-a"), "the member is a project of its own");
+        let serving = pool.serving_root(&project, "python");
+        assert_eq!(serving, repo, "and the repository's server looks after it");
+        // One environment at the top: the command names it, not the member's.
+        let config = pool.config_for(&serving, "python").expect("a server");
+        assert_eq!(config.command, format!("{}/.venv/bin/server", repo.display()));
+        // Both members, one instance.
+        assert_eq!(pool.serving_root(&repo.join("svc-b"), "python"), repo);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn separate_nested_servers_share_the_configuration_and_nothing_else() {
+        let repo = workspace_on_disk("separate");
+        let lsp = format!(
+            r#"{{"projects": {{"{}": {{"python": "{{project}}/.venv/bin/server --stdio"}}}}}}"#,
+            repo.display()
+        );
+        let pool = pool_with(&settings(
+            &repo,
+            r#""manifest_projects": true, "recursive_config": true,
+               "separate_nested_servers": true"#,
+            &lsp,
+        ));
+        let member = repo.join("svc-a");
+        let serving = pool.serving_root(&member, "python");
+        assert_eq!(serving, member, "a server of its own");
+        let config = pool.config_for(&serving, "python").expect("a server");
+        assert_eq!(
+            config.command,
+            format!("{}/.venv/bin/server", member.display()),
+            "running the repository's command line, in the member"
+        );
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn nesting_without_recursion_changes_nothing() {
+        let repo = workspace_on_disk("plain");
+        let pool = pool_with(&settings(&repo, r#""manifest_projects": true"#, "{}"));
+        let member = repo.join("svc-a");
+        assert_eq!(pool.serving_root(&member, "python"), member);
+        // Recursive, and no entry anywhere: the defaults are the shared
+        // configuration, and the repository's instance still serves.
+        let pool = pool_with(&settings(
+            &repo,
+            r#""manifest_projects": true, "recursive_config": true"#,
+            "{}",
+        ));
+        assert_eq!(pool.serving_root(&member, "python"), repo);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn an_entry_of_its_own_keeps_a_nested_project_to_itself() {
+        let repo = workspace_on_disk("own");
+        let member = repo.join("svc-a");
+        let lsp = format!(
+            r#"{{"projects": {{"{}": {{"python": "pylsp"}}, "{}": {{"python": "pyright"}}}}}}"#,
+            repo.display(),
+            member.display()
+        );
+        let pool = pool_with(&settings(
+            &repo,
+            r#""manifest_projects": true, "recursive_config": true"#,
+            &lsp,
+        ));
+        assert_eq!(pool.serving_root(&member, "python"), member);
+        assert_eq!(pool.config_for(&member, "python").unwrap().id, "pyright");
+        // Its sibling says nothing, and goes to the repository's.
+        assert_eq!(pool.serving_root(&repo.join("svc-b"), "python"), repo);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn a_directory_above_a_repository_lends_its_configuration_not_its_server() {
+        let repo = workspace_on_disk("above");
+        let above = repo.parent().unwrap().to_owned();
+        let config = format!(
+            r#"{{"workspace": {{"recursive_config": true}},
+                "lsp": {{"projects": {{"{}": {{"python": "pylsp"}}}}}}}}"#,
+            above.display()
+        );
+        let pool = pool_with(&config);
+        assert_eq!(pool.serving_root(&repo, "python"), repo);
+        assert_eq!(pool.config_for(&repo, "python").unwrap().id, "pylsp");
+        let _ = std::fs::remove_dir_all(&repo);
     }
 
     #[test]

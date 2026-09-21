@@ -587,6 +587,42 @@ func runSmokeTest() -> Int32 {
     // the part that can be verified honestly, and it is the part that
     // has actually regressed before.
 
+    // A project's reach into the projects nested in it is one pair of
+    // switches, read the same from the Projects tab and from the
+    // Language Servers tab: the root's own flag, the default otherwise.
+    do {
+        let scope = "/tmp/textchum-smoke-monorepo"
+        guard !settingsModel.recursiveConfig(forScope: scope),
+            !settingsModel.separateNestedServers(forScope: scope)
+        else {
+            print("FAIL: a project nobody configured reaches its nested projects")
+            return 1
+        }
+        settingsModel.setWorkspaceFlag(scope: scope, key: "recursive_config", value: true)
+        settingsModel.setWorkspaceFlag(scope: scope, key: "separate_nested_servers", value: true)
+        let entry = settingsModel.workspaceEntries.first { $0.scope == scope }
+        guard settingsModel.recursiveConfig(forScope: scope),
+            settingsModel.separateNestedServers(forScope: scope),
+            entry?.recursiveConfig == true, entry?.separateNestedServers == true,
+            settingsModel.workspaceJSON.contains("\"separate_nested_servers\":true")
+        else {
+            print("FAIL: the nested-server switches did not reach the configuration: \(settingsModel.workspaceJSON)")
+            return 1
+        }
+        if let entry { settingsModel.removeWorkspaceEntry(entry) }
+        guard !settingsModel.workspaceJSON.contains("separate_nested_servers") else {
+            print("FAIL: removing a project left its nested-server switch behind")
+            return 1
+        }
+        settingsModel.separateNestedServersDefault = true
+        guard settingsModel.separateNestedServers(forScope: scope) else {
+            print("FAIL: a project without the switch does not take the default")
+            return 1
+        }
+        settingsModel.separateNestedServersDefault = false
+    }
+    print("nested servers ok (one pair of switches, per project and by default)")
+
     // One sidebar width across every window. The wiring needs a window
     // server, but the two ways it goes wrong are pure decisions and are
     // checked here: adopting a width already held sets two windows
