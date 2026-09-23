@@ -5996,6 +5996,19 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&rainbow_row);
 
+    let auto_close_row = adw::SwitchRow::new();
+    auto_close_row.set_title(&tr("Close brackets and quotes as they are typed"));
+    auto_close_row.set_subtitle(&tr("An opening half brings its closing half; the closer typed steps over it"));
+    auto_close_row.set_active(shell.config.borrow().auto_close_pairs());
+    {
+        let shell = Rc::clone(&shell);
+        auto_close_row.connect_active_notify(move |row| {
+            shell.config.borrow_mut().set_auto_close_pairs(row.is_active());
+            shell.save_config();
+        });
+    }
+    editor_group.add(&auto_close_row);
+
     let occurrences_row = adw::SwitchRow::new();
     occurrences_row.set_title(&tr("Mark the selected word elsewhere"));
     occurrences_row.set_subtitle(&tr("Selecting a whole word marks its other occurrences on screen"));
