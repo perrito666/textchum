@@ -694,6 +694,10 @@ msgid "Could not save the document."
 msgstr "No se pudo guardar el documento."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Saved without preprocessing — {} failed"
+msgstr "Guardado sin preprocesar — {} falló"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Save Without Preprocessing"
 msgstr "Guardar sin preprocesar"
 
@@ -967,6 +971,14 @@ msgstr "comando (por ejemplo pylsp)"
 #: linux/src/workbench.rs
 msgid "Save preprocessors"
 msgstr "Preprocesadores al guardar"
+
+#: linux/src/workbench.rs
+msgid "Save anyway when a chain fails"
+msgstr "Guardar igualmente cuando una cadena falla"
+
+#: linux/src/workbench.rs
+msgid "A toast says so, instead of a question"
+msgstr "Un aviso lo dice, en lugar de una pregunta"
 
 #: linux/src/workbench.rs
 msgid "project root (empty = default for all projects)"
@@ -1830,6 +1842,10 @@ msgstr "Los cambios se aplican a los servidores que arranquen después."
 #: macos/Sources/Textchum/Settings.swift
 msgid "Restart Servers Now"
 msgstr "Reiniciar los servidores ahora"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "When a chain fails, save anyway and say so in the status bar"
+msgstr "Cuando una cadena falla, guardar igualmente y decirlo en la barra de estado"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "No preprocessors — documents save exactly as typed."

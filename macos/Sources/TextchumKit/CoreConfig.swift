@@ -288,6 +288,13 @@ public final class CoreConfig {
         set { tc_config_set_rainbow_brackets(handle, newValue) }
     }
 
+    /// Whether a save whose preprocessor chain failed goes ahead and
+    /// says so, rather than asking.
+    public var preprocessorFailureSaves: Bool {
+        get { tc_config_preprocessor_failure_saves(handle) }
+        set { tc_config_set_preprocessor_failure_saves(handle, newValue) }
+    }
+
     /// One icon pack on offer.
     public struct IconPackEntry {
         public let name: String

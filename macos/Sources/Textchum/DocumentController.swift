@@ -3983,6 +3983,9 @@ final class DocumentController: NSResponder {
     /// Whether bracket pairs are painted by depth over their syntax
     /// colour.
     private var appliedRainbowBrackets = false
+    /// Whether a save whose preprocessor chain failed goes ahead and
+    /// says so in the status bar, rather than asking.
+    private var appliedPreprocessorFailureSaves = false
     /// Whether mouse-rest hover documentation is on. The deliberate
     /// show-at-caret command ignores this.
     private var appliedHoverDocs = true
@@ -4034,6 +4037,7 @@ final class DocumentController: NSResponder {
             // stretch; a forced pass writes or clears them.
             _ = applyHighlights(force: true)
         }
+        appliedPreprocessorFailureSaves = settings.preprocessorFailureSaves
         appliedKeepBuffers = settings.keepBuffers
         appliedMarkOccurrences = settings.markOccurrences
         appliedOccurrencesCaseSensitive = settings.occurrencesCaseSensitive
@@ -4575,10 +4579,19 @@ final class DocumentController: NSResponder {
 
     /// The pre-save half of the flow: runs the chain, and on failure
     /// lets the user choose between saving the unprocessed buffer and
-    /// not saving at all. Returns whether the save should proceed.
+    /// not saving at all — or, when the configuration has answered that
+    /// once and for all, saves and says so where the eye is. Returns
+    /// whether the save should proceed.
     private func preprocessBeforeSave() -> Bool {
         switch preprocessBuffer() {
         case .clean:
+            return true
+        case .failed(let failure) where appliedPreprocessorFailureSaves:
+            // The command's own words go to the log, where a failure
+            // can be read in full; the bar has room for what happened.
+            NSLog("save preprocessor failed: \(failure.command): \(failure.details)")
+            workbench?.showNotice(
+                t("Saved without preprocessing — {} failed", failure.command))
             return true
         case .failed(let failure):
             let alert = NSAlert()

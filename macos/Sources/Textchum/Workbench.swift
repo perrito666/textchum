@@ -889,6 +889,12 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
 
     /// Redraws the status bar from the focused document. Cheap: the bar
     /// only touches its labels when something it says changed.
+    /// A word in the status bar, for a while: what happened, when it
+    /// is not worth a dialog.
+    func showNotice(_ text: String) {
+        statusBar.notice(text)
+    }
+
     func refreshStatus() {
         guard let document = focusedDocument else {
             statusBar.show(StatusBar.Info())

@@ -311,7 +311,11 @@ the whole document back on standard output (the `-` convention most
 formatters follow). If a link in the chain fails — non-zero exit,
 empty output, or a hang past ten seconds — nothing is applied, the
 error (with the tool's stderr) is shown, and the save asks whether to
-proceed unprocessed.
+proceed unprocessed. That question can be answered once and for all:
+**When a chain fails, save anyway** (Settings ▸ Preprocessors;
+`"on_failure": "save"` in the section below) writes the document as
+typed and says so in the status bar for a moment, with the tool's
+words in the log — for anyone whose answer is always yes.
 
 ```json
 {
