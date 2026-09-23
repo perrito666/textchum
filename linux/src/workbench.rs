@@ -4308,6 +4308,16 @@ fn preprocess_gate(
 ) {
     match run_preprocessor_chain(page) {
         Ok(()) => proceed(workbench, page),
+        // Answered once and for all in the configuration: the save goes
+        // ahead, and a toast says what did not happen.
+        Err(failure) if Shell::instance().config.borrow().preprocessor_failure_saves() => {
+            eprintln!("save preprocessor failed: {}: {}", failure.command, failure.details);
+            workbench.toast(&fill(
+                &tr("Saved without preprocessing — {} failed"),
+                &[&failure.command],
+            ));
+            proceed(workbench, page);
+        }
         Err(failure) => {
             let dialog = adw::AlertDialog::new(
                 Some(&format!("Save preprocessor failed: {}", failure.command)),
@@ -6320,6 +6330,24 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
          (ruff check --fix - ;; black -). {path} and {filename} expand \
          to the document's. A project entry replaces the defaults.",
     ));
+    // A formatter that is missing or broken should not stand between
+    // the hand and the disk: for some, the answer to "the chain
+    // failed, save anyway?" is always yes.
+    let on_failure_row = adw::SwitchRow::new();
+    on_failure_row.set_title(&tr("Save anyway when a chain fails"));
+    on_failure_row.set_subtitle(&tr("A toast says so, instead of a question"));
+    on_failure_row.set_active(shell.config.borrow().preprocessor_failure_saves());
+    {
+        let shell = Rc::clone(&shell);
+        on_failure_row.connect_active_notify(move |row| {
+            shell
+                .config
+                .borrow_mut()
+                .set_preprocessor_failure_saves(row.is_active());
+            shell.save_config();
+        });
+    }
+    preprocessors_group.add(&on_failure_row);
     let preprocessor_entries: Vec<(Option<String>, String, String)> = {
         let json = shell.config.borrow().preprocessors_json();
         let parsed = serde_json::from_str::<serde_json::Value>(&json).unwrap_or_default();

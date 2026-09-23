@@ -12,6 +12,9 @@ struct EditorSettings {
     /// Whether the enclosing constructs' first lines pin at the top.
     let contextLines: Bool
     let hoverDocs: Bool
+    /// Whether a save whose preprocessor chain failed goes ahead and
+    /// says so, rather than asking.
+    let preprocessorFailureSaves: Bool
     /// Whether a file stays open when the window showing it closes.
     let keepBuffers: Bool
     let spellLanguage: String?
@@ -55,6 +58,7 @@ struct EditorSettings {
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
         self.hoverDocs = config.hoverDocs
+        self.preprocessorFailureSaves = config.preprocessorFailureSaves
         self.keepBuffers = config.keepBuffers
         self.markOccurrences = config.markOccurrences
         self.occurrencesCaseSensitive = config.occurrencesCaseSensitive
@@ -143,6 +147,9 @@ final class SettingsModel: ObservableObject {
     }
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
+    }
+    @Published var preprocessorFailureSaves: Bool {
+        didSet { persist { $0.preprocessorFailureSaves = preprocessorFailureSaves } }
     }
     @Published var keepBuffers: Bool {
         didSet { persist { $0.keepBuffers = keepBuffers } }
@@ -325,6 +332,7 @@ final class SettingsModel: ObservableObject {
         gitMarks = config.gitMarks
         mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         hoverDocs = config.hoverDocs
+        preprocessorFailureSaves = config.preprocessorFailureSaves
         keepBuffers = config.keepBuffers
         interfaceLanguage = config.interfaceLanguage
         projectStateInProject = config.projectStateInProject
@@ -361,6 +369,7 @@ final class SettingsModel: ObservableObject {
         self.gitMarks = config.gitMarks
         self.mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         self.hoverDocs = config.hoverDocs
+        self.preprocessorFailureSaves = config.preprocessorFailureSaves
         self.keepBuffers = config.keepBuffers
         self.interfaceLanguage = config.interfaceLanguage
         self.projectStateInProject = config.projectStateInProject
@@ -2008,6 +2017,13 @@ private struct PreprocessorsTab: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+                // A formatter that is missing or broken should not stand
+                // between the hand and the disk: for some, the answer to
+                // "the chain failed, save anyway?" is always yes.
+                Toggle(
+                    t("When a chain fails, save anyway and say so in the status bar"),
+                    isOn: $model.preprocessorFailureSaves)
 
                 List {
                     if model.preprocessorEntries.isEmpty {

@@ -1911,6 +1911,51 @@ func runSmokeTest() -> Int32 {
     }
     print("find and replace ok (docked bar, Vim's dialect, groups in the replacement)")
 
+    // A save whose preprocessor chain fails asks — unless the
+    // configuration has answered once and for all, in which case the
+    // document is written as typed and the status bar says so for a
+    // while, with no dialog in the way.
+    do {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-smoke-preprocess-\(getpid())", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("script.py")
+        try? "x = 1\n".write(to: file, atomically: true, encoding: .utf8)
+        let config = CoreConfig(path: folder.appendingPathComponent("config.json").path)
+        config.preprocessorFailureSaves = true
+        var sidebar = SidebarConfiguration(
+            treeState: FileTreeState(),
+            resolveProjectRoot: { _ in nil },
+            selectDocument: { _ in },
+            showProperties: { _ in },
+            openFile: { _ in })
+        // `false` exits 1 and writes nothing: a chain that always fails.
+        sidebar.preprocessorCommands = { _, language in language == "python" ? ["false"] : [] }
+        let bench = Workbench(sidebar: sidebar)
+        guard let core = try? CoreDocument(contentsOf: file.path) else {
+            print("FAIL: the script did not open")
+            return 1
+        }
+        _ = core.setLanguage("python")
+        let editor = DocumentController(document: core, settings: EditorSettings(config: config), sidebar: sidebar)
+        bench.add(editor)
+        bench.window?.makeKeyAndOrderFront(nil)
+        editor.primaryView?.insertText("y = 2\n", replacementRange: NSRange(location: 0, length: 0))
+        guard editor.saveInteractively(), !core.isDirty,
+            (try? String(contentsOf: file, encoding: .utf8)) == "y = 2\nx = 1\n"
+        else {
+            print("FAIL: the save did not go ahead past the failed chain (dirty \(core.isDirty))")
+            return 1
+        }
+        guard let notice = bench.statusBar.noticeText, notice.contains("false") else {
+            print("FAIL: the status bar did not say the chain failed: \(bench.statusBar.noticeText ?? "nil")")
+            return 1
+        }
+        bench.window?.close()
+        try? FileManager.default.removeItem(at: folder)
+    }
+    print("preprocessor failure ok (saves anyway when told to, and says so in the status bar)")
+
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
     // where the caret is and what the file is.

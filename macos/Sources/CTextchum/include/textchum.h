@@ -1314,6 +1314,23 @@ bool tc_config_hover_docs(const struct TcConfig *config);
 void tc_config_set_hover_docs(struct TcConfig *config, bool enabled);
 
 /**
+ * Whether a save whose preprocessor chain failed goes ahead and says
+ * so (`preprocessors.on_failure` = "save"), rather than asking.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_preprocessor_failure_saves(const struct TcConfig *config);
+
+/**
+ * Sets whether a save whose preprocessor chain failed goes ahead.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_preprocessor_failure_saves(struct TcConfig *config, bool saves);
+
+/**
  * Re-reads the configuration file, replacing in-memory state — for
  * following external edits while running. Returns a human-readable
  * warning (release with [`tc_string_free`]) or null when the file was

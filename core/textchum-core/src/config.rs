@@ -396,6 +396,33 @@ impl Config {
         prune_empty(top, "preprocessors");
     }
 
+    /// What a save does when its preprocessor chain fails
+    /// (`preprocessors.on_failure`): `"ask"` — the default — puts the
+    /// question to the user, `"save"` writes the document as it is and
+    /// says so where the eye is, without stopping the hand. Anything
+    /// else reads as asking.
+    pub fn preprocessor_failure_saves(&self) -> bool {
+        self.root
+            .get("preprocessors")
+            .and_then(|section| section.get("on_failure"))
+            .and_then(Value::as_str)
+            == Some("save")
+    }
+
+    pub fn set_preprocessor_failure_saves(&mut self, saves: bool) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let section = ensure_object(top, "preprocessors");
+        if saves {
+            section.insert("on_failure".into(), Value::String("save".into()));
+        } else {
+            section.remove("on_failure");
+        }
+        prune_empty(top, "preprocessors");
+    }
+
     /// The preprocessor command chain for a language: the project
     /// entry when the root has one, the defaults entry otherwise.
     /// A string entry counts as a one-command chain, so hand-written
@@ -1631,6 +1658,22 @@ mod tests {
             vec!["/work/b".to_string(), "/work/c".into()]
         );
         assert!(!config.lsp_json().contains("/work/a"));
+    }
+
+    #[test]
+    fn a_failed_chain_asks_unless_told_to_save() {
+        let path = temp_path("on_failure.json");
+        std::fs::write(&path, r#"{"preprocessors": {"on_failure": "shrug"}}"#).unwrap();
+        let (mut config, _) = Config::load(&path);
+        assert!(!config.preprocessor_failure_saves(), "an unknown word asks");
+        config.set_preprocessor_failure_saves(true);
+        assert!(config.preprocessor_failure_saves());
+        config.save().unwrap();
+        assert!(Config::load(&path).0.preprocessor_failure_saves(), "the choice is in the file");
+        // Off again, the key goes and so does an otherwise empty section.
+        config.set_preprocessor_failure_saves(false);
+        config.save().unwrap();
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("preprocessors"));
     }
 
     #[test]

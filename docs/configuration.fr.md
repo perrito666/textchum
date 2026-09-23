@@ -314,7 +314,12 @@ entier sur la sortie standard (la convention `-` que suivent presque
 tous les formateurs). Si un maillon échoue — code de sortie non nul,
 sortie vide, ou plus de dix secondes sans répondre — rien n'est
 appliqué, l'erreur (avec le stderr de l'outil) s'affiche, et la
-sauvegarde demande s'il faut continuer sans traitement.
+sauvegarde demande s'il faut continuer sans traitement. On peut
+répondre à cette question une fois pour toutes : **When a chain fails,
+save anyway** (Réglages ▸ Preprocessors ; `"on_failure": "save"` dans
+la section ci-dessous) écrit le document tel quel et le dit un instant
+dans la barre d'état, les mots de l'outil allant dans le journal — pour
+qui répond toujours oui.
 
 ```json
 {

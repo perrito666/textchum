@@ -309,7 +309,11 @@ completo por la salida estándar (la convención `-` que siguen casi
 todos los formateadores). Si un eslabón falla — salida distinta de
 cero, salida vacía, o más de diez segundos colgado — no se aplica nada,
 se muestra el error (con el stderr de la herramienta) y el guardado
-pregunta si continuar sin procesar.
+pregunta si continuar sin procesar. Esa pregunta se puede responder de
+una vez: **When a chain fails, save anyway** (Ajustes ▸ Preprocessors;
+`"on_failure": "save"` en la sección de abajo) escribe el documento tal
+como está y lo dice un momento en la barra de estado, con las palabras
+de la herramienta en el registro — para quien siempre responde que sí.
 
 ```json
 {

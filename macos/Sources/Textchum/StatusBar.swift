@@ -27,6 +27,11 @@ final class StatusBar: NSView {
     private let language = makeButton()
     private let encoding = NSTextField(labelWithString: "")
     private let branch = NSTextField(labelWithString: "")
+    /// A word in passing — a save that went ahead without its
+    /// preprocessors — shown for a while at the end of the bar and
+    /// then gone, without a dialog to dismiss.
+    private let notice = NSTextField(labelWithString: "")
+    private var noticeTimer: Timer?
     private var shown = Info()
     /// Opens File Properties for the focused document.
     var onProperties: (() -> Void)?
@@ -37,17 +42,20 @@ final class StatusBar: NSView {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
         let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
-        for label in [position, encoding, branch] {
+        for label in [position, encoding, branch, notice] {
             label.font = font
             label.textColor = .secondaryLabelColor
         }
+        notice.textColor = .systemOrange
+        notice.lineBreakMode = .byTruncatingTail
+        notice.isHidden = true
         branch.toolTip = t("The git branch checked out in this file's project")
         for button in [indent, language] {
             button.font = font
             button.target = self
             button.action = #selector(openProperties(_:))
         }
-        let row = NSStackView(views: [position, indent, language, encoding, branch])
+        let row = NSStackView(views: [position, indent, language, encoding, branch, notice])
         row.orientation = .horizontal
         row.spacing = 14
         row.translatesAutoresizingMaskIntoConstraints = false
@@ -92,6 +100,26 @@ final class StatusBar: NSView {
     @objc private func openProperties(_ sender: Any?) {
         onProperties?()
     }
+
+    /// Says `text` for a while. Long enough to be read, not so long
+    /// that it reads as the state of things.
+    func notice(_ text: String) {
+        notice.stringValue = text
+        notice.toolTip = text
+        notice.isHidden = false
+        noticeTimer?.invalidate()
+        noticeTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.notice.isHidden = true
+                    self?.notice.stringValue = ""
+                }
+            }
+        }
+    }
+
+    /// For the smoke test: what the bar is saying in passing, if anything.
+    var noticeText: String? { notice.isHidden ? nil : notice.stringValue }
 
     override func draw(_ dirtyRect: NSRect) {
         NSColor.windowBackgroundColor.setFill()
