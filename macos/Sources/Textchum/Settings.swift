@@ -11,6 +11,8 @@ struct EditorSettings {
     let lineNumbers: Bool
     /// Whether the enclosing constructs' first lines pin at the top.
     let contextLines: Bool
+    /// Whether bracket pairs are coloured by depth.
+    let rainbowBrackets: Bool
     let hoverDocs: Bool
     /// The modifier hover waits for ("shift", "control", "option",
     /// "command"), or "" for the mouse alone.
@@ -57,6 +59,7 @@ struct EditorSettings {
         self.tabWidth = tabWidth
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
+        self.rainbowBrackets = config.rainbowBrackets
         self.hoverDocs = config.hoverDocs
         self.hoverModifier = config.hoverModifier
         self.keepBuffers = config.keepBuffers
@@ -144,6 +147,9 @@ final class SettingsModel: ObservableObject {
                     .filter { !$0.isEmpty }
             }
         }
+    }
+    @Published var rainbowBrackets: Bool {
+        didSet { persist { $0.rainbowBrackets = rainbowBrackets } }
     }
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
@@ -340,6 +346,7 @@ final class SettingsModel: ObservableObject {
         tabWidth = config.tabWidth
         lineNumbers = config.lineNumbers
         contextLines = config.contextLines
+        rainbowBrackets = config.rainbowBrackets
         gitMarks = config.gitMarks
         mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         hoverDocs = config.hoverDocs
@@ -377,6 +384,7 @@ final class SettingsModel: ObservableObject {
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
+        self.rainbowBrackets = config.rainbowBrackets
         self.gitMarks = config.gitMarks
         self.mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         self.hoverDocs = config.hoverDocs
@@ -1049,6 +1057,7 @@ struct GeneralSettingsTab: View {
             }
             Toggle(t("Show line numbers"), isOn: $model.lineNumbers)
             Toggle(t("Pin enclosing context lines"), isOn: $model.contextLines)
+            Toggle(t("Colour bracket pairs by depth"), isOn: $model.rainbowBrackets)
             Picker(t("Gutter marks compare against"), selection: $model.gitMarks) {
                 Text(t("The last commit")).tag("head")
                 Text(t("Where the branch forked")).tag("branch")
