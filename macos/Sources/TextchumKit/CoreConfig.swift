@@ -263,6 +263,25 @@ public final class CoreConfig {
         set { tc_config_set_hover_docs(handle, newValue) }
     }
 
+    /// The modifier hover documentation waits for — "shift", "control",
+    /// "option" or "command" — or "" for the mouse alone.
+    public var hoverModifier: String {
+        get {
+            guard let cString = tc_config_hover_modifier(handle) else { return "" }
+            defer { tc_string_free(cString) }
+            return String(cString: cString)
+        }
+        set {
+            var modifier = newValue
+            modifier.withUTF8 { bytes in
+                tc_config_set_hover_modifier(
+                    handle,
+                    bytes.baseAddress.map { UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self) },
+                    UInt(bytes.count))
+            }
+        }
+    }
+
     /// One icon pack on offer.
     public struct IconPackEntry {
         public let name: String

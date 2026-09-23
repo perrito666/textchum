@@ -1314,6 +1314,28 @@ bool tc_config_hover_docs(const struct TcConfig *config);
 void tc_config_set_hover_docs(struct TcConfig *config, bool enabled);
 
 /**
+ * The modifier key hover documentation waits for — "shift", "control",
+ * "option" or "command" — or an empty string for the mouse alone.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_hover_modifier(const struct TcConfig *config);
+
+/**
+ * Sets (or removes, with `modifier_len == 0` or a name that is not a
+ * modifier) the key hover documentation waits for.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `modifier` must point
+ * to `modifier_len` readable bytes.
+ */
+void tc_config_set_hover_modifier(struct TcConfig *config,
+                                  const char *modifier,
+                                  uintptr_t modifier_len);
+
+/**
  * Re-reads the configuration file, replacing in-memory state — for
  * following external edits while running. Returns a human-readable
  * warning (release with [`tc_string_free`]) or null when the file was

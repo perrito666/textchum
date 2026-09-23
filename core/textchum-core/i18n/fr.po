@@ -863,6 +863,30 @@ msgstr ""
 "Afficher la documentation du serveur quand la souris s'arrête sur un symbole"
 
 #: linux/src/workbench.rs
+msgid "Shown when"
+msgstr "Affichée quand"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "the mouse rests"
+msgstr "la souris se pose"
+
+#: linux/src/workbench.rs
+msgid "Shift is held"
+msgstr "Maj est maintenue"
+
+#: linux/src/workbench.rs
+msgid "Ctrl is held"
+msgstr "Ctrl est maintenue"
+
+#: linux/src/workbench.rs
+msgid "Alt is held"
+msgstr "Alt est maintenue"
+
+#: linux/src/workbench.rs
+msgid "Super is held"
+msgstr "Super est maintenue"
+
+#: linux/src/workbench.rs
 msgid "Mark the selected word elsewhere"
 msgstr "Marquer le mot sélectionné ailleurs"
 
@@ -1583,6 +1607,26 @@ msgstr "Corps : {} pt"
 #: macos/Sources/Textchum/Settings.swift
 msgid "Tab width: {} columns"
 msgstr "Largeur de tabulation : {} colonnes"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "  Shown when"
+msgstr "  Affichée quand"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⇧ Shift is held"
+msgstr "⇧ Maj est maintenue"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⌃ Control is held"
+msgstr "⌃ Contrôle est maintenue"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⌥ Option is held"
+msgstr "⌥ Option est maintenue"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⌘ Command is held"
+msgstr "⌘ Commande est maintenue"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "Reveal the current file in the tree"

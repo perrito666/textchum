@@ -12,6 +12,9 @@ struct EditorSettings {
     /// Whether the enclosing constructs' first lines pin at the top.
     let contextLines: Bool
     let hoverDocs: Bool
+    /// The modifier hover waits for ("shift", "control", "option",
+    /// "command"), or "" for the mouse alone.
+    let hoverModifier: String
     /// Whether a file stays open when the window showing it closes.
     let keepBuffers: Bool
     let spellLanguage: String?
@@ -55,6 +58,7 @@ struct EditorSettings {
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
         self.hoverDocs = config.hoverDocs
+        self.hoverModifier = config.hoverModifier
         self.keepBuffers = config.keepBuffers
         self.markOccurrences = config.markOccurrences
         self.occurrencesCaseSensitive = config.occurrencesCaseSensitive
@@ -143,6 +147,9 @@ final class SettingsModel: ObservableObject {
     }
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
+    }
+    @Published var hoverModifier: String {
+        didSet { persist { $0.hoverModifier = hoverModifier } }
     }
     @Published var keepBuffers: Bool {
         didSet { persist { $0.keepBuffers = keepBuffers } }
@@ -336,6 +343,7 @@ final class SettingsModel: ObservableObject {
         gitMarks = config.gitMarks
         mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         hoverDocs = config.hoverDocs
+        hoverModifier = config.hoverModifier
         keepBuffers = config.keepBuffers
         interfaceLanguage = config.interfaceLanguage
         projectStateInProject = config.projectStateInProject
@@ -372,6 +380,7 @@ final class SettingsModel: ObservableObject {
         self.gitMarks = config.gitMarks
         self.mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         self.hoverDocs = config.hoverDocs
+        self.hoverModifier = config.hoverModifier
         self.keepBuffers = config.keepBuffers
         self.interfaceLanguage = config.interfaceLanguage
         self.projectStateInProject = config.projectStateInProject
@@ -1057,6 +1066,18 @@ struct GeneralSettingsTab: View {
                             .stroke(Color.secondary.opacity(0.3)))
             }
             Toggle(t("Hover documentation"), isOn: $model.hoverDocs)
+            // A key to hold: documentation that appears wherever the
+            // pointer rests is a tax on reading for some, and a lifted
+            // hand for a moment is an easy way to ask for it.
+            Picker(t("  Shown when"), selection: $model.hoverModifier) {
+                Text(t("the mouse rests")).tag("")
+                Text(t("⇧ Shift is held")).tag("shift")
+                Text(t("⌃ Control is held")).tag("control")
+                Text(t("⌥ Option is held")).tag("option")
+                Text(t("⌘ Command is held")).tag("command")
+            }
+            .disabled(!model.hoverDocs)
+            .frame(maxWidth: 360, alignment: .leading)
             Toggle(t("Keep files open when their window closes"), isOn: $model.keepBuffers)
             Picker(t("Interface language"), selection: $model.interfaceLanguage) {
                 Text(t("System")).tag("system")
