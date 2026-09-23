@@ -2721,7 +2721,8 @@ fn arm_hover(
     // one was asked for: without it the pointer can rest anywhere and
     // nothing appears.
     let (on, modifier) = {
-        let config = Shell::instance().config.borrow();
+        let shell = Shell::instance();
+        let config = shell.config.borrow();
         (config.hover_docs(), config.hover_modifier())
     };
     if !on {
