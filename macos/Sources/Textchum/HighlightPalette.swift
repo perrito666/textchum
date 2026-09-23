@@ -35,6 +35,11 @@ enum HighlightPalette {
         CoreTheme.styles.contains { $0.isBold || $0.isItalic }
     }
 
+    /// The colour a bracket pair of `depth` is painted with.
+    static func rainbow(depth: Int, darkAppearance: Bool) -> NSColor {
+        color(rgba: CoreDocument.rainbowColor(depth: depth, dark: darkAppearance))
+    }
+
     private static func color(rgba: UInt32) -> NSColor {
         NSColor(
             srgbRed: CGFloat((rgba >> 24) & 0xFF) / 255,

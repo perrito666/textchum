@@ -45,6 +45,22 @@ incorporé avec la grammaire du langage incorporé :
 - Les éléments `<script>` et `<style>` de HTML se colorent comme du
   JavaScript et du CSS.
 
+## Crochets
+
+Placez le curseur sur un `(`, `[` ou `{` — ou juste après sa fermeture
+— et les deux bouts de la paire sont teintés, pour trouver l'autre sans
+compter. Un crochet dans une chaîne ou un commentaire n'est pas un
+crochet, et un crochet sans partenaire est laissé tranquille : rien
+n'est teinté, et c'est la réponse.
+
+**Colour bracket pairs by depth** (Réglages ▸ Général, désactivé par
+défaut) peint chaque crochet apparié dans l'une de six couleurs selon
+sa profondeur d'imbrication, en recommençant après la sixième, par-
+dessus la couleur syntaxique. Un crochet sans partenaire garde sa
+couleur syntaxique, ce qui le fait ressortir. Les documents de plus
+d'un million de caractères n'ont ni l'un ni l'autre : le balayage
+couvre tout le texte et ses chaînes, à chaque modification.
+
 ## Comment ça marche
 
 Le partage des rôles suit la règle architecturale du projet :
@@ -93,6 +109,8 @@ l'autre, donc rien ne se replace.
 
 ## Pas encore là
 
+- Les six couleurs de l'arc-en-ciel sont celles de l'éditeur, pas du
+  thème ; un thème ne peut pas encore les changer.
 - Les requêtes limitées à la portion visible pour les documents de
   plusieurs centaines de kilooctets : aujourd'hui ils sont colorés en
   entier ou, au-delà d'un plafond, pas du tout.

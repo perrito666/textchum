@@ -44,6 +44,22 @@ incrustado con la gramática del lenguaje incrustado:
 - Los elementos `<script>` y `<style>` de HTML se colorean como JavaScript
   y CSS.
 
+## Corchetes
+
+Ponga el cursor en un `(`, `[` o `{` — o justo después de su cierre —
+y los dos extremos del par se tiñen, para encontrar el otro sin contar.
+Un corchete dentro de una cadena o de un comentario no es un corchete,
+y uno sin pareja se deja en paz: no se tiñe nada, y esa es la
+respuesta.
+
+**Colour bracket pairs by depth** (Ajustes ▸ General, apagado por
+defecto) pinta cada corchete emparejado en uno de seis colores según
+cuán profundo anida, repitiéndolos pasado el sexto, sobre el color de
+sintaxis. Un corchete sin pareja conserva su color de sintaxis, que es
+lo que lo hace destacar. Los documentos de más de un millón de
+caracteres no tienen ninguna de las dos cosas: el rastreo es del texto
+entero y sus cadenas, otra vez tras cada edición.
+
 ## Cómo funciona
 
 El reparto de responsabilidades sigue la regla arquitectónica del
@@ -93,5 +109,7 @@ nada se recoloca.
 
 ## Aún no está
 
+- Los seis colores del arcoíris son del editor, no del tema; un tema
+  todavía no puede cambiarlos.
 - Consultas limitadas a la zona visible para documentos de cientos de
   kilobytes: hoy se colorean enteros o, pasado un tope, no se colorean.

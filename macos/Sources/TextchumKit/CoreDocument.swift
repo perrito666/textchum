@@ -166,6 +166,34 @@ public final class CoreDocument {
         }
     }
 
+    /// The bracket the caret is on and its partner — the one just before
+    /// the caret first, else the one at it — or nil.
+    public func matchingBracket(at caret: Int) -> (this: Int, partner: Int)? {
+        var this: UInt = 0
+        var partner: UInt = 0
+        guard tc_document_matching_bracket(handle, UInt(caret), &this, &partner) else { return nil }
+        return (Int(this), Int(partner))
+    }
+
+    /// The paired brackets within `range` with their depth (the
+    /// outermost pair is 0), for colouring by depth.
+    public func bracketDepths(in range: NSRange) -> [(offset: Int, depth: Int)] {
+        var depths: UnsafeMutablePointer<TcBracketDepth>?
+        var count: UInt = 0
+        guard
+            tc_document_bracket_depths(
+                handle, UInt(range.location), UInt(NSMaxRange(range)), &depths, &count),
+            let depths
+        else { return [] }
+        defer { tc_bracket_depths_free(depths, count) }
+        return (0..<Int(count)).map { (Int(depths[$0].offset), Int(depths[$0].depth)) }
+    }
+
+    /// The colour bracket pairs of `depth` are painted with, 0xRRGGBBAA.
+    public static func rainbowColor(depth: Int, dark: Bool) -> UInt32 {
+        tc_bracket_rainbow(UInt32(depth), dark)
+    }
+
     /// The UTF-16 range of the innermost multi-line syntax block
     /// containing `position` — the caret's enclosing block. Nil for plain
     /// text or positions outside any block.

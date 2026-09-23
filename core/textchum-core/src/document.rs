@@ -114,6 +114,9 @@ pub struct Document {
     /// An expansion handed to the shell to insert, waiting for
     /// [`Document::begin_snippet`] to say where it landed.
     pending_snippet: Option<snippet::Expansion>,
+    /// The brackets of the current text, worked out once and kept
+    /// until an edit; see [`Document::brackets`].
+    brackets: std::cell::RefCell<Option<std::rc::Rc<Vec<crate::brackets::Bracket>>>>,
 }
 
 impl Default for Document {
@@ -136,6 +139,7 @@ impl Document {
             syntax: None,
             snippet: None,
             pending_snippet: None,
+            brackets: std::cell::RefCell::new(None),
         }
     }
 
@@ -154,6 +158,7 @@ impl Document {
             syntax: None,
             snippet: None,
             pending_snippet: None,
+            brackets: std::cell::RefCell::new(None),
         };
         doc.history.mark_saved();
         doc.detect_language();
@@ -174,6 +179,9 @@ impl Document {
     /// Sets (or clears, with `None`) the syntax language. Returns false if
     /// the name is unknown or the document exceeds the syntax size cap.
     pub fn set_language(&mut self, name: Option<&str>) -> bool {
+        // A language decides where the strings and comments are, which
+        // decides which brackets count.
+        self.brackets.borrow_mut().take();
         let Some(name) = name else {
             self.syntax = None;
             return true;
@@ -283,6 +291,58 @@ impl Document {
         serde_json::Value::Array(items).to_string()
     }
 
+    /// Documents past this size keep no bracket structure: the scan is
+    /// the whole text and its strings, again after every edit.
+    pub const BRACKETS_CEILING_UTF16: usize = 1_000_000;
+
+    /// The brackets of the text, as [`crate::brackets::scan`] answers
+    /// them with the strings, characters and comments the syntax knows
+    /// of left out. Worked out on the first ask after an edit and kept
+    /// until the next; empty past [`Self::BRACKETS_CEILING_UTF16`].
+    pub fn brackets(&self) -> std::rc::Rc<Vec<crate::brackets::Bracket>> {
+        if let Some(cached) = self.brackets.borrow().as_ref() {
+            return std::rc::Rc::clone(cached);
+        }
+        let length = self.len_utf16();
+        let scanned = if length > Self::BRACKETS_CEILING_UTF16 {
+            Vec::new()
+        } else {
+            let quiet: Vec<u32> = ["string", "string.special", "character", "comment"]
+                .iter()
+                .filter_map(|name| crate::theme::resolve(name))
+                .collect();
+            let mut excluded: Vec<(usize, usize)> = self
+                .highlights(0, length)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|span| quiet.contains(&span.style))
+                .map(|span| (span.start_utf16, span.end_utf16))
+                .collect();
+            excluded.sort_unstable();
+            crate::brackets::scan(&self.text(), &excluded)
+        };
+        let scanned = std::rc::Rc::new(scanned);
+        *self.brackets.borrow_mut() = Some(std::rc::Rc::clone(&scanned));
+        scanned
+    }
+
+    /// The bracket the caret is on and its partner; see
+    /// [`crate::brackets::matching`].
+    pub fn matching_bracket(&self, caret: usize) -> Option<(usize, usize)> {
+        crate::brackets::matching(&self.brackets(), caret)
+    }
+
+    /// The paired brackets within `start..end` with their depth, for
+    /// colouring by depth. A bracket without a partner is left out: it
+    /// keeps the colour its syntax gives it.
+    pub fn bracket_depths(&self, start: usize, end: usize) -> Vec<(usize, u32)> {
+        crate::brackets::within(&self.brackets(), start, end)
+            .iter()
+            .filter(|bracket| bracket.partner.is_some())
+            .map(|bracket| (bracket.offset, bracket.depth))
+            .collect()
+    }
+
     /// Styled spans over the UTF-16 code unit range `start..end`, in
     /// application order (later spans win where they overlap). Empty for
     /// plain-text documents.
@@ -388,6 +448,8 @@ impl Document {
     /// The single choke point for buffer mutation: performs the replacement
     /// and keeps the syntax tree in sync with an incremental re-parse.
     fn mutate_buffer(&mut self, start: usize, end: usize, text: &str) -> Result<(), BufferError> {
+        // The brackets are the text's; the text is about to change.
+        self.brackets.borrow_mut().take();
         // tree-sitter wants the edit described in bytes and (row, column)
         // points; start/old-end come from the text before the mutation,
         // new-end from after.

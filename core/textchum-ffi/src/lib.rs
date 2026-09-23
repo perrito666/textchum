@@ -2097,6 +2097,7 @@ pub unsafe extern "C" fn tc_config_set_hover_docs(config: *mut TcConfig, enabled
 /// The modifier key hover documentation waits for — "shift", "control",
 /// "option" or "command" — or an empty string for the mouse alone.
 /// Release with [`tc_string_free`].
+/// Whether bracket pairs are coloured by depth (`editor.rainbow_brackets`).
 ///
 /// # Safety
 /// `config` must be a live configuration pointer.
@@ -2131,6 +2132,30 @@ pub unsafe extern "C" fn tc_config_set_hover_modifier(
             .inner
             .set_hover_modifier((!modifier.is_empty()).then_some(modifier))
     }));
+}
+
+/// Whether bracket pairs are coloured by depth (`editor.rainbow_brackets`).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_rainbow_brackets(config: *const TcConfig) -> bool {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| config.inner.rainbow_brackets())).unwrap_or(false)
+}
+
+/// Sets whether bracket pairs are coloured by depth.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_rainbow_brackets(config: *mut TcConfig, enabled: bool) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_rainbow_brackets(enabled)));
 }
 
 /// Re-reads the configuration file, replacing in-memory state — for
@@ -4137,6 +4162,114 @@ pub unsafe extern "C" fn tc_highlight_snippet(
         true
     }))
     .unwrap_or(false)
+}
+
+/// One paired bracket, for colouring by depth.
+#[repr(C)]
+pub struct TcBracketDepth {
+    /// UTF-16 offset of the bracket.
+    pub offset: usize,
+    /// How many pairs enclose it; the outermost pair is 0.
+    pub depth: u32,
+}
+
+/// The paired brackets within `start..end` and their depth — a bracket
+/// without a partner is left out. Stores the array in `out`/`count_out`
+/// (empty is a success: null/0); release with [`tc_bracket_depths_free`].
+///
+/// # Safety
+/// `document` must be a live document pointer; `out` and `count_out`
+/// must point to writable slots.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_bracket_depths(
+    document: *const TcDocument,
+    start: usize,
+    end: usize,
+    out: *mut *mut TcBracketDepth,
+    count_out: *mut usize,
+) -> bool {
+    if out.is_null() || count_out.is_null() {
+        return false;
+    }
+    unsafe {
+        *out = std::ptr::null_mut();
+        *count_out = 0;
+    }
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let depths = document.inner.bracket_depths(start, end);
+        if depths.is_empty() {
+            return true;
+        }
+        let boxed: Box<[TcBracketDepth]> = depths
+            .into_iter()
+            .map(|(offset, depth)| TcBracketDepth { offset, depth })
+            .collect();
+        unsafe {
+            *count_out = boxed.len();
+            *out = Box::into_raw(boxed) as *mut TcBracketDepth;
+        }
+        true
+    }))
+    .unwrap_or(false)
+}
+
+/// Releases an array handed out by [`tc_document_bracket_depths`].
+///
+/// # Safety
+/// `depths` must be null or an array from that function, `count` long,
+/// released once.
+#[no_mangle]
+pub unsafe extern "C" fn tc_bracket_depths_free(depths: *mut TcBracketDepth, count: usize) {
+    if depths.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(depths, count)));
+    }
+}
+
+/// The bracket the caret is on and its partner: the one just before
+/// the caret first, else the one at it. Fills `this_out` and
+/// `partner_out` and returns true; false when neither side of the caret
+/// is a bracket with a partner.
+///
+/// # Safety
+/// `document` must be a live document pointer; the out pointers must
+/// point to writable slots.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_matching_bracket(
+    document: *const TcDocument,
+    caret: usize,
+    this_out: *mut usize,
+    partner_out: *mut usize,
+) -> bool {
+    if this_out.is_null() || partner_out.is_null() {
+        return false;
+    }
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| match document.inner.matching_bracket(caret) {
+        Some((this, partner)) => {
+            unsafe {
+                *this_out = this;
+                *partner_out = partner;
+            }
+            true
+        }
+        None => false,
+    }))
+    .unwrap_or(false)
+}
+
+/// The colour bracket pairs of `depth` are painted with, 0xRRGGBBAA,
+/// for the dark or the light appearance.
+#[no_mangle]
+pub extern "C" fn tc_bracket_rainbow(depth: u32, dark: bool) -> u32 {
+    textchum_core::brackets::rainbow(depth, dark)
 }
 
 /// Styled spans over the UTF-16 code unit range `start..end`, in

@@ -2999,6 +2999,23 @@ final class DocumentController: NSResponder {
 
     /// Where the selected word appears in the visible text.
     private var occurrenceRanges: [NSRange] = []
+    /// The bracket the caret is on and its partner, tinted so the eye
+    /// finds the other end.
+    private(set) var bracketMatchRanges: [NSRange] = []
+
+    /// The caret moved: the pair it is on, if any, is what to mark.
+    private func refreshBracketMatch() {
+        let previous = bracketMatchRanges
+        let caret = textView?.selectedRange()
+        if let caret, caret.length == 0, let pair = coreDocument.matchingBracket(at: caret.location) {
+            bracketMatchRanges = [
+                NSRange(location: pair.this, length: 1), NSRange(location: pair.partner, length: 1),
+            ]
+        } else {
+            bracketMatchRanges = []
+        }
+        if previous != bracketMatchRanges { renderMarks() }
+    }
 
     /// Recomputes the occurrence marks for the current selection.
     ///
@@ -3371,6 +3388,9 @@ final class DocumentController: NSResponder {
         // rendering attributes, which it does draw.
         var marks: [EditorTextView.BackgroundMark] = []
         let text: NSString = textView.textStorage?.mutableString ?? (textView.string as NSString)
+        for bracket in bracketMatchRanges where inScope(bracket) && NSMaxRange(bracket) <= text.length {
+            marks.append(.init(range: bracket, color: NSColor.controlAccentColor.withAlphaComponent(0.35)))
+        }
         for occurrence in occurrenceRanges where inScope(occurrence) {
             guard NSMaxRange(occurrence) <= text.length else { continue }
             marks.append(
@@ -3636,12 +3656,17 @@ final class DocumentController: NSResponder {
             }
         }
 
-        let spans = toPaint.flatMap { coreDocument.highlights(in: $0) }
-        guard !spans.isEmpty else { return true }
-
         let darkAppearance =
             (window?.effectiveAppearance ?? NSApp.effectiveAppearance)
                 .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let spans = toPaint.flatMap { coreDocument.highlights(in: $0) }
+        guard !spans.isEmpty else {
+            // Plain text has no syntax to colour and brackets all the same.
+            if appliedRainbowBrackets {
+                paintRainbow(over: toPaint, in: layoutManager, darkAppearance: darkAppearance)
+            }
+            return true
+        }
         let wantsTraits = HighlightPalette.hasTypographicStyles
         var wantedFonts: [NSRange: NSFont] = [:]
         for span in spans {
@@ -3670,6 +3695,9 @@ final class DocumentController: NSResponder {
             wantedFonts[clamped] = Self.font(
                 appliedFont, bold: traits.bold, italic: traits.italic)
         }
+        if appliedRainbowBrackets {
+            paintRainbow(over: toPaint, in: layoutManager, darkAppearance: darkAppearance)
+        }
         if wantsTraits, let storage = textView.textStorage {
             if isLiveScrolling {
                 // A font is a layout attribute: writing one under a
@@ -3697,6 +3725,30 @@ final class DocumentController: NSResponder {
     /// Bold and italic skipped while a view was scrolling, owed to the
     /// painted stretch when the scroll ends.
     private var traitFontsOwed = false
+
+    /// Paints every paired bracket in `stretches` the colour of its
+    /// depth, over the syntax colour just written. A bracket without a
+    /// partner keeps the syntax colour: an unmatched one is what the
+    /// eye is looking for, and one colour among the rainbow says so.
+    private func paintRainbow(
+        over stretches: [NSRange], in layoutManager: NSTextLayoutManager, darkAppearance: Bool
+    ) {
+        guard let contentManager = layoutManager.textContentManager else { return }
+        let documentRange = layoutManager.documentRange
+        for stretch in stretches {
+            for (offset, depth) in coreDocument.bracketDepths(in: stretch) {
+                guard
+                    let start = contentManager.location(documentRange.location, offsetBy: offset),
+                    let end = contentManager.location(start, offsetBy: 1),
+                    let range = NSTextRange(location: start, end: end)
+                else { continue }
+                let color = HighlightPalette.rainbow(depth: depth, darkAppearance: darkAppearance)
+                for target in paintTargets {
+                    target.setRenderingAttributes([.foregroundColor: color], for: range)
+                }
+            }
+        }
+    }
 
     private func layoutTextRange(_ range: NSRange, in layoutManager: NSTextLayoutManager)
         -> NSTextRange?
@@ -3928,6 +3980,9 @@ final class DocumentController: NSResponder {
     /// The configured tab width, remembered for formatting requests.
     private var appliedTabWidth = 4
 
+    /// Whether bracket pairs are painted by depth over their syntax
+    /// colour.
+    private var appliedRainbowBrackets = false
     /// Whether mouse-rest hover documentation is on. The deliberate
     /// show-at-caret command ignores this.
     private var appliedHoverDocs = true
@@ -3973,6 +4028,12 @@ final class DocumentController: NSResponder {
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
         appliedHoverModifier = Self.modifierFlags(named: settings.hoverModifier)
+        if appliedRainbowBrackets != settings.rainbowBrackets {
+            appliedRainbowBrackets = settings.rainbowBrackets
+            // The colours are rendering attributes over the painted
+            // stretch; a forced pass writes or clears them.
+            _ = applyHighlights(force: true)
+        }
         appliedKeepBuffers = settings.keepBuffers
         appliedMarkOccurrences = settings.markOccurrences
         appliedOccurrencesCaseSensitive = settings.occurrencesCaseSensitive
@@ -5478,6 +5539,7 @@ extension DocumentController: NSTextViewDelegate {
         }
         // A new selection asks a new question, and an edit answers the
         // old one differently; both go through here.
+        refreshBracketMatch()
         refreshOccurrences()
         scheduleCaretHover()
     }
