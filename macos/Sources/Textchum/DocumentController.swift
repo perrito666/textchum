@@ -2880,6 +2880,18 @@ final class DocumentController: NSResponder {
     private(set) var findMatches: [NSRange] = []
     private var findCurrent: Int?
     var findBarShown: Bool { focusedView?.findBar.isHidden == false }
+    /// Finding runs off the main thread: the pattern's every keystroke
+    /// used to scan the whole document before the character showed,
+    /// and so did every character typed into the document while the
+    /// bar was up — sixty milliseconds each in a hundred-kilobyte
+    /// file, and the file's size times that. A search is owed a beat
+    /// after the last change and answered by generation, so a slow
+    /// answer to an old pattern is dropped, never shown.
+    private static let findQueue = DispatchQueue(label: "textchum.find", qos: .userInitiated)
+    private var findGeneration = 0
+    private var findDebounce: Timer?
+    /// True while an answer is owed — the smoke test waits on it.
+    private(set) var findPending = false
 
     /// Edit ▸ Find ▸ Find and Replace… (⌥⌘F): the bar, started from the
     /// selection when there is one.
@@ -2913,7 +2925,7 @@ final class DocumentController: NSResponder {
 
     private func handleFind(_ request: FindReplaceBar.Request) {
         switch request {
-        case .changed: refreshFindMatches(selectCurrent: true)
+        case .changed: scheduleFindRefresh(selectCurrent: true)
         case .next: findStep(1)
         case .previous: findStep(-1)
         case .replace: replaceCurrentMatch()
@@ -2922,13 +2934,69 @@ final class DocumentController: NSResponder {
         }
     }
 
-    /// Asks the core for the matches and shows the count; with
-    /// `selectCurrent`, the first match at or after the caret is
-    /// selected, so typing a pattern walks to it.
+    /// Finds a beat from now, once, however many changes arrive in the
+    /// meantime: a pattern being typed, a document being edited.
+    private func scheduleFindRefresh(selectCurrent: Bool) {
+        findDebounce?.invalidate()
+        findPending = true
+        // .common mode: a timer scheduled while the field editor is
+        // tracking would otherwise wait for typing to stop entirely.
+        let timer = Timer(timeInterval: 0.04, repeats: false) { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.refreshFindMatches(selectCurrent: selectCurrent) }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        findDebounce = timer
+    }
+
+    /// Asks the core for the matches, off the main thread, and shows
+    /// the count when they come; with `selectCurrent`, the first match
+    /// at or after the caret is selected, so typing a pattern walks to
+    /// it. Nothing but this document's text goes to the other thread,
+    /// and only the newest question's answer is taken.
     func refreshFindMatches(selectCurrent: Bool) {
+        findDebounce?.invalidate()
+        findDebounce = nil
+        guard let view = focusedView, !view.findBar.isHidden else {
+            findPending = false
+            return
+        }
+        let bar = view.findBar
+        let pattern = bar.pattern
+        guard !pattern.isEmpty else {
+            findPending = false
+            findMatches = []
+            findCurrent = nil
+            bar.show(found: 0, current: nil, problem: nil)
+            renderMarks()
+            return
+        }
+        let text = view.textView.string
+        let options = bar.options
+        findGeneration += 1
+        let generation = findGeneration
+        Self.findQueue.async { [weak self] in
+            let found = CoreFind.matches(in: text, pattern: pattern, options: options)
+            let problem = found == nil ? CoreFind.problem(pattern: pattern, options: options) : nil
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.findGeneration == generation else { return }
+                    self.findPending = false
+                    self.takeFindResults(found, problem: problem, selectCurrent: selectCurrent)
+                }
+            }
+        }
+    }
+
+    /// The same, answered before it returns — for the steps that act
+    /// on the matches next: replacing, and a Next with none in hand.
+    private func refreshFindMatchesNow(selectCurrent: Bool) {
+        findDebounce?.invalidate()
+        findDebounce = nil
+        findPending = false
         guard let view = focusedView, !view.findBar.isHidden else { return }
         let bar = view.findBar
-        let text = view.textView.string
         let pattern = bar.pattern
         guard !pattern.isEmpty else {
             findMatches = []
@@ -2937,31 +3005,44 @@ final class DocumentController: NSResponder {
             renderMarks()
             return
         }
-        guard let found = CoreFind.matches(in: text, pattern: pattern, options: bar.options) else {
+        findGeneration += 1
+        let found = CoreFind.matches(in: view.textView.string, pattern: pattern, options: bar.options)
+        let problem = found == nil ? CoreFind.problem(pattern: pattern, options: bar.options) : nil
+        takeFindResults(found, problem: problem, selectCurrent: selectCurrent)
+    }
+
+    private func takeFindResults(_ found: [NSRange]?, problem: String?, selectCurrent: Bool) {
+        guard let view = focusedView, !view.findBar.isHidden else { return }
+        let bar = view.findBar
+        guard let found else {
             findMatches = []
             findCurrent = nil
-            bar.show(found: 0, current: nil, problem: CoreFind.problem(pattern: pattern, options: bar.options))
+            bar.show(found: 0, current: nil, problem: problem)
             renderMarks()
             return
         }
-        findMatches = found
+        // The text may have moved on under an answer computed a beat
+        // ago; a match past its end is no match.
+        let length = (view.textView.string as NSString).length
+        findMatches = found.filter { NSMaxRange($0) <= length }
+        let matches = findMatches
         let caret = view.textView.selectedRange().location
-        if let onCaret = found.firstIndex(where: { $0 == view.textView.selectedRange() }) {
+        if let onCaret = matches.firstIndex(where: { $0 == view.textView.selectedRange() }) {
             findCurrent = onCaret
-        } else if selectCurrent, let ahead = found.firstIndex(where: { $0.location >= caret }) ?? (found.isEmpty ? nil : 0) {
+        } else if selectCurrent, let ahead = matches.firstIndex(where: { $0.location >= caret }) ?? (matches.isEmpty ? nil : 0) {
             findCurrent = ahead
             select(match: ahead)
         } else {
             findCurrent = nil
         }
-        bar.show(found: found.count, current: findCurrent, problem: nil)
+        bar.show(found: matches.count, current: findCurrent, problem: nil)
         renderMarks()
     }
 
     /// Matches follow the text: an edit re-asks while the bar is up.
     func refreshFindMatchesIfShown() {
         guard findBarShown else { return }
-        refreshFindMatches(selectCurrent: false)
+        scheduleFindRefresh(selectCurrent: false)
     }
 
     private func select(match index: Int) {
@@ -2974,7 +3055,7 @@ final class DocumentController: NSResponder {
 
     private func findStep(_ step: Int) {
         guard let view = focusedView else { return }
-        if findMatches.isEmpty { refreshFindMatches(selectCurrent: false) }
+        if findMatches.isEmpty || findPending { refreshFindMatchesNow(selectCurrent: false) }
         guard !findMatches.isEmpty else {
             NSSound.beep()
             return
@@ -3015,7 +3096,7 @@ final class DocumentController: NSResponder {
         guard textView.shouldChangeText(in: range, replacementString: expanded) else { return }
         textView.textStorage?.replaceCharacters(in: range, with: expanded)
         textView.didChangeText()
-        refreshFindMatches(selectCurrent: false)
+        refreshFindMatchesNow(selectCurrent: false)
         // The one after the replaced text, by position.
         let after = range.location + (expanded as NSString).length
         if let next = findMatches.firstIndex(where: { $0.location >= after }) ?? (findMatches.isEmpty ? nil : 0) {
@@ -3046,7 +3127,7 @@ final class DocumentController: NSResponder {
         textView.didChangeText()
         let length = (result.text as NSString).length
         textView.setSelectedRange(NSRange(location: min(caret, length), length: 0))
-        refreshFindMatches(selectCurrent: false)
+        refreshFindMatchesNow(selectCurrent: false)
         bar.show(found: findMatches.count, current: nil, problem: nil)
     }
 
@@ -3056,7 +3137,15 @@ final class DocumentController: NSResponder {
         view.findBar.patternField.stringValue = pattern
         view.findBar.replacementField.stringValue = replacement
         view.findBar.setOptions(options)
-        refreshFindMatches(selectCurrent: true)
+        refreshFindMatchesNow(selectCurrent: true)
+    }
+
+    /// For the smoke test and the probe: the pattern typed, the way
+    /// the field reports it — the debounced, off-thread path.
+    func debugTypeFind(pattern: String) {
+        guard let view = focusedView else { return }
+        view.findBar.patternField.stringValue = pattern
+        handleFind(.changed)
     }
 
     func debugReplaceAll() { replaceAllMatches() }

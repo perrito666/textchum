@@ -1902,6 +1902,20 @@ func runSmokeTest() -> Int32 {
             print("FAIL: an unreadable pattern did not say so")
             return 1
         }
+        // Typed, the pattern is answered a beat later and off the main
+        // thread; the typing itself owes nothing. A pattern typed over
+        // an unanswered one is the only one answered.
+        findDocument.debugTypeFind(pattern: "zzz")
+        findDocument.debugTypeFind(pattern: "o")
+        guard findDocument.findPending else {
+            print("FAIL: typing a pattern answered on the spot")
+            return 1
+        }
+        spin(untilTrue: { !findDocument.findPending }, seconds: 5)
+        guard !findDocument.findPending, findDocument.findMatches.count == 6 else {
+            print("FAIL: the typed pattern was not answered: pending \(findDocument.findPending), \(findDocument.findMatches)")
+            return 1
+        }
         findDocument.hideFindReplace()
         guard !findDocument.findBarShown else {
             print("FAIL: the find bar did not go away")
@@ -1909,7 +1923,7 @@ func runSmokeTest() -> Int32 {
         }
         findBench.window?.close()
     }
-    print("find and replace ok (docked bar, Vim's dialect, groups in the replacement)")
+    print("find and replace ok (docked bar, Vim's dialect, groups in the replacement, answered off the main thread)")
 
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows
