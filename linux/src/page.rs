@@ -51,6 +51,11 @@ pub struct Page {
     /// The hover balloon and its content label.
     hover_popover: gtk::Popover,
     hover_label: gtk::Label,
+    /// The text the balloon up right now is about, as character
+    /// offsets — the symbol, or the diagnostic. The pointer moving
+    /// within it keeps the balloon: a name read letter by letter is
+    /// one name.
+    hover_about: Cell<Option<(i32, i32)>>,
     /// The completion popup and its current candidates.
     completion: CompletionState,
     /// The git change bar, and the marks it draws: line number to kind.
@@ -333,6 +338,7 @@ impl Page {
             preview,
             hover_popover,
             hover_label,
+            hover_about: Cell::new(None),
             completion: CompletionState {
                 popover: completion_popover,
                 list: completion_list,
@@ -2541,8 +2547,11 @@ fn diagnostic_under(page: &Rc<Page>, x: f64, y: f64) -> Option<crate::shell::Dia
     diagnostic_at(handles, line, character)
 }
 
-/// The balloon hover documentation and diagnostics both appear in.
-fn show_balloon(page: &Rc<Page>, text: &str, x: f64, y: f64) {
+/// The balloon hover documentation and diagnostics both appear in;
+/// `about` is the text it explains, which the pointer may cross
+/// without closing it.
+fn show_balloon(page: &Rc<Page>, text: &str, x: f64, y: f64, about: Option<(i32, i32)>) {
+    page.hover_about.set(about);
     page.hover_label.set_text(text);
     page.hover_popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(
         x as i32,
@@ -2553,60 +2562,159 @@ fn show_balloon(page: &Rc<Page>, text: &str, x: f64, y: f64) {
     page.hover_popover.popup();
 }
 
+/// The modifier the configuration names, as GDK spells it: Option is
+/// Alt on this keyboard and Command is Super.
+fn hover_modifier_mask(name: &str) -> gtk::gdk::ModifierType {
+    use gtk::gdk::ModifierType;
+    match name {
+        "shift" => ModifierType::SHIFT_MASK,
+        "control" => ModifierType::CONTROL_MASK,
+        "option" => ModifierType::ALT_MASK,
+        "command" => ModifierType::SUPER_MASK,
+        _ => ModifierType::empty(),
+    }
+}
+
+/// Whether the modifier key `key` is the one the configuration names.
+fn is_hover_modifier_key(name: &str, key: gtk::gdk::Key) -> bool {
+    use gtk::gdk::Key;
+    match name {
+        "shift" => matches!(key, Key::Shift_L | Key::Shift_R),
+        "control" => matches!(key, Key::Control_L | Key::Control_R),
+        "option" => matches!(key, Key::Alt_L | Key::Alt_R),
+        "command" => matches!(key, Key::Super_L | Key::Super_R | Key::Meta_L | Key::Meta_R),
+        _ => false,
+    }
+}
+
+/// The iter under a widget point, when there is text there.
+fn iter_under(page: &Page, x: f64, y: f64) -> Option<gtk::TextIter> {
+    let (bx, by) = page.view.window_to_buffer_coords(
+        gtk::TextWindowType::Widget,
+        x as i32,
+        y as i32,
+    );
+    page.view.iter_at_location(bx, by)
+}
+
+/// Arms the balloon for what is under (x, y), a beat from now — or
+/// shows a diagnostic's message at once, which needs no server and
+/// no key: the mark is on screen either way.
+fn arm_hover(
+    page: &Rc<Page>,
+    timer: &Rc<Cell<Option<glib::SourceId>>>,
+    x: f64,
+    y: f64,
+    held: gtk::gdk::ModifierType,
+) {
+    if let Some(previous) = timer.take() {
+        previous.remove();
+    }
+    if let Some(found) = diagnostic_under(page, x, y) {
+        let about = (|| {
+            let start = page.buffer.iter_at_line_offset(found.line, 0)?;
+            let start = start.offset() + char_offset(&line_text(page, found.line), found.character);
+            let end = page.buffer.iter_at_line_offset(found.end_line, 0)?;
+            let end = end.offset() + char_offset(&line_text(page, found.end_line), found.end_character);
+            Some((start, end.max(start + 1)))
+        })();
+        show_balloon(page, &format!("{}\n{}", found.kind(), found.message), x, y, about);
+        return;
+    }
+    // Off unless the configuration says otherwise; the deliberate
+    // at-caret command ignores the toggle. And the key to hold, when
+    // one was asked for: without it the pointer can rest anywhere and
+    // nothing appears.
+    let (on, modifier) = {
+        let config = Shell::instance().config.borrow();
+        (config.hover_docs(), config.hover_modifier())
+    };
+    if !on {
+        return;
+    }
+    if let Some(name) = modifier {
+        if !held.contains(hover_modifier_mask(&name)) {
+            return;
+        }
+    }
+    let timer_inner = Rc::clone(timer);
+    let weak = Rc::downgrade(page);
+    let source = glib::timeout_add_local_once(
+        std::time::Duration::from_millis(500),
+        move || {
+            timer_inner.set(None);
+            let Some(page) = weak.upgrade() else { return };
+            let Some(iter) = iter_under(&page, x, y) else { return };
+            request_hover(&page, iter, false);
+        },
+    );
+    timer.set(Some(source));
+}
+
+/// One line's text, for turning a UTF-16 column into a character one.
+fn line_text(page: &Page, line: i32) -> String {
+    let Some(start) = page.buffer.iter_at_line(line) else { return String::new() };
+    let mut end = start;
+    if !end.ends_line() {
+        end.forward_to_line_end();
+    }
+    page.buffer.text(&start, &end, true).to_string()
+}
+
 fn install_hover(page: &Rc<Page>) {
     let motion = gtk::EventControllerMotion::new();
     let timer: Rc<Cell<Option<glib::SourceId>>> = Rc::new(Cell::new(None));
+    // Where the pointer last was over the text, for a modifier key
+    // pressed once it is there.
+    let last_pointer: Rc<Cell<Option<(f64, f64)>>> = Rc::new(Cell::new(None));
     let weak = Rc::downgrade(page);
     {
         let timer = Rc::clone(&timer);
-        motion.connect_motion(move |_, x, y| {
+        let last_pointer = Rc::clone(&last_pointer);
+        motion.connect_motion(move |controller, x, y| {
             let Some(page) = weak.upgrade() else { return };
-            page.hover_popover.popdown();
-            if let Some(previous) = timer.take() {
-                previous.remove();
-            }
-            // A diagnostic is already in hand and needs no server, so
-            // it answers whether or not hover documentation is on: the
-            // mark is on screen either way.
-            if let Some(found) = diagnostic_under(&page, x, y) {
-                show_balloon(&page, &format!("{}\n{}", found.kind(), found.message), x, y);
-                return;
-            }
-            // Off unless the configuration says otherwise; the
-            // deliberate at-caret command ignores the toggle.
-            if !Shell::instance().config.borrow().hover_docs() {
-                return;
-            }
-            let timer_inner = Rc::clone(&timer);
-            let weak = Rc::downgrade(&page);
-            let source = glib::timeout_add_local_once(
-                std::time::Duration::from_millis(500),
-                move || {
-                    timer_inner.set(None);
-                    let Some(page) = weak.upgrade() else { return };
-                    let (bx, by) = page.view.window_to_buffer_coords(
-                        gtk::TextWindowType::Widget,
-                        x as i32,
-                        y as i32,
-                    );
-                    let Some(iter) = page.view.iter_at_location(bx, by) else {
+            last_pointer.set(Some((x, y)));
+            if page.hover_popover.is_visible() {
+                if let (Some((start, end)), Some(iter)) = (page.hover_about.get(), iter_under(&page, x, y)) {
+                    if (start..end).contains(&iter.offset()) {
                         return;
-                    };
-                    request_hover(&page, iter, false);
-                },
-            );
-            timer.set(Some(source));
+                    }
+                }
+            }
+            page.hover_popover.popdown();
+            page.hover_about.set(None);
+            arm_hover(&page, &timer, x, y, controller.current_event_state());
         });
     }
     {
         let timer = Rc::clone(&timer);
+        let last_pointer = Rc::clone(&last_pointer);
         motion.connect_leave(move |_| {
+            last_pointer.set(None);
             if let Some(previous) = timer.take() {
                 previous.remove();
             }
         });
     }
     page.view.add_controller(motion);
+
+    // The modifier pressed with the pointer already resting on a
+    // symbol: that is the ask.
+    let keys = gtk::EventControllerKey::new();
+    let weak = Rc::downgrade(page);
+    keys.connect_key_pressed(move |controller, key, _, state| {
+        let Some(page) = weak.upgrade() else { return glib::Propagation::Proceed };
+        let modifier = Shell::instance().config.borrow().hover_modifier();
+        if let (Some(name), Some((x, y))) = (modifier, last_pointer.get()) {
+            if is_hover_modifier_key(&name, key) && !page.hover_popover.is_visible() {
+                let held = state | hover_modifier_mask(&name);
+                arm_hover(&page, &timer, x, y, held);
+            }
+        }
+        let _ = controller;
+        glib::Propagation::Proceed
+    });
+    page.view.add_controller(keys);
 }
 
 /// Shows hover documentation for the symbol under the caret — works
@@ -2668,6 +2776,20 @@ fn request_hover(page: &Rc<Page>, iter: gtk::TextIter, deliberate: bool) {
     shell.expect_response(id, move |json| {
         let Some(page) = weak.upgrade() else { return };
         let Some(text) = hover_text(json) else { return };
+        // The identifier around the point, which the pointer may cross
+        // without the balloon closing.
+        let mut start = iter;
+        while start.backward_char() && (start.char().is_alphanumeric() || start.char() == '_') {}
+        if !(start.char().is_alphanumeric() || start.char() == '_') {
+            start.forward_char();
+        }
+        let mut end = iter;
+        while end.char().is_alphanumeric() || end.char() == '_' {
+            if !end.forward_char() {
+                break;
+            }
+        }
+        page.hover_about.set(Some((start.offset(), end.offset().max(start.offset() + 1))));
         page.hover_label.set_markup(&hover_markup(&text));
         let rect = page.view.iter_location(&iter);
         let (wx, wy) = page.view.buffer_to_window_coords(

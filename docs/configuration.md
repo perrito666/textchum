@@ -44,14 +44,18 @@ A file edited by hand might look like:
     "font_family": "JetBrains Mono",
     "font_size": 13,
     "tab_width": 4,
-    "hover": false
+    "hover": false,
+    "hover_modifier": "option"
   }
 }
 ```
 
 `appearance` accepts `"system"`, `"light"`, or `"dark"`; omitting it (the
 default) follows the system. `editor.hover` switches the mouse-rest
-documentation popover off (`true`, the default, keeps it on).
+documentation popover off (`true`, the default, keeps it on);
+`editor.hover_modifier` — `"shift"`, `"control"`, `"option"` or
+`"command"` — makes it wait for that key as well, and leaving it out
+means the mouse alone.
 `editor.new_files_in` places fresh documents in a `"tab"` of the
 frontmost window's group (the default) or a `"window"` of their own.
 `editor.mark_occurrences` (`true` by default) marks the other places

@@ -46,7 +46,8 @@ Un archivo editado a mano podría verse así:
     "font_family": "JetBrains Mono",
     "font_size": 13,
     "tab_width": 4,
-    "hover": false
+    "hover": false,
+    "hover_modifier": "option"
   }
 }
 ```
@@ -54,7 +55,9 @@ Un archivo editado a mano podría verse así:
 `appearance` acepta `"system"`, `"light"` u `"dark"`; si se omite (el
 valor por defecto), se sigue al sistema. `editor.hover` apaga el globo
 de documentación al reposar el ratón (`true`, el valor por defecto, lo
-mantiene encendido). `editor.new_files_in` coloca los documentos
+mantiene encendido); `editor.hover_modifier` — `"shift"`, `"control"`,
+`"option"` u `"command"` — hace que además espere esa tecla, y omitirlo
+significa solo el ratón. `editor.new_files_in` coloca los documentos
 nuevos en una `"tab"` del grupo de la ventana frontal (el valor por
 defecto) o en una `"window"` propia. `editor.mark_occurrences` (`true`
 por defecto) marca los demás lugares donde aparece la palabra

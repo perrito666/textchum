@@ -47,14 +47,18 @@ Un fichier édité à la main pourrait ressembler à :
     "font_family": "JetBrains Mono",
     "font_size": 13,
     "tab_width": 4,
-    "hover": false
+    "hover": false,
+    "hover_modifier": "option"
   }
 }
 ```
 
 `appearance` accepte `"system"`, `"light"` ou `"dark"` ; en son absence
 (le défaut), le système est suivi. `editor.hover` désactive la bulle de
-documentation au survol (`true`, le défaut, la laisse active).
+documentation au survol (`true`, le défaut, la laisse active) ;
+`editor.hover_modifier` — `"shift"`, `"control"`, `"option"` ou
+`"command"` — la fait attendre cette touche en plus, et l'omettre
+signifie la souris seule.
 `editor.new_files_in` place les documents neufs dans un `"tab"` du
 groupe de la fenêtre frontale (le défaut) ou dans une `"window"` à
 eux. `editor.mark_occurrences` (`true` par défaut) marque les autres

@@ -2094,6 +2094,45 @@ pub unsafe extern "C" fn tc_config_set_hover_docs(config: *mut TcConfig, enabled
     let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_hover_docs(enabled)));
 }
 
+/// The modifier key hover documentation waits for — "shift", "control",
+/// "option" or "command" — or an empty string for the mouse alone.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_hover_modifier(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    owned_c_string(config.inner.hover_modifier().unwrap_or_default())
+}
+
+/// Sets (or removes, with `modifier_len == 0` or a name that is not a
+/// modifier) the key hover documentation waits for.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `modifier` must point
+/// to `modifier_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_hover_modifier(
+    config: *mut TcConfig,
+    modifier: *const c_char,
+    modifier_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(modifier) = (unsafe { str_from_raw(modifier, modifier_len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config
+            .inner
+            .set_hover_modifier((!modifier.is_empty()).then_some(modifier))
+    }));
+}
+
 /// Re-reads the configuration file, replacing in-memory state — for
 /// following external edits while running. Returns a human-readable
 /// warning (release with [`tc_string_free`]) or null when the file was

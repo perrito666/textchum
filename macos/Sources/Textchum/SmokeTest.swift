@@ -587,6 +587,29 @@ func runSmokeTest() -> Int32 {
     // the part that can be verified honestly, and it is the part that
     // has actually regressed before.
 
+    // The key hover waits for: one of the four, or the mouse alone;
+    // a name that is not a key is no requirement, and the flags the
+    // shell checks against are the key's own.
+    do {
+        let hoverConfig = CoreConfig(path: settingsScratch)
+        hoverConfig.hoverModifier = "option"
+        guard hoverConfig.hoverModifier == "option",
+            DocumentController.modifierFlags(named: "option") == .option,
+            DocumentController.modifierFlags(named: "command") == .command
+        else {
+            print("FAIL: the hover modifier did not reach the configuration or the flags")
+            return 1
+        }
+        hoverConfig.hoverModifier = "hyper"
+        guard hoverConfig.hoverModifier == "",
+            DocumentController.modifierFlags(named: "").isEmpty
+        else {
+            print("FAIL: a key nobody can hold was kept as a requirement")
+            return 1
+        }
+    }
+    print("hover key ok (a real modifier or the mouse alone)")
+
     // One sidebar width across every window. The wiring needs a window
     // server, but the two ways it goes wrong are pure decisions and are
     // checked here: adopting a width already held sets two windows

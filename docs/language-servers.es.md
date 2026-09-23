@@ -35,10 +35,15 @@ nadie.
   servidor en un globo, con el Markdown que envían los servidores ya
   renderizado — bloques de código en monoespaciada, énfasis y código en
   línea con su estilo. Solo se dispara sobre identificadores (nunca
-  sobre espacios ni comentarios), se puede apagar en Vista ▸
-  Documentación al pasar (o en Ajustes), y **Mostrar documentación del
-  símbolo** (⌃⌘H) la pide para el símbolo bajo el cursor a demanda —
-  incluso con el hover del ratón apagado.
+  sobre espacios ni comentarios), sigue abierto mientras el puntero se
+  mueve dentro del símbolo que explica, y se puede apagar en Vista ▸
+  Documentación al pasar (o en Ajustes). Ajustes ▸ General también
+  puede pedir que se mantenga una tecla — ⇧, ⌃, ⌥ o ⌘ — para mostrarlo,
+  de modo que la documentación aparezca cuando se pide y no donde
+  repose el puntero; pulsar la tecla con el puntero ya sobre un símbolo
+  también la pide. **Mostrar documentación del símbolo** (⌃⌘H) la pide
+  para el símbolo bajo el cursor a demanda — incluso con el hover del
+  ratón apagado.
 - **Saltar a la definición** (⌃⌘J, o ⌘-clic) va al símbolo bajo el
   cursor — entre archivos, abriendo o trayendo al frente el destino
   según haga falta. Sobre la definición no tiene adónde ir, así que

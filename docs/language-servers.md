@@ -28,10 +28,14 @@ never join someone else's workspace either.
 - Resting the mouse over a symbol shows the server's **hover**
   documentation in a popover, with the Markdown servers send rendered
   — code blocks monospaced, emphasis and inline code styled. It only
-  triggers over identifiers (never whitespace or comments), can be
-  switched off in View ▸ Hover Documentation (or Settings), and
-  **Show Documentation for Symbol** (⌃⌘H) asks for the symbol under
-  the caret on demand — even with mouse hover off.
+  triggers over identifiers (never whitespace or comments), stays up
+  while the pointer moves within the symbol it explains, and can be
+  switched off in View ▸ Hover Documentation (or Settings). Settings ▸
+  General can also ask for a key — ⇧, ⌃, ⌥ or ⌘ — to be held for it,
+  so documentation appears when asked for rather than wherever the
+  pointer rests; pressing the key with the pointer already on a symbol
+  is an ask too. **Show Documentation for Symbol** (⌃⌘H) asks for the
+  symbol under the caret on demand — even with mouse hover off.
 - **Jump to Definition** (⌃⌘J, or ⌘-click) goes to the symbol under
   the caret — across files, opening or fronting the target as needed.
   On the definition it has nowhere to go, so it answers the question

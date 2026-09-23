@@ -34,8 +34,13 @@ quelqu'un d'autre.
   serveur dans une bulle, avec le Markdown envoyé par les serveurs déjà
   rendu — blocs de code en chasse fixe, emphase et code en ligne
   stylés. Elle ne se déclenche que sur les identifiants (jamais sur les
-  espaces ni les commentaires), se désactive dans Présentation ▸
-  Documentation au survol (ou dans les Réglages), et **Afficher la
+  espaces ni les commentaires), reste ouverte tant que le pointeur se
+  déplace dans le symbole qu'elle explique, et se désactive dans
+  Présentation ▸ Documentation au survol (ou dans les Réglages).
+  Réglages ▸ Général peut aussi exiger qu'une touche — ⇧, ⌃, ⌥ ou ⌘ —
+  soit maintenue, pour que la documentation apparaisse quand on la
+  demande et non là où le pointeur se pose ; presser la touche avec le
+  pointeur déjà sur un symbole est aussi une demande. **Afficher la
   documentation du symbole** (⌃⌘H) la demande pour le symbole sous le
   curseur — même souris désactivée.
 - **Aller à la définition** (⌃⌘J, ou ⌘-clic) rejoint le symbole sous

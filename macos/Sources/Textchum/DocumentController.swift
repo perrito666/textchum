@@ -816,23 +816,61 @@ final class DocumentController: NSResponder {
         // The armed hover would otherwise fire over whatever the mouse
         // came to rest on outside the text — the status bar, say.
         hoverTimer?.invalidate()
+        closeBalloon()
+        lastPointerPoint = nil
+    }
+
+    /// The text the balloon up right now is about — the symbol, or the
+    /// diagnostic. The pointer moving within it keeps the balloon: a
+    /// name read letter by letter is one name, and a balloon that
+    /// closed and opened again for each letter said so three times.
+    private var balloonRange: NSRange?
+    /// Where the pointer last was over the text, for a modifier key
+    /// pressed once it is there.
+    private var lastPointerPoint: NSPoint?
+
+    private func closeBalloon() {
         hoverPopover?.close()
         hoverPopover = nil
+        balloonRange = nil
     }
 
     override func mouseMoved(with event: NSEvent) {
-        hoverPopover?.close()
-        hoverPopover = nil
         guard let textView else { return }
+        let point = textView.convert(event.locationInWindow, from: nil)
+        lastPointerPoint = point
+        if let balloonRange, hoverPopover?.isShown == true,
+            let index = characterIndex(at: point), NSLocationInRange(index, balloonRange)
+        {
+            return
+        }
+        closeBalloon()
         // Under the pinned context the text is hidden; documenting it
         // from there would explain a line nobody is looking at.
         if let strip = focusedView?.contextStrip, !strip.isHidden,
             strip.bounds.contains(strip.convert(event.locationInWindow, from: nil))
         {
             hoverTimer?.invalidate()
+            lastPointerPoint = nil
             return
         }
-        let point = textView.convert(event.locationInWindow, from: nil)
+        armHover(at: point, modifiers: event.modifierFlags)
+    }
+
+    /// The modifier hover documentation waits for was pressed with the
+    /// pointer already resting on a symbol: that is the ask.
+    override func flagsChanged(with event: NSEvent) {
+        super.flagsChanged(with: event)
+        guard !appliedHoverModifier.isEmpty, let point = lastPointerPoint,
+            event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                .contains(appliedHoverModifier),
+            hoverPopover?.isShown != true
+        else { return }
+        armHover(at: point, modifiers: event.modifierFlags)
+    }
+
+    /// Arms the balloon for what is under `point`, a beat from now.
+    private func armHover(at point: NSPoint, modifiers: NSEvent.ModifierFlags) {
         // A diagnostic is already in hand and needs no server: an
         // underline nobody can read is a notification with the message
         // taken out. It shows whether or not hover documentation is on,
@@ -844,11 +882,12 @@ final class DocumentController: NSResponder {
             let diagnostic = diagnostic(atOffset: index)
         {
             hoverTimer?.invalidate()
+            let about = textView.flatMap { nsRange(of: diagnostic, in: $0.string as NSString) }
             hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) {
                 [weak self] _ in
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
-                        self?.showBalloon(Self.diagnosticText(diagnostic), at: point)
+                        self?.showBalloon(Self.diagnosticText(diagnostic), at: point, about: about)
                     }
                 }
             }
@@ -856,6 +895,14 @@ final class DocumentController: NSResponder {
         }
         guard appliedHoverDocs || infoPanelTakesDocumentation, lspApp != nil, lspOpenPath != nil
         else { return }
+        // The key to hold, when one was asked for. Without it the
+        // pointer can rest anywhere and nothing appears.
+        guard appliedHoverModifier.isEmpty
+            || modifiers.intersection(.deviceIndependentFlagsMask).contains(appliedHoverModifier)
+        else {
+            hoverTimer?.invalidate()
+            return
+        }
         hoverTimer?.invalidate()
         hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) {
             [weak self] _ in
@@ -863,6 +910,21 @@ final class DocumentController: NSResponder {
                 MainActor.assumeIsolated { self?.requestHover(at: point) }
             }
         }
+    }
+
+    /// The identifier around `index`: the stretch the balloon is about.
+    private func symbolRange(at index: Int, in text: NSString) -> NSRange {
+        var identifier = CharacterSet.alphanumerics
+        identifier.insert("_")
+        func isWord(_ at: Int) -> Bool {
+            at >= 0 && at < text.length
+                && UnicodeScalar(text.character(at: at)).map(identifier.contains) == true
+        }
+        var start = index
+        while isWord(start - 1) { start -= 1 }
+        var end = index
+        while isWord(end) { end += 1 }
+        return NSRange(location: start, length: end - start)
     }
 
     /// The worst severity on each line, for the gutter to colour the
@@ -1052,8 +1114,9 @@ final class DocumentController: NSResponder {
         // costs a round trip and a popover flicker.
         if !deliberate, !isHoverableSymbol(at: index, in: text) { return }
         let (line, character) = Self.lspPosition(ofIndex: index, in: text)
+        let about = symbolRange(at: index, in: text)
         lspApp.lspHover(path: path, line: line, character: character) { [weak self] json in
-            self?.showHover(resultJSON: json, at: point)
+            self?.showHover(resultJSON: json, at: point, about: about)
         }
     }
 
@@ -1158,6 +1221,17 @@ final class DocumentController: NSResponder {
         return !spans.contains { span in
             CoreTheme.commentStyleID.map { span.styleIndex == $0 } ?? false
                 && NSLocationInRange(index, span.range)
+        }
+    }
+
+    /// The configuration's name for a modifier, as flags.
+    static func modifierFlags(named name: String) -> NSEvent.ModifierFlags {
+        switch name {
+        case "shift": .shift
+        case "control": .control
+        case "option": .option
+        case "command": .command
+        default: []
         }
     }
 
@@ -2071,17 +2145,20 @@ final class DocumentController: NSResponder {
         return result
     }
 
-    private func showHover(resultJSON: String, at point: NSPoint) {
+    private func showHover(resultJSON: String, at point: NSPoint, about: NSRange? = nil) {
         guard let content = Self.hoverText(fromResultJSON: resultJSON) else { return }
         showBalloon(
             Self.hoverAttributedText(fromMarkdown: content, language: coreDocument.languageName),
-            at: point)
+            at: point, about: about)
     }
 
-    /// The balloon hover documentation and diagnostics both appear in.
-    private func showBalloon(_ attributed: NSAttributedString, at point: NSPoint) {
+    /// The balloon hover documentation and diagnostics both appear in;
+    /// `about` is the text it explains, which the pointer may cross
+    /// without closing it.
+    private func showBalloon(_ attributed: NSAttributedString, at point: NSPoint, about: NSRange? = nil) {
         guard let textView else { return }
         hoverPopover?.close()
+        balloonRange = about
         // With the panel docked, what the bubble would have said goes
         // there, and the bubble stays away.
         if let panel = infoPanel, panel.mode == .documentation {
@@ -3672,6 +3749,9 @@ final class DocumentController: NSResponder {
     /// Whether mouse-rest hover documentation is on. The deliberate
     /// show-at-caret command ignores this.
     private var appliedHoverDocs = true
+    /// The key that has to be held with the mouse for it; none by
+    /// default.
+    private var appliedHoverModifier: NSEvent.ModifierFlags = []
     /// Whether a file stays open when the window showing it closes.
     private var appliedKeepBuffers = false
     /// The language this file was told it is, when its name does not
@@ -3710,6 +3790,7 @@ final class DocumentController: NSResponder {
         appliedFont = settings.font
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
+        appliedHoverModifier = Self.modifierFlags(named: settings.hoverModifier)
         appliedKeepBuffers = settings.keepBuffers
         appliedMarkOccurrences = settings.markOccurrences
         appliedOccurrencesCaseSensitive = settings.occurrencesCaseSensitive

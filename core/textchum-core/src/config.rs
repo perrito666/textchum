@@ -912,6 +912,35 @@ impl Config {
             .insert("hover".into(), Value::Bool(enabled));
     }
 
+    /// The keys that can be asked for alongside the mouse before hover
+    /// documentation shows, in the order a picker lists them.
+    pub const HOVER_MODIFIERS: &'static [&'static str] = &["shift", "control", "option", "command"];
+
+    /// The modifier key that has to be held for hover documentation to
+    /// show on mouse rest (`editor.hover_modifier`): one of
+    /// [`Self::HOVER_MODIFIERS`], or `None` — the default — for the
+    /// mouse alone. Anything else in the file reads as `None`: a typo
+    /// should not make documentation unreachable.
+    pub fn hover_modifier(&self) -> Option<String> {
+        self.editor()
+            .get("hover_modifier")
+            .and_then(Value::as_str)
+            .filter(|name| Self::HOVER_MODIFIERS.contains(name))
+            .map(str::to_owned)
+    }
+
+    pub fn set_hover_modifier(&mut self, modifier: Option<&str>) {
+        match modifier.filter(|name| Self::HOVER_MODIFIERS.contains(name)) {
+            Some(name) => {
+                self.editor_mut()
+                    .insert("hover_modifier".into(), Value::String(name.into()));
+            }
+            None => {
+                self.editor_mut().remove("hover_modifier");
+            }
+        }
+    }
+
     /// Whether selecting a word marks its other occurrences on screen
     /// (`editor.mark_occurrences`, default true).
     pub fn mark_occurrences(&self) -> bool {
@@ -1631,6 +1660,22 @@ mod tests {
             vec!["/work/b".to_string(), "/work/c".into()]
         );
         assert!(!config.lsp_json().contains("/work/a"));
+    }
+
+    #[test]
+    fn hover_modifier_is_one_of_the_keys_or_nothing() {
+        let path = temp_path("hover_modifier.json");
+        std::fs::write(&path, r#"{"editor": {"hover_modifier": "opton"}}"#).unwrap();
+        let (mut config, _) = Config::load(&path);
+        // A misspelt key is no requirement: documentation stays reachable.
+        assert_eq!(config.hover_modifier(), None);
+        config.set_hover_modifier(Some("option"));
+        assert_eq!(config.hover_modifier().as_deref(), Some("option"));
+        // A name nobody can hold down is no requirement at all.
+        config.set_hover_modifier(Some("hyper"));
+        assert_eq!(config.hover_modifier(), None);
+        config.save().unwrap();
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("hover_modifier"));
     }
 
     #[test]
