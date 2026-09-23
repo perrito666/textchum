@@ -700,6 +700,10 @@ msgid "Could not save the document."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Saved without preprocessing — {} failed"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Save Without Preprocessing"
 msgstr ""
 
@@ -864,6 +868,46 @@ msgid "Show server documentation when the mouse rests on a symbol"
 msgstr ""
 
 #: linux/src/workbench.rs
+msgid "Shown when"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "the mouse rests"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Shift is held"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Ctrl is held"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Alt is held"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Super is held"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Colour bracket pairs by depth"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Each nesting level of (), [] and {} in a colour of its own"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Close brackets and quotes as they are typed"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "An opening half brings its closing half; the closer typed steps over it"
+msgstr ""
+
+#: linux/src/workbench.rs
 msgid "Mark the selected word elsewhere"
 msgstr ""
 
@@ -941,6 +985,14 @@ msgstr ""
 
 #: linux/src/workbench.rs
 msgid "Save preprocessors"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Save anyway when a chain fails"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "A toast says so, instead of a question"
 msgstr ""
 
 #: linux/src/workbench.rs
@@ -1578,6 +1630,26 @@ msgid "Tab width: {} columns"
 msgstr ""
 
 #: macos/Sources/Textchum/Settings.swift
+msgid "  Shown when"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⇧ Shift is held"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⌃ Control is held"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⌥ Option is held"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⌘ Command is held"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
 msgid "Reveal the current file in the tree"
 msgstr ""
 
@@ -1775,6 +1847,10 @@ msgstr ""
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "Restart Servers Now"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "When a chain fails, save anyway and say so in the status bar"
 msgstr ""
 
 #: macos/Sources/Textchum/Settings.swift

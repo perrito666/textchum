@@ -22,6 +22,9 @@ aplicación.
   o la tipografía monoespaciada de la plataforma.
 - **Tamaño de letra** — de 6 a 72 puntos.
 - **Ancho de tabulación** — de 1 a 16 columnas.
+- **Close brackets and quotes as they are typed** — apagado por
+  defecto; `editor.auto_close_pairs` en el archivo. Véase
+  [el recorrido](tour.md).
 - **Mostrar números de línea** — el margen, también conmutables por
   sesión con View → Toggle Line Numbers (⇧⌘L).
 

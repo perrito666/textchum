@@ -866,14 +866,6 @@ msgid "Show server documentation when the mouse rests on a symbol"
 msgstr ""
 "Afficher la documentation du serveur quand la souris s'arrête sur un symbole"
 
-#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Colour bracket pairs by depth"
-msgstr "Colorer les paires de crochets selon la profondeur"
-
-#: linux/src/workbench.rs
-msgid "Each nesting level of (), [] and {} in a colour of its own"
-msgstr "Chaque niveau d'imbrication de (), [] et {} dans sa propre couleur"
-
 #: linux/src/workbench.rs
 msgid "Shown when"
 msgstr "Affichée quand"
@@ -897,6 +889,22 @@ msgstr "Alt est maintenue"
 #: linux/src/workbench.rs
 msgid "Super is held"
 msgstr "Super est maintenue"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Colour bracket pairs by depth"
+msgstr "Colorer les paires de crochets selon la profondeur"
+
+#: linux/src/workbench.rs
+msgid "Each nesting level of (), [] and {} in a colour of its own"
+msgstr "Chaque niveau d'imbrication de (), [] et {} dans sa propre couleur"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Close brackets and quotes as they are typed"
+msgstr "Fermer les crochets et les guillemets à la frappe"
+
+#: linux/src/workbench.rs
+msgid "An opening half brings its closing half; the closer typed steps over it"
+msgstr "La moitié ouvrante amène la fermante ; la fermante tapée passe par-dessus"
 
 #: linux/src/workbench.rs
 msgid "Mark the selected word elsewhere"
@@ -941,16 +949,24 @@ msgid "Nested projects too"
 msgstr "Les projets imbriqués aussi"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Projects nested in this one use its entries. The same switch as Projects ▸ Recursive config."
-msgstr "Les projets imbriqués dans celui-ci utilisent ses entrées. C'est le même interrupteur que Projects ▸ Recursive config."
+msgid ""
+"Projects nested in this one use its entries. The same switch as Projects ▸ "
+"Recursive config."
+msgstr ""
+"Les projets imbriqués dans celui-ci utilisent ses entrées. C'est le même "
+"interrupteur que Projects ▸ Recursive config."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "A server each"
 msgstr "Un serveur chacun"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Off: this project's server looks after the nested ones. On: each nested project runs the command for itself, in its own folder."
-msgstr "Désactivé : le serveur de ce projet s'occupe des projets imbriqués. Activé : chaque projet imbriqué exécute la commande pour lui-même, dans son dossier."
+msgid ""
+"Off: this project's server looks after the nested ones. On: each nested "
+"project runs the command for itself, in its own folder."
+msgstr ""
+"Désactivé : le serveur de ce projet s'occupe des projets imbriqués. Activé : "
+"chaque projet imbriqué exécute la commande pour lui-même, dans son dossier."
 
 #: linux/src/workbench.rs
 msgid "project root path"
@@ -1001,8 +1017,12 @@ msgid "Defaults (all projects)"
 msgstr "Par défaut (tous les projets)"
 
 #: linux/src/workbench.rs
-msgid "Under recursive config: a server per nested project, rather than the root's serving them all"
-msgstr "Avec recursive config : un serveur par projet imbriqué, au lieu que celui de la racine les serve tous"
+msgid ""
+"Under recursive config: a server per nested project, rather than the root's "
+"serving them all"
+msgstr ""
+"Avec recursive config : un serveur par projet imbriqué, au lieu que celui de "
+"la racine les serve tous"
 
 #: linux/src/workbench.rs
 msgid "copy settings from this project"
@@ -1851,7 +1871,8 @@ msgstr "Redémarrer les serveurs maintenant"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "When a chain fails, save anyway and say so in the status bar"
-msgstr "Si une chaîne échoue, sauvegarder quand même et le dire dans la barre d'état"
+msgstr ""
+"Si une chaîne échoue, sauvegarder quand même et le dire dans la barre d'état"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "No preprocessors — documents save exactly as typed."

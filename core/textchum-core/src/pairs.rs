@@ -49,9 +49,110 @@ pub fn wrap(selection: &str, open: &str) -> Option<String> {
     Some(format!("{open}{selection}{close}"))
 }
 
+/// Whether typing `typed` should put its closing half after the caret
+/// as well, in `language`, with `before` and `after` the characters on
+/// either side of the caret. The closer to insert, or None.
+///
+/// Brackets close everywhere. Quotes are the language's business: an
+/// apostrophe in prose is not a quote, a `'` in Rust is a lifetime as
+/// often as a character, and a backtick is code in Markdown and a
+/// template in JavaScript but nothing in most languages. And a pair
+/// is not opened into a word — `foo|bar` typing `"` is a `"`, not a
+/// `""` — nor a quote right after one, since `it's` is not a string.
+pub fn auto_close(language: Option<&str>, typed: char, before: Option<char>, after: Option<char>) -> Option<char> {
+    let close = closing(typed)?;
+    let is_word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+    if is_word(after) {
+        return None;
+    }
+    let is_quote = typed == '\'' || typed == '"' || typed == '`';
+    if is_quote {
+        if is_word(before) || after == Some(typed) {
+            return None;
+        }
+        let language = language.unwrap_or("");
+        let prose = matches!(language, "" | "markdown" | "gitcommit" | "text");
+        match typed {
+            '\'' if prose || matches!(language, "rust" | "ocaml") => return None,
+            '"' if language.is_empty() => return None,
+            '`' if !matches!(
+                language,
+                "markdown" | "javascript" | "typescript" | "tsx" | "jsx" | "go" | "bash" | "shell"
+                    | "sh" | "zsh" | "kotlin" | "sql" | "php" | "swift"
+            ) =>
+            {
+                return None
+            }
+            _ => {}
+        }
+    }
+    Some(close)
+}
+
+/// Whether typing `typed` with `after` already there should step over
+/// it rather than insert a second: the closer the editor put there a
+/// moment ago, typed by a hand that types closers.
+pub fn skips_closer(typed: char, after: Option<char>) -> bool {
+    after == Some(typed)
+        && (matches!(typed, ')' | ']' | '}') || closing(typed) == Some(typed))
+}
+
+/// Whether Backspace between `before` and `after` should take both:
+/// an empty pair the editor opened and nothing was typed into.
+pub fn deletes_pair(before: Option<char>, after: Option<char>) -> bool {
+    match (before, after) {
+        (Some(open), Some(close)) => closing(open) == Some(close),
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn brackets_close_everywhere_but_not_into_a_word() {
+        assert_eq!(auto_close(Some("rust"), '(', None, None), Some(')'));
+        assert_eq!(auto_close(None, '[', Some('a'), Some(' ')), Some(']'));
+        assert_eq!(auto_close(Some("python"), '{', None, Some(')')), Some('}'));
+        assert_eq!(auto_close(Some("rust"), '(', None, Some('x')), None, "not into a word");
+        assert_eq!(auto_close(Some("rust"), 'x', None, None), None);
+        assert_eq!(auto_close(Some("rust"), '<', None, None), None);
+    }
+
+    #[test]
+    fn quotes_follow_the_language() {
+        assert_eq!(auto_close(Some("python"), '"', None, None), Some('"'));
+        assert_eq!(auto_close(Some("python"), '\'', None, None), Some('\''));
+        assert_eq!(auto_close(Some("rust"), '\'', None, None), None, "a lifetime as often as not");
+        assert_eq!(auto_close(Some("rust"), '"', None, None), Some('"'));
+        assert_eq!(auto_close(Some("markdown"), '\'', None, None), None, "an apostrophe in prose");
+        assert_eq!(auto_close(Some("markdown"), '`', None, None), Some('`'));
+        assert_eq!(auto_close(Some("javascript"), '`', None, None), Some('`'));
+        assert_eq!(auto_close(Some("python"), '`', None, None), None);
+        assert_eq!(auto_close(None, '"', None, None), None, "plain text has no strings");
+        // Not after a word — it's — nor before the same quote.
+        assert_eq!(auto_close(Some("python"), '\'', Some('t'), None), None);
+        assert_eq!(auto_close(Some("python"), '"', None, Some('"')), None);
+    }
+
+    #[test]
+    fn a_typed_closer_steps_over_the_one_there() {
+        assert!(skips_closer(')', Some(')')));
+        assert!(skips_closer('"', Some('"')));
+        assert!(!skips_closer(')', Some(']')));
+        assert!(!skips_closer('(', Some('(')));
+        assert!(!skips_closer(')', None));
+    }
+
+    #[test]
+    fn backspace_takes_an_empty_pair() {
+        assert!(deletes_pair(Some('('), Some(')')));
+        assert!(deletes_pair(Some('"'), Some('"')));
+        assert!(!deletes_pair(Some('('), Some(']')));
+        assert!(!deletes_pair(Some('a'), Some(')')));
+        assert!(!deletes_pair(None, Some(')')));
+    }
 
     #[test]
     fn a_delimiter_wraps_the_selection() {

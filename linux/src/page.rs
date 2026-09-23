@@ -1745,13 +1745,77 @@ fn install_wrap_keys(page: &Rc<Page>) {
         {
             return glib::Propagation::Proceed;
         }
-        if wrap_selection(&page, key) || outdent_closing_bracket(&page, key) {
+        if wrap_selection(&page, key)
+            || outdent_closing_bracket(&page, key)
+            || close_pair(&page, key)
+        {
             glib::Propagation::Stop
         } else {
             glib::Propagation::Proceed
         }
     });
     page.view.add_controller(controller);
+}
+
+/// An opening bracket or quote typed with nothing selected brings its
+/// closing half along, with the caret between the two; the closer
+/// typed afterwards steps over the one already there; Backspace
+/// between an empty pair takes both. Which characters pair, and where
+/// a quote is an apostrophe instead, is the core's rule by language.
+/// Off unless the configuration says otherwise.
+fn close_pair(page: &Rc<Page>, key: gtk::gdk::Key) -> bool {
+    if !Shell::instance().config.borrow().auto_close_pairs() {
+        return false;
+    }
+    let buffer = &page.buffer;
+    if buffer.selection_bounds().is_some() {
+        return false;
+    }
+    let caret = buffer.iter_at_mark(&buffer.get_insert());
+    let after = if caret.is_end() { None } else { Some(caret.char()) };
+    let before = {
+        let mut back = caret;
+        if back.backward_char() { Some(back.char()) } else { None }
+    };
+    if key == gtk::gdk::Key::BackSpace {
+        if !textchum_core::pairs::deletes_pair(before, after) {
+            return false;
+        }
+        let mut from = caret;
+        from.backward_char();
+        let mut to = caret;
+        to.forward_char();
+        buffer.begin_user_action();
+        buffer.delete(&mut from, &mut to);
+        buffer.end_user_action();
+        return true;
+    }
+    let Some(typed) = key.to_unicode() else { return false };
+    if textchum_core::pairs::skips_closer(typed, after) {
+        let mut next = caret;
+        next.forward_char();
+        buffer.place_cursor(&next);
+        return true;
+    }
+    let language = page.state.borrow().document.language_name().map(str::to_owned);
+    let Some(close) = textchum_core::pairs::auto_close(language.as_deref(), typed, before, after)
+    else {
+        return false;
+    };
+    // One undo step for the pair, through the same door as any other
+    // edit: the buffer, which the choke point mirrors into the core.
+    let offset = caret.offset();
+    buffer.begin_user_action();
+    let mut at = caret;
+    buffer.insert(&mut at, &format!("{typed}{close}"));
+    buffer.end_user_action();
+    buffer.place_cursor(&buffer.iter_at_offset(offset + 1));
+    true
+}
+
+/// The pair closing, for the smoke test to drive without a key event.
+pub fn close_pair_for_test(page: &Rc<Page>, key: gtk::gdk::Key) -> bool {
+    close_pair(page, key)
 }
 
 /// A closing bracket typed first on its line takes the indentation of

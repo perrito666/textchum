@@ -13,6 +13,9 @@ struct EditorSettings {
     let contextLines: Bool
     /// Whether bracket pairs are coloured by depth.
     let rainbowBrackets: Bool
+    /// Whether typing an opening bracket or quote puts its closing half
+    /// after the caret.
+    let autoClosePairs: Bool
     let hoverDocs: Bool
     /// The modifier hover waits for ("shift", "control", "option",
     /// "command"), or "" for the mouse alone.
@@ -63,6 +66,7 @@ struct EditorSettings {
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
         self.rainbowBrackets = config.rainbowBrackets
+        self.autoClosePairs = config.autoClosePairs
         self.hoverDocs = config.hoverDocs
         self.hoverModifier = config.hoverModifier
         self.preprocessorFailureSaves = config.preprocessorFailureSaves
@@ -154,6 +158,9 @@ final class SettingsModel: ObservableObject {
     }
     @Published var rainbowBrackets: Bool {
         didSet { persist { $0.rainbowBrackets = rainbowBrackets } }
+    }
+    @Published var autoClosePairs: Bool {
+        didSet { persist { $0.autoClosePairs = autoClosePairs } }
     }
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
@@ -354,6 +361,7 @@ final class SettingsModel: ObservableObject {
         lineNumbers = config.lineNumbers
         contextLines = config.contextLines
         rainbowBrackets = config.rainbowBrackets
+        autoClosePairs = config.autoClosePairs
         gitMarks = config.gitMarks
         mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         hoverDocs = config.hoverDocs
@@ -393,6 +401,7 @@ final class SettingsModel: ObservableObject {
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
         self.rainbowBrackets = config.rainbowBrackets
+        self.autoClosePairs = config.autoClosePairs
         self.gitMarks = config.gitMarks
         self.mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         self.hoverDocs = config.hoverDocs
@@ -1065,6 +1074,7 @@ struct GeneralSettingsTab: View {
                 Text(t("Tab width: {} columns", model.tabWidth))
             }
             Toggle(t("Show line numbers"), isOn: $model.lineNumbers)
+            Toggle(t("Close brackets and quotes as they are typed"), isOn: $model.autoClosePairs)
             Toggle(t("Pin enclosing context lines"), isOn: $model.contextLines)
             Toggle(t("Colour bracket pairs by depth"), isOn: $model.rainbowBrackets)
             Picker(t("Gutter marks compare against"), selection: $model.gitMarks) {

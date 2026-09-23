@@ -224,6 +224,16 @@ reemplazarla. Lo envuelto sigue seleccionado, así que pulsar otro lo
 envuelve a su vez: `[`, `(` y `{` sobre `hello` dan `[({hello})]`.
 Escribir cualquier otra cosa reemplaza la selección como siempre.
 
+Sin nada seleccionado, **Close brackets and quotes as they are typed**
+(Ajustes ▸ General, apagado por defecto) trae consigo la mitad de
+cierre — `(` da `()` con el cursor en medio — y el `)` que se escribe
+después pasa por encima del que ya está en vez de añadir un segundo;
+Retroceso entre un par vacío se lleva los dos. Los corchetes se
+emparejan en todas partes; las comillas siguen al lenguaje: `'` es un
+apóstrofo en prosa y un lifetime en Rust, así que ahí se deja en paz, y
+el acento grave solo se empareja donde significa código. Ningún par se
+abre dentro de una palabra, y ninguna comilla justo después de una.
+
 La barra fina bajo el editor responde lo que mirar el texto no puede:
 dónde está el cursor, si el archivo indenta con tabuladores o espacios
 y de cuántos, como qué lenguaje se trata, y su codificación. La
