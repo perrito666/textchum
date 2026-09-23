@@ -859,6 +859,30 @@ msgstr ""
 "Mostrar la documentación del servidor al dejar el ratón sobre un símbolo"
 
 #: linux/src/workbench.rs
+msgid "Shown when"
+msgstr "Se muestra cuando"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "the mouse rests"
+msgstr "el ratón reposa"
+
+#: linux/src/workbench.rs
+msgid "Shift is held"
+msgstr "se mantiene Mayús"
+
+#: linux/src/workbench.rs
+msgid "Ctrl is held"
+msgstr "se mantiene Ctrl"
+
+#: linux/src/workbench.rs
+msgid "Alt is held"
+msgstr "se mantiene Alt"
+
+#: linux/src/workbench.rs
+msgid "Super is held"
+msgstr "se mantiene Súper"
+
+#: linux/src/workbench.rs
 msgid "Mark the selected word elsewhere"
 msgstr "Marcar la palabra seleccionada en otros lugares"
 
@@ -1577,6 +1601,26 @@ msgstr "Cuerpo: {} pt"
 #: macos/Sources/Textchum/Settings.swift
 msgid "Tab width: {} columns"
 msgstr "Ancho de tabulación: {} columnas"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "  Shown when"
+msgstr "  Se muestra cuando"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⇧ Shift is held"
+msgstr "se mantiene ⇧ Mayús"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⌃ Control is held"
+msgstr "se mantiene ⌃ Control"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⌥ Option is held"
+msgstr "se mantiene ⌥ Opción"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "⌘ Command is held"
+msgstr "se mantiene ⌘ Comando"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "Reveal the current file in the tree"

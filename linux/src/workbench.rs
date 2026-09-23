@@ -5929,6 +5929,43 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         });
     }
     editor_group.add(&hover_row);
+    // A key to hold: documentation that appears wherever the pointer
+    // rests is a tax on reading for some, and a lifted hand for a
+    // moment is an easy way to ask for it.
+    let hover_key_row = adw::ComboRow::new();
+    hover_key_row.set_title(&tr("Shown when"));
+    hover_key_row.set_model(Some(&gtk::StringList::new(&[
+        &tr("the mouse rests"),
+        &tr("Shift is held"),
+        &tr("Ctrl is held"),
+        &tr("Alt is held"),
+        &tr("Super is held"),
+    ])));
+    let names = textchum_core::Config::HOVER_MODIFIERS;
+    hover_key_row.set_selected(
+        shell
+            .config
+            .borrow()
+            .hover_modifier()
+            .and_then(|name| names.iter().position(|known| *known == name))
+            .map(|index| index as u32 + 1)
+            .unwrap_or(0),
+    );
+    hover_row
+        .bind_property("active", &hover_key_row, "sensitive")
+        .sync_create()
+        .build();
+    {
+        let shell = Rc::clone(&shell);
+        hover_key_row.connect_selected_notify(move |row| {
+            let chosen = (row.selected() as usize)
+                .checked_sub(1)
+                .and_then(|index| names.get(index).copied());
+            shell.config.borrow_mut().set_hover_modifier(chosen);
+            shell.save_config();
+        });
+    }
+    editor_group.add(&hover_key_row);
 
     let occurrences_row = adw::SwitchRow::new();
     occurrences_row.set_title(&tr("Mark the selected word elsewhere"));
