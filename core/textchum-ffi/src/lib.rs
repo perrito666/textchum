@@ -2094,6 +2094,34 @@ pub unsafe extern "C" fn tc_config_set_hover_docs(config: *mut TcConfig, enabled
     let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_hover_docs(enabled)));
 }
 
+/// Whether a save whose preprocessor chain failed goes ahead and says
+/// so (`preprocessors.on_failure` = "save"), rather than asking.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_preprocessor_failure_saves(config: *const TcConfig) -> bool {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| config.inner.preprocessor_failure_saves())).unwrap_or(false)
+}
+
+/// Sets whether a save whose preprocessor chain failed goes ahead.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_preprocessor_failure_saves(
+    config: *mut TcConfig,
+    saves: bool,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_preprocessor_failure_saves(saves)));
+}
+
 /// The modifier key hover documentation waits for — "shift", "control",
 /// "option" or "command" — or an empty string for the mouse alone.
 /// Release with [`tc_string_free`].
