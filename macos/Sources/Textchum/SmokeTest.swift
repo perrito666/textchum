@@ -1899,6 +1899,45 @@ func runSmokeTest() -> Int32 {
     }
     print("tree refresh ok (listings read again in place, never forgotten)")
 
+    // Word-wise selection from a selection the editor did not make —
+    // a double-clicked word — grows the same way in both directions:
+    // the end that moves is the one the arrow points at, and the other
+    // is the anchor from then on.
+    do {
+        let bench = Workbench(sidebar: nil)
+        let document = DocumentController(document: CoreDocument())
+        bench.add(document)
+        bench.window?.makeKeyAndOrderFront(nil)
+        guard let view = document.primaryView else {
+            print("FAIL: no view to select in")
+            return 1
+        }
+        view.string = "foo bar baz\n"
+        document.noteTextReplaced()
+        view.setSelectedRange(NSRange(location: 4, length: 3))  // "bar", as a double-click leaves it
+        view.moveWordLeftAndModifySelection(nil)
+        guard view.selectedRange() == NSRange(location: 0, length: 7) else {
+            print("FAIL: option-shift-left from a double-clicked word gave \(view.selectedRange()), not foo bar")
+            return 1
+        }
+        // The anchor is the end from now on: the free end, at the
+        // start, goes back over "foo" and the selection shrinks to
+        // " bar" — the word taken can be given back.
+        view.moveWordRightAndModifySelection(nil)
+        guard view.selectedRange() == NSRange(location: 3, length: 4) else {
+            print("FAIL: after anchoring at the end, option-shift-right gave \(view.selectedRange())")
+            return 1
+        }
+        view.setSelectedRange(NSRange(location: 4, length: 3))
+        view.moveWordRightAndModifySelection(nil)
+        guard view.selectedRange() == NSRange(location: 4, length: 7) else {
+            print("FAIL: option-shift-right from a double-clicked word gave \(view.selectedRange()), not bar baz")
+            return 1
+        }
+        bench.window?.close()
+    }
+    print("word selection ok (grows the way the arrow points, from any selection)")
+
     // Selecting a word marks its other occurrences, on the layout the
     // view draws from.
     do {

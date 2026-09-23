@@ -76,18 +76,10 @@ final class EditorTextView: NSTextView {
     override func moveWordLeft(_ sender: Any?) { moveWord(forward: false) }
     override func moveWordRight(_ sender: Any?) { moveWord(forward: true) }
 
-    override func moveWordForwardAndModifySelection(_ sender: Any?) {
-        extendSelection(to: wordBoundaryFromCaret(forward: true))
-    }
-    override func moveWordBackwardAndModifySelection(_ sender: Any?) {
-        extendSelection(to: wordBoundaryFromCaret(forward: false))
-    }
-    override func moveWordLeftAndModifySelection(_ sender: Any?) {
-        extendSelection(to: wordBoundaryFromCaret(forward: false))
-    }
-    override func moveWordRightAndModifySelection(_ sender: Any?) {
-        extendSelection(to: wordBoundaryFromCaret(forward: true))
-    }
+    override func moveWordForwardAndModifySelection(_ sender: Any?) { extendByWord(forward: true) }
+    override func moveWordBackwardAndModifySelection(_ sender: Any?) { extendByWord(forward: false) }
+    override func moveWordLeftAndModifySelection(_ sender: Any?) { extendByWord(forward: false) }
+    override func moveWordRightAndModifySelection(_ sender: Any?) { extendByWord(forward: true) }
 
     private func moveWord(forward: Bool) {
         setSelectedRange(NSRange(location: wordTarget(forward: forward), length: 0))
@@ -120,21 +112,35 @@ final class EditorTextView: NSTextView {
     /// keeps its own anchor private.
     private var selectionAnchor: Int?
 
-    private func wordBoundaryFromCaret(forward: Bool) -> Int {
+    /// Moves the selection's free end a word the way the arrow points.
+    ///
+    /// A selection this view did not make — a double-clicked word, a
+    /// drag, a shift-click — has no anchor on record. It used to be
+    /// taken as anchored at its start, so ⌥⇧→ grew it and ⌥⇧← ate it
+    /// from the end until nothing was left. The end that moves is the
+    /// one the arrow points at; the other becomes the anchor and stays
+    /// it, so a word taken back can be given back.
+    private func extendByWord(forward: Bool) {
         let selection = selectedRange()
+        if selectionAnchor == nil {
+            selectionAnchor = forward ? selection.location : NSMaxRange(selection)
+        }
         let anchor = selectionAnchor ?? selection.location
         let caret = anchor == selection.location ? NSMaxRange(selection) : selection.location
-        return CoreMotion.wordBoundary(in: string, from: caret, forward: forward)
+        extendSelection(
+            to: CoreMotion.wordBoundary(in: string, from: caret, forward: forward), anchor: anchor)
     }
 
-    private func extendSelection(to caret: Int) {
-        let selection = selectedRange()
-        if selection.length == 0 { selectionAnchor = selection.location }
-        let anchor = selectionAnchor ?? selection.location
+    /// True while this view sets a selection of its own making, which
+    /// is the one kind that keeps the anchor.
+    private var extendingSelection = false
+
+    private func extendSelection(to caret: Int, anchor: Int) {
         let range = NSRange(location: min(anchor, caret), length: abs(caret - anchor))
+        extendingSelection = true
         setSelectedRange(
             range, affinity: caret < anchor ? .upstream : .downstream, stillSelecting: false)
-        // The anchor survives the collapse check below: this set is ours.
+        extendingSelection = false
         selectionAnchor = anchor
         scrollRangeToVisible(NSRange(location: caret, length: 0))
     }
@@ -143,8 +149,10 @@ final class EditorTextView: NSTextView {
         _ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool
     ) {
         super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
-        // A collapsed selection ends any word-wise extension.
-        if let first = ranges.first?.rangeValue, first.length == 0 { selectionAnchor = nil }
+        // Any selection but our own — a click, a drag, a find, a jump —
+        // is a new selection with no anchor yet; the next ⌥⇧ arrow
+        // decides which end holds still.
+        if !extendingSelection { selectionAnchor = nil }
         if !tintedLine.isEmpty { setNeedsDisplay(tintedLine) }
         if let line = caretLineRect() { setNeedsDisplay(line) }
     }
