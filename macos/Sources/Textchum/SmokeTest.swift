@@ -2628,6 +2628,85 @@ func runSmokeTest() -> Int32 {
     }
     print("occurrence marks ok (whole words, inside longer names, document offsets)")
 
+    // The caret on a bracket tints it and its partner; by depth, the
+    // pairs take the rainbow's colours over the syntax colour, and a
+    // bracket without a partner keeps the syntax colour.
+    do {
+        let bench = Workbench(sidebar: nil)
+        let document = DocumentController(document: CoreDocument())
+        bench.add(document)
+        bench.window?.makeKeyAndOrderFront(nil)
+        guard let view = document.primaryView else {
+            print("FAIL: no view for the brackets")
+            return 1
+        }
+        view.string = "f(a[b]) x)\n"
+        document.noteTextReplaced()
+        view.setSelectedRange(NSRange(location: 7, length: 0))  // after the `)`
+        guard document.bracketMatchRanges == [NSRange(location: 6, length: 1), NSRange(location: 1, length: 1)],
+            document.backgroundMarksForDebug.contains(where: { $0.range == NSRange(location: 1, length: 1) })
+        else {
+            print("FAIL: the caret after a closer did not mark the pair: \(document.bracketMatchRanges)")
+            return 1
+        }
+        view.setSelectedRange(NSRange(location: 3, length: 0))  // on the `[`
+        guard document.bracketMatchRanges == [NSRange(location: 3, length: 1), NSRange(location: 5, length: 1)] else {
+            print("FAIL: the caret on an opener did not mark the pair: \(document.bracketMatchRanges)")
+            return 1
+        }
+        view.setSelectedRange(NSRange(location: 10, length: 0))  // after the lone `)`
+        guard document.bracketMatchRanges.isEmpty else {
+            print("FAIL: a bracket without a partner was marked: \(document.bracketMatchRanges)")
+            return 1
+        }
+        let depths = document.coreDocument.bracketDepths(in: NSRange(location: 0, length: 11))
+        guard depths.map({ $0.offset }) == [1, 3, 5, 6], depths.map({ $0.depth }) == [0, 1, 1, 0] else {
+            print("FAIL: bracket depths: \(depths)")
+            return 1
+        }
+        let rainbowScratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-smoke-rainbow-\(getpid()).json").path
+        let rainbowConfig = CoreConfig(path: rainbowScratch)
+        rainbowConfig.rainbowBrackets = true
+        document.apply(settings: EditorSettings(config: rainbowConfig))
+        guard let layoutManager = view.textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            let inner = contentManager.location(layoutManager.documentRange.location, offsetBy: 3),
+            let lone = contentManager.location(layoutManager.documentRange.location, offsetBy: 9)
+        else {
+            print("FAIL: no layout to read the rainbow from")
+            return 1
+        }
+        let dark = (view.window?.effectiveAppearance ?? NSApp.effectiveAppearance)
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        // The colour on a character: the first rendering-attribute run
+        // from its location.
+        func colour(at location: NSTextLocation) -> NSColor? {
+            var found: NSColor?
+            layoutManager.enumerateRenderingAttributes(from: location, reverse: false) { _, attributes, _ in
+                found = attributes[.foregroundColor] as? NSColor
+                return false
+            }
+            return found
+        }
+        guard colour(at: inner) == HighlightPalette.rainbow(depth: 1, darkAppearance: dark) else {
+            print("FAIL: the inner pair is not painted depth 1: \(String(describing: colour(at: inner)))")
+            return 1
+        }
+        guard colour(at: lone) == nil else {
+            print("FAIL: a bracket without a partner took a rainbow colour")
+            return 1
+        }
+        rainbowConfig.rainbowBrackets = false
+        document.apply(settings: EditorSettings(config: rainbowConfig))
+        guard colour(at: inner) == nil else {
+            print("FAIL: the rainbow stayed after being switched off")
+            return 1
+        }
+        bench.window?.close()
+    }
+    print("brackets ok (the pair under the caret marked, the rainbow by depth, the unmatched left alone)")
+
     // A project's settings can be copied onto another root, which is
     // what a second service in the same layout needs. The rules are the
     // core's; the bridge is what is checked here.

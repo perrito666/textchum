@@ -60,7 +60,9 @@ defecto) o en una `"window"` propia. `editor.mark_occurrences` (`true`
 por defecto) marca los demás lugares donde aparece la palabra
 seleccionada; `editor.occurrences_case_sensitive` y
 `editor.occurrences_whole_word` deciden qué cuenta como uno, ambos
-`true` por defecto. `editor.context_lines` (`true` por defecto) fija
+`true` por defecto. `editor.rainbow_brackets` (`false` por defecto) colorea los pares de
+corchetes por profundidad; véase [resaltado](highlighting.md#corchetes).
+`editor.context_lines` (`true` por defecto) fija
 la primera línea de cada construcción envolvente en lo alto de la vista
 mientras un cuerpo largo se desplaza; `false` apaga las líneas fijadas.
 `editor.git_marks` elige con qué compara la barra de cambios del

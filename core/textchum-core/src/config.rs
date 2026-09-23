@@ -912,6 +912,20 @@ impl Config {
             .insert("hover".into(), Value::Bool(enabled));
     }
 
+    /// Whether bracket pairs are coloured by depth
+    /// (`editor.rainbow_brackets`, default false).
+    pub fn rainbow_brackets(&self) -> bool {
+        self.editor()
+            .get("rainbow_brackets")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    pub fn set_rainbow_brackets(&mut self, enabled: bool) {
+        self.editor_mut()
+            .insert("rainbow_brackets".into(), Value::Bool(enabled));
+    }
+
     /// Whether selecting a word marks its other occurrences on screen
     /// (`editor.mark_occurrences`, default true).
     pub fn mark_occurrences(&self) -> bool {

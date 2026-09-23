@@ -58,6 +58,8 @@ frontmost window's group (the default) or a `"window"` of their own.
 the selected word appears; `editor.occurrences_case_sensitive` and
 `editor.occurrences_whole_word` decide what counts as one, both `true`
 by default.
+`editor.rainbow_brackets` (`false` by default) colours bracket pairs by
+depth; see [highlighting](highlighting.md#brackets).
 `editor.context_lines` (`true` by default) pins the first line of each
 enclosing construct at the top of the view while a long body scrolls;
 `false` switches the pins off.

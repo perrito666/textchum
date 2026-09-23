@@ -5913,6 +5913,25 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&hover_row);
 
+    let rainbow_row = adw::SwitchRow::new();
+    rainbow_row.set_title(&tr("Colour bracket pairs by depth"));
+    rainbow_row.set_subtitle(&tr("Each nesting level of (), [] and {} in a colour of its own"));
+    rainbow_row.set_active(shell.config.borrow().rainbow_brackets());
+    {
+        let shell = Rc::clone(&shell);
+        rainbow_row.connect_active_notify(move |row| {
+            shell.config.borrow_mut().set_rainbow_brackets(row.is_active());
+            shell.save_config();
+            // The colours ride the highlight pass; every page repaints.
+            Workbench::for_each(|workbench| {
+                for page in workbench.all_pages() {
+                    crate::page::apply_highlights(&page.buffer, &page.state.borrow().document);
+                }
+            });
+        });
+    }
+    editor_group.add(&rainbow_row);
+
     let occurrences_row = adw::SwitchRow::new();
     occurrences_row.set_title(&tr("Mark the selected word elsewhere"));
     occurrences_row.set_subtitle(&tr("Selecting a whole word marks its other occurrences on screen"));

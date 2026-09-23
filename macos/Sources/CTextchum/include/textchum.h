@@ -187,6 +187,20 @@ typedef struct TcHighlightSpan {
   uint32_t style;
 } TcHighlightSpan;
 
+/**
+ * One paired bracket, for colouring by depth.
+ */
+typedef struct TcBracketDepth {
+  /**
+   * UTF-16 offset of the bracket.
+   */
+  uintptr_t offset;
+  /**
+   * How many pairs enclose it; the outermost pair is 0.
+   */
+  uint32_t depth;
+} TcBracketDepth;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -1314,6 +1328,22 @@ bool tc_config_hover_docs(const struct TcConfig *config);
 void tc_config_set_hover_docs(struct TcConfig *config, bool enabled);
 
 /**
+ * Whether bracket pairs are coloured by depth (`editor.rainbow_brackets`).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_rainbow_brackets(const struct TcConfig *config);
+
+/**
+ * Sets whether bracket pairs are coloured by depth.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_rainbow_brackets(struct TcConfig *config, bool enabled);
+
+/**
  * Re-reads the configuration file, replacing in-memory state — for
  * following external edits while running. Returns a human-readable
  * warning (release with [`tc_string_free`]) or null when the file was
@@ -2301,6 +2331,51 @@ bool tc_highlight_snippet(const char *language,
                           uintptr_t text_len,
                           struct TcHighlightSpan **spans_out,
                           uintptr_t *count_out);
+
+/**
+ * The paired brackets within `start..end` and their depth — a bracket
+ * without a partner is left out. Stores the array in `out`/`count_out`
+ * (empty is a success: null/0); release with [`tc_bracket_depths_free`].
+ *
+ * # Safety
+ * `document` must be a live document pointer; `out` and `count_out`
+ * must point to writable slots.
+ */
+bool tc_document_bracket_depths(const struct TcDocument *document,
+                                uintptr_t start,
+                                uintptr_t end,
+                                struct TcBracketDepth **out,
+                                uintptr_t *count_out);
+
+/**
+ * Releases an array handed out by [`tc_document_bracket_depths`].
+ *
+ * # Safety
+ * `depths` must be null or an array from that function, `count` long,
+ * released once.
+ */
+void tc_bracket_depths_free(struct TcBracketDepth *depths, uintptr_t count);
+
+/**
+ * The bracket the caret is on and its partner: the one just before
+ * the caret first, else the one at it. Fills `this_out` and
+ * `partner_out` and returns true; false when neither side of the caret
+ * is a bracket with a partner.
+ *
+ * # Safety
+ * `document` must be a live document pointer; the out pointers must
+ * point to writable slots.
+ */
+bool tc_document_matching_bracket(const struct TcDocument *document,
+                                  uintptr_t caret,
+                                  uintptr_t *this_out,
+                                  uintptr_t *partner_out);
+
+/**
+ * The colour bracket pairs of `depth` are painted with, 0xRRGGBBAA,
+ * for the dark or the light appearance.
+ */
+uint32_t tc_bracket_rainbow(uint32_t depth, bool dark);
 
 /**
  * Styled spans over the UTF-16 code unit range `start..end`, in

@@ -853,6 +853,14 @@ msgid "Show server documentation when the mouse rests on a symbol"
 msgstr ""
 "Afficher la documentation du serveur quand la souris s'arrête sur un symbole"
 
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Colour bracket pairs by depth"
+msgstr "Colorer les paires de crochets selon la profondeur"
+
+#: linux/src/workbench.rs
+msgid "Each nesting level of (), [] and {} in a colour of its own"
+msgstr "Chaque niveau d'imbrication de (), [] et {} dans sa propre couleur"
+
 #: linux/src/workbench.rs
 msgid "Mark the selected word elsewhere"
 msgstr "Marquer le mot sélectionné ailleurs"

@@ -148,6 +148,7 @@ impl Page {
         install_diagnostic_tags(&buffer);
         crate::spell::install_tag(&buffer);
         install_occurrence_tag(&buffer);
+        install_bracket_tags(&buffer);
         install_fold_tag(&buffer);
 
         // --- Load ------------------------------------------------------
@@ -348,11 +349,13 @@ impl Page {
         });
         document.views.borrow_mut().push(Rc::downgrade(&page));
         {
-            // The status bar follows the caret.
+            // The status bar follows the caret, and so does the mark on
+            // the bracket it is on.
             let weak = Rc::downgrade(&page);
             buffer.connect_cursor_position_notify(move |_| {
                 if let Some(page) = weak.upgrade() {
                     crate::workbench::refresh_status_for(&page);
+                    refresh_bracket_match(&page);
                 }
             });
         }
@@ -794,6 +797,63 @@ pub fn transform_selection(page: &Rc<Page>, kind: &str) {
 
 /// The tag the other places the selected word appears wear.
 pub const OCCURRENCE_TAG: &str = "occurrence";
+/// The tint on the bracket the caret is on and its partner.
+pub const BRACKET_MATCH_TAG: &str = "bracket-match";
+/// The colours of paired brackets by depth: `rainbow0`…`rainbow5`,
+/// over the syntax colour.
+const RAINBOW_TAGS: usize = 6;
+
+fn install_bracket_tags(buffer: &sourceview5::Buffer) {
+    let tag = gtk::TextTag::new(Some(BRACKET_MATCH_TAG));
+    tag.set_background_rgba(Some(&gtk::gdk::RGBA::new(0.35, 0.55, 0.95, 0.35)));
+    buffer.tag_table().add(&tag);
+    for depth in 0..RAINBOW_TAGS {
+        let tag = gtk::TextTag::new(Some(&format!("rainbow{depth}")));
+        buffer.tag_table().add(&tag);
+        // Over the syntax tags, which were added first and sit lower.
+        tag.set_priority(buffer.tag_table().size() - 1);
+    }
+    recolor_rainbow(buffer);
+}
+
+/// (Re)binds the rainbow tags' colours from the core's palette for the
+/// appearance in force.
+pub fn recolor_rainbow(buffer: &sourceview5::Buffer) {
+    let dark = adw::StyleManager::default().is_dark();
+    for depth in 0..RAINBOW_TAGS {
+        let rgba = textchum_core::brackets::rainbow(depth as u32, dark);
+        let color = format!(
+            "#{:02X}{:02X}{:02X}",
+            (rgba >> 24) & 0xFF,
+            (rgba >> 16) & 0xFF,
+            (rgba >> 8) & 0xFF
+        );
+        if let Some(tag) = buffer.tag_table().lookup(&format!("rainbow{depth}")) {
+            tag.set_foreground(Some(&color));
+        }
+    }
+}
+
+/// Tints the bracket the caret is on and its partner, when the caret
+/// is on one and it has one.
+pub fn refresh_bracket_match(page: &Rc<Page>) {
+    let buffer = &page.buffer;
+    buffer.remove_tag_by_name(BRACKET_MATCH_TAG, &buffer.start_iter(), &buffer.end_iter());
+    if buffer.selection_bounds().is_some() {
+        return;
+    }
+    let caret = buffer.iter_at_mark(&buffer.get_insert());
+    let offset = utf16_offset(buffer, caret.offset());
+    let pair = page.state.borrow().document.matching_bracket(offset);
+    let Some((this, partner)) = pair else { return };
+    let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+    for at in [this, partner] {
+        let start = buffer.iter_at_offset(char_offset(&text, at));
+        let mut end = start;
+        end.forward_char();
+        buffer.apply_tag_by_name(BRACKET_MATCH_TAG, &start, &end);
+    }
+}
 
 /// Installs that tag on a fresh buffer: a neutral grey, so it reads as
 /// neither the selection, nor a misspelling, nor a finding.
@@ -1084,6 +1144,41 @@ pub fn apply_highlights(buffer: &sourceview5::Buffer, document: &Document) {
                 &buffer.iter_at_offset(*to),
             );
         }
+    }
+    apply_rainbow(buffer, document, &text);
+}
+
+/// Colours every paired bracket by its depth, over the syntax colour,
+/// when the configuration asks for it. A bracket without a partner
+/// keeps the syntax colour: an unmatched one is what the eye is
+/// looking for, and one colour among the rainbow says so.
+fn apply_rainbow(buffer: &sourceview5::Buffer, document: &Document, text: &str) {
+    for depth in 0..RAINBOW_TAGS {
+        buffer.remove_tag_by_name(
+            &format!("rainbow{depth}"),
+            &buffer.start_iter(),
+            &buffer.end_iter(),
+        );
+    }
+    if !Shell::instance().config.borrow().rainbow_brackets() {
+        return;
+    }
+    let depths = document.bracket_depths(0, document.len_utf16());
+    if depths.is_empty() {
+        return;
+    }
+    let boundaries: Vec<usize> = depths.iter().map(|(offset, _)| *offset).collect();
+    let mapped = map_utf16_to_chars(text, &boundaries);
+    for (offset, depth) in depths {
+        let Some(at) = mapped.get(&offset) else { continue };
+        let start = buffer.iter_at_offset(*at);
+        let mut end = start;
+        end.forward_char();
+        buffer.apply_tag_by_name(
+            &format!("rainbow{}", depth as usize % RAINBOW_TAGS),
+            &start,
+            &end,
+        );
     }
 }
 

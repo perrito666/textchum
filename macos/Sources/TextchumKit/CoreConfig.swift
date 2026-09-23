@@ -263,6 +263,12 @@ public final class CoreConfig {
         set { tc_config_set_hover_docs(handle, newValue) }
     }
 
+    /// Whether bracket pairs are coloured by depth.
+    public var rainbowBrackets: Bool {
+        get { tc_config_rainbow_brackets(handle) }
+        set { tc_config_set_rainbow_brackets(handle, newValue) }
+    }
+
     /// One icon pack on offer.
     public struct IconPackEntry {
         public let name: String
