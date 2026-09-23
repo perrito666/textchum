@@ -23,6 +23,8 @@ reads and writes it; nothing lives only inside the app.
 - **Tab width** — 1 to 16 columns.
 - **Show line numbers** — the gutter, also togglable per session with
   View → Toggle Line Numbers (⇧⌘L).
+- **Close brackets and quotes as they are typed** — off by default;
+  `editor.auto_close_pairs` in the file. See [the tour](tour.md).
 
 Every change is applied to open editor windows immediately and written to
 disk at the same moment. There is no Apply or Save button to forget.

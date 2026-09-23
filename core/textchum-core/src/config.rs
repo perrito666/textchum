@@ -977,9 +977,23 @@ impl Config {
             .unwrap_or(false)
     }
 
+    /// Whether typing an opening bracket or quote puts its closing half
+    /// after the caret (`editor.auto_close_pairs`, default false).
+    pub fn auto_close_pairs(&self) -> bool {
+        self.editor()
+            .get("auto_close_pairs")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
     pub fn set_rainbow_brackets(&mut self, enabled: bool) {
         self.editor_mut()
             .insert("rainbow_brackets".into(), Value::Bool(enabled));
+    }
+
+    pub fn set_auto_close_pairs(&mut self, enabled: bool) {
+        self.editor_mut()
+            .insert("auto_close_pairs".into(), Value::Bool(enabled));
     }
 
     /// Whether selecting a word marks its other occurrences on screen

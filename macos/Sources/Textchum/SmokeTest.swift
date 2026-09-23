@@ -3427,6 +3427,80 @@ func runSmokeTest() -> Int32 {
     }
     print("indentation ok (backspace by level, tab aligns with the block above)")
 
+    // Pairs close themselves when asked: an opener brings its closer,
+    // the closer typed steps over the one there, Backspace between an
+    // empty pair takes both — and a quote follows the language.
+    do {
+        let bench = Workbench(sidebar: nil)
+        let core = CoreDocument()
+        _ = core.setLanguage("python")
+        let document = DocumentController(document: core)
+        bench.add(document)
+        bench.window?.makeKeyAndOrderFront(nil)
+        guard let view = document.primaryView else {
+            print("FAIL: no view to type pairs into")
+            return 1
+        }
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("textchum-smoke-pairs-\(getpid()).json").path
+        let config = CoreConfig(path: scratch)
+        view.insertText("(", replacementRange: NSRange(location: 0, length: 0))
+        guard view.string == "(" else {
+            print("FAIL: off by default, a bracket brought a closer: \(view.string.debugDescription)")
+            return 1
+        }
+        view.insertText("", replacementRange: NSRange(location: 0, length: 1))
+        config.autoClosePairs = true
+        document.apply(settings: EditorSettings(config: config))
+        view.insertText("(", replacementRange: NSRange(location: 0, length: 0))
+        guard view.string == "()", view.selectedRange() == NSRange(location: 1, length: 0),
+            core.text == "()"
+        else {
+            print("FAIL: an opener did not bring its closer: \(view.string.debugDescription) caret \(view.selectedRange())")
+            return 1
+        }
+        view.insertText(")", replacementRange: view.selectedRange())
+        guard view.string == "()", view.selectedRange() == NSRange(location: 2, length: 0) else {
+            print("FAIL: the closer did not step over the one there: \(view.string.debugDescription) caret \(view.selectedRange())")
+            return 1
+        }
+        view.setSelectedRange(NSRange(location: 1, length: 0))
+        guard document.textView(view, doCommandBy: #selector(NSResponder.deleteBackward(_:))),
+            view.string == "", core.text == ""
+        else {
+            print("FAIL: Backspace did not take the empty pair: \(view.string.debugDescription)")
+            return 1
+        }
+        // A quote in Python is a string; in Rust `'` is a lifetime as
+        // often as not, and is left alone.
+        view.insertText("'", replacementRange: NSRange(location: 0, length: 0))
+        guard view.string == "''" else {
+            print("FAIL: a quote in Python did not pair: \(view.string.debugDescription)")
+            return 1
+        }
+        view.insertText("", replacementRange: NSRange(location: 0, length: 2))
+        _ = core.setLanguage("rust")
+        view.insertText("'", replacementRange: NSRange(location: 0, length: 0))
+        guard view.string == "'" else {
+            print("FAIL: a single quote in Rust paired: \(view.string.debugDescription)")
+            return 1
+        }
+        // Not into a word: the caret before `x` gets a lone bracket.
+        view.insertText("x", replacementRange: NSRange(location: 1, length: 0))
+        view.insertText("(", replacementRange: NSRange(location: 1, length: 0))
+        guard view.string == "'(x" else {
+            print("FAIL: a bracket opened into a word: \(view.string.debugDescription)")
+            return 1
+        }
+        guard document.coreDocument.canUndo, view.string == core.text else {
+            print("FAIL: the pairs left the core and the view apart")
+            return 1
+        }
+        bench.window?.close()
+        try? FileManager.default.removeItem(atPath: scratch)
+    }
+    print("auto-close ok (opener brings closer, closer steps over, backspace takes both, quotes by language)")
+
     // Every mouse move over the editor asks which character is under
     // the pointer. The first version of that added a line fragment's
     // own index to a document offset, and NSTextLineFragment answers

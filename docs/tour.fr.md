@@ -227,6 +227,17 @@ taper un autre l'entoure à son tour : `[`, `(` puis `{` sur `hello`
 donnent `[({hello})]`. Taper autre chose remplace la sélection comme
 avant.
 
+Sans rien de sélectionné, **Close brackets and quotes as they are
+typed** (Réglages ▸ Général, désactivé par défaut) amène la moitié
+fermante — `(` donne `()` avec le curseur au milieu — et le `)` tapé
+ensuite passe par-dessus celui qui est déjà là au lieu d'en ajouter un
+second ; Retour arrière entre une paire vide emporte les deux. Les
+crochets s'apparient partout ; les guillemets suivent le langage : `'`
+est une apostrophe en prose et une durée de vie en Rust, où on le
+laisse donc tranquille, et l'accent grave ne s'apparie que là où il
+signifie du code. Aucune paire ne s'ouvre dans un mot, et aucun
+guillemet juste après un.
+
 La barre fine sous l'éditeur répond à ce qu'un regard sur le texte ne
 peut pas : où est le curseur, si le fichier indente avec des
 tabulations ou des espaces et de combien, quel langage lui est

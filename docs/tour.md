@@ -215,6 +215,16 @@ it. What was wrapped stays selected, so pressing another one wraps that
 in turn: `[`, `(` and `{` over `hello` give `[({hello})]`. Typing
 anything else replaces the selection as it always did.
 
+With nothing selected, **Close brackets and quotes as they are typed**
+(Settings ▸ General, off by default) brings the closing half along —
+`(` gives `()` with the caret between — and the `)` typed afterwards
+steps over the one already there rather than adding a second;
+Backspace between an empty pair takes both. Brackets pair everywhere;
+quotes follow the language: `'` is an apostrophe in prose and a
+lifetime in Rust, so it is left alone there, and a backtick pairs only
+where it means code. No pair opens into a word, and no quote opens
+right after one.
+
 The thin bar under the editor answers what a look at the text cannot:
 where the caret is, whether the file indents with tabs or spaces and by
 how much, what language it is treated as, and its encoding. The

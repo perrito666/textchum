@@ -862,14 +862,6 @@ msgid "Show server documentation when the mouse rests on a symbol"
 msgstr ""
 "Mostrar la documentación del servidor al dejar el ratón sobre un símbolo"
 
-#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Colour bracket pairs by depth"
-msgstr "Colorear los pares de corchetes por profundidad"
-
-#: linux/src/workbench.rs
-msgid "Each nesting level of (), [] and {} in a colour of its own"
-msgstr "Cada nivel de anidamiento de (), [] y {} en un color propio"
-
 #: linux/src/workbench.rs
 msgid "Shown when"
 msgstr "Se muestra cuando"
@@ -893,6 +885,22 @@ msgstr "se mantiene Alt"
 #: linux/src/workbench.rs
 msgid "Super is held"
 msgstr "se mantiene Súper"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Colour bracket pairs by depth"
+msgstr "Colorear los pares de corchetes por profundidad"
+
+#: linux/src/workbench.rs
+msgid "Each nesting level of (), [] and {} in a colour of its own"
+msgstr "Cada nivel de anidamiento de (), [] y {} en un color propio"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Close brackets and quotes as they are typed"
+msgstr "Cerrar corchetes y comillas al escribirlos"
+
+#: linux/src/workbench.rs
+msgid "An opening half brings its closing half; the closer typed steps over it"
+msgstr "La mitad de apertura trae la de cierre; el cierre escrito pasa por encima"
 
 #: linux/src/workbench.rs
 msgid "Mark the selected word elsewhere"
@@ -937,16 +945,24 @@ msgid "Nested projects too"
 msgstr "También los proyectos anidados"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Projects nested in this one use its entries. The same switch as Projects ▸ Recursive config."
-msgstr "Los proyectos anidados en este usan sus entradas. Es el mismo interruptor que Projects ▸ Recursive config."
+msgid ""
+"Projects nested in this one use its entries. The same switch as Projects ▸ "
+"Recursive config."
+msgstr ""
+"Los proyectos anidados en este usan sus entradas. Es el mismo interruptor "
+"que Projects ▸ Recursive config."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "A server each"
 msgstr "Un servidor para cada uno"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Off: this project's server looks after the nested ones. On: each nested project runs the command for itself, in its own folder."
-msgstr "Apagado: el servidor de este proyecto atiende a los anidados. Encendido: cada proyecto anidado corre el comando por su cuenta, en su propia carpeta."
+msgid ""
+"Off: this project's server looks after the nested ones. On: each nested "
+"project runs the command for itself, in its own folder."
+msgstr ""
+"Apagado: el servidor de este proyecto atiende a los anidados. Encendido: "
+"cada proyecto anidado corre el comando por su cuenta, en su propia carpeta."
 
 #: linux/src/workbench.rs
 msgid "project root path"
@@ -997,8 +1013,12 @@ msgid "Defaults (all projects)"
 msgstr "Por defecto (todos los proyectos)"
 
 #: linux/src/workbench.rs
-msgid "Under recursive config: a server per nested project, rather than the root's serving them all"
-msgstr "Con recursive config: un servidor por proyecto anidado, en lugar de que el de la raíz los atienda a todos"
+msgid ""
+"Under recursive config: a server per nested project, rather than the root's "
+"serving them all"
+msgstr ""
+"Con recursive config: un servidor por proyecto anidado, en lugar de que el "
+"de la raíz los atienda a todos"
 
 #: linux/src/workbench.rs
 msgid "copy settings from this project"
@@ -1845,7 +1865,8 @@ msgstr "Reiniciar los servidores ahora"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "When a chain fails, save anyway and say so in the status bar"
-msgstr "Cuando una cadena falla, guardar igualmente y decirlo en la barra de estado"
+msgstr ""
+"Cuando una cadena falla, guardar igualmente y decirlo en la barra de estado"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "No preprocessors — documents save exactly as typed."

@@ -1328,6 +1328,51 @@ bool tc_config_hover_docs(const struct TcConfig *config);
 void tc_config_set_hover_docs(struct TcConfig *config, bool enabled);
 
 /**
+ * Whether typing an opening bracket or quote puts its closing half
+ * after the caret (`editor.auto_close_pairs`).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_auto_close_pairs(const struct TcConfig *config);
+
+/**
+ * Sets whether pairs close themselves as they are typed.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_auto_close_pairs(struct TcConfig *config, bool enabled);
+
+/**
+ * The closing half to put after the caret when `typed` (a Unicode
+ * scalar) is typed in `language` between `before` and `after` (0 for
+ * none), or 0 when nothing should be. See
+ * `textchum_core::pairs::auto_close`.
+ *
+ * # Safety
+ * `language` must point to `language_len` readable bytes (0 for no
+ * language).
+ */
+uint32_t tc_pairs_auto_close(const char *language,
+                             uintptr_t language_len,
+                             uint32_t typed,
+                             uint32_t before,
+                             uint32_t after);
+
+/**
+ * Whether typing `typed` with `after` (0 for none) already there
+ * steps over it — the closer the editor put there a moment ago.
+ */
+bool tc_pairs_skips_closer(uint32_t typed, uint32_t after);
+
+/**
+ * Whether Backspace between `before` and `after` (0 for none) takes
+ * both: an empty pair the editor opened.
+ */
+bool tc_pairs_deletes_pair(uint32_t before, uint32_t after);
+
+/**
  * Whether a save whose preprocessor chain failed goes ahead and says
  * so (`preprocessors.on_failure` = "save"), rather than asking.
  *
@@ -1348,7 +1393,6 @@ void tc_config_set_preprocessor_failure_saves(struct TcConfig *config, bool save
  * The modifier key hover documentation waits for — "shift", "control",
  * "option" or "command" — or an empty string for the mouse alone.
  * Release with [`tc_string_free`].
- * Whether bracket pairs are coloured by depth (`editor.rainbow_brackets`).
  *
  * # Safety
  * `config` must be a live configuration pointer.
