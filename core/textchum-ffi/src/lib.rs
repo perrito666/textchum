@@ -2094,6 +2094,74 @@ pub unsafe extern "C" fn tc_config_set_hover_docs(config: *mut TcConfig, enabled
     let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_hover_docs(enabled)));
 }
 
+/// Whether typing an opening bracket or quote puts its closing half
+/// after the caret (`editor.auto_close_pairs`).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_auto_close_pairs(config: *const TcConfig) -> bool {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| config.inner.auto_close_pairs())).unwrap_or(false)
+}
+
+/// Sets whether pairs close themselves as they are typed.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_auto_close_pairs(config: *mut TcConfig, enabled: bool) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_auto_close_pairs(enabled)));
+}
+
+/// The closing half to put after the caret when `typed` (a Unicode
+/// scalar) is typed in `language` between `before` and `after` (0 for
+/// none), or 0 when nothing should be. See
+/// `textchum_core::pairs::auto_close`.
+///
+/// # Safety
+/// `language` must point to `language_len` readable bytes (0 for no
+/// language).
+#[no_mangle]
+pub unsafe extern "C" fn tc_pairs_auto_close(
+    language: *const c_char,
+    language_len: usize,
+    typed: u32,
+    before: u32,
+    after: u32,
+) -> u32 {
+    let language = if language_len == 0 {
+        None
+    } else {
+        unsafe { str_from_raw(language, language_len) }
+    };
+    let scalar = |code: u32| (code != 0).then(|| char::from_u32(code)).flatten();
+    let Some(typed) = char::from_u32(typed) else { return 0 };
+    textchum_core::pairs::auto_close(language, typed, scalar(before), scalar(after))
+        .map_or(0, |close| close as u32)
+}
+
+/// Whether typing `typed` with `after` (0 for none) already there
+/// steps over it — the closer the editor put there a moment ago.
+#[no_mangle]
+pub extern "C" fn tc_pairs_skips_closer(typed: u32, after: u32) -> bool {
+    let Some(typed) = char::from_u32(typed) else { return false };
+    textchum_core::pairs::skips_closer(typed, (after != 0).then(|| char::from_u32(after)).flatten())
+}
+
+/// Whether Backspace between `before` and `after` (0 for none) takes
+/// both: an empty pair the editor opened.
+#[no_mangle]
+pub extern "C" fn tc_pairs_deletes_pair(before: u32, after: u32) -> bool {
+    let scalar = |code: u32| (code != 0).then(|| char::from_u32(code)).flatten();
+    textchum_core::pairs::deletes_pair(scalar(before), scalar(after))
+}
+
 /// Re-reads the configuration file, replacing in-memory state — for
 /// following external edits while running. Returns a human-readable
 /// warning (release with [`tc_string_free`]) or null when the file was

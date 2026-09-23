@@ -3669,6 +3669,9 @@ final class DocumentController: NSResponder {
     /// The configured tab width, remembered for formatting requests.
     private var appliedTabWidth = 4
 
+    /// Whether an opening bracket or quote typed puts its closing half
+    /// after the caret.
+    private var appliedAutoClosePairs = false
     /// Whether mouse-rest hover documentation is on. The deliberate
     /// show-at-caret command ignores this.
     private var appliedHoverDocs = true
@@ -3710,6 +3713,7 @@ final class DocumentController: NSResponder {
         appliedFont = settings.font
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
+        appliedAutoClosePairs = settings.autoClosePairs
         appliedKeepBuffers = settings.keepBuffers
         appliedMarkOccurrences = settings.markOccurrences
         appliedOccurrencesCaseSensitive = settings.occurrencesCaseSensitive
@@ -4822,6 +4826,9 @@ extension DocumentController: NSTextViewDelegate {
         if outdentClosingBracket(in: textView, range: affectedCharRange, typed: replacementString) {
             return false
         }
+        if closePair(in: textView, range: affectedCharRange, typed: replacementString) {
+            return false
+        }
         do {
             try coreDocument.replace(utf16Range: affectedCharRange, with: replacementString)
             selectionChangeIsFromEditing = true
@@ -4868,6 +4875,69 @@ extension DocumentController: NSTextViewDelegate {
                 location: answer.blanks.location + (replacement as NSString).length, length: 0))
         selectionChangeIsFromEditing = true
         textDidChangeFromWrap()
+        return true
+    }
+
+    /// An opening bracket or quote typed with nothing selected brings
+    /// its closing half along, with the caret between the two; the
+    /// closer typed afterwards steps over the one already there rather
+    /// than adding a second. Which characters pair, and where a quote
+    /// is an apostrophe instead, is the core's rule by language. Off
+    /// unless the configuration says otherwise.
+    ///
+    /// Answers whether it handled the edit; the text view is told to
+    /// refuse the original change, since this replaced it.
+    private func closePair(in textView: NSTextView, range: NSRange, typed: String) -> Bool {
+        guard appliedAutoClosePairs, range.length == 0, (typed as NSString).length == 1
+        else { return false }
+        let text = textView.string as NSString
+        guard range.location <= text.length else { return false }
+        let key = (typed as NSString).character(at: 0)
+        let before: unichar? = range.location > 0 ? text.character(at: range.location - 1) : nil
+        let after: unichar? = range.location < text.length ? text.character(at: range.location) : nil
+        if CorePairs.skipsCloser(typed: key, after: after) {
+            selectionChangeIsFromEditing = true
+            textView.setSelectedRange(NSRange(location: range.location + 1, length: 0))
+            return true
+        }
+        guard let close = CorePairs.autoClose(
+            language: coreDocument.languageName, typed: key, before: before, after: after)
+        else { return false }
+        let pair = typed + close
+        // Through the same door as any other edit: the core first, the
+        // view second, one undo step for the pair.
+        coreDocument.beginEditGroup()
+        do {
+            try coreDocument.replace(utf16Range: range, with: pair)
+        } catch {
+            coreDocument.endEditGroup()
+            NSSound.beep()
+            NSLog("pair rejected by core: \(error)")
+            return false
+        }
+        coreDocument.endEditGroup()
+        selectionChangeIsFromEditing = true
+        textView.textStorage?.replaceCharacters(in: range, with: pair)
+        textView.setSelectedRange(NSRange(location: range.location + 1, length: 0))
+        lastTypedText = typed
+        textDidChangeFromWrap()
+        return true
+    }
+
+    /// Backspace between the two halves of a pair the editor opened,
+    /// with nothing typed into it, takes both.
+    private func deleteEmptyPair(in textView: NSTextView) -> Bool {
+        guard appliedAutoClosePairs else { return false }
+        let selection = textView.selectedRange()
+        let text = textView.string as NSString
+        guard selection.length == 0, selection.location > 0, selection.location < text.length,
+            CorePairs.deletesPair(
+                before: text.character(at: selection.location - 1),
+                after: text.character(at: selection.location))
+        else { return false }
+        // Through insertText, so the edit takes the same synchronized
+        // path (delegate → core → history) as anything typed.
+        textView.insertText("", replacementRange: NSRange(location: selection.location - 1, length: 2))
         return true
     }
 
@@ -5025,7 +5095,7 @@ extension DocumentController: NSTextViewDelegate {
                 return insertNewlineAutoIndenting(in: textView)
             }
             if commandSelector == #selector(NSResponder.deleteBackward(_:)) {
-                return deleteBackwardByIndent(in: textView)
+                return deleteEmptyPair(in: textView) || deleteBackwardByIndent(in: textView)
             }
             if commandSelector == #selector(NSResponder.insertTab(_:)) {
                 return indentToBlockAbove(in: textView)

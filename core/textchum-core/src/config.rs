@@ -912,6 +912,20 @@ impl Config {
             .insert("hover".into(), Value::Bool(enabled));
     }
 
+    /// Whether typing an opening bracket or quote puts its closing half
+    /// after the caret (`editor.auto_close_pairs`, default false).
+    pub fn auto_close_pairs(&self) -> bool {
+        self.editor()
+            .get("auto_close_pairs")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    pub fn set_auto_close_pairs(&mut self, enabled: bool) {
+        self.editor_mut()
+            .insert("auto_close_pairs".into(), Value::Bool(enabled));
+    }
+
     /// Whether selecting a word marks its other occurrences on screen
     /// (`editor.mark_occurrences`, default true).
     pub fn mark_occurrences(&self) -> bool {

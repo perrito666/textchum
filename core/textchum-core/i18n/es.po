@@ -849,6 +849,14 @@ msgid "Show server documentation when the mouse rests on a symbol"
 msgstr ""
 "Mostrar la documentación del servidor al dejar el ratón sobre un símbolo"
 
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Close brackets and quotes as they are typed"
+msgstr "Cerrar corchetes y comillas al escribirlos"
+
+#: linux/src/workbench.rs
+msgid "An opening half brings its closing half; the closer typed steps over it"
+msgstr "La mitad de apertura trae la de cierre; el cierre escrito pasa por encima"
+
 #: linux/src/workbench.rs
 msgid "Mark the selected word elsewhere"
 msgstr "Marcar la palabra seleccionada en otros lugares"

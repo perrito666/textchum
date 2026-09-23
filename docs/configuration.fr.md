@@ -23,6 +23,9 @@ uniquement à l'intérieur de l'application.
   police à chasse fixe de la plateforme.
 - **Taille de police** — de 6 à 72 points.
 - **Largeur de tabulation** — de 1 à 16 colonnes.
+- **Close brackets and quotes as they are typed** — désactivé par
+  défaut ; `editor.auto_close_pairs` dans le fichier. Voir
+  [la visite](tour.md).
 - **Afficher les numéros de ligne** — la marge, aussi basculables par
   session avec View → Toggle Line Numbers (⇧⌘L).
 

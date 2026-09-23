@@ -11,6 +11,9 @@ struct EditorSettings {
     let lineNumbers: Bool
     /// Whether the enclosing constructs' first lines pin at the top.
     let contextLines: Bool
+    /// Whether typing an opening bracket or quote puts its closing half
+    /// after the caret.
+    let autoClosePairs: Bool
     let hoverDocs: Bool
     /// Whether a file stays open when the window showing it closes.
     let keepBuffers: Bool
@@ -54,6 +57,7 @@ struct EditorSettings {
         self.tabWidth = tabWidth
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
+        self.autoClosePairs = config.autoClosePairs
         self.hoverDocs = config.hoverDocs
         self.keepBuffers = config.keepBuffers
         self.markOccurrences = config.markOccurrences
@@ -140,6 +144,9 @@ final class SettingsModel: ObservableObject {
                     .filter { !$0.isEmpty }
             }
         }
+    }
+    @Published var autoClosePairs: Bool {
+        didSet { persist { $0.autoClosePairs = autoClosePairs } }
     }
     @Published var hoverDocs: Bool {
         didSet { persist { $0.hoverDocs = hoverDocs } }
@@ -322,6 +329,7 @@ final class SettingsModel: ObservableObject {
         tabWidth = config.tabWidth
         lineNumbers = config.lineNumbers
         contextLines = config.contextLines
+        autoClosePairs = config.autoClosePairs
         gitMarks = config.gitMarks
         mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         hoverDocs = config.hoverDocs
@@ -358,6 +366,7 @@ final class SettingsModel: ObservableObject {
         self.tabWidth = config.tabWidth
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
+        self.autoClosePairs = config.autoClosePairs
         self.gitMarks = config.gitMarks
         self.mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
         self.hoverDocs = config.hoverDocs
@@ -1008,6 +1017,7 @@ struct GeneralSettingsTab: View {
                 Text(t("Tab width: {} columns", model.tabWidth))
             }
             Toggle(t("Show line numbers"), isOn: $model.lineNumbers)
+            Toggle(t("Close brackets and quotes as they are typed"), isOn: $model.autoClosePairs)
             Toggle(t("Pin enclosing context lines"), isOn: $model.contextLines)
             Picker(t("Gutter marks compare against"), selection: $model.gitMarks) {
                 Text(t("The last commit")).tag("head")

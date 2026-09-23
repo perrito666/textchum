@@ -263,6 +263,13 @@ public final class CoreConfig {
         set { tc_config_set_hover_docs(handle, newValue) }
     }
 
+    /// Whether typing an opening bracket or quote puts its closing
+    /// half after the caret.
+    public var autoClosePairs: Bool {
+        get { tc_config_auto_close_pairs(handle) }
+        set { tc_config_set_auto_close_pairs(handle, newValue) }
+    }
+
     /// One icon pack on offer.
     public struct IconPackEntry {
         public let name: String
