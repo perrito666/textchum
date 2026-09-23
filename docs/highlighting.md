@@ -41,6 +41,21 @@ the embedded language's grammar:
   inline code come from a dedicated inline grammar.
 - HTML `<script>` and `<style>` elements color as JavaScript and CSS.
 
+## Brackets
+
+Put the caret on a `(`, `[` or `{` — or just after its closer — and
+both ends of the pair are tinted, so the other end can be found without
+counting. A bracket inside a string or a comment is not a bracket, and
+one with no partner is left alone: nothing is tinted, which is the
+answer.
+
+**Colour bracket pairs by depth** (Settings ▸ General, off by default)
+paints every paired bracket in one of six colours by how deeply it
+nests, cycling past the sixth, over the syntax colour. A bracket
+without a partner keeps its syntax colour, which is what makes it
+stand out. Documents past a million characters keep neither: the scan
+is the whole text and its strings, again after every edit.
+
 ## How it works
 
 The division of labor follows the project's architecture rule:
@@ -82,6 +97,8 @@ their advance width across weights, so nothing reflows.
 
 ## Not there yet
 
+- The rainbow's six colours are the editor's own, not the theme's; a
+  theme cannot change them yet.
 - Queries limited to the visible stretch for documents of several
   hundred kilobytes: today they are coloured whole, or past a ceiling
   not at all.

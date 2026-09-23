@@ -65,6 +65,8 @@ eux. `editor.mark_occurrences` (`true` par défaut) marque les autres
 endroits où apparaît le mot sélectionné ;
 `editor.occurrences_case_sensitive` et `editor.occurrences_whole_word`
 décident ce qui compte comme tel, tous deux `true` par défaut.
+`editor.rainbow_brackets` (`false` par défaut) colore les paires de
+crochets selon la profondeur ; voir [coloration](highlighting.md#crochets).
 `editor.context_lines` (`true` par défaut) épingle la première ligne de
 chaque construction englobante en haut de la vue pendant qu'un long
 corps défile ; `false` retire les épingles.
