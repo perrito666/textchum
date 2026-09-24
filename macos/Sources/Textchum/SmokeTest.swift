@@ -1951,10 +1951,25 @@ func runSmokeTest() -> Int32 {
             print("FAIL: the status bar did not say the chain failed: \(bench.statusBar.noticeText ?? "nil")")
             return 1
         }
+        // The word stays until the next one, and the session's list
+        // has it, newest first, with a repeat not said twice.
+        guard let log = bench.statusBar.log, log.count == 1, log.latest == notice else {
+            print("FAIL: the notice did not reach the session's list: \(bench.statusBar.log?.count ?? -1)")
+            return 1
+        }
+        bench.showNotice("second thing")
+        bench.showNotice("second thing")
+        guard log.count == 2, bench.statusBar.noticeText == "second thing",
+            bench.statusBar.historyText().hasSuffix(notice),
+            bench.statusBar.historyText().contains("second thing")
+        else {
+            print("FAIL: the notices list is wrong: \(bench.statusBar.historyText())")
+            return 1
+        }
         bench.window?.close()
         try? FileManager.default.removeItem(at: folder)
     }
-    print("preprocessor failure ok (saves anyway when told to, and says so in the status bar)")
+    print("preprocessor failure ok (saves anyway when told to, says so in the status bar, and the notices list keeps it)")
 
     // The pinned context: scrolled into a Python method, the class line
     // and the def line hold the top of the view; the status bar knows

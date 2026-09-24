@@ -151,6 +151,9 @@ pub struct Workbench {
     status_indent: gtk::Button,
     status_language: gtk::Button,
     status_encoding: gtk::Label,
+    /// The notification area at the bar's right end: the last thing the
+    /// editor had to say, as much as fits; a click lists the session's.
+    status_notice: gtk::Button,
     search_bar: gtk::SearchBar,
     search_entry: gtk::SearchEntry,
     replace_entry: gtk::Entry,
@@ -444,6 +447,24 @@ impl Workbench {
         status_bar.append(&status_indent);
         status_bar.append(&status_language);
         status_bar.append(&status_encoding);
+        // The last word, at the right end: one ellipsized line, the
+        // whole of it as a tooltip, the session's list on a click.
+        let status_notice = gtk::Button::with_label("");
+        status_notice.add_css_class("flat");
+        status_notice.set_hexpand(true);
+        status_notice.set_halign(gtk::Align::End);
+        status_notice.set_tooltip_text(Some(&tr(
+            "What the editor had to say — click for the whole list",
+        )));
+        if let Some(label) = status_notice.child().and_downcast::<gtk::Label>() {
+            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            label.set_xalign(1.0);
+        }
+        if let Some(last) = Shell::instance().notices.borrow().latest() {
+            set_notice_label(&status_notice, &last.text);
+        }
+        status_notice.connect_clicked(|button| show_notices(button));
+        status_bar.append(&status_notice);
         content_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         content_box.append(&status_bar);
         tab_view.set_vexpand(true);
@@ -515,6 +536,7 @@ impl Workbench {
             status_indent: status_indent.clone(),
             status_language: status_language.clone(),
             status_encoding: status_encoding.clone(),
+            status_notice: status_notice.clone(),
             search_bar,
             search_entry: search_entry.clone(),
             replace_entry: replace_entry.clone(),
@@ -689,6 +711,18 @@ impl Workbench {
     /// Something the user should hear about, softly.
     pub fn toast(&self, text: &str) {
         self.toasts.add_toast(adw::Toast::new(text));
+    }
+
+    /// Puts `text` in the notification area, where it stays until the
+    /// next thing worth saying. [`Shell::notify`] calls this on every
+    /// window after putting the text in the session's list.
+    pub fn set_notice(&self, text: &str) {
+        set_notice_label(&self.status_notice, text);
+    }
+
+    /// The notification area's text, for the smoke test.
+    pub fn notice_text(&self) -> String {
+        self.status_notice.label().map(|text| text.to_string()).unwrap_or_default()
     }
 
     /// An explanation rather than a note: it wraps, and it waits to be
@@ -4312,10 +4346,9 @@ fn preprocess_gate(
         // ahead, and a toast says what did not happen.
         Err(failure) if Shell::instance().config.borrow().preprocessor_failure_saves() => {
             eprintln!("save preprocessor failed: {}: {}", failure.command, failure.details);
-            workbench.toast(&fill(
-                &tr("Saved without preprocessing — {} failed"),
-                &[&failure.command],
-            ));
+            let text = fill(&tr("Saved without preprocessing — {} failed"), &[&failure.command]);
+            workbench.toast(&text);
+            Shell::instance().notify(&text);
             proceed(workbench, page);
         }
         Err(failure) => {
@@ -5397,6 +5430,59 @@ fn finish_theme_import(
         shell.apply_theme();
         shell.save_config();
     }
+}
+
+/// One line of `text` on the notification area, the whole of it as the
+/// tooltip.
+fn set_notice_label(button: &gtk::Button, text: &str) {
+    let first_line = text.lines().next().unwrap_or(text);
+    button.set_label(first_line);
+    button.set_tooltip_text(Some(text));
+}
+
+/// The session's notices, newest first with the time each was said,
+/// in a popover over the notification area. Selectable, since what is
+/// said is often a command to run.
+fn show_notices(button: &gtk::Button) {
+    let shell = Shell::instance();
+    let notices = shell.notices.borrow();
+    let text = if notices.is_empty() {
+        tr("Nothing to report yet.")
+    } else {
+        notices
+            .all()
+            .iter()
+            .rev()
+            .map(|notice| {
+                let when = glib::DateTime::from_unix_local(notice.at_ms as i64 / 1000)
+                    .and_then(|time| time.format("%H:%M"))
+                    .map(|time| time.to_string())
+                    .unwrap_or_default();
+                format!("{when}  {}", notice.text)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    };
+    drop(notices);
+    let label = gtk::Label::new(Some(&text));
+    label.set_wrap(true);
+    label.set_selectable(true);
+    label.set_xalign(0.0);
+    label.set_max_width_chars(60);
+    label.set_margin_top(8);
+    label.set_margin_bottom(8);
+    label.set_margin_start(10);
+    label.set_margin_end(10);
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    scroll.set_max_content_height(280);
+    scroll.set_propagate_natural_height(true);
+    scroll.set_child(Some(&label));
+    let popover = gtk::Popover::new();
+    popover.set_child(Some(&scroll));
+    popover.set_parent(button);
+    popover.connect_closed(|popover| popover.unparent());
+    popover.popup();
 }
 
 // MARK: Preferences

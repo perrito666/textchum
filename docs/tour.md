@@ -143,7 +143,16 @@ somewhere, that tab comes to the front; otherwise a new window opens
 with the project in its tree and no file yet, and it stays open when
 its last tab closes. The status bar says the project's **git branch**,
 read when the file is shown and again when git rewrites HEAD — the
-editor watches that file rather than asking on a timer. **Go ▸
+editor watches that file rather than asking on a timer. Its right end
+is the **notification area**: the last thing the editor had to say —
+a language server it could not find, and what would install it; a
+grammar it could not load; a save that went ahead without its
+preprocessors — as much of it as fits, the whole of it as a tooltip.
+Nothing there interrupts: what used to be a dialog to dismiss is a line
+here. A click lists the session's notices, newest first with the time
+each was said, selectable, since what was said is often a command to
+run. Not there yet: the list does not outlive the session, and nothing
+clears it. **Go ▸
 Worktrees…** lists the repository's working trees: choose one to
 switch this window to it — its files close and the ones the other tree
 also has reopen there, and the language servers start in the new root

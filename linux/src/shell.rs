@@ -13,6 +13,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 
 use adw::prelude::*;
 use gtk::glib;
+use textchum_core::i18n::tr;
 use textchum_core::{theme, Config, Event};
 use textchum_lsp::Pool;
 
@@ -253,6 +254,9 @@ pub struct Shell {
     /// The last hundred server status transitions, oldest first:
     /// (when, server, root, "status — message").
     pub status_log: RefCell<Vec<(std::time::SystemTime, String, String, String)>>,
+    /// What the editor has had to say this session; the last of it
+    /// stays on every window's status bar, the list is a click away.
+    pub notices: RefCell<textchum_core::notices::Notices>,
     /// Keeps the config-file monitor alive.
     config_monitor: RefCell<Option<gtk::gio::FileMonitor>>,
     /// Every open document, by id, and the paths that name them. A
@@ -322,8 +326,12 @@ impl Shell {
             // language and nothing else.
             let grammar_problems =
                 textchum_core::grammar::load_configured(&config.grammars_json());
+            // Said in the status bar once there is one; the shell is
+            // not built yet, so straight into its list.
+            let mut notices = textchum_core::notices::Notices::new();
             for problem in &grammar_problems {
                 eprintln!("textchum: languages: {problem}");
+                notices.push(&format!("{}: {problem}", tr("A configured grammar could not be loaded")));
             }
             // The interface language, before anything is drawn.
             let tag = config.interface_language();
@@ -385,6 +393,7 @@ impl Shell {
                 own_saves: RefCell::new(HashMap::new()),
                 own_config_save: std::cell::Cell::new(None),
                 status_log: RefCell::new(Vec::new()),
+                notices: RefCell::new(notices),
                 config_monitor: RefCell::new(None),
                 documents: RefCell::new(HashMap::new()),
                 documents_by_path: RefCell::new(HashMap::new()),
@@ -629,6 +638,14 @@ impl Shell {
         }
     }
 
+    /// Says `text` the way that does not interrupt: into the session's
+    /// list, onto every window's status bar, and to stderr.
+    pub fn notify(&self, text: &str) {
+        eprintln!("textchum: {text}");
+        self.notices.borrow_mut().push(text);
+        crate::workbench::Workbench::for_each(|workbench| workbench.set_notice(text));
+    }
+
     /// Follows external edits to config.json while running: the file is
     /// reloaded wholesale and `reapply` runs the same pipeline a
     /// Preferences change does. The app's own saves are ignored.
@@ -733,6 +750,7 @@ impl Shell {
                         // dismissed instead of ellipsizing and fading.
                         // It goes to the window the user is in, not to
                         // whichever page happens to be first in the map.
+                        Shell::instance().notify(&text);
                         if let Some(workbench) = crate::workbench::Workbench::active() {
                             workbench.explain(&text);
                         }

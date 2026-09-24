@@ -12,6 +12,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Strong references to open editors; windows do not retain their
     /// controllers. Entries are removed as their windows close.
     private var editors: [DocumentController] = []
+
+    /// What the editor has had to say this session. The last of it
+    /// stays on every window's status bar; the list is a click away.
+    let notices = CoreNotices()
+
+    /// Says `text` the way that does not interrupt: into the session's
+    /// list, onto every window's status bar, and into the log. What
+    /// used to be a dialog to dismiss.
+    func notify(_ text: String) {
+        NSLog("notice: \(text)")
+        notices.push(text)
+        for workbench in Workbench.all {
+            workbench.statusBar.notice(text)
+        }
+    }
     /// The open documents, for the smoke test to look at.
     var editorsForTest: [DocumentController] { editors }
 
@@ -698,14 +713,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !grammarProblems.isEmpty else { return }
         let problems = grammarProblems
         grammarProblems = []
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText =
-            problems.count == 1
-            ? "A configured grammar could not be loaded"
-            : "\(problems.count) configured grammars could not be loaded"
-        alert.informativeText = problems.joined(separator: "\n")
-        alert.runModal()
+        for problem in problems {
+            notify(t("A configured grammar could not be loaded") + ": " + problem)
+        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -1094,13 +1104,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case let .serverStatus(server, root, status, message):
             NSLog("lsp \(server) [\(root)]: \(status) \(message)")
             noteServerStatus(server: server, root: root, status: status, message: message)
+            // Said once per server, in the status bar: the file is
+            // what the person is looking at, and a dialog over it on
+            // every launch was the most-mentioned annoyance this editor
+            // had. The whole sentence — the package to install — is in
+            // the notices list.
             if status == "not-found", !reportedMissingServers.contains(server) {
                 reportedMissingServers.insert(server)
-                let alert = NSAlert()
-                alert.alertStyle = .informational
-                alert.messageText = t("No language server for this project")
-                alert.informativeText = message
-                alert.runModal()
+                notify(t("No language server for this project") + ": " + message)
             }
             // A healthy server that stops running gets restarted with
             // backoff; "closed" is our own orderly shutdown and needs
@@ -1118,15 +1129,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 status == "failed" || (status == "exited" && message == "during initialize")
             if diedEarly, !reportedMissingServers.contains(server) {
                 reportedMissingServers.insert(server)
-                let alert = NSAlert()
-                alert.alertStyle = .warning
-                alert.messageText = t("Language server failed to start")
-                alert.informativeText =
-                    "\(server) exited during startup"
-                    + (message.isEmpty || message == "during initialize"
-                        ? "" : " (\(message))")
-                    + ". Its own error output is in \(AppPaths.logFileForDisplay)."
-                alert.runModal()
+                notify(
+                    t("Language server failed to start") + ": \(server) exited during startup"
+                        + (message.isEmpty || message == "during initialize"
+                            ? "" : " (\(message))")
+                        + ". Its own error output is in \(AppPaths.logFileForDisplay).")
             }
         }
     }
@@ -1400,7 +1407,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard Date().timeIntervalSince(lastOwnConfigSave) > 2 else { return }
         guard let config else { return }
         if let warning = config.reload() {
-            NSLog("config reload: \(warning)")
+            notify(t("Settings file could not be read") + ": " + warning)
         }
         // Same pipeline as a Settings change — plus re-publishing the
         // Settings window's own fields.

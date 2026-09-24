@@ -318,6 +318,10 @@ msgstr "Copier le chemin et la ligne"
 msgid "Copy Forge URL for Line"
 msgstr "Copier l'URL de la forge pour la ligne"
 
+#: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "A configured grammar could not be loaded"
+msgstr "Une grammaire configurée n'a pas pu être chargée"
+
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "New with Format…"
 msgstr "Nouveau avec format…"
@@ -442,6 +446,10 @@ msgstr "Comment ce fichier est indenté — cliquer pour le changer"
 #: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
 msgid "What this file is treated as — click to change it"
 msgstr "Le langage appliqué à ce fichier — cliquer pour le changer"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "What the editor had to say — click for the whole list"
+msgstr "Ce que l'éditeur a eu à dire — cliquez pour la liste entière"
 
 #: linux/src/workbench.rs
 msgid "Replaced every occurrence."
@@ -755,6 +763,10 @@ msgstr "Copier le commit"
 #: linux/src/workbench.rs
 msgid "Nothing was imported. {}"
 msgstr "Rien n'a été importé. {}"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "Nothing to report yet."
+msgstr "Rien à signaler pour l'instant."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "General"
@@ -1762,7 +1774,8 @@ msgstr "Redémarrer les serveurs maintenant"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "When a chain fails, save anyway and say so in the status bar"
-msgstr "Si une chaîne échoue, sauvegarder quand même et le dire dans la barre d'état"
+msgstr ""
+"Si une chaîne échoue, sauvegarder quand même et le dire dans la barre d'état"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "No preprocessors — documents save exactly as typed."
