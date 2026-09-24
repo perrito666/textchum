@@ -514,7 +514,7 @@ final class DocumentController: NSResponder {
         // switch starts on estimated line heights, and a viewport put
         // back onto estimates lands wherever they were wrong — an empty
         // stretch, or a jump once real heights replaced them.
-        settleLayout(of: textView)
+        timed("settleLayout") { settleLayout(of: textView) }
         // Every new view's gutter learns the lines: the first from the
         // text just set, later ones from the shared storage. This used
         // to ride the settings pass, which now only restyles on a real
@@ -543,6 +543,7 @@ final class DocumentController: NSResponder {
         }
         DispatchQueue.main.async { [weak self, weak view] in
             MainActor.assumeIsolated {
+                if Self.debugTimers { NSLog("TIMER open-idle") }
                 guard let self, let view else { return }
                 self.updateContextStrip(for: view)
                 if let pending = self.pendingSessionPosition {
@@ -3244,11 +3245,8 @@ final class DocumentController: NSResponder {
             let whole = NSRange(location: 0, length: length)
             return (whole, whole)
         }
-        guard let textView, let scrollView = textView.enclosingScrollView,
-            let layoutManager = textView.textLayoutManager,
-            let contentManager = layoutManager.textContentManager
-        else {
-            let head = NSRange(location: 0, length: min(length, Self.viewportMargin * 2))
+        let head = NSRange(location: 0, length: min(length, Self.viewportMargin * 2))
+        guard let textView, let scrollView = textView.enclosingScrollView else {
             return (head, head)
         }
 
@@ -3259,15 +3257,30 @@ final class DocumentController: NSResponder {
         // clip view is what scrolled, so it is always current, and
         // asking for the character at its corners lays that region out
         // on demand.
-        _ = layoutManager
-        _ = contentManager
         let visible = scrollView.contentView.bounds
+        // A view that is not in a window yet — every view is, when it
+        // is made — has an empty clip, and the character at the corners
+        // of an empty rectangle is not a viewport: the bottom-right
+        // corner lies off the text, which TextKit answers with the end
+        // of the document. The first pass painted the whole file that
+        // way, bold and italic included, and a two-megabyte file took
+        // over a minute to show its window. The head is the honest
+        // answer until the clip has a size; its first bounds change
+        // paints wherever the view then lands.
+        guard visible.width > 0, visible.height > 0 else {
+            return (head, head)
+        }
         let start = textView.characterIndexForInsertion(
             at: NSPoint(x: 5, y: visible.minY + 1))
         let end = textView.characterIndexForInsertion(
             at: NSPoint(x: visible.maxX - 5, y: visible.maxY - 1))
         let from = max(0, start - Self.viewportMargin)
         let to = min(length, end + Self.viewportMargin)
+        if Self.debugTimers {
+            NSLog(
+                "TIMER highlightRange clip=%@ viewport=%d..%d painted=%d..%d",
+                NSStringFromRect(visible), start, end, from, to)
+        }
         guard to > from else { return nil }
         return (
             NSRange(location: start, length: max(0, end - start)),
@@ -3278,6 +3291,8 @@ final class DocumentController: NSResponder {
     /// What the last pass painted, and how long the document was then.
     private var paintedRange: NSRange?
     private var paintedLength: Int?
+    /// For the smoke test: the stretch the last pass painted.
+    var paintedRangeForDebug: NSRange? { paintedRange }
 
     /// Whether a scroll has to repaint at all.
     ///
@@ -3372,12 +3387,16 @@ final class DocumentController: NSResponder {
             }
             if toPaint.isEmpty { return true }
         } else {
-            for target in paintTargets {
-                target.removeRenderingAttribute(.foregroundColor, for: documentRange)
+            timed("clearColours") {
+                for target in paintTargets {
+                    target.removeRenderingAttribute(.foregroundColor, for: documentRange)
+                }
             }
         }
 
-        let spans = toPaint.flatMap { coreDocument.highlights(in: $0) }
+        let spans = timed("coreHighlights") {
+            toPaint.flatMap { coreDocument.highlights(in: $0) }
+        }
         guard !spans.isEmpty else { return true }
 
         let darkAppearance =
@@ -3421,14 +3440,16 @@ final class DocumentController: NSResponder {
                 traitFontsOwed = true
             } else {
                 for stretch in toPaint {
-                    let written = Self.applyTraitFonts(
-                        wantedFonts, over: stretch, in: storage, plain: appliedFont)
+                    let written = timed("traitFonts") {
+                        Self.applyTraitFonts(
+                            wantedFonts, over: stretch, in: storage, plain: appliedFont)
+                    }
                     guard written > 0, coreDocument.lengthInUTF16 < 2_000_000,
                         let range = layoutTextRange(stretch, in: layoutManager)
                     else { continue }
                     // Real layout for what was just invalidated, so no
                     // estimate is left to be corrected under the eye.
-                    layoutManager.ensureLayout(for: range)
+                    timed("traitRelayout") { layoutManager.ensureLayout(for: range) }
                 }
             }
         }
@@ -3497,6 +3518,13 @@ final class DocumentController: NSResponder {
             }
             pending = nil
         }
+        // One editing transaction for the lot. Each write outside one
+        // is its own processEditing, and the text system's part of
+        // that costs in proportion to the document, not the write: a
+        // sixteen-thousand-unit stretch with a few hundred comments in
+        // it took a second and a half in a two-megabyte file.
+        storage.beginEditing()
+        defer { storage.endEditing() }
         storage.enumerateAttribute(.font, in: bounds, options: []) { value, range, _ in
             let current = value as? NSFont
             var index = range.location
