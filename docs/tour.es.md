@@ -246,7 +246,11 @@ forja con el fragmento de línea escrito como lo escribe esa forja.
 Moverse por palabras (⌥→/⌥←, Ctrl+flechas en Linux, y sus formas de
 seleccionar y borrar) se detiene en cada cambio de clase de carácter
 —identificador, símbolo, blanco— y en cada salto de línea, así que una
-tira como `")}` es una parada y el cursor nunca salta de línea. Un
+tira como `)}` es una parada y el cursor nunca salta de línea. Una
+comilla pertenece a la palabra que tiene al lado, así que `"hello"` es
+una sola parada, y `.`, `,` y `;` se pasan por encima como blancos
+—separan cosas en vez de ser cosas—, así que `a.b` son dos paradas y
+el punto se salta. Un
 paréntesis o llave de cierre escrito al principio de su línea toma la
 sangría de la línea que lo abrió.
 

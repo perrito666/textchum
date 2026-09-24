@@ -251,8 +251,11 @@ forge l'écrit.
 Le déplacement par mots (⌥→/⌥←, Ctrl+flèches sous Linux, et leurs
 formes de sélection et de suppression) s'arrête à chaque changement de
 classe de caractère — identifiant, symbole, blanc — et à chaque saut de
-ligne : une suite comme `")}` est un arrêt, et le curseur ne saute
-jamais de ligne. Une parenthèse ou accolade fermante tapée en tête de
+ligne : une suite comme `)}` est un arrêt, et le curseur ne saute
+jamais de ligne. Un guillemet appartient au mot qu'il borde, si bien
+que `"hello"` est un seul arrêt, et `.`, `,` et `;` sont franchis
+comme des blancs — ils séparent les choses au lieu d'en être — si bien
+que `a.b` fait deux arrêts, le point sauté. Une parenthèse ou accolade fermante tapée en tête de
 ligne prend l'indentation de la ligne qui l'a ouverte.
 
 La complétion apparaît à la frappe après les caractères d'identifiant

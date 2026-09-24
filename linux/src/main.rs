@@ -1384,9 +1384,15 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
 
                 // Code's own word boundaries, and a closer that takes
                 // its opener's indentation.
-                let symbols = textchum_core::motion::word_boundary("key\")} next", 3, true);
+                let symbols = textchum_core::motion::word_boundary("key\")} next", 4, true);
                 if symbols != 6 {
                     eprintln!("FAIL: a run of symbols should be one word, landed at {symbols}");
+                    return 1;
+                }
+                let quoted = textchum_core::motion::word_boundary("\"hello\", a.b", 0, true);
+                let dotted = textchum_core::motion::word_boundary("\"hello\", a.b", 7, true);
+                if quoted != 7 || dotted != 10 {
+                    eprintln!("FAIL: a quoted word should be one stop and a separator none, landed at {quoted} and {dotted}");
                     return 1;
                 }
                 buffer.set_text("fn f() {\n    if x {\n        y();\n        ");

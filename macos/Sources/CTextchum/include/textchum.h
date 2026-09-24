@@ -966,7 +966,8 @@ bool tc_preview_is_place_in_page(const char *current,
 /**
  * Where a word move from `offset` lands, by code's own boundaries:
  * identifier characters, symbols, and whitespace are separate words,
- * and a line break is a stop of its own.
+ * a quote belongs to the word beside it, `.` `,` `;` are passed over
+ * like blanks, and a line break is a stop of its own.
  *
  * # Safety
  * `text` must be valid UTF-8 for its length.

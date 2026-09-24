@@ -1094,7 +1094,7 @@ func runSmokeTest() -> Int32 {
     }
     motionView.string = "key\")} next"
     motionDocument.noteTextReplaced()
-    motionView.setSelectedRange(NSRange(location: 3, length: 0))
+    motionView.setSelectedRange(NSRange(location: 4, length: 0))
     motionView.moveWordForward(nil)
     guard motionView.selectedRange().location == 6 else {
         print("FAIL: ⌥→ over a run of symbols landed at \(motionView.selectedRange().location)")
@@ -1102,8 +1102,9 @@ func runSmokeTest() -> Int32 {
     }
     // The bound selector is moveWordLeft:, not moveWordBackward:, and
     // on the user's line the default AppKit binding landed inside the
-    // last word. From the trailing `")}` the first left-move lands at
-    // its start, right after `token`, not inside it.
+    // last word. From the trailing `)}` the first left-move lands at
+    // its start, right after the closing quote — which is the word's
+    // — not inside the word.
     motionView.string = "return wrap(err, \"parsing jwt ui token\")}"
     motionDocument.noteTextReplaced()
     let lineEnd = (motionView.string as NSString).length
@@ -1111,17 +1112,32 @@ func runSmokeTest() -> Int32 {
     motionView.moveWordLeft(nil)
     let landedAt = motionView.selectedRange().location
     let tailFromCaret = (motionView.string as NSString).substring(from: landedAt)
-    guard tailFromCaret == "\")}" else {
+    guard tailFromCaret == ")}" else {
         print("FAIL: opt-left landed at \(landedAt): \(tailFromCaret)")
         return 1
     }
     motionView.string = "key\")} next"
     motionDocument.noteTextReplaced()
-    // ⌥⇧→ from just after `key` extends over the symbol run alone.
-    motionView.setSelectedRange(NSRange(location: 3, length: 0))
+    // ⌥⇧→ from just after `key"` extends over the symbol run alone.
+    motionView.setSelectedRange(NSRange(location: 4, length: 0))
     motionView.moveWordRightAndModifySelection(nil)
-    guard motionView.selectedRange() == NSRange(location: 3, length: 3) else {
+    guard motionView.selectedRange() == NSRange(location: 4, length: 2) else {
         print("FAIL: opt-shift-right did not select the symbol run: \(motionView.selectedRange())")
+        return 1
+    }
+    // A quoted word is one stop; `,` and `.` are passed over like
+    // blanks, so from after `"hello"` the next stop is after `a`.
+    motionView.string = "\"hello\", a.b"
+    motionDocument.noteTextReplaced()
+    motionView.setSelectedRange(NSRange(location: 0, length: 0))
+    motionView.moveWordForward(nil)
+    guard motionView.selectedRange().location == 7 else {
+        print("FAIL: ⌥→ over a quoted word landed at \(motionView.selectedRange().location)")
+        return 1
+    }
+    motionView.moveWordForward(nil)
+    guard motionView.selectedRange().location == 10 else {
+        print("FAIL: ⌥→ over a separator landed at \(motionView.selectedRange().location)")
         return 1
     }
     motionView.string = "fn f() {\n    if x {\n        y();\n        "

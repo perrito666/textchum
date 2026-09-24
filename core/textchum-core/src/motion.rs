@@ -3,8 +3,12 @@
 //! The text system's idea of a word lumps a run of punctuation together
 //! and reads across line breaks; an editor stops at every change of
 //! character class — identifier characters, symbols, whitespace — and
-//! at the end of a line. And a closing bracket typed first on a line
-//! wants the indentation of the line that opened it.
+//! at the end of a line. Two kinds of punctuation are not symbols in
+//! code: a quote belongs to the word it opens or closes, so `"hello"`
+//! is one stop, and `.`, `,` and `;` separate things rather than being
+//! things, so they are passed over the way blanks are. And a closing
+//! bracket typed first on a line wants the indentation of the line
+//! that opened it.
 //!
 //! Offsets are UTF-16 code units, the shells' native currency.
 
@@ -13,6 +17,7 @@
 enum Class {
     Word,
     Symbol,
+    /// A blank, or a separator that reads as one: `.`, `,`, `;`.
     Space,
     Newline,
 }
@@ -20,9 +25,9 @@ enum Class {
 fn class(character: char) -> Class {
     if character == '\n' || character == '\r' {
         Class::Newline
-    } else if character.is_whitespace() {
+    } else if character.is_whitespace() || matches!(character, '.' | ',' | ';') {
         Class::Space
-    } else if character.is_alphanumeric() || character == '_' {
+    } else if character.is_alphanumeric() || matches!(character, '_' | '"' | '\'' | '`') {
         Class::Word
     } else {
         Class::Symbol
@@ -30,9 +35,10 @@ fn class(character: char) -> Class {
 }
 
 /// The UTF-16 offset a word move lands on from `offset`: forward,
-/// past any blanks and then one run of like characters; backward, the
-/// mirror. A line break is a stop of its own, so a move never crosses
-/// a line without landing on its edge first.
+/// past any blanks — and separators, which read as blanks — and then
+/// one run of like characters; backward, the mirror. A line break is
+/// a stop of its own, so a move never crosses a line without landing
+/// on its edge first.
 pub fn word_boundary(text: &str, offset: usize, forward: bool) -> usize {
     let units: Vec<(usize, char)> = utf16_indexed(text);
     let total = units.last().map_or(0, |(at, c)| at + c.len_utf16());
@@ -158,14 +164,31 @@ mod tests {
     #[test]
     fn a_run_of_symbols_is_its_own_word() {
         let text = r#"key")} next"#;
-        // From the start: over `key`, then over `")}`, then over ` next`.
-        assert_eq!(word_boundary(text, 0, true), 3);
-        assert_eq!(word_boundary(text, 3, true), 6);
+        // From the start: over `key"` — the quote is the word's — then
+        // over `)}`, then over ` next`.
+        assert_eq!(word_boundary(text, 0, true), 4);
+        assert_eq!(word_boundary(text, 4, true), 6);
         assert_eq!(word_boundary(text, 6, true), 11);
         // And back.
         assert_eq!(word_boundary(text, 11, false), 7);
-        assert_eq!(word_boundary(text, 7, false), 3);
-        assert_eq!(word_boundary(text, 3, false), 0);
+        assert_eq!(word_boundary(text, 7, false), 4);
+        assert_eq!(word_boundary(text, 4, false), 0);
+    }
+
+    #[test]
+    fn quotes_belong_to_the_word_and_separators_to_nobody() {
+        let text = r#""hello", a.b; c"#;
+        // `"hello"` is one stop; `,` `.` `;` are passed over like blanks.
+        assert_eq!(word_boundary(text, 0, true), 7);
+        assert_eq!(word_boundary(text, 7, true), 10);
+        assert_eq!(word_boundary(text, 10, true), 12);
+        assert_eq!(word_boundary(text, 12, true), 15);
+        assert_eq!(word_boundary(text, 15, false), 14);
+        assert_eq!(word_boundary(text, 14, false), 11);
+        assert_eq!(word_boundary(text, 11, false), 9);
+        assert_eq!(word_boundary(text, 9, false), 0);
+        // An apostrophe inside a word does not split it.
+        assert_eq!(word_boundary("it's fine", 0, true), 4);
     }
 
     #[test]

@@ -236,8 +236,11 @@ spelled the way that forge does.
 
 Word movement (⌥→/⌥←, Ctrl+arrows on Linux, and their selecting and
 deleting forms) stops at every change of character class — identifier,
-symbol, blank — and at a line break, so a run like `")}` is one stop
-and the caret never skips across lines. A closing bracket typed first
+symbol, blank — and at a line break, so a run like `)}` is one stop
+and the caret never skips across lines. A quote belongs to the word
+beside it, so `"hello"` is one stop, and `.`, `,` and `;` are passed
+over like blanks — they separate things rather than being things — so
+`a.b` is two stops with the dot skipped. A closing bracket typed first
 on its line takes the indentation of the line that opened it.
 
 Completions appear as you type after identifier characters and `.`;
