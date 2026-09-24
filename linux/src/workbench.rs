@@ -357,6 +357,7 @@ impl Workbench {
         import_theme.append(Some(&tr("From VS Code…")), Some("win.import-theme-vscode"));
         import_theme.append(Some(&tr("From TextMate…")), Some("win.import-theme-textmate"));
         app_section.append_submenu(Some(&tr("Import Theme")), &import_theme);
+        app_section.append(Some(&tr("Install Grammar…")), Some("win.install-grammar"));
         app_section.append(Some(&tr("About Textchum")), Some("win.about"));
         app_section.append(Some(&tr("Close Tab")), Some("win.close-tab"));
         app_section.append(Some(&tr("Reopen Closed Tab")), Some("win.reopen-tab"));
@@ -2607,6 +2608,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("import-theme-textmate", workbench, |workbench, _| {
         import_theme(workbench, theme_import::Source::TextMate);
     });
+    add("install-grammar", workbench, |workbench, _| install_grammar(workbench));
     add("file-properties", workbench, |workbench, _| show_file_properties(workbench));
     add("about", workbench, |workbench, _| {
         // The real build version comes from git at compile time (the
@@ -5415,6 +5417,80 @@ fn finish_theme_import(
         shell.apply_theme();
         shell.save_config();
     }
+}
+
+/// Textchum ▸ Install Grammar…: a language the build does not carry,
+/// from a checkout of its tree-sitter grammar. The compiling and the
+/// query rewriting are the core's; this chooses the folder, keeps the
+/// seconds a compile takes off the main loop, saves the entry as the
+/// app's own change and says what happened.
+fn install_grammar(workbench: &Rc<Workbench>) {
+    let dialog = gtk::FileDialog::new();
+    dialog.set_title(&tr("Choose a tree-sitter grammar's repository"));
+    let window = workbench.window.clone();
+    let workbench = Rc::clone(workbench);
+    dialog.select_folder(Some(&window), gtk::gio::Cancellable::NONE, move |result| {
+        let Ok(file) = result else { return };
+        let Some(repository) = file.path() else { return };
+        let grammars = crate::paths::grammars_dir();
+        let workbench = Rc::clone(&workbench);
+        glib::spawn_future_local(async move {
+            let built = gtk::gio::spawn_blocking(move || {
+                textchum_core::grammar::build(&repository, &grammars)
+            })
+            .await
+            .unwrap_or_else(|_| Err("the build could not be run".to_string()));
+            finish_grammar_install(&workbench, built);
+        });
+    });
+}
+
+fn finish_grammar_install(
+    workbench: &Rc<Workbench>,
+    built: Result<textchum_core::grammar::Built, String>,
+) {
+    let built = match built {
+        Ok(built) => built,
+        Err(error) => {
+            gtk::AlertDialog::builder()
+                .message(tr("The grammar was not installed"))
+                .detail(error)
+                .build()
+                .show(Some(&workbench.window.clone()));
+            return;
+        }
+    };
+    let shell = crate::shell::Shell::instance();
+    shell
+        .config
+        .borrow_mut()
+        .set_language_entry(&built.name, Some(built.entry.clone()));
+    shell.save_config();
+    // Loaded here rather than by the file monitor, which ignores the
+    // app's own saves; the pages are told the way a reload tells them,
+    // so a file of that type already open is coloured.
+    let json = format!(
+        "{{\"languages\":{{{}:{}}}}}",
+        serde_json_string(&built.name),
+        built.entry
+    );
+    let mut lines = vec![tr(
+        "Files of its types open as it from now on, and the ones already open are coloured.",
+    )];
+    lines.extend(textchum_core::grammar::load_configured(&json));
+    lines.extend(built.warnings);
+    relearn_languages();
+    gtk::AlertDialog::builder()
+        .message(format!("Installed “{}”", built.name))
+        .detail(lines.join("\n\n"))
+        .build()
+        .show(Some(&workbench.window.clone()));
+}
+
+/// `text` as a JSON string literal.
+fn serde_json_string(text: &str) -> String {
+    let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
 }
 
 // MARK: Preferences

@@ -725,6 +725,21 @@ final class DocumentController: NSResponder {
         for view in views {
             view.contextStrip.invalidateText()
             updateContextStrip(for: view)
+            // The colours went on as rendering attributes, which the
+            // text system folds in only when it builds a layout
+            // fragment. An edit or a font change rebuilds them as a
+            // side effect; a change of language with the same fonts
+            // does neither, and a document coloured for the first time
+            // stayed black until its next edit. Telling the storage its
+            // attributes changed — without changing any — is what
+            // rebuilds them; invalidating the layout alone did not.
+            if let storage = view.textView.textStorage {
+                storage.beginEditing()
+                storage.edited(
+                    .editedAttributes, range: NSRange(location: 0, length: storage.length),
+                    changeInLength: 0)
+                storage.endEditing()
+            }
         }
         syncLSPOpenState()
     }

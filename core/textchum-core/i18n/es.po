@@ -412,6 +412,10 @@ msgid "Import Theme"
 msgstr "Importar tema"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Install Grammar…"
+msgstr "Instalar gramática…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "About Textchum"
 msgstr "Acerca de Textchum"
 
@@ -747,6 +751,20 @@ msgstr "Copiar el commit"
 #: linux/src/workbench.rs
 msgid "Nothing was imported. {}"
 msgstr "No se importó nada. {}"
+
+#: linux/src/workbench.rs
+msgid "Choose a tree-sitter grammar's repository"
+msgstr "Elige el repositorio de una gramática tree-sitter"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/GrammarInstall.swift
+msgid "The grammar was not installed"
+msgstr "La gramática no se instaló"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/GrammarInstall.swift
+msgid ""
+"Files of its types open as it from now on, and the ones already open are "
+"coloured."
+msgstr "Los archivos de sus tipos se abren como ella a partir de ahora, y los ya abiertos quedan coloreados."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "General"
@@ -1447,6 +1465,16 @@ msgstr "{} de {}"
 #: macos/Sources/Textchum/FindReplaceBar.swift
 msgid "{} matches"
 msgstr "{} coincidencias"
+
+#: macos/Sources/Textchum/GrammarInstall.swift
+msgid ""
+"Choose a tree-sitter grammar's repository: a folder with src/parser.c and "
+"queries/highlights.scm."
+msgstr "Elige el repositorio de una gramática tree-sitter: una carpeta con src/parser.c y queries/highlights.scm."
+
+#: macos/Sources/Textchum/GrammarInstall.swift
+msgid "Install"
+msgstr "Instalar"
 
 #: macos/Sources/Textchum/InfoPanel.swift
 msgid "Documentation"

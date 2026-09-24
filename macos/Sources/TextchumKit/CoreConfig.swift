@@ -194,6 +194,22 @@ public final class CoreConfig {
         return String(cString: raw)
     }
 
+    /// Sets (or, with nil, removes) a language's entry under
+    /// `languages`: the JSON object `CoreLanguages.build` answered with.
+    public func setLanguageEntry(name: String, json: String?) {
+        name.withCString { namePointer in
+            guard let json else {
+                tc_config_set_language_entry(handle, namePointer, UInt(strlen(namePointer)), nil, 0)
+                return
+            }
+            json.withCString { jsonPointer in
+                tc_config_set_language_entry(
+                    handle, namePointer, UInt(strlen(namePointer)),
+                    jsonPointer, UInt(strlen(jsonPointer)))
+            }
+        }
+    }
+
     public func loadGrammars() -> [String] {
         guard let raw = tc_load_grammars(handle) else { return [] }
         defer { tc_string_free(raw) }

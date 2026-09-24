@@ -687,7 +687,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// grammars arrived are told again; after a reload (`relearn`),
     /// every document is, since a grammar it already had may have been
     /// replaced.
-    private func finishGrammarLoading(problems: [String], relearn: Bool = false) {
+    func finishGrammarLoading(problems: [String], relearn: Bool = false) {
         for problem in problems {
             NSLog("languages: \(problem)")
         }
@@ -1387,6 +1387,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// When the app itself last wrote config.json; the watcher ignores
     /// the echo of our own saves.
     private var lastOwnConfigSave = Date.distantPast
+
+    /// Writes the configuration as the app's own change, which the
+    /// on-disk watcher then leaves alone rather than re-applying.
+    func saveConfigAsOwn() {
+        lastOwnConfigSave = Date()
+        try? config?.save()
+    }
     private var configWatcher: DispatchSourceFileSystemObject?
 
     /// Follows external edits to config.json while running: the file is
@@ -2835,6 +2842,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         importThemeItem.submenu = importThemeMenu
         appMenu.addItem(importThemeItem)
+        appMenu.addItem(
+            withTitle: t("Install Grammar…"),
+            action: #selector(installGrammar(_:)),
+            keyEquivalent: ""
+        )
         appMenu.addItem(.separator())
         appMenu.addItem(
             withTitle: t("Quit Textchum"),
