@@ -232,7 +232,10 @@ Retroceso entre un par vacío se lleva los dos. Los corchetes se
 emparejan en todas partes; las comillas siguen al lenguaje: `'` es un
 apóstrofo en prosa y un lifetime en Rust, así que ahí se deja en paz, y
 el acento grave solo se empareja donde significa código. Ningún par se
-abre dentro de una palabra, y ninguna comilla justo después de una.
+abre dentro de una palabra, y ninguna comilla justo después de una. Un
+lenguaje que la regla no conoce, o en el que se equivoca con una
+comilla, trae su propia tabla en el archivo: `editor.pairs` en
+[la configuración](configuration.md).
 
 La barra fina bajo el editor responde lo que mirar el texto no puede:
 dónde está el cursor, si el archivo indenta con tabuladores o espacios

@@ -3491,6 +3491,45 @@ func runSmokeTest() -> Int32 {
             print("FAIL: a bracket opened into a word: \(view.string.debugDescription)")
             return 1
         }
+        // A language's own table from the file is the whole answer for
+        // it: `<` pairs in Rust once the table says so, and `[` no
+        // longer does when the table leaves it out. Wrapping follows
+        // the same table.
+        config.setPairTable(["()", "<>", "x"], language: "rust")
+        guard config.pairTables["rust"] == ["()", "<>"] else {
+            print("FAIL: the pair table did not round-trip: \(config.pairTables)")
+            return 1
+        }
+        document.apply(settings: EditorSettings(config: config))
+        view.insertText("", replacementRange: NSRange(location: 0, length: (view.string as NSString).length))
+        view.insertText("<", replacementRange: NSRange(location: 0, length: 0))
+        view.insertText("[", replacementRange: NSRange(location: 1, length: 0))
+        guard view.string == "<[>" else {
+            print("FAIL: the table did not decide what pairs: \(view.string.debugDescription)")
+            return 1
+        }
+        view.setSelectedRange(NSRange(location: 1, length: 1))
+        view.insertText("<", replacementRange: view.selectedRange())
+        guard view.string == "<<[>>" else {
+            print("FAIL: wrapping did not follow the table: \(view.string.debugDescription)")
+            return 1
+        }
+        config.setPairTable(nil, language: "rust")
+        guard config.pairTables["rust"] == nil else {
+            print("FAIL: the pair table did not go away: \(config.pairTables)")
+            return 1
+        }
+        document.apply(settings: EditorSettings(config: config))
+        // The status bar reads the caret against the new text, not the
+        // text before the pair went in: `(` on an empty second line
+        // leaves the caret on line 2, column 2 — not on "line 3".
+        view.insertText("a\n\n", replacementRange: NSRange(location: 0, length: (view.string as NSString).length))
+        view.insertText("(", replacementRange: NSRange(location: 2, length: 0))
+        let status = bench.statusBar.shownInfo
+        guard view.string == "a\n()\n", status.line == 2, status.column == 2 else {
+            print("FAIL: the status bar lagged the pair: \(view.string.debugDescription) Ln \(status.line), Col \(status.column)")
+            return 1
+        }
         guard document.coreDocument.canUndo, view.string == core.text else {
             print("FAIL: the pairs left the core and the view apart")
             return 1
@@ -3498,7 +3537,7 @@ func runSmokeTest() -> Int32 {
         bench.window?.close()
         try? FileManager.default.removeItem(atPath: scratch)
     }
-    print("auto-close ok (opener brings closer, closer steps over, backspace takes both, quotes by language)")
+    print("auto-close ok (opener brings closer, closer steps over, backspace takes both, quotes by language, a language's own table)")
 
     // Every mouse move over the editor asks which character is under
     // the pointer. The first version of that added a line fragment's

@@ -1449,22 +1449,6 @@ pub unsafe extern "C" fn tc_config_set_project_state_keep_days(config: *mut TcCo
     }
 }
 
-/// The closing half of a delimiter that wraps a selection, or an empty
-/// string when the text is not one. Release with [`tc_string_free`].
-///
-/// # Safety
-/// The pointer and length must describe valid UTF-8.
-#[no_mangle]
-pub unsafe extern "C" fn tc_pair_closing(open: *const c_char, open_len: usize) -> *mut c_char {
-    let Some(open) = (unsafe { str_from_raw(open, open_len) }) else {
-        return owned_c_string(String::new());
-    };
-    let closing = textchum_core::pairs::wraps(open)
-        .map(|(_, close)| close.to_string())
-        .unwrap_or_default();
-    owned_c_string(closing)
-}
-
 /// Whether a link the preview was asked to follow names a place in the
 /// page already on screen.
 ///
@@ -2119,47 +2103,180 @@ pub unsafe extern "C" fn tc_config_set_auto_close_pairs(config: *mut TcConfig, e
     let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_auto_close_pairs(enabled)));
 }
 
+/// A language name as the pair functions take it: `language_len` bytes,
+/// or none at all for plain text.
+///
+/// # Safety
+/// `language` must point to `language_len` readable bytes when the
+/// length is not 0.
+unsafe fn language_from_raw<'a>(language: *const c_char, language_len: usize) -> Option<&'a str> {
+    if language_len == 0 {
+        None
+    } else {
+        unsafe { str_from_raw(language, language_len) }
+    }
+}
+
+/// A character argument: a Unicode scalar, or 0 for none.
+fn scalar_from_raw(code: u32) -> Option<char> {
+    (code != 0).then(|| char::from_u32(code)).flatten()
+}
+
+/// A language's own table of pairs as the shells hand it over: `len`
+/// bytes of UTF-8, two characters per pair, or null for no table and
+/// the built-in rule. `None` when the bytes are not UTF-8.
+///
+/// # Safety
+/// `table`, when not null, must point to `len` readable bytes.
+unsafe fn table_from_raw(table: *const c_char, len: usize) -> Option<Option<Vec<(char, char)>>> {
+    if table.is_null() {
+        return Some(None);
+    }
+    let flat = unsafe { str_from_raw(table, len) }?;
+    let characters: Vec<char> = flat.chars().collect();
+    Some(Some(
+        characters
+            .chunks_exact(2)
+            .map(|pair| (pair[0], pair[1]))
+            .collect(),
+    ))
+}
+
+/// Every language's own table of pairs from the configuration
+/// (`editor.pairs`), serialized — `{language: ["()", "<>", ...]}` —
+/// and `{}` when unset. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_pair_tables_json(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    owned_c_string(config.inner.pair_tables_json())
+}
+
+/// Sets (or, with a null `table`, removes) a language's own table of
+/// pairs: `table_len` bytes of UTF-8, two characters per pair.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `language` must
+/// point to `language_len` readable bytes, and `table`, when not null,
+/// to `table_len`.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_pair_table(
+    config: *mut TcConfig,
+    language: *const c_char,
+    language_len: usize,
+    table: *const c_char,
+    table_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(language) = (unsafe { language_from_raw(language, language_len) }) else {
+        return;
+    };
+    let Some(table) = (unsafe { table_from_raw(table, table_len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config.inner.set_pair_table(language, table.as_deref())
+    }));
+}
+
+/// The closing half of `open` (a Unicode scalar) for wrapping a
+/// selection, or 0 when `open` is not a delimiter: under `table` — a
+/// language's own, `table_len` bytes of two characters per pair — when
+/// it is not null, the built-in pairs otherwise.
+///
+/// # Safety
+/// `table`, when not null, must point to `table_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_pairs_closing(table: *const c_char, table_len: usize, open: u32) -> u32 {
+    let Some(table) = (unsafe { table_from_raw(table, table_len) }) else {
+        return 0;
+    };
+    let Some(open) = char::from_u32(open) else { return 0 };
+    textchum_core::pairs::closing_with(table.as_deref(), open).map_or(0, |close| close as u32)
+}
+
 /// The closing half to put after the caret when `typed` (a Unicode
 /// scalar) is typed in `language` between `before` and `after` (0 for
-/// none), or 0 when nothing should be. See
+/// none), or 0 when nothing should be: under `table` — a language's
+/// own, `table_len` bytes of two characters per pair — when it is not
+/// null, the built-in rule by language otherwise. See
 /// `textchum_core::pairs::auto_close`.
 ///
 /// # Safety
-/// `language` must point to `language_len` readable bytes (0 for no
-/// language).
+/// `table`, when not null, must point to `table_len` readable bytes;
+/// `language` to `language_len` (0 for no language).
 #[no_mangle]
 pub unsafe extern "C" fn tc_pairs_auto_close(
+    table: *const c_char,
+    table_len: usize,
     language: *const c_char,
     language_len: usize,
     typed: u32,
     before: u32,
     after: u32,
 ) -> u32 {
-    let language = if language_len == 0 {
-        None
-    } else {
-        unsafe { str_from_raw(language, language_len) }
+    let Some(table) = (unsafe { table_from_raw(table, table_len) }) else {
+        return 0;
     };
-    let scalar = |code: u32| (code != 0).then(|| char::from_u32(code)).flatten();
+    let language = unsafe { language_from_raw(language, language_len) };
     let Some(typed) = char::from_u32(typed) else { return 0 };
-    textchum_core::pairs::auto_close(language, typed, scalar(before), scalar(after))
-        .map_or(0, |close| close as u32)
+    textchum_core::pairs::auto_close_with(
+        table.as_deref(),
+        language,
+        typed,
+        scalar_from_raw(before),
+        scalar_from_raw(after),
+    )
+    .map_or(0, |close| close as u32)
 }
 
 /// Whether typing `typed` with `after` (0 for none) already there
-/// steps over it — the closer the editor put there a moment ago.
+/// steps over it — the closer the editor put there a moment ago —
+/// under `table` when it is not null, the built-in pairs otherwise.
+///
+/// # Safety
+/// `table`, when not null, must point to `table_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn tc_pairs_skips_closer(typed: u32, after: u32) -> bool {
+pub unsafe extern "C" fn tc_pairs_skips_closer(
+    table: *const c_char,
+    table_len: usize,
+    typed: u32,
+    after: u32,
+) -> bool {
+    let Some(table) = (unsafe { table_from_raw(table, table_len) }) else {
+        return false;
+    };
     let Some(typed) = char::from_u32(typed) else { return false };
-    textchum_core::pairs::skips_closer(typed, (after != 0).then(|| char::from_u32(after)).flatten())
+    textchum_core::pairs::skips_closer_with(table.as_deref(), typed, scalar_from_raw(after))
 }
 
 /// Whether Backspace between `before` and `after` (0 for none) takes
-/// both: an empty pair the editor opened.
+/// both — an empty pair the editor opened — under `table` when it is
+/// not null, the built-in pairs otherwise.
+///
+/// # Safety
+/// `table`, when not null, must point to `table_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn tc_pairs_deletes_pair(before: u32, after: u32) -> bool {
-    let scalar = |code: u32| (code != 0).then(|| char::from_u32(code)).flatten();
-    textchum_core::pairs::deletes_pair(scalar(before), scalar(after))
+pub unsafe extern "C" fn tc_pairs_deletes_pair(
+    table: *const c_char,
+    table_len: usize,
+    before: u32,
+    after: u32,
+) -> bool {
+    let Some(table) = (unsafe { table_from_raw(table, table_len) }) else {
+        return false;
+    };
+    textchum_core::pairs::deletes_pair_with(
+        table.as_deref(),
+        scalar_from_raw(before),
+        scalar_from_raw(after),
+    )
 }
 
 /// Whether a save whose preprocessor chain failed goes ahead and says

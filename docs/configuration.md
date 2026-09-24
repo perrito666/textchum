@@ -76,6 +76,31 @@ of branch names tried, in order, when git does not name a default
 branch — `["main", "master", "trunk", "develop"]` unless set. Both keys
 also work per project, as `editor` overrides on a workspace entry.
 
+`editor.pairs` gives a language its own table of pairs, for **Close
+brackets and quotes as they are typed** and for wrapping a selection:
+for a language the built-in rule does not know, or one where it gets a
+quote wrong for you. Keys are language names as the status bar shows
+them; each entry is the opening half then the closing one:
+
+```json
+{
+  "editor": {
+    "auto_close_pairs": true,
+    "pairs": {
+      "nix": ["()", "[]", "{}", "\"\""],
+      "rust": ["()", "[]", "{}", "\"\"", "<>"]
+    }
+  }
+}
+```
+
+A table is the whole answer for its language — nothing from the
+built-in rule is added to it, so a quote left out stays a plain
+keystroke. A pair whose two halves are the same character is a quote,
+never opened right after a word nor before another of itself, and no
+pair opens into a word, table or not. Not there yet: the Settings
+window does not edit the table, and plain text cannot have one.
+
 Everything is optional — a missing file, a missing section, or a missing
 key simply means the default. Writes are atomic (temporary file plus
 rename), like every write Textchum does.

@@ -16,6 +16,8 @@ struct EditorSettings {
     /// Whether typing an opening bracket or quote puts its closing half
     /// after the caret.
     let autoClosePairs: Bool
+    /// Each language's own table of pairs from the file, by name.
+    let pairTables: [String: [String]]
     let hoverDocs: Bool
     /// The modifier hover waits for ("shift", "control", "option",
     /// "command"), or "" for the mouse alone.
@@ -67,6 +69,7 @@ struct EditorSettings {
         self.contextLines = config.contextLines
         self.rainbowBrackets = config.rainbowBrackets
         self.autoClosePairs = config.autoClosePairs
+        self.pairTables = config.pairTables
         self.hoverDocs = config.hoverDocs
         self.hoverModifier = config.hoverModifier
         self.preprocessorFailureSaves = config.preprocessorFailureSaves
