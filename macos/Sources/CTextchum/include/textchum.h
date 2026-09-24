@@ -1158,6 +1158,40 @@ char *tc_config_grammars_json(const struct TcConfig *config);
 char *tc_load_grammars_from(const char *json, uintptr_t json_len);
 
 /**
+ * Builds the tree-sitter grammar checked out at `repository` into
+ * `grammars_dir` — the parser compiled with the system C compiler, the
+ * queries copied with their capture names mapped onto the editor's —
+ * and answers with JSON: `{"name": …, "entry": {…}, "warnings": […]}`
+ * where `entry` is what to put under `languages` (see
+ * [`tc_config_set_language_entry`]), or `{"error": "…"}` saying what
+ * would make it work. Slow — a compile — so call it off the main
+ * thread. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `repository` must point to `repository_len` readable bytes and
+ * `grammars_dir` to `dir_len`.
+ */
+char *tc_grammar_build(const char *repository,
+                       uintptr_t repository_len,
+                       const char *grammars_dir,
+                       uintptr_t dir_len);
+
+/**
+ * Sets (or, with `entry_len == 0`, removes) a language's entry under
+ * `languages`: `entry` is the JSON object [`tc_grammar_build`]
+ * answered with, or one written by hand.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `name` must point to
+ * `name_len` readable bytes and `entry` to `entry_len`.
+ */
+void tc_config_set_language_entry(struct TcConfig *config,
+                                  const char *name,
+                                  uintptr_t name_len,
+                                  const char *entry,
+                                  uintptr_t entry_len);
+
+/**
  * Whether a file stays open when the window showing it closes
  * (default false).
  *

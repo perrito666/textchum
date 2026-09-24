@@ -328,6 +328,26 @@ impl Config {
         }
     }
 
+    /// Sets (or, with `None`, removes) a language's entry under
+    /// `languages` — the grammar library, its queries and file types,
+    /// as [`crate::grammar`] reads them. Empty sections are pruned.
+    pub fn set_language_entry(&mut self, name: &str, entry: Option<Value>) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let languages = ensure_object(top, "languages");
+        match entry {
+            Some(entry) => {
+                languages.insert(name.into(), entry);
+            }
+            None => {
+                languages.remove(name);
+            }
+        }
+        prune_empty(top, "languages");
+    }
+
     /// Sets (or, with `None`, removes) the server command line for a
     /// language — under `lsp.projects.<root>` when `root` is given,
     /// under `lsp.defaults` otherwise. Empty sections are pruned.

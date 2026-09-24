@@ -162,6 +162,71 @@ func runSmokeTest() -> Int32 {
                 return 1
             }
         }
+        // A grammar installed from a repository: the Dockerfile grammar's
+        // C, laid out as a checkout, with queries as another editor
+        // writes them. The sources are in the repository the smoke test
+        // runs from.
+        let vendored = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("core/textchum-core/grammars/dockerfile/src")
+        if FileManager.default.fileExists(atPath: vendored.path) {
+            let repo = syntaxDir.appendingPathComponent("tree-sitter-dsmoke")
+            try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: vendored, to: repo.appendingPathComponent("src"))
+            try "{\"name\": \"dockerfile\"}".write(
+                toFile: repo.appendingPathComponent("src/grammar.json").path, atomically: true, encoding: .utf8)
+            try "{\"grammars\": [{\"name\": \"dsmoke\", \"file-types\": [\"dsmoke\"]}]}".write(
+                toFile: repo.appendingPathComponent("tree-sitter.json").path, atomically: true, encoding: .utf8)
+            try FileManager.default.createDirectory(
+                at: repo.appendingPathComponent("queries"), withIntermediateDirectories: true)
+            try "(comment) @comment @spell\n\"FROM\" @keyword.import\n".write(
+                toFile: repo.appendingPathComponent("queries/highlights.scm").path, atomically: true, encoding: .utf8)
+            // A file of the new type, open as plain text before the
+            // grammar exists: what the person installing it is looking at.
+            let samplePath = syntaxDir.appendingPathComponent("sample.dsmoke").path
+            try "# note\nFROM alpine\n".write(toFile: samplePath, atomically: true, encoding: .utf8)
+            let plainBench = Workbench(sidebar: nil)
+            let plainDocument = DocumentController(document: try CoreDocument(contentsOf: samplePath))
+            plainBench.add(plainDocument)
+            plainBench.window?.makeKeyAndOrderFront(nil)
+            guard plainDocument.coreDocument.languageName == nil else {
+                print("FAIL: .dsmoke was known before its grammar was installed")
+                return 1
+            }
+            let outcome = CoreLanguages.build(
+                repository: repo.path, into: syntaxDir.appendingPathComponent("grammars").path)
+            guard outcome.error == nil, outcome.name == "dsmoke" else {
+                print("FAIL: grammar install: \(outcome.error ?? "named \(outcome.name)")")
+                return 1
+            }
+            let problems = CoreLanguages.load(grammarsJSON: "{\"languages\":{\"dsmoke\":\(outcome.entryJSON)}}")
+            guard problems.isEmpty, CoreLanguages.detected(forPath: "/x/a.dsmoke") == "dsmoke" else {
+                print("FAIL: installed grammar did not load: \(problems)")
+                return 1
+            }
+            // Told again, the open document takes the language and its
+            // colours without an edit.
+            plainDocument.relearnLanguage()
+            guard plainDocument.coreDocument.languageName == "dsmoke" else {
+                print("FAIL: the open document did not take the installed language")
+                return 1
+            }
+            var painted = false
+            if let plainView = plainDocument.primaryView, let manager = plainView.textLayoutManager {
+                manager.enumerateRenderingAttributes(from: manager.documentRange.location, reverse: false) {
+                    _, attributes, _ in
+                    if attributes[.foregroundColor] != nil { painted = true }
+                    return !painted
+                }
+            }
+            guard painted else {
+                let spans = plainDocument.coreDocument.highlights(
+                    in: NSRange(location: 0, length: plainDocument.coreDocument.lengthInUTF16))
+                print("FAIL: the open document was not coloured after its grammar arrived (\(spans.count) spans from the core)")
+                return 1
+            }
+            plainBench.window?.close()
+            print("grammar install ok (built from a checkout, loaded, detected, an open document coloured)")
+        }
         let spans = rustDoc.highlights(in: NSRange(location: 0, length: rustDoc.lengthInUTF16))
         guard !spans.isEmpty, spans.allSatisfy({ CoreTheme.styles.indices.contains($0.styleIndex) })
         else {

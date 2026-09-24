@@ -72,6 +72,15 @@ pub fn themes_dir() -> PathBuf {
     }
 }
 
+/// Grammars installed from their repositories: a library each, and a
+/// folder of queries named after the language.
+pub fn grammars_dir() -> PathBuf {
+    match data_dir() {
+        Some(dir) => dir.join("grammars"),
+        None => glib::user_data_dir().join("textchum/grammars"),
+    }
+}
+
 /// Imported icon packs.
 pub fn icons_dir() -> PathBuf {
     match data_dir() {

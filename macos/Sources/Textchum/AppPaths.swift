@@ -59,6 +59,13 @@ enum AppPaths {
             .appendingPathComponent("themes", isDirectory: true)
     }
 
+    /// Grammars installed from their repositories: a library each, and
+    /// a folder of queries named after the language.
+    static var grammarsDirectory: URL {
+        (dataDirectory ?? applicationSupport)
+            .appendingPathComponent("grammars", isDirectory: true)
+    }
+
     /// Imported icon packs.
     static var iconsDirectory: URL {
         (dataDirectory ?? applicationSupport)

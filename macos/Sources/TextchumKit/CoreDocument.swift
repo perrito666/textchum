@@ -478,6 +478,54 @@ public enum CoreLanguages {
     /// Opens the grammars named in a configuration snapshot — safe off
     /// the main thread, which is the point: the registry locks, the
     /// configuration does not.
+    /// What building a grammar from its repository produced.
+    public struct BuildOutcome {
+        /// The name the language goes by.
+        public let name: String
+        /// The `languages` entry, as JSON, that names the library and
+        /// queries now under the grammars directory.
+        public let entryJSON: String
+        /// What was worth saying about the queries on the way.
+        public let warnings: [String]
+        /// Why nothing was installed, when nothing was.
+        public let error: String?
+    }
+
+    /// Builds the tree-sitter grammar checked out at `repository` into
+    /// `directory`: the parser compiled with the system C compiler, the
+    /// queries copied with their capture names mapped onto this
+    /// editor's. Nothing is written to the configuration; the caller
+    /// sets the entry and loads it. A compile takes seconds — call this
+    /// off the main thread.
+    public static func build(repository: String, into directory: String) -> BuildOutcome {
+        let json = repository.withCString { repositoryPointer in
+            directory.withCString { directoryPointer in
+                tc_grammar_build(
+                    repositoryPointer, UInt(strlen(repositoryPointer)),
+                    directoryPointer, UInt(strlen(directoryPointer)))
+            }
+        }
+        guard let json else {
+            return BuildOutcome(
+                name: "", entryJSON: "{}", warnings: [], error: "the build could not be started")
+        }
+        defer { tc_string_free(json) }
+        let data = Data(String(cString: json).utf8)
+        let parsed = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        if let error = parsed["error"] as? String {
+            return BuildOutcome(name: "", entryJSON: "{}", warnings: [], error: error)
+        }
+        let entry = parsed["entry"] as? [String: Any] ?? [:]
+        let entryJSON =
+            (try? JSONSerialization.data(withJSONObject: entry))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        return BuildOutcome(
+            name: parsed["name"] as? String ?? "",
+            entryJSON: entryJSON,
+            warnings: parsed["warnings"] as? [String] ?? [],
+            error: nil)
+    }
+
     public static func load(grammarsJSON json: String) -> [String] {
         let raw = json.withCString { pointer in
             tc_load_grammars_from(pointer, UInt(strlen(pointer)))
