@@ -3524,9 +3524,25 @@ final class DocumentController: NSResponder {
             let whole = NSRange(location: 0, length: length)
             return (whole, whole)
         }
-        let head = NSRange(location: 0, length: min(length, Self.viewportMargin * 2))
+        // Before the view has a clip to measure — every view is made
+        // before it is placed — the best guess at a viewport is where
+        // the view is about to be put: a restored tab knows its caret
+        // already, in the units the paint is expressed in, and the
+        // margin either side of it is wider than any screen. Anything
+        // else opens at the top, and the head is right for it. A wrong
+        // guess costs what a scroll costs: one repaint on the clip's
+        // first bounds change.
+        let guess: NSRange = {
+            guard let pending = pendingSessionPosition else {
+                return NSRange(location: 0, length: min(length, Self.viewportMargin * 2))
+            }
+            let caret = min(max(0, pending.caret), length)
+            let from = max(0, caret - Self.viewportMargin)
+            let to = min(length, caret + Self.viewportMargin)
+            return NSRange(location: from, length: to - from)
+        }()
         guard let textView, let scrollView = textView.enclosingScrollView else {
-            return (head, head)
+            return (guess, guess)
         }
 
         // From the clip view's geometry, not the viewport layout
@@ -3543,11 +3559,13 @@ final class DocumentController: NSResponder {
         // corner lies off the text, which TextKit answers with the end
         // of the document. The first pass painted the whole file that
         // way, bold and italic included, and a two-megabyte file took
-        // over a minute to show its window. The head is the honest
-        // answer until the clip has a size; its first bounds change
-        // paints wherever the view then lands.
+        // over a minute to show its window. The guess above stands in
+        // until the clip has a size.
         guard visible.width > 0, visible.height > 0 else {
-            return (head, head)
+            if Self.debugTimers {
+                NSLog("TIMER highlightRange no clip yet, painted=%@", NSStringFromRange(guess))
+            }
+            return (guess, guess)
         }
         let start = textView.characterIndexForInsertion(
             at: NSPoint(x: 5, y: visible.minY + 1))
