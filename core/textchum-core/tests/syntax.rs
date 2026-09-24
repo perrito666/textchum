@@ -154,6 +154,47 @@ fn language_detected_from_extension_on_open() {
 }
 
 #[test]
+fn hcl_and_dockerfiles_detect_and_color() {
+    use textchum_core::syntax::languages;
+    for (path, expected) in [
+        ("infra/main.tf", "hcl"),
+        ("terragrunt.hcl", "hcl"),
+        ("prod.tfvars", "hcl"),
+        ("job.nomad", "hcl"),
+        ("terraform.tfstate", "json"),
+        ("Dockerfile", "dockerfile"),
+        ("Dockerfile.dev", "dockerfile"),
+        ("Containerfile", "dockerfile"),
+        ("api.Dockerfile", "dockerfile"),
+    ] {
+        assert_eq!(
+            languages::by_path(std::path::Path::new(path)).map(|l| l.spec.name),
+            Some(expected),
+            "{path}"
+        );
+    }
+
+    // The word opening a top-level block is the keyword, whichever
+    // dialect it belongs to; strings and comments are themselves.
+    let tf = doc_with(
+        "hcl",
+        "# infra\nresource \"aws_ecs_service\" \"web\" {\n  name = var.name\n}\n",
+    );
+    let spans = tf.highlights(0, tf.len_utf16()).unwrap();
+    assert!(styles_at(&spans, 0).contains(&style("comment")));
+    assert!(styles_at(&spans, 8).contains(&style("keyword")), "resource opens a block");
+    assert!(styles_at(&spans, 18).contains(&style("string")));
+
+    let docker = doc_with(
+        "dockerfile",
+        "FROM python:3.12 AS base\n# deps\nRUN pip install -r requirements.txt\n",
+    );
+    let spans = docker.highlights(0, docker.len_utf16()).unwrap();
+    assert!(styles_at(&spans, 0).contains(&style("keyword")), "FROM is an instruction");
+    assert!(styles_at(&spans, 25).contains(&style("comment")));
+}
+
+#[test]
 fn filename_only_languages_detect_and_color() {
     use textchum_core::syntax::languages;
     // Identity by name, not extension.

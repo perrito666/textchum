@@ -84,6 +84,8 @@ fn every_language_colours_a_sample_of_itself() {
         ("markdown", "# hi\n"),
         ("make", "all:\n\techo hi\n"),
         ("gotmpl", "{{ if .Name }}hi{{ end }}\n"),
+        ("hcl", "resource \"a\" \"b\" {\n  name = \"hi\"\n}\n"),
+        ("dockerfile", "FROM alpine\nRUN echo hi\n"),
     ];
     for (language, source) in samples {
         let spans = styles_of(source, language);
@@ -104,7 +106,7 @@ fn every_selectable_language_is_covered_by_that_sample() {
         "rust", "python", "go", "c", "cpp", "javascript", "typescript", "tsx", "java",
         "csharp", "ruby", "php", "lua", "nix", "elixir", "haskell", "ocaml", "scala",
         "cmake", "r", "xml", "json", "html", "css", "toml", "yaml", "sql", "bash",
-        "swift", "zig", "markdown", "make", "gotmpl",
+        "swift", "zig", "markdown", "make", "gotmpl", "hcl", "dockerfile",
     ];
     let missing: Vec<&str> = textchum_core::syntax::languages::selectable_names()
         .into_iter()

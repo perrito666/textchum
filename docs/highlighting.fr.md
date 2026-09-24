@@ -16,8 +16,17 @@ colorés. Elle s'exécute à l'ouverture et au premier enregistrement d'un
 document sans titre. Sont actuellement reconnus : Rust, Python, Go, C,
 C++, TypeScript, TSX, JavaScript, Java, C#, Ruby, PHP, Lua, Haskell,
 OCaml, Scala, Elixir, Nix, R, CMake, XML, JSON, Bash, Make, messages de
-commit git, modèles Go, HTML, CSS, TOML, YAML, SQL, Swift, Zig et
-Markdown. C++ et TypeScript héritent de la coloration de leur parent —
+commit git, modèles Go, HTML, CSS, TOML, YAML, SQL, Swift, Zig,
+Markdown, HCL et Dockerfiles. HCL couvre Terraform, Terragrunt, Packer
+et Nomad (`.tf`, `.tfvars`, `.hcl`, `.nomad`, `.pkr`), le mot qui ouvre
+un bloc étant coloré comme mot-clé quel que soit le dialecte ; un
+Dockerfile se reconnaît à son nom, suffixé ou non — `Dockerfile`,
+`Dockerfile.dev`, `api.Dockerfile`, `Containerfile`. Les artefacts AWS
+qui les entourent — modèles CloudFormation et SAM, définitions de
+tâches ECS, politiques IAM, `buildspec.yml`, `appspec.yml`, `.tfstate`
+— sont du JSON ou du YAML et sont colorés comme tels ; les balises
+qu'ajoute CloudFormation (`!Ref`, `!GetAtt`) sont celles de YAML.
+C++ et TypeScript héritent de la coloration de leur parent —
 celle de C et de JavaScript — et ajoutent la leur par-dessus, ce qui est
 la façon dont leurs grammaires sont fournies : chacune ne porte que ce
 qu'elle ajoute. Le sous-titre de la fenêtre affiche le
