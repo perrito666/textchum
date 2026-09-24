@@ -929,6 +929,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     frontmostEditor = editor
                 }
             }
+            // The caret and the scroll are handed over before any tab
+            // is shown, so the first view of a file is made knowing
+            // where it is going and paints there rather than at the
+            // top. Each takes its place when its first view is made.
+            for editor in restored {
+                if let savedPlace = state.windows.first(where: {
+                    $0.path == editor.coreDocument.path
+                }) {
+                    editor.restoreSessionPosition(
+                        caret: savedPlace.caret, scroll: savedPlace.scroll)
+                }
+            }
             // The columns come back showing what they were showing,
             // each with the views it had. A session written before
             // windows held columns names one file per pane.
@@ -959,17 +971,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 if let only = saved.first {
                     workbench.restore(column: 0, views: only.views, dividers: only.dividers)
-                }
-            }
-            // The caret and the scroll come back only once a file has
-            // views to put them in; a never-shown tab takes its place
-            // when it is first shown.
-            for editor in restored {
-                if let savedPlace = state.windows.first(where: {
-                    $0.path == editor.coreDocument.path
-                }) {
-                    editor.restoreSessionPosition(
-                        caret: savedPlace.caret, scroll: savedPlace.scroll)
                 }
             }
             if let root = group.projectRoot { workbench?.pinProject(root: root) }

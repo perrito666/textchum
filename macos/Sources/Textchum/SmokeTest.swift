@@ -3131,12 +3131,37 @@ func runSmokeTest() -> Int32 {
             )
             return 1
         }
+        // A restored tab knows its caret before its view is made, and
+        // the first paint goes around the caret, so the restore lands on
+        // coloured text rather than the head.
+        let remembered = CoreDocument()
+        try remembered.replace(
+            utf16Range: NSRange(location: 0, length: 0),
+            with: String(repeating: unit, count: 12_000))
+        remembered.setLanguage("rust")
+        let rememberedController = DocumentController(document: remembered)
+        let caret = length - 5_000
+        rememberedController.restoreSessionPosition(caret: caret, scroll: 0)
+        firstPaintBench.add(rememberedController)
+        guard let around = rememberedController.paintedRangeForDebug,
+            NSLocationInRange(caret, around), around.location > 0, around.length < length / 4
+        else {
+            print(
+                "FAIL: a restored tab's first paint is \(String(describing: rememberedController.paintedRangeForDebug)), caret at \(caret)"
+            )
+            return 1
+        }
+        spin(untilTrue: { rememberedController.primaryView?.selectedRange().location == caret })
+        guard rememberedController.primaryView?.selectedRange().location == caret else {
+            print("FAIL: the restored tab did not take its caret back")
+            return 1
+        }
         firstPaintBench.window?.close()
     } catch {
         print("FAIL: first paint of a large document: \(error)")
         return 1
     }
-    print("first paint ok (the head before the view has a window, the viewport after)")
+    print("first paint ok (the head before the view has a window, around a remembered caret, the viewport after)")
 
     // Backspace in a line's leading spaces takes a whole indent, and
     // one character anywhere else. It is the position that decides,
