@@ -517,11 +517,10 @@ requête de coloration comme fichier :
 ```json
 {
   "languages": {
-    "dockerfile": {
-      "grammar": "~/.local/share/textchum/grammars/libtree-sitter-dockerfile.dylib",
-      "highlights": "~/.local/share/textchum/grammars/dockerfile/highlights.scm",
-      "extensions": ["dockerfile"],
-      "filenames": ["Dockerfile", "Containerfile"]
+    "kdl": {
+      "grammar": "~/.local/share/textchum/grammars/libtree-sitter-kdl.dylib",
+      "highlights": "~/.local/share/textchum/grammars/kdl/highlights.scm",
+      "extensions": ["kdl"]
     }
   }
 }
@@ -543,7 +542,11 @@ cc -O2 -fPIC -shared -I src -o libtree-sitter-NOM.dylib src/parser.c src/scanner
 
 (`.so` sous Linux, et sans `src/scanner.c` quand la grammaire n'en a
 pas.) Une entrée qui ne charge pas coûte ce langage et rien d'autre :
-l'éditeur dit ce qui s'est passé et continue.
+l'éditeur dit ce qui s'est passé et continue. La section est relue à
+chaque changement du fichier : une grammaire ajoutée ou corrigée
+pendant que l'éditeur tourne arrive sans redémarrage, et les documents
+déjà ouverts sont analysés avec elle — sauf celui dont vous avez choisi
+le langage à la main, qui garde votre choix.
 
 ## La langue de l'interface
 

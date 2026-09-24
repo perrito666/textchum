@@ -154,6 +154,14 @@ func runSmokeTest() -> Int32 {
             print("FAIL: language not detected: \(String(describing: rustDoc.languageName))")
             return 1
         }
+        // Identity by extension, by exact name, and by how a name starts.
+        for (name, expected) in [("main.tf", "hcl"), ("terragrunt.hcl", "hcl"), ("Dockerfile.dev", "dockerfile")] {
+            let path = syntaxDir.appendingPathComponent(name).path
+            guard CoreLanguages.detected(forPath: path) == expected else {
+                print("FAIL: \(name) should be \(expected): \(String(describing: CoreLanguages.detected(forPath: path)))")
+                return 1
+            }
+        }
         let spans = rustDoc.highlights(in: NSRange(location: 0, length: rustDoc.lengthInUTF16))
         guard !spans.isEmpty, spans.allSatisfy({ CoreTheme.styles.indices.contains($0.styleIndex) })
         else {

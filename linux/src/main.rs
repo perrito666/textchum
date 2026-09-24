@@ -313,6 +313,7 @@ fn main() -> gtk::glib::ExitCode {
             let line_numbers = config.line_numbers();
             drop(config);
             workbench::apply_editor_look(font_size, tab_width, line_numbers);
+            workbench::relearn_languages();
             workbench::Workbench::for_each(|workbench| {
                 for page in workbench.all_pages() {
                     spell::run(&page);
@@ -1384,6 +1385,14 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
 
                 // Code's own word boundaries, and a closer that takes
                 // its opener's indentation.
+                for (path, expected) in [("terragrunt.hcl", "hcl"), ("Dockerfile.dev", "dockerfile")] {
+                    let found = textchum_core::syntax::languages::by_path(std::path::Path::new(path))
+                        .map(|entry| entry.spec.name);
+                    if found != Some(expected) {
+                        eprintln!("FAIL: {path} should be {expected}, was {found:?}");
+                        return 1;
+                    }
+                }
                 let symbols = textchum_core::motion::word_boundary("key\")} next", 3, true);
                 if symbols != 6 {
                     eprintln!("FAIL: a run of symbols should be one word, landed at {symbols}");

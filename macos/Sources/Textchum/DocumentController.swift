@@ -701,6 +701,25 @@ final class DocumentController: NSResponder {
             let detected = CoreLanguages.detected(forPath: path),
             coreDocument.setLanguage(detected)
         else { return }
+        languageDidChange()
+    }
+
+    /// After the configured grammars were loaded again: a document
+    /// whose language is decided by its path is parsed with what the
+    /// path now says — a grammar added, or a built-in replaced by the
+    /// file's. A language chosen by hand for this file stands.
+    func relearnLanguage() {
+        guard languageOverride == nil, let path = coreDocument.path else { return }
+        let detected = CoreLanguages.detected(forPath: path)
+        guard detected != nil || coreDocument.languageName != nil,
+            coreDocument.setLanguage(detected)
+        else { return }
+        languageDidChange()
+    }
+
+    /// What follows a change of language: colours, chrome, the pinned
+    /// context lines, and the server that wants to know.
+    private func languageDidChange() {
         refreshDecorations()
         updateChrome()
         for view in views {

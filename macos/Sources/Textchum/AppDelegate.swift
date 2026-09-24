@@ -683,14 +683,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The configured grammars finished loading on their thread:
     /// report what failed, and give every document that opened as
     /// plain text another chance at its language.
-    private func finishGrammarLoading(problems: [String]) {
+    /// At launch, documents that opened as plain text before the
+    /// grammars arrived are told again; after a reload (`relearn`),
+    /// every document is, since a grammar it already had may have been
+    /// replaced.
+    private func finishGrammarLoading(problems: [String], relearn: Bool = false) {
         for problem in problems {
             NSLog("languages: \(problem)")
         }
         grammarProblems = problems
         announceGrammarProblems()
         for editor in editors {
-            editor.retryLanguageDetection()
+            if relearn {
+                editor.relearnLanguage()
+            } else {
+                editor.retryLanguageDetection()
+            }
+        }
+    }
+
+    /// The `languages` section again, after the file changed on disk:
+    /// off the main thread as at launch, with the documents told once
+    /// the grammars are in.
+    private func reloadGrammars() {
+        guard let config else { return }
+        let grammarsJSON = config.grammarsJSON
+        DispatchQueue.global(qos: .utility).async {
+            let problems = CoreLanguages.load(grammarsJSON: grammarsJSON)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.finishGrammarLoading(problems: problems, relearn: true)
+                }
+            }
         }
     }
 
@@ -1403,7 +1427,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSLog("config reload: \(warning)")
         }
         // Same pipeline as a Settings change — plus re-publishing the
-        // Settings window's own fields.
+        // Settings window's own fields, and the grammars, which no
+        // Settings tab edits.
+        reloadGrammars()
         settingsModel?.reloadFromConfig()
         applyKeyOverrides()
         applyAppearanceChoice()

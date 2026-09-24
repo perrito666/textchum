@@ -15,7 +15,15 @@ and on the first save of an untitled document. Currently recognized:
 Rust, Python, Go, C, C++, TypeScript, TSX, JavaScript, Java, C#, Ruby,
 PHP, Lua, Haskell, OCaml, Scala, Elixir, Nix, R, CMake, XML, JSON, Bash,
 Make, git commit messages, Go templates, HTML, CSS, TOML, YAML, SQL,
-Swift, Zig, and Markdown.
+Swift, Zig, Markdown, HCL and Dockerfiles. HCL covers Terraform,
+Terragrunt, Packer and Nomad (`.tf`, `.tfvars`, `.hcl`, `.nomad`,
+`.pkr`), with the word that opens a block coloured as the keyword
+whichever dialect it belongs to; a Dockerfile is known by its name,
+suffixed or not — `Dockerfile`, `Dockerfile.dev`, `api.Dockerfile`,
+`Containerfile`. The AWS artifacts around them — CloudFormation and SAM
+templates, ECS task definitions, IAM policies, `buildspec.yml`,
+`appspec.yml`, `.tfstate` — are JSON or YAML and are coloured as such;
+the tags CloudFormation adds (`!Ref`, `!GetAtt`) are YAML's own.
 
 C++ and TypeScript inherit their parent's colouring — C's and
 JavaScript's — and add their own on top, which is how their grammars

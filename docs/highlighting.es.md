@@ -16,7 +16,16 @@ Se ejecuta al abrir y en el primer guardado de un documento sin título.
 Actualmente se reconocen: Rust, Python, Go, C, C++, TypeScript, TSX,
 JavaScript, Java, C#, Ruby, PHP, Lua, Haskell, OCaml, Scala, Elixir,
 Nix, R, CMake, XML, JSON, Bash, Make, mensajes de commit de git,
-plantillas de Go, HTML, CSS, TOML, YAML, SQL, Swift, Zig y Markdown.
+plantillas de Go, HTML, CSS, TOML, YAML, SQL, Swift, Zig, Markdown, HCL
+y Dockerfiles. HCL cubre Terraform, Terragrunt, Packer y Nomad (`.tf`,
+`.tfvars`, `.hcl`, `.nomad`, `.pkr`), con la palabra que abre un bloque
+coloreada como palabra clave sea cual sea el dialecto; un Dockerfile se
+reconoce por su nombre, con sufijo o sin él — `Dockerfile`,
+`Dockerfile.dev`, `api.Dockerfile`, `Containerfile`. Los artefactos de
+AWS que los rodean — plantillas de CloudFormation y SAM, definiciones
+de tareas de ECS, políticas IAM, `buildspec.yml`, `appspec.yml`,
+`.tfstate` — son JSON o YAML y se colorean como tales; las etiquetas
+que añade CloudFormation (`!Ref`, `!GetAtt`) son las propias de YAML.
 C++ y TypeScript heredan el coloreado de su lengua madre —C y
 JavaScript— y añaden el suyo encima, que es como vienen sus gramáticas:
 cada una trae solo lo que suma. El subtítulo de la ventana muestra el lenguaje activo; los

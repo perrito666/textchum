@@ -508,11 +508,10 @@ como archivo:
 ```json
 {
   "languages": {
-    "dockerfile": {
-      "grammar": "~/.local/share/textchum/grammars/libtree-sitter-dockerfile.dylib",
-      "highlights": "~/.local/share/textchum/grammars/dockerfile/highlights.scm",
-      "extensions": ["dockerfile"],
-      "filenames": ["Dockerfile", "Containerfile"]
+    "kdl": {
+      "grammar": "~/.local/share/textchum/grammars/libtree-sitter-kdl.dylib",
+      "highlights": "~/.local/share/textchum/grammars/kdl/highlights.scm",
+      "extensions": ["kdl"]
     }
   }
 }
@@ -534,7 +533,11 @@ cc -O2 -fPIC -shared -I src -o libtree-sitter-NOMBRE.dylib src/parser.c src/scan
 
 (`.so` en Linux, y sin `src/scanner.c` cuando la gramática no lo trae.)
 Una entrada que no se puede cargar cuesta ese lenguaje y nada más: el
-editor dice qué pasó y sigue.
+editor dice qué pasó y sigue. La sección se vuelve a leer cada vez que
+el archivo cambia, así que una gramática añadida o arreglada con el
+editor en marcha llega sin reiniciar, y los documentos ya abiertos se
+analizan con ella — salvo aquel cuyo lenguaje elegiste a mano, que
+conserva tu elección.
 
 ## El idioma de la interfaz
 

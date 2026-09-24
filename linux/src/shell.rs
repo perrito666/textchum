@@ -659,6 +659,12 @@ impl Shell {
             if let Some(warning) = shell.config.borrow_mut().reload() {
                 eprintln!("textchum: config reload: {warning}");
             }
+            // The `languages` section too, which no Preferences row
+            // edits: a grammar added or fixed arrives without a restart.
+            let grammars_json = shell.config.borrow().grammars_json();
+            for problem in textchum_core::grammar::load_configured(&grammars_json) {
+                eprintln!("textchum: languages: {problem}");
+            }
             shell.apply_appearance();
             shell.apply_theme();
             shell.apply_icon_pack();
