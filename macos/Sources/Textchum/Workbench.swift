@@ -130,6 +130,8 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         statusBar.onProperties = { [weak self] in
             self?.focusedDocument?.showFileProperties(nil)
         }
+        // One session log for every window's bar.
+        statusBar.log = (NSApp.delegate as? AppDelegate)?.notices ?? CoreNotices()
         NSLayoutConstraint.activate([
             tabHost.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
             tabHost.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
@@ -889,10 +891,17 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
 
     /// Redraws the status bar from the focused document. Cheap: the bar
     /// only touches its labels when something it says changed.
-    /// A word in the status bar, for a while: what happened, when it
-    /// is not worth a dialog.
+    /// A word in the status bar: what happened, when it is not worth a
+    /// dialog. It goes into the session's list and onto every window's
+    /// bar; without an application delegate — the smoke test — onto
+    /// this one's.
     func showNotice(_ text: String) {
-        statusBar.notice(text)
+        if let delegate = NSApp.delegate as? AppDelegate {
+            delegate.notify(text)
+        } else {
+            statusBar.log?.push(text)
+            statusBar.notice(text)
+        }
     }
 
     func refreshStatus() {

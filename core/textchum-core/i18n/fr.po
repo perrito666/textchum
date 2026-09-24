@@ -318,6 +318,10 @@ msgstr "Copier le chemin et la ligne"
 msgid "Copy Forge URL for Line"
 msgstr "Copier l'URL de la forge pour la ligne"
 
+#: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "A configured grammar could not be loaded"
+msgstr "Une grammaire configurée n'a pas pu être chargée"
+
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "New with Format…"
 msgstr "Nouveau avec format…"
@@ -446,6 +450,10 @@ msgstr "Comment ce fichier est indenté — cliquer pour le changer"
 #: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
 msgid "What this file is treated as — click to change it"
 msgstr "Le langage appliqué à ce fichier — cliquer pour le changer"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "What the editor had to say — click for the whole list"
+msgstr "Ce que l'éditeur a eu à dire — cliquez pour la liste entière"
 
 #: linux/src/workbench.rs
 msgid "Replaced every occurrence."
@@ -781,7 +789,13 @@ msgstr "La grammaire n'a pas été installée"
 msgid ""
 "Files of its types open as it from now on, and the ones already open are "
 "coloured."
-msgstr "Les fichiers de ses types s'ouvrent désormais comme elle, et ceux déjà ouverts sont colorés."
+msgstr ""
+"Les fichiers de ses types s'ouvrent désormais comme elle, et ceux déjà "
+"ouverts sont colorés."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "Nothing to report yet."
+msgstr "Rien à signaler pour l'instant."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "General"
@@ -922,7 +936,8 @@ msgstr "Fermer les crochets et les guillemets à la frappe"
 
 #: linux/src/workbench.rs
 msgid "An opening half brings its closing half; the closer typed steps over it"
-msgstr "La moitié ouvrante amène la fermante ; la fermante tapée passe par-dessus"
+msgstr ""
+"La moitié ouvrante amène la fermante ; la fermante tapée passe par-dessus"
 
 #: linux/src/workbench.rs
 msgid "Mark the selected word elsewhere"
@@ -1573,7 +1588,9 @@ msgstr "{} correspondances"
 msgid ""
 "Choose a tree-sitter grammar's repository: a folder with src/parser.c and "
 "queries/highlights.scm."
-msgstr "Choisissez le dépôt d'une grammaire tree-sitter : un dossier avec src/parser.c et queries/highlights.scm."
+msgstr ""
+"Choisissez le dépôt d'une grammaire tree-sitter : un dossier avec src/"
+"parser.c et queries/highlights.scm."
 
 #: macos/Sources/Textchum/GrammarInstall.swift
 msgid "Install"

@@ -151,7 +151,16 @@ abre una ventana nueva con el proyecto en su árbol y sin archivo aún, y
 sigue abierta cuando se cierra su última pestaña. La barra de estado
 dice la **rama de git** del proyecto, leída al mostrar el archivo y de
 nuevo cuando git reescribe HEAD — el editor vigila ese archivo en vez
-de preguntar con un temporizador. **Ir ▸ Árboles de trabajo…** lista
+de preguntar con un temporizador. Su extremo derecho es el **área de
+notificaciones**: lo último que el editor tuvo que decir — un servidor
+de lenguaje que no encontró, y qué lo instalaría; una gramática que no
+pudo cargar; un guardado que siguió adelante sin sus preprocesadores —
+tanto como quepa, y entero como descripción emergente. Nada de eso
+interrumpe: lo que antes era un diálogo que cerrar es una línea aquí.
+Un clic lista las notificaciones de la sesión, la más reciente
+primero con la hora de cada una, seleccionables, porque lo dicho suele
+ser un comando que ejecutar. Todavía no: la lista no sobrevive a la
+sesión, y nada la vacía. **Ir ▸ Árboles de trabajo…** lista
 los árboles de trabajo del repositorio: elige uno para cambiar esta
 ventana a él — sus archivos se cierran y los que el otro árbol también
 tiene se vuelven a abrir allí, y los servidores de lenguaje arrancan en

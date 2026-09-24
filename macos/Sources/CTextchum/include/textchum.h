@@ -101,6 +101,12 @@ typedef struct TcConfig TcConfig;
 typedef struct TcDocument TcDocument;
 
 /**
+ * What the editor has had to say this session. Create with
+ * [`tc_notices_new`], release with [`tc_notices_free`]; not thread-safe.
+ */
+typedef struct TcNotices TcNotices;
+
+/**
  * An event delivered from the core to the shell.
  *
  * The struct and every string it points to are only valid for the
@@ -1226,6 +1232,56 @@ char *tc_config_keys_json(const struct TcConfig *config);
  * `document` must be a live document pointer.
  */
 const char *tc_document_encoding_name(const struct TcDocument *document);
+
+/**
+ * An empty session log of notices.
+ */
+struct TcNotices *tc_notices_new(void);
+
+/**
+ * Destroys a notices handle.
+ *
+ * # Safety
+ * `notices` must be a pointer from [`tc_notices_new`], not previously
+ * freed.
+ */
+void tc_notices_free(struct TcNotices *notices);
+
+/**
+ * Says `text` (`len` bytes of UTF-8). Said again straight after
+ * itself, it is not repeated; its time moves instead.
+ *
+ * # Safety
+ * `notices` must be a live handle; `text` must point to `len`
+ * readable bytes.
+ */
+void tc_notices_push(struct TcNotices *notices, const char *text, uintptr_t len);
+
+/**
+ * The most recent notice's text, or null when nothing has been said.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `notices` must be a live handle.
+ */
+char *tc_notices_latest(const struct TcNotices *notices);
+
+/**
+ * How many notices are kept.
+ *
+ * # Safety
+ * `notices` must be a live handle.
+ */
+uintptr_t tc_notices_count(const struct TcNotices *notices);
+
+/**
+ * Everything said, newest first: `[{"at": ms, "text": "…"}, …]`.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `notices` must be a live handle.
+ */
+char *tc_notices_json(const struct TcNotices *notices);
 
 /**
  * Loads the configuration file at `path` (`len` bytes of UTF-8). Always

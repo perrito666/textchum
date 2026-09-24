@@ -153,7 +153,17 @@ nouvelle fenêtre s'ouvre avec le projet dans son arbre et sans fichier
 encore, et elle reste ouverte quand son dernier onglet se ferme. La
 barre d'état dit la **branche git** du projet, lue quand le fichier est
 montré et de nouveau quand git réécrit HEAD — l'éditeur surveille ce
-fichier plutôt que d'interroger git à intervalle. **Aller ▸ Arbres de
+fichier plutôt que d'interroger git à intervalle. Son extrémité droite
+est la **zone de notifications** : la dernière chose que l'éditeur a eu
+à dire — un serveur de langage introuvable, et ce qui l'installerait ;
+une grammaire qu'il n'a pas pu charger ; un enregistrement qui s'est
+fait sans ses préprocesseurs — autant qu'il en tient, et en entier
+comme infobulle. Rien de cela n'interrompt : ce qui était un dialogue
+à fermer est une ligne ici. Un clic liste les notifications de la
+session, la plus récente d'abord avec l'heure de chacune,
+sélectionnables, puisque ce qui est dit est souvent une commande à
+lancer. Pas encore là : la liste ne survit pas à la session, et rien ne
+la vide. **Aller ▸ Arbres de
 travail…** liste les arbres de travail du dépôt : choisissez-en un pour
 y basculer cette fenêtre — ses fichiers se ferment et ceux que l'autre
 arbre a aussi s'y rouvrent, et les serveurs de langage démarrent dans

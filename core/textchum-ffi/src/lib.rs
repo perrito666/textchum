@@ -1921,6 +1921,87 @@ pub unsafe extern "C" fn tc_document_encoding_name(document: *const TcDocument) 
     }
 }
 
+/// What the editor has had to say this session. Create with
+/// [`tc_notices_new`], release with [`tc_notices_free`]; not thread-safe.
+pub struct TcNotices {
+    inner: textchum_core::notices::Notices,
+}
+
+/// An empty session log of notices.
+#[no_mangle]
+pub extern "C" fn tc_notices_new() -> *mut TcNotices {
+    Box::into_raw(Box::new(TcNotices {
+        inner: textchum_core::notices::Notices::new(),
+    }))
+}
+
+/// Destroys a notices handle.
+///
+/// # Safety
+/// `notices` must be a pointer from [`tc_notices_new`], not previously
+/// freed.
+#[no_mangle]
+pub unsafe extern "C" fn tc_notices_free(notices: *mut TcNotices) {
+    if !notices.is_null() {
+        drop(unsafe { Box::from_raw(notices) });
+    }
+}
+
+/// Says `text` (`len` bytes of UTF-8). Said again straight after
+/// itself, it is not repeated; its time moves instead.
+///
+/// # Safety
+/// `notices` must be a live handle; `text` must point to `len`
+/// readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_notices_push(notices: *mut TcNotices, text: *const c_char, len: usize) {
+    let Some(notices) = (unsafe { notices.as_mut() }) else {
+        return;
+    };
+    let Some(text) = (unsafe { str_from_raw(text, len) }) else {
+        return;
+    };
+    notices.inner.push(text);
+}
+
+/// The most recent notice's text, or null when nothing has been said.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `notices` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_notices_latest(notices: *const TcNotices) -> *mut c_char {
+    let Some(notices) = (unsafe { notices.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    match notices.inner.latest() {
+        Some(notice) => owned_c_string(notice.text.clone()),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// How many notices are kept.
+///
+/// # Safety
+/// `notices` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_notices_count(notices: *const TcNotices) -> usize {
+    unsafe { notices.as_ref() }.map_or(0, |notices| notices.inner.len())
+}
+
+/// Everything said, newest first: `[{"at": ms, "text": "…"}, …]`.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `notices` must be a live handle.
+#[no_mangle]
+pub unsafe extern "C" fn tc_notices_json(notices: *const TcNotices) -> *mut c_char {
+    let Some(notices) = (unsafe { notices.as_ref() }) else {
+        return owned_c_string("[]".to_string());
+    };
+    owned_c_string(notices.inner.to_json())
+}
+
 /// The application's JSON-backed configuration. Create with
 /// [`tc_config_load`], release with [`tc_config_free`].
 pub struct TcConfig {

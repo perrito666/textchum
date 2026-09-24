@@ -32,6 +32,7 @@ pub mod keys;
 pub mod markdown;
 pub mod occurrences;
 pub mod motion;
+pub mod notices;
 pub mod pairs;
 pub mod preview;
 pub mod project_state;
