@@ -532,11 +532,10 @@ the grammar as a compiled library and its highlights query as a file:
 ```json
 {
   "languages": {
-    "dockerfile": {
-      "grammar": "~/.local/share/textchum/grammars/libtree-sitter-dockerfile.dylib",
-      "highlights": "~/.local/share/textchum/grammars/dockerfile/highlights.scm",
-      "extensions": ["dockerfile"],
-      "filenames": ["Dockerfile", "Containerfile"]
+    "kdl": {
+      "grammar": "~/.local/share/textchum/grammars/libtree-sitter-kdl.dylib",
+      "highlights": "~/.local/share/textchum/grammars/kdl/highlights.scm",
+      "extensions": ["kdl"]
     }
   }
 }
@@ -558,7 +557,10 @@ cc -O2 -fPIC -shared -I src -o libtree-sitter-NAME.dylib src/parser.c src/scanne
 
 (`.so` on Linux, and drop `src/scanner.c` when the grammar has none.)
 An entry that cannot be loaded costs that one language: the editor says
-what went wrong and carries on.
+what went wrong and carries on. The section is read again whenever the
+file changes, so a grammar added or fixed while the editor runs arrives
+without a restart, and the documents already open are parsed with it —
+except one whose language you chose by hand, which keeps your choice.
 
 ## The interface's language
 

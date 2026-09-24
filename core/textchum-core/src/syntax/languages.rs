@@ -160,6 +160,20 @@ const PYTHON_RECEIVERS: &str = r#"
 ((identifier) @variable.builtin (#match? @variable.builtin "^(self|cls)$"))
 "#;
 
+extern "C" {
+    fn tree_sitter_dockerfile() -> *const ();
+}
+
+/// Dockerfile's grammar, compiled from the C under `grammars/dockerfile`
+/// by the build script (see there for why it is not a crate).
+const DOCKERFILE_LANGUAGE: tree_sitter_language::LanguageFn =
+    unsafe { tree_sitter_language::LanguageFn::from_raw(tree_sitter_dockerfile) };
+const DOCKERFILE_HIGHLIGHTS: &str = include_str!("../../queries/dockerfile/highlights.scm");
+
+/// The HCL crate ships its grammar without queries; this one is kept
+/// beside the editor's other adapted queries.
+const HCL_HIGHLIGHTS: &str = include_str!("../../queries/hcl/highlights.scm");
+
 static SPECS: &[LanguageSpec] = &[
     // TypeScript ships only what it adds to JavaScript — types,
     // interfaces, enums — and inherits the rest, so JavaScript's query
@@ -350,7 +364,7 @@ static SPECS: &[LanguageSpec] = &[
     lang!(
         "json",
         &[],
-        &["json", "jsonc"],
+        &["json", "jsonc", "tfstate"],
         tree_sitter_json::LANGUAGE,
         tree_sitter_json::HIGHLIGHTS_QUERY,
         None
@@ -436,6 +450,26 @@ static SPECS: &[LanguageSpec] = &[
         &["yaml", "yml"],
         tree_sitter_yaml::LANGUAGE,
         tree_sitter_yaml::HIGHLIGHTS_QUERY,
+        None
+    ),
+    // One grammar serves Terraform, Terragrunt, Packer and Nomad: they
+    // differ in which words open a block, and the query colours the
+    // opener of a top-level block whatever it is.
+    lang!(
+        "hcl",
+        &["terraform", "terragrunt", "tf", "packer", "nomad"],
+        &["hcl", "tf", "tfvars", "nomad", "pkr"],
+        tree_sitter_hcl::LANGUAGE,
+        HCL_HIGHLIGHTS,
+        None
+    ),
+    lang!(
+        "dockerfile",
+        &["docker", "containerfile"],
+        &["dockerfile"],
+        &["Dockerfile", "Containerfile"],
+        DOCKERFILE_LANGUAGE,
+        DOCKERFILE_HIGHLIGHTS,
         None
     ),
     lang!(
@@ -547,6 +581,13 @@ pub fn by_path(path: &std::path::Path) -> Option<&'static RegisteredLanguage> {
             .find(|entry| entry.spec.filenames.iter().any(|file| *file == name))
         {
             return Some(entry);
+        }
+        // `Dockerfile.dev`, `Containerfile.test`: the suffix says which
+        // one it is, the start says what it is.
+        if name.starts_with("Dockerfile") || name.starts_with("Containerfile") {
+            if let Some(entry) = by_name("dockerfile") {
+                return Some(entry);
+            }
         }
     }
     let extension = path.extension()?.to_str()?.to_ascii_lowercase();
