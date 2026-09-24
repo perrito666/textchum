@@ -926,6 +926,97 @@ impl Config {
             .insert("auto_close_pairs".into(), Value::Bool(enabled));
     }
 
+    /// A language's own table of pairs (`editor.pairs.<language>`): a
+    /// list of two-character strings, opening half then closing one,
+    /// and the whole answer for that language when present — nothing
+    /// from the built-in rule is added to it. `None` for a language the
+    /// file says nothing about, and for no language at all.
+    pub fn pair_table(&self, language: Option<&str>) -> Option<crate::pairs::Table> {
+        let entries = self
+            .editor()
+            .get("pairs")?
+            .as_object()?
+            .get(language?)?
+            .as_array()?;
+        Some(crate::pairs::table(entries.iter().filter_map(Value::as_str)))
+    }
+
+    /// Sets (or, with `None`, removes) a language's own table of pairs.
+    pub fn set_pair_table(&mut self, language: &str, table: Option<&[(char, char)]>) {
+        let editor = self.editor_mut();
+        match table {
+            Some(table) => {
+                let entries = table
+                    .iter()
+                    .map(|(open, close)| Value::String(format!("{open}{close}")))
+                    .collect();
+                ensure_object(editor, "pairs").insert(language.into(), Value::Array(entries));
+            }
+            None => {
+                if let Some(pairs) = editor.get_mut("pairs").and_then(Value::as_object_mut) {
+                    pairs.remove(language);
+                }
+                prune_empty(editor, "pairs");
+            }
+        }
+    }
+
+    /// Every language's own table of pairs (`editor.pairs`), serialized
+    /// as it is in the file — `{language: ["()", ...]}` — and `{}` when
+    /// unset. A shell that keeps a snapshot of the editor settings
+    /// takes the tables this way.
+    pub fn pair_tables_json(&self) -> String {
+        self.editor()
+            .get("pairs")
+            .filter(|section| section.is_object())
+            .map(|section| section.to_string())
+            .unwrap_or_else(|| "{}".into())
+    }
+
+    /// The closing half of `open` for wrapping a selection in
+    /// `language`: from the language's own table when the file has
+    /// one, from the built-in pairs otherwise.
+    pub fn pair_closing(&self, language: Option<&str>, open: char) -> Option<char> {
+        crate::pairs::closing_with(self.pair_table(language).as_deref(), open)
+    }
+
+    /// The closing half to put after the caret when `typed` is typed in
+    /// `language` between `before` and `after`: the language's own
+    /// table when the file has one, the built-in rule by language
+    /// otherwise. See [`crate::pairs::auto_close`].
+    pub fn auto_close(
+        &self,
+        language: Option<&str>,
+        typed: char,
+        before: Option<char>,
+        after: Option<char>,
+    ) -> Option<char> {
+        crate::pairs::auto_close_with(
+            self.pair_table(language).as_deref(),
+            language,
+            typed,
+            before,
+            after,
+        )
+    }
+
+    /// Whether typing `typed` in `language` with `after` already there
+    /// steps over it. See [`crate::pairs::skips_closer`].
+    pub fn skips_closer(&self, language: Option<&str>, typed: char, after: Option<char>) -> bool {
+        crate::pairs::skips_closer_with(self.pair_table(language).as_deref(), typed, after)
+    }
+
+    /// Whether Backspace between `before` and `after` in `language`
+    /// takes both. See [`crate::pairs::deletes_pair`].
+    pub fn deletes_pair(
+        &self,
+        language: Option<&str>,
+        before: Option<char>,
+        after: Option<char>,
+    ) -> bool {
+        crate::pairs::deletes_pair_with(self.pair_table(language).as_deref(), before, after)
+    }
+
     /// Whether selecting a word marks its other occurrences on screen
     /// (`editor.mark_occurrences`, default true).
     pub fn mark_occurrences(&self) -> bool {
@@ -1584,6 +1675,41 @@ mod tests {
 
         config.set_key_profile("mine", None);
         assert_eq!(config.key_profiles_json(), "{}");
+    }
+
+    #[test]
+    fn a_language_can_bring_its_own_pairs() {
+        let path = temp_path("pairs.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.pair_table(Some("rust")), None);
+        assert_eq!(config.auto_close(Some("python"), '\'', None, None), Some('\''));
+        assert_eq!(config.auto_close(Some("rust"), '<', None, None), None);
+
+        config.set_pair_table("rust", Some(&[('(', ')'), ('<', '>')]));
+        config.save().unwrap();
+        let (mut config, warning) = Config::load(&path);
+        assert!(warning.is_none());
+        assert_eq!(config.pair_table(Some("rust")), Some(vec![('(', ')'), ('<', '>')]));
+        assert_eq!(config.pair_tables_json(), r#"{"rust":["()","<>"]}"#);
+        // The table is the whole answer: what it leaves out is a plain
+        // keystroke, and what it adds pairs, steps over and deletes.
+        assert_eq!(config.auto_close(Some("rust"), '<', None, None), Some('>'));
+        assert_eq!(config.auto_close(Some("rust"), '[', None, None), None);
+        assert_eq!(config.auto_close(Some("rust"), '"', None, None), None);
+        assert!(config.skips_closer(Some("rust"), '>', Some('>')));
+        assert!(config.deletes_pair(Some("rust"), Some('<'), Some('>')));
+        assert_eq!(config.pair_closing(Some("rust"), '<'), Some('>'));
+        assert_eq!(config.pair_closing(Some("rust"), '['), None);
+        // Other languages keep the built-in rule.
+        assert_eq!(config.auto_close(Some("python"), '[', None, None), Some(']'));
+        assert!(!config.deletes_pair(Some("python"), Some('<'), Some('>')));
+        assert_eq!(config.pair_closing(None, '['), Some(']'));
+
+        config.set_pair_table("rust", None);
+        assert_eq!(config.pair_table(Some("rust")), None);
+        assert_eq!(config.pair_tables_json(), "{}");
+        config.save().unwrap();
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("pairs"));
     }
 
     #[test]

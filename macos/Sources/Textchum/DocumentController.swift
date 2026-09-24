@@ -3672,6 +3672,15 @@ final class DocumentController: NSResponder {
     /// Whether an opening bracket or quote typed puts its closing half
     /// after the caret.
     private var appliedAutoClosePairs = false
+    /// Each language's own table of pairs from the file, by name; a
+    /// language not in it takes the core's built-in rule.
+    private var appliedPairTables: [String: [String]] = [:]
+
+    /// This document's language's own table of pairs, when the file
+    /// has one.
+    private var pairTable: [String]? {
+        coreDocument.languageName.flatMap { appliedPairTables[$0] }
+    }
     /// Whether mouse-rest hover documentation is on. The deliberate
     /// show-at-caret command ignores this.
     private var appliedHoverDocs = true
@@ -3714,6 +3723,7 @@ final class DocumentController: NSResponder {
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
         appliedAutoClosePairs = settings.autoClosePairs
+        appliedPairTables = settings.pairTables
         appliedKeepBuffers = settings.keepBuffers
         appliedMarkOccurrences = settings.markOccurrences
         appliedOccurrencesCaseSensitive = settings.occurrencesCaseSensitive
@@ -4895,13 +4905,14 @@ extension DocumentController: NSTextViewDelegate {
         let key = (typed as NSString).character(at: 0)
         let before: unichar? = range.location > 0 ? text.character(at: range.location - 1) : nil
         let after: unichar? = range.location < text.length ? text.character(at: range.location) : nil
-        if CorePairs.skipsCloser(typed: key, after: after) {
+        let table = pairTable
+        if CorePairs.skipsCloser(table: table, typed: key, after: after) {
             selectionChangeIsFromEditing = true
             textView.setSelectedRange(NSRange(location: range.location + 1, length: 0))
             return true
         }
         guard let close = CorePairs.autoClose(
-            language: coreDocument.languageName, typed: key, before: before, after: after)
+            table: table, language: coreDocument.languageName, typed: key, before: before, after: after)
         else { return false }
         let pair = typed + close
         // Through the same door as any other edit: the core first, the
@@ -4932,6 +4943,7 @@ extension DocumentController: NSTextViewDelegate {
         let text = textView.string as NSString
         guard selection.length == 0, selection.location > 0, selection.location < text.length,
             CorePairs.deletesPair(
+                table: pairTable,
                 before: text.character(at: selection.location - 1),
                 after: text.character(at: selection.location))
         else { return false }
@@ -4948,9 +4960,13 @@ extension DocumentController: NSTextViewDelegate {
     /// Answers whether it handled the edit. The text view is told to
     /// refuse the original change, since this replaced it.
     private func wrapSelection(in textView: NSTextView, range: NSRange, typed: String) -> Bool {
-        guard range.length > 0, let closing = CorePairs.closing(of: typed) else {
-            return false
-        }
+        // One character, and that character a delimiter in this
+        // language; a paste of several replaces the selection as it
+        // always did.
+        guard range.length > 0, (typed as NSString).length == 1,
+            let closing = CorePairs.closing(
+                table: pairTable, open: (typed as NSString).character(at: 0))
+        else { return false }
         let text = textView.string as NSString
         guard NSMaxRange(range) <= text.length else { return false }
         let selected = text.substring(with: range)
@@ -4990,6 +5006,10 @@ extension DocumentController: NSTextViewDelegate {
     /// The bookkeeping an edit through the delegate would have done.
     private func textDidChangeFromWrap() {
         NotificationCenter.default.post(name: NSText.didChangeNotification, object: textView)
+        // The caret was placed before the gutter heard about the new
+        // text, so the status bar worked its line out on the old one;
+        // now that the gutter knows, ask again.
+        workbench?.refreshStatus()
     }
 
     /// Multi-range variant, used by the find bar's Replace All (and any

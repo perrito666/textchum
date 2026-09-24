@@ -270,6 +270,36 @@ public final class CoreConfig {
         set { tc_config_set_auto_close_pairs(handle, newValue) }
     }
 
+    /// Every language's own table of pairs from the file, keyed by
+    /// language name, each entry two characters — opening half then
+    /// closing one. An entry that is not two characters is left out,
+    /// as the core leaves it out. Empty when the file has none.
+    public var pairTables: [String: [String]] {
+        guard let json = tc_config_pair_tables_json(handle) else { return [:] }
+        defer { tc_string_free(json) }
+        guard let data = String(cString: json).data(using: .utf8),
+            let section = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return [:] }
+        return section.compactMapValues { entries in
+            (entries as? [Any]).map { entries in
+                entries.compactMap { $0 as? String }.filter { $0.unicodeScalars.count == 2 }
+            }
+        }
+    }
+
+    /// Sets (or, with nil, removes) a language's own table of pairs.
+    public func setPairTable(_ table: [String]?, language: String) {
+        language.withCString { name in
+            guard let table else {
+                tc_config_set_pair_table(handle, name, UInt(strlen(name)), nil, 0)
+                return
+            }
+            table.joined().withCString { flat in
+                tc_config_set_pair_table(handle, name, UInt(strlen(name)), flat, UInt(strlen(flat)))
+            }
+        }
+    }
+
     /// One icon pack on offer.
     public struct IconPackEntry {
         public let name: String

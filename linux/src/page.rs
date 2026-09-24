@@ -1663,8 +1663,10 @@ fn install_wrap_keys(page: &Rc<Page>) {
 /// a quote is an apostrophe instead, is the core's rule by language.
 /// Off unless the configuration says otherwise.
 fn close_pair(page: &Rc<Page>, key: gtk::gdk::Key) -> bool {
-    if !Shell::instance().config.borrow().auto_close_pairs() {
-        return false;
+    enum Answer {
+        Delete,
+        Skip,
+        Insert(char, char),
     }
     let buffer = &page.buffer;
     if buffer.selection_bounds().is_some() {
@@ -1676,39 +1678,59 @@ fn close_pair(page: &Rc<Page>, key: gtk::gdk::Key) -> bool {
         let mut back = caret;
         if back.backward_char() { Some(back.char()) } else { None }
     };
-    if key == gtk::gdk::Key::BackSpace {
-        if !textchum_core::pairs::deletes_pair(before, after) {
+    // The configuration decides, and its borrow is over before the
+    // buffer changes: the edit's signal handlers are free to read it.
+    let answer = {
+        let shell = Shell::instance();
+        let config = shell.config.borrow();
+        if !config.auto_close_pairs() {
             return false;
         }
-        let mut from = caret;
-        from.backward_char();
-        let mut to = caret;
-        to.forward_char();
-        buffer.begin_user_action();
-        buffer.delete(&mut from, &mut to);
-        buffer.end_user_action();
-        return true;
-    }
-    let Some(typed) = key.to_unicode() else { return false };
-    if textchum_core::pairs::skips_closer(typed, after) {
-        let mut next = caret;
-        next.forward_char();
-        buffer.place_cursor(&next);
-        return true;
-    }
-    let language = page.state.borrow().document.language_name().map(str::to_owned);
-    let Some(close) = textchum_core::pairs::auto_close(language.as_deref(), typed, before, after)
-    else {
-        return false;
+        let language = page.state.borrow().document.language_name().map(str::to_owned);
+        let language = language.as_deref();
+        if key == gtk::gdk::Key::BackSpace {
+            if !config.deletes_pair(language, before, after) {
+                return false;
+            }
+            Answer::Delete
+        } else {
+            let Some(typed) = key.to_unicode() else { return false };
+            if config.skips_closer(language, typed, after) {
+                Answer::Skip
+            } else if let Some(close) = config.auto_close(language, typed, before, after) {
+                Answer::Insert(typed, close)
+            } else {
+                return false;
+            }
+        }
     };
-    // One undo step for the pair, through the same door as any other
-    // edit: the buffer, which the choke point mirrors into the core.
-    let offset = caret.offset();
-    buffer.begin_user_action();
-    let mut at = caret;
-    buffer.insert(&mut at, &format!("{typed}{close}"));
-    buffer.end_user_action();
-    buffer.place_cursor(&buffer.iter_at_offset(offset + 1));
+    match answer {
+        Answer::Delete => {
+            let mut from = caret;
+            from.backward_char();
+            let mut to = caret;
+            to.forward_char();
+            buffer.begin_user_action();
+            buffer.delete(&mut from, &mut to);
+            buffer.end_user_action();
+        }
+        Answer::Skip => {
+            let mut next = caret;
+            next.forward_char();
+            buffer.place_cursor(&next);
+        }
+        Answer::Insert(typed, close) => {
+            // One undo step for the pair, through the same door as any
+            // other edit: the buffer, which the choke point mirrors
+            // into the core.
+            let offset = caret.offset();
+            buffer.begin_user_action();
+            let mut at = caret;
+            buffer.insert(&mut at, &format!("{typed}{close}"));
+            buffer.end_user_action();
+            buffer.place_cursor(&buffer.iter_at_offset(offset + 1));
+        }
+    }
     true
 }
 
@@ -1962,11 +1984,17 @@ pub fn refresh_context_strip(page: &Rc<Page>) {
 /// Wraps the selection when `key` is an opening delimiter, and answers
 /// whether it did.
 fn wrap_selection(page: &Rc<Page>, key: gtk::gdk::Key) -> bool {
-    let Some(typed) = key.to_unicode() else { return false };
-    let mut encoded = [0u8; 4];
-    let typed = typed.encode_utf8(&mut encoded);
-    let Some((open, close)) = textchum_core::pairs::wraps(typed) else {
-        return false;
+    let Some(open) = key.to_unicode() else { return false };
+    // What wraps in this language is the configuration's to say; the
+    // borrow is over before the buffer changes.
+    let close = {
+        let shell = Shell::instance();
+        let config = shell.config.borrow();
+        let language = page.state.borrow().document.language_name().map(str::to_owned);
+        match config.pair_closing(language.as_deref(), open) {
+            Some(close) => close,
+            None => return false,
+        }
     };
     let buffer = &page.buffer;
     let Some((start, end)) = buffer.selection_bounds() else { return false };

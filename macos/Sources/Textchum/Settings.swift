@@ -14,6 +14,8 @@ struct EditorSettings {
     /// Whether typing an opening bracket or quote puts its closing half
     /// after the caret.
     let autoClosePairs: Bool
+    /// Each language's own table of pairs from the file, by name.
+    let pairTables: [String: [String]]
     let hoverDocs: Bool
     /// Whether a file stays open when the window showing it closes.
     let keepBuffers: Bool
@@ -58,6 +60,7 @@ struct EditorSettings {
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
         self.autoClosePairs = config.autoClosePairs
+        self.pairTables = config.pairTables
         self.hoverDocs = config.hoverDocs
         self.keepBuffers = config.keepBuffers
         self.markOccurrences = config.markOccurrences

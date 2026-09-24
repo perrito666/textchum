@@ -223,7 +223,9 @@ Backspace between an empty pair takes both. Brackets pair everywhere;
 quotes follow the language: `'` is an apostrophe in prose and a
 lifetime in Rust, so it is left alone there, and a backtick pairs only
 where it means code. No pair opens into a word, and no quote opens
-right after one.
+right after one. A language the rule does not know, or one where it
+gets a quote wrong for you, takes its own table in the file:
+`editor.pairs` in [configuration](configuration.md).
 
 The thin bar under the editor answers what a look at the text cannot:
 where the caret is, whether the file indents with tabs or spaces and by

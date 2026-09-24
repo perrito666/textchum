@@ -28,6 +28,9 @@ final class StatusBar: NSView {
     private let encoding = NSTextField(labelWithString: "")
     private let branch = NSTextField(labelWithString: "")
     private var shown = Info()
+
+    /// What the bar says right now, for the smoke test.
+    var shownInfo: Info { shown }
     /// Opens File Properties for the focused document.
     var onProperties: (() -> Void)?
 
