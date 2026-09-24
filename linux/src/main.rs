@@ -1393,6 +1393,60 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                         return 1;
                     }
                 }
+                // A grammar installed from a repository: the Dockerfile
+                // grammar's C, laid out as a checkout, with queries as
+                // another editor writes them.
+                let vendored = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../core/textchum-core/grammars/dockerfile/src");
+                if vendored.exists() {
+                    let scratch = std::env::temp_dir()
+                        .join(format!("textchum-gtk-smoke-grammar-{}", std::process::id()));
+                    let repo = scratch.join("tree-sitter-dsmoke");
+                    let _ = std::fs::remove_dir_all(&scratch);
+                    std::fs::create_dir_all(repo.join("src/tree_sitter")).unwrap();
+                    for name in ["parser.c", "scanner.c"] {
+                        std::fs::copy(vendored.join(name), repo.join("src").join(name)).unwrap();
+                    }
+                    for name in ["parser.h", "alloc.h", "array.h"] {
+                        std::fs::copy(
+                            vendored.join("tree_sitter").join(name),
+                            repo.join("src/tree_sitter").join(name),
+                        )
+                        .unwrap();
+                    }
+                    std::fs::write(repo.join("src/grammar.json"), r#"{"name": "dockerfile"}"#).unwrap();
+                    std::fs::write(
+                        repo.join("tree-sitter.json"),
+                        r#"{"grammars": [{"name": "dsmoke", "file-types": ["dsmoke"]}]}"#,
+                    )
+                    .unwrap();
+                    std::fs::create_dir_all(repo.join("queries")).unwrap();
+                    std::fs::write(
+                        repo.join("queries/highlights.scm"),
+                        "(comment) @comment @spell\n\"FROM\" @keyword.import\n",
+                    )
+                    .unwrap();
+                    match textchum_core::grammar::build(&repo, &scratch.join("grammars")) {
+                        Ok(built) => {
+                            let json = format!("{{\"languages\":{{\"dsmoke\":{}}}}}", built.entry);
+                            let problems = textchum_core::grammar::load_configured(&json);
+                            let found = textchum_core::syntax::languages::by_path(
+                                std::path::Path::new("a.dsmoke"),
+                            )
+                            .map(|entry| entry.spec.name);
+                            if !problems.is_empty() || found != Some("dsmoke") {
+                                eprintln!("FAIL: installed grammar did not load: {problems:?} {found:?}");
+                                return 1;
+                            }
+                        }
+                        Err(error) => {
+                            eprintln!("FAIL: grammar install: {error}");
+                            return 1;
+                        }
+                    }
+                    let _ = std::fs::remove_dir_all(&scratch);
+                    println!("grammar install ok (built from a checkout, loaded, detected)");
+                }
                 let symbols = textchum_core::motion::word_boundary("key\")} next", 4, true);
                 if symbols != 6 {
                     eprintln!("FAIL: a run of symbols should be one word, landed at {symbols}");
