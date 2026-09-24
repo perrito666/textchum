@@ -574,7 +574,27 @@ ella y romper, y un nombre que la compilación ya conoce queda
 reemplazado por el configurado: así se arregla una gramática vieja sin
 esperar una versión nueva.
 
-Para construir una, desde el repositorio de la gramática:
+**Textchum ▸ Install Grammar…** escribe esa entrada por ti a partir del
+repositorio de una gramática — un checkout de cualquier gramática
+tree-sitter, que es con lo que Neovim, Helix y Zed colorean también.
+Compila el analizador con el compilador de C del sistema en la carpeta
+`grammars` del perfil, copia las consultas de resaltado e inyección a
+su lado, lee el nombre y los tipos de archivo del `tree-sitter.json`
+del repositorio y carga el resultado, así que un archivo de ese tipo
+abierto en una pestaña se colorea antes de que se cierre el diálogo.
+Las consultas escritas para otro editor se reescriben para este: los
+nombres de captura para los que los temas de aquí no tienen color se
+asignan a los que sí (`keyword.repeat` pasa a ser `repeat`,
+`markup.bold` pasa a ser `text.strong`), un predicado con patrón de Lua
+se convierte en la expresión regular que tree-sitter evalúa, y un
+predicado que el editor no puede evaluar se nombra en el informe en
+vez de dejarlo coincidir con todo en silencio. Sin compilador de C, el
+comando dice qué instalar; un repositorio sin `src/parser.c` necesita
+antes `tree-sitter generate`, y lo dice. Todavía no: clonar desde una
+URL — clónalo y elige la carpeta — y una lista de lo instalado, que
+por ahora es la propia sección `languages`.
+
+Para construir una a mano, desde el repositorio de la gramática:
 
 ```bash
 cc -O2 -fPIC -shared -I src -o libtree-sitter-NOMBRE.dylib src/parser.c src/scanner.c

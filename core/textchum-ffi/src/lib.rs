@@ -1796,6 +1796,78 @@ pub unsafe extern "C" fn tc_load_grammars_from(
     owned_c_string(problems.join("\n"))
 }
 
+/// Builds the tree-sitter grammar checked out at `repository` into
+/// `grammars_dir` — the parser compiled with the system C compiler, the
+/// queries copied with their capture names mapped onto the editor's —
+/// and answers with JSON: `{"name": …, "entry": {…}, "warnings": […]}`
+/// where `entry` is what to put under `languages` (see
+/// [`tc_config_set_language_entry`]), or `{"error": "…"}` saying what
+/// would make it work. Slow — a compile — so call it off the main
+/// thread. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `repository` must point to `repository_len` readable bytes and
+/// `grammars_dir` to `dir_len`.
+#[no_mangle]
+pub unsafe extern "C" fn tc_grammar_build(
+    repository: *const c_char,
+    repository_len: usize,
+    grammars_dir: *const c_char,
+    dir_len: usize,
+) -> *mut c_char {
+    let Some(repository) = (unsafe { str_from_raw(repository, repository_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(grammars_dir) = (unsafe { str_from_raw(grammars_dir, dir_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let json = match textchum_core::grammar::build(
+            std::path::Path::new(repository),
+            std::path::Path::new(grammars_dir),
+        ) {
+            Ok(built) => built.to_json(),
+            Err(error) => serde_json::json!({ "error": error }).to_string(),
+        };
+        owned_c_string(json)
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Sets (or, with `entry_len == 0`, removes) a language's entry under
+/// `languages`: `entry` is the JSON object [`tc_grammar_build`]
+/// answered with, or one written by hand.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `name` must point to
+/// `name_len` readable bytes and `entry` to `entry_len`.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_language_entry(
+    config: *mut TcConfig,
+    name: *const c_char,
+    name_len: usize,
+    entry: *const c_char,
+    entry_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(name) = (unsafe { str_from_raw(name, name_len) }) else {
+        return;
+    };
+    let entry = if entry_len == 0 {
+        None
+    } else {
+        match unsafe { str_from_raw(entry, entry_len) }
+            .and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
+        {
+            Some(value) if value.is_object() => Some(value),
+            _ => return,
+        }
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_language_entry(name, entry)));
+}
+
 /// Whether a file stays open when the window showing it closes
 /// (default false).
 ///

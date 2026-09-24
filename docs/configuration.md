@@ -549,7 +549,26 @@ and crashed on, and a name the build already knows is replaced by the
 configured one — which is how a dated built-in grammar gets fixed
 without waiting for a release.
 
-Building one, from a grammar's own repository:
+**Textchum ▸ Install Grammar…** writes such an entry for you from a
+grammar's repository — a checkout of any tree-sitter grammar, which is
+what Neovim, Helix and Zed colour with too. It compiles the parser with
+the system's C compiler into the profile's `grammars` folder, copies
+the highlight and injection queries beside it, reads the name and file
+types from the repository's `tree-sitter.json`, and loads the result,
+so a file of that type open in a tab is coloured before the dialog
+closes. Queries written for another editor are rewritten for this one:
+capture names the themes here have no colour for are mapped onto the
+ones they do (`keyword.repeat` becomes `repeat`, `markup.bold` becomes
+`text.strong`), a Lua-pattern predicate becomes the regular expression
+tree-sitter evaluates, and a predicate the editor cannot evaluate is
+named in the report rather than left to match everything in silence.
+Without a C compiler the command says what to install; a repository
+without `src/parser.c` needs `tree-sitter generate` first, and says
+so. Not there yet: cloning from a URL — clone it, then choose the
+folder — and a list of what is installed, which for now is the
+`languages` section itself.
+
+Building one by hand, from a grammar's own repository:
 
 ```bash
 cc -O2 -fPIC -shared -I src -o libtree-sitter-NAME.dylib src/parser.c src/scanner.c

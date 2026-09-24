@@ -586,7 +586,28 @@ suivie jusqu'au plantage, et un nom que la compilation connaît déjà est
 remplacé par celui de la configuration — de quoi corriger une grammaire
 dépassée sans attendre une version.
 
-Pour en construire une, depuis le dépôt de la grammaire :
+**Textchum ▸ Install Grammar…** écrit cette entrée pour vous à partir du
+dépôt d'une grammaire — un checkout de n'importe quelle grammaire
+tree-sitter, ce avec quoi Neovim, Helix et Zed colorent aussi. Il
+compile l'analyseur avec le compilateur C du système dans le dossier
+`grammars` du profil, copie les requêtes de coloration et d'injection
+à côté, lit le nom et les types de fichier dans le `tree-sitter.json`
+du dépôt et charge le résultat, si bien qu'un fichier de ce type ouvert
+dans un onglet est coloré avant que le dialogue ne se ferme. Les
+requêtes écrites pour un autre éditeur sont réécrites pour celui-ci :
+les noms de capture pour lesquels les thèmes d'ici n'ont pas de couleur
+sont rapportés à ceux qu'ils connaissent (`keyword.repeat` devient
+`repeat`, `markup.bold` devient `text.strong`), un prédicat à motif Lua
+devient l'expression régulière que tree-sitter évalue, et un prédicat
+que l'éditeur ne sait pas évaluer est nommé dans le compte rendu plutôt
+que laissé à tout faire correspondre en silence. Sans compilateur C, la
+commande dit quoi installer ; un dépôt sans `src/parser.c` demande
+d'abord `tree-sitter generate`, et le dit. Pas encore là : cloner
+depuis une URL — clonez-le, puis choisissez le dossier — et une liste
+de ce qui est installé, qui pour l'instant est la section `languages`
+elle-même.
+
+Pour en construire une à la main, depuis le dépôt de la grammaire :
 
 ```bash
 cc -O2 -fPIC -shared -I src -o libtree-sitter-NOM.dylib src/parser.c src/scanner.c
