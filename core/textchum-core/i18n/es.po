@@ -318,6 +318,10 @@ msgstr "Copiar la ruta y la línea"
 msgid "Copy Forge URL for Line"
 msgstr "Copiar la URL de la forja para la línea"
 
+#: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "A configured grammar could not be loaded"
+msgstr "No se pudo cargar una gramática configurada"
+
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "New with Format…"
 msgstr "Nuevo con formato…"
@@ -446,6 +450,10 @@ msgstr "Cómo se indenta este archivo — clic para cambiarlo"
 #: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
 msgid "What this file is treated as — click to change it"
 msgstr "El lenguaje con que se trata este archivo — clic para cambiarlo"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "What the editor had to say — click for the whole list"
+msgstr "Lo que el editor tuvo que decir — clic para ver la lista completa"
 
 #: linux/src/workbench.rs
 msgid "Replaced every occurrence."
@@ -777,7 +785,13 @@ msgstr "La gramática no se instaló"
 msgid ""
 "Files of its types open as it from now on, and the ones already open are "
 "coloured."
-msgstr "Los archivos de sus tipos se abren como ella a partir de ahora, y los ya abiertos quedan coloreados."
+msgstr ""
+"Los archivos de sus tipos se abren como ella a partir de ahora, y los ya "
+"abiertos quedan coloreados."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "Nothing to report yet."
+msgstr "Nada que contar todavía."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "General"
@@ -918,7 +932,8 @@ msgstr "Cerrar corchetes y comillas al escribirlos"
 
 #: linux/src/workbench.rs
 msgid "An opening half brings its closing half; the closer typed steps over it"
-msgstr "La mitad de apertura trae la de cierre; el cierre escrito pasa por encima"
+msgstr ""
+"La mitad de apertura trae la de cierre; el cierre escrito pasa por encima"
 
 #: linux/src/workbench.rs
 msgid "Mark the selected word elsewhere"
@@ -1567,7 +1582,9 @@ msgstr "{} coincidencias"
 msgid ""
 "Choose a tree-sitter grammar's repository: a folder with src/parser.c and "
 "queries/highlights.scm."
-msgstr "Elige el repositorio de una gramática tree-sitter: una carpeta con src/parser.c y queries/highlights.scm."
+msgstr ""
+"Elige el repositorio de una gramática tree-sitter: una carpeta con src/"
+"parser.c y queries/highlights.scm."
 
 #: macos/Sources/Textchum/GrammarInstall.swift
 msgid "Install"
