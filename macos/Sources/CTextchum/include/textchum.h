@@ -957,15 +957,6 @@ uint32_t tc_config_project_state_keep_days(const struct TcConfig *config);
 void tc_config_set_project_state_keep_days(struct TcConfig *config, uint32_t days);
 
 /**
- * The closing half of a delimiter that wraps a selection, or an empty
- * string when the text is not one. Release with [`tc_string_free`].
- *
- * # Safety
- * The pointer and length must describe valid UTF-8.
- */
-char *tc_pair_closing(const char *open, uintptr_t open_len);
-
-/**
  * Whether a link the preview was asked to follow names a place in the
  * page already on screen.
  *
@@ -1345,16 +1336,56 @@ bool tc_config_auto_close_pairs(const struct TcConfig *config);
 void tc_config_set_auto_close_pairs(struct TcConfig *config, bool enabled);
 
 /**
+ * Every language's own table of pairs from the configuration
+ * (`editor.pairs`), serialized — `{language: ["()", "<>", ...]}` —
+ * and `{}` when unset. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_pair_tables_json(const struct TcConfig *config);
+
+/**
+ * Sets (or, with a null `table`, removes) a language's own table of
+ * pairs: `table_len` bytes of UTF-8, two characters per pair.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `language` must
+ * point to `language_len` readable bytes, and `table`, when not null,
+ * to `table_len`.
+ */
+void tc_config_set_pair_table(struct TcConfig *config,
+                              const char *language,
+                              uintptr_t language_len,
+                              const char *table,
+                              uintptr_t table_len);
+
+/**
+ * The closing half of `open` (a Unicode scalar) for wrapping a
+ * selection, or 0 when `open` is not a delimiter: under `table` — a
+ * language's own, `table_len` bytes of two characters per pair — when
+ * it is not null, the built-in pairs otherwise.
+ *
+ * # Safety
+ * `table`, when not null, must point to `table_len` readable bytes.
+ */
+uint32_t tc_pairs_closing(const char *table, uintptr_t table_len, uint32_t open);
+
+/**
  * The closing half to put after the caret when `typed` (a Unicode
  * scalar) is typed in `language` between `before` and `after` (0 for
- * none), or 0 when nothing should be. See
+ * none), or 0 when nothing should be: under `table` — a language's
+ * own, `table_len` bytes of two characters per pair — when it is not
+ * null, the built-in rule by language otherwise. See
  * `textchum_core::pairs::auto_close`.
  *
  * # Safety
- * `language` must point to `language_len` readable bytes (0 for no
- * language).
+ * `table`, when not null, must point to `table_len` readable bytes;
+ * `language` to `language_len` (0 for no language).
  */
-uint32_t tc_pairs_auto_close(const char *language,
+uint32_t tc_pairs_auto_close(const char *table,
+                             uintptr_t table_len,
+                             const char *language,
                              uintptr_t language_len,
                              uint32_t typed,
                              uint32_t before,
@@ -1362,15 +1393,23 @@ uint32_t tc_pairs_auto_close(const char *language,
 
 /**
  * Whether typing `typed` with `after` (0 for none) already there
- * steps over it — the closer the editor put there a moment ago.
+ * steps over it — the closer the editor put there a moment ago —
+ * under `table` when it is not null, the built-in pairs otherwise.
+ *
+ * # Safety
+ * `table`, when not null, must point to `table_len` readable bytes.
  */
-bool tc_pairs_skips_closer(uint32_t typed, uint32_t after);
+bool tc_pairs_skips_closer(const char *table, uintptr_t table_len, uint32_t typed, uint32_t after);
 
 /**
  * Whether Backspace between `before` and `after` (0 for none) takes
- * both: an empty pair the editor opened.
+ * both — an empty pair the editor opened — under `table` when it is
+ * not null, the built-in pairs otherwise.
+ *
+ * # Safety
+ * `table`, when not null, must point to `table_len` readable bytes.
  */
-bool tc_pairs_deletes_pair(uint32_t before, uint32_t after);
+bool tc_pairs_deletes_pair(const char *table, uintptr_t table_len, uint32_t before, uint32_t after);
 
 /**
  * Whether a save whose preprocessor chain failed goes ahead and says

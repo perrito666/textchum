@@ -33,6 +33,9 @@ final class StatusBar: NSView {
     private let notice = NSTextField(labelWithString: "")
     private var noticeTimer: Timer?
     private var shown = Info()
+
+    /// What the bar says right now, for the smoke test.
+    var shownInfo: Info { shown }
     /// Opens File Properties for the focused document.
     var onProperties: (() -> Void)?
 

@@ -80,6 +80,33 @@ prueban, en orden, cuando git no nombra una rama por defecto —
 claves funcionan también por proyecto, como anulaciones `editor` de una
 entrada del workspace.
 
+`editor.pairs` da a un lenguaje su propia tabla de pares, para **Close
+brackets and quotes as they are typed** y para envolver una selección:
+para un lenguaje que la regla incorporada no conoce, o en el que se
+equivoca con una comilla. Las claves son nombres de lenguaje tal como
+los muestra la barra de estado; cada entrada es la mitad de apertura y
+luego la de cierre:
+
+```json
+{
+  "editor": {
+    "auto_close_pairs": true,
+    "pairs": {
+      "nix": ["()", "[]", "{}", "\"\""],
+      "rust": ["()", "[]", "{}", "\"\"", "<>"]
+    }
+  }
+}
+```
+
+Una tabla es la respuesta completa para su lenguaje — nada de la regla
+incorporada se le añade, así que una comilla que falte sigue siendo una
+pulsación normal. Un par cuyas dos mitades son el mismo carácter es una
+comilla, que nunca se abre justo después de una palabra ni delante de
+otra igual, y ningún par se abre dentro de una palabra, con tabla o sin
+ella. Todavía no: la ventana de Ajustes no edita la tabla, y el texto
+sin formato no puede tener una.
+
 Todo es opcional: un archivo, una sección o una clave ausentes significan
 simplemente el valor por defecto. Las escrituras son atómicas (archivo
 temporal más renombrado), como toda escritura que hace Textchum.

@@ -236,7 +236,10 @@ crochets s'apparient partout ; les guillemets suivent le langage : `'`
 est une apostrophe en prose et une durée de vie en Rust, où on le
 laisse donc tranquille, et l'accent grave ne s'apparie que là où il
 signifie du code. Aucune paire ne s'ouvre dans un mot, et aucun
-guillemet juste après un.
+guillemet juste après un. Un langage que la règle ne connaît pas, ou
+pour lequel elle se trompe sur un guillemet, apporte sa propre table
+dans le fichier : `editor.pairs` dans
+[la configuration](configuration.md).
 
 La barre fine sous l'éditeur répond à ce qu'un regard sur le texte ne
 peut pas : où est le curseur, si le fichier indente avec des

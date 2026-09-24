@@ -81,6 +81,33 @@ branche par défaut — `["main", "master", "trunk", "develop"]` sinon.
 Les deux clés fonctionnent aussi par projet, comme surcharges `editor`
 d'une entrée du workspace.
 
+`editor.pairs` donne à un langage sa propre table de paires, pour
+**Close brackets and quotes as they are typed** et pour envelopper une
+sélection : pour un langage que la règle intégrée ne connaît pas, ou
+pour lequel elle se trompe sur un guillemet. Les clés sont des noms de
+langage tels que la barre d'état les affiche ; chaque entrée est la
+moitié ouvrante puis la fermante :
+
+```json
+{
+  "editor": {
+    "auto_close_pairs": true,
+    "pairs": {
+      "nix": ["()", "[]", "{}", "\"\""],
+      "rust": ["()", "[]", "{}", "\"\"", "<>"]
+    }
+  }
+}
+```
+
+Une table est la réponse entière pour son langage — rien de la règle
+intégrée ne s'y ajoute, si bien qu'un guillemet omis reste une frappe
+ordinaire. Une paire dont les deux moitiés sont le même caractère est
+un guillemet, jamais ouvert juste après un mot ni devant un autre
+lui-même, et aucune paire ne s'ouvre dans un mot, table ou pas. Pas
+encore là : la fenêtre des Réglages n'édite pas la table, et le texte
+brut ne peut pas en avoir.
+
 Tout est optionnel — fichier, section ou clé manquants signifient
 simplement la valeur par défaut. Les écritures sont atomiques (fichier
 temporaire puis renommage), comme toute écriture de Textchum.
