@@ -3390,6 +3390,62 @@ func runSmokeTest() -> Int32 {
     }
     print("trait fonts ok (writes only what differs, so typing does not relayout)")
 
+    // The first paint of a view happens before the view is in a
+    // window, when its clip is an empty rectangle. Asking for the
+    // character at the corners of that rectangle used to answer "the
+    // whole document": the bottom-right corner is off the text, which
+    // is the end. Bold and italic then went into the storage over the
+    // lot, and a two-megabyte file took over a minute to show its
+    // window. The first paint is the head; once the view lands and
+    // scrolls, the paint follows the viewport as it always did.
+    do {
+        let firstPaintBench = Workbench(sidebar: nil)
+        firstPaintBench.window?.setFrame(
+            NSRect(x: 0, y: 0, width: 900, height: 600), display: true)
+        let large = CoreDocument()
+        let unit = "/// a comment\npub fn f() {}\n"
+        try large.replace(
+            utf16Range: NSRange(location: 0, length: 0),
+            with: String(repeating: unit, count: 12_000))
+        large.setLanguage("rust")
+        let length = large.lengthInUTF16
+        let controller = DocumentController(document: large)
+        firstPaintBench.add(controller)
+        guard let first = controller.paintedRangeForDebug else {
+            print("FAIL: a view made for a large document painted nothing")
+            return 1
+        }
+        guard first.location == 0, first.length < length / 4 else {
+            print("FAIL: a view not yet in a window painted \(first) of \(length) units")
+            return 1
+        }
+        firstPaintBench.window?.makeKeyAndOrderFront(nil)
+        guard let view = firstPaintBench.columns.first?.views.first else {
+            print("FAIL: no view of the large document to scroll")
+            return 1
+        }
+        spin(untilTrue: { view.textView.frame.width > 700 }, seconds: 2)
+        controller.scroll(view, topOffset: length - 2_000)
+        spin(
+            untilTrue: {
+                guard let painted = controller.paintedRangeForDebug else { return false }
+                return NSMaxRange(painted) == length
+            }, seconds: 2)
+        guard let painted = controller.paintedRangeForDebug, NSMaxRange(painted) == length,
+            painted.length < length / 4
+        else {
+            print(
+                "FAIL: after scrolling to the end the paint is \(String(describing: controller.paintedRangeForDebug)) of \(length)"
+            )
+            return 1
+        }
+        firstPaintBench.window?.close()
+    } catch {
+        print("FAIL: first paint of a large document: \(error)")
+        return 1
+    }
+    print("first paint ok (the head before the view has a window, the viewport after)")
+
     // Backspace in a line's leading spaces takes a whole indent, and
     // one character anywhere else. It is the position that decides,
     // which is what keeps it from surprising anyone.
