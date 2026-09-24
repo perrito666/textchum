@@ -18,6 +18,7 @@ use std::process::Command;
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    compile_vendored_grammars(&manifest);
     let catalogues = manifest.join("i18n");
     println!("cargo:rerun-if-changed=i18n");
     let Ok(entries) = std::fs::read_dir(&catalogues) else { return };
@@ -34,6 +35,25 @@ fn main() {
         }
         let entries = parse_po(&std::fs::read_to_string(&source).unwrap_or_default());
         std::fs::write(&target, write_mo(&entries)).expect("write catalogue");
+    }
+}
+
+/// The grammars carried as generated C under `grammars/` rather than as
+/// crates: their crate binds to an older tree-sitter runtime than the
+/// editor links, and two runtimes in one binary is not an option. The
+/// parser tables themselves are runtime-independent, so the C is
+/// compiled here and `languages.rs` declares the constructor.
+fn compile_vendored_grammars(manifest: &Path) {
+    for name in ["dockerfile"] {
+        let sources = manifest.join("grammars").join(name).join("src");
+        println!("cargo:rerun-if-changed=grammars/{name}/src");
+        let mut build = cc::Build::new();
+        build.include(&sources).file(sources.join("parser.c")).warnings(false);
+        let scanner = sources.join("scanner.c");
+        if scanner.exists() {
+            build.file(scanner);
+        }
+        build.compile(&format!("tree-sitter-{name}"));
     }
 }
 

@@ -3590,6 +3590,34 @@ fn show_file_properties(workbench: &Rc<Workbench>) {
     window.present();
 }
 
+/// After the configured grammars were loaded again: every page whose
+/// language is decided by its path is parsed with what the path now
+/// says — a grammar added, or a built-in replaced by the file's. A
+/// language chosen by hand for the file stands.
+pub fn relearn_languages() {
+    Workbench::for_each(|workbench| {
+        for page in workbench.all_pages() {
+            let Some(path) = page.path().borrow().clone() else { continue };
+            let chosen = Shell::instance().config.borrow().file_override(&path).language;
+            if chosen.is_some() {
+                continue;
+            }
+            let detected = textchum_core::syntax::languages::by_path(Path::new(&path))
+                .map(|entry| entry.spec.name.to_owned());
+            if detected.is_none() && page.state.borrow().document.language_name().is_none() {
+                continue;
+            }
+            page.state
+                .borrow_mut()
+                .document
+                .set_language(detected.as_deref());
+            page::refresh_style_tags(&page.buffer);
+            page::recolor(&page.buffer);
+            page::apply_highlights(&page.buffer, &page.state.borrow().document);
+        }
+    });
+}
+
 /// Puts a document's own settings into effect: the language it is read
 /// as, and how wide a tab is drawn. `None` for the language means fall
 /// back to what the filename implies.
