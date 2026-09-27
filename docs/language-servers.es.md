@@ -38,7 +38,10 @@ proyecto en Settings ▸ Language Servers; véase
 
 - Los hallazgos llegan mientras se escribe (enviados en lotes con
   *debounce*) y marcan el texto afectado: rojo para errores, naranja para
-  avisos, azul para notas.
+  avisos, azul para notas. Una marca se queda sobre el código que señala
+  mientras se edita encima o alrededor, hasta que el servidor vuelve a
+  informar; un *lint* que solo corre al guardar (el de cargo, por
+  ejemplo) se refresca con el siguiente guardado.
 - El subtítulo de la ventana los cuenta («2 errors, 1 warning»).
 - **Autocompletado al escribir**: las sugerencias aparecen tras
   caracteres de identificador y `.`, filtradas mientras se sigue

@@ -152,6 +152,36 @@ impl Buffer {
         Ok(self.rope.char_to_utf16_cu(char_idx))
     }
 
+    /// The zero-based line holding the UTF-16 offset, clamped into the
+    /// text.
+    pub fn line_at_utf16(&self, offset: usize) -> usize {
+        let char_idx = self.rope.utf16_cu_to_char(offset.min(self.rope.len_utf16_cu()));
+        self.rope.char_to_line(char_idx)
+    }
+
+    /// Where the zero-based `line` starts, in UTF-16 units, clamped to
+    /// the last line.
+    pub fn utf16_line_start(&self, line: usize) -> usize {
+        let line = line.min(self.rope.len_lines().saturating_sub(1));
+        self.rope.char_to_utf16_cu(self.rope.line_to_char(line))
+    }
+
+    /// The UTF-16 offset of `character` on `line`, clamped into the
+    /// line: a column past its end lands on its last unit, the way a
+    /// server's stale position should.
+    pub fn utf16_offset_at(&self, line: usize, character: usize) -> usize {
+        let line = line.min(self.rope.len_lines().saturating_sub(1));
+        let start = self.utf16_line_start(line);
+        // The line's own text ends before its line break, whichever
+        // spelling of one it has.
+        let slice = self.rope.line(line);
+        let mut content_chars = slice.len_chars();
+        while content_chars > 0 && matches!(slice.char(content_chars - 1), '\n' | '\r') {
+            content_chars -= 1;
+        }
+        (start + character).min(start + slice.char_to_utf16_cu(content_chars))
+    }
+
     /// Read access to the underlying rope, for subsystems (syntax) that
     /// iterate chunks without copying.
     pub(crate) fn rope(&self) -> &Rope {

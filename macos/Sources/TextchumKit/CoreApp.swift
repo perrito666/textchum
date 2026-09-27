@@ -3,6 +3,11 @@ import Foundation
 
 /// One language-server finding, positioned the LSP way: zero-based line,
 /// UTF-16 column.
+///
+/// A finding read back from a document (``CoreDocument/diagnostics``)
+/// also carries `start` and `end`, its range in UTF-16 units of the
+/// text as it is now. One straight from a server has not been placed
+/// yet, and reads as zero there.
 public struct CoreDiagnostic: Codable, Equatable, Sendable {
     public let line: Int
     public let character: Int
@@ -11,6 +16,34 @@ public struct CoreDiagnostic: Codable, Equatable, Sendable {
     /// 1 = error, 2 = warning, 3 = information, 4 = hint.
     public let severity: Int
     public let message: String
+    public let start: Int
+    public let end: Int
+
+    public init(
+        line: Int, character: Int, endLine: Int, endCharacter: Int,
+        severity: Int, message: String, start: Int = 0, end: Int = 0
+    ) {
+        self.line = line
+        self.character = character
+        self.endLine = endLine
+        self.endCharacter = endCharacter
+        self.severity = severity
+        self.message = message
+        self.start = start
+        self.end = end
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        line = try values.decode(Int.self, forKey: .line)
+        character = try values.decode(Int.self, forKey: .character)
+        endLine = try values.decode(Int.self, forKey: .endLine)
+        endCharacter = try values.decode(Int.self, forKey: .endCharacter)
+        severity = try values.decode(Int.self, forKey: .severity)
+        message = try values.decode(String.self, forKey: .message)
+        start = try values.decodeIfPresent(Int.self, forKey: .start) ?? 0
+        end = try values.decodeIfPresent(Int.self, forKey: .end) ?? 0
+    }
 }
 
 /// The root handle for a core instance and the receiving end of its events.

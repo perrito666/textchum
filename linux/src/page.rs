@@ -423,6 +423,7 @@ fn install_change_handler(
                     document.state.borrow().document.text(),
                     "shell and core disagree about the document"
                 );
+                refresh_diagnostics(&document);
                 if !recolor_pending.replace(true) {
                     let document = Rc::clone(&document);
                     let pending = Rc::clone(&recolor_pending);
@@ -1223,26 +1224,20 @@ pub fn apply_diagnostics(handles: &PageHandles, json: &str) {
             buffer.remove_tag(&tag, &start, &end);
         }
     }
-    let Ok(serde_json::Value::Array(items)) = serde_json::from_str(json) else {
-        return;
+    // The core takes the findings against the text as it is now and
+    // moves them with every edit after; the lines kept here are its
+    // answer, read again after each change (see `refresh_diagnostics`).
+    let placed = {
+        let mut state = handles.document.state.borrow_mut();
+        state.document.set_diagnostics(json);
+        state.document.diagnostics_json()
     };
+    let kept = findings_from_json(&placed);
     let mut errors = 0usize;
     let mut warnings = 0usize;
-    let mut kept: Vec<crate::shell::Diagnostic> = Vec::new();
-    for item in &items {
-        let line = item["line"].as_i64().unwrap_or(0) as i32;
-        let character = item["character"].as_u64().unwrap_or(0) as usize;
-        let end_line = item["endLine"].as_i64().unwrap_or(0) as i32;
-        let end_character = item["endCharacter"].as_u64().unwrap_or(0) as usize;
-        let severity = item["severity"].as_u64().unwrap_or(1);
-        kept.push(crate::shell::Diagnostic {
-            line,
-            character,
-            end_line,
-            end_character,
-            severity,
-            message: item["message"].as_str().unwrap_or_default().to_owned(),
-        });
+    for item in &kept {
+        let (line, character, end_line, end_character, severity) =
+            (item.line, item.character, item.end_line, item.end_character, item.severity);
         let tag_name = if severity == 1 {
             errors += 1;
             "diag-error"
@@ -1279,6 +1274,37 @@ pub fn apply_diagnostics(handles: &PageHandles, json: &str) {
     *handles.problems.borrow_mut() = parts.join(", ");
     *handles.document.diagnostics.borrow_mut() = kept;
     crate::workbench::refresh_subtitle(handles);
+}
+
+/// The findings the core holds, as the shell keeps them.
+fn findings_from_json(json: &str) -> Vec<crate::shell::Diagnostic> {
+    let Ok(serde_json::Value::Array(items)) = serde_json::from_str::<serde_json::Value>(json)
+    else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .map(|item| crate::shell::Diagnostic {
+            line: item["line"].as_i64().unwrap_or(0) as i32,
+            character: item["character"].as_u64().unwrap_or(0) as usize,
+            end_line: item["endLine"].as_i64().unwrap_or(0) as i32,
+            end_character: item["endCharacter"].as_u64().unwrap_or(0) as usize,
+            severity: item["severity"].as_u64().unwrap_or(1),
+            message: item["message"].as_str().unwrap_or_default().to_owned(),
+        })
+        .collect()
+}
+
+/// Reads the findings back from the core after an edit moved them.
+/// The squiggles are buffer tags and ride along on their own; the
+/// lines the balloon and the list go by are what this brings up to
+/// date.
+pub fn refresh_diagnostics(document: &crate::shell::OpenDocument) {
+    if document.diagnostics.borrow().is_empty() {
+        return;
+    }
+    let placed = document.state.borrow().document.diagnostics_json();
+    *document.diagnostics.borrow_mut() = findings_from_json(&placed);
 }
 
 /// The diagnostic covering a position, or — failing that — the first

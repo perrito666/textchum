@@ -34,6 +34,7 @@ use crate::buffer::{Buffer, BufferError};
 use crate::fsutil::write_atomically;
 use crate::history::{EditRecord, History};
 use crate::snippet::{self, Region, Session};
+use crate::diagnostics::{self, Finding};
 use crate::syntax::{self, HighlightSpan, SyntaxState, SYNTAX_MAX_BYTES};
 
 /// The on-disk encoding of a document.
@@ -117,6 +118,11 @@ pub struct Document {
     /// The brackets of the current text, worked out once and kept
     /// until an edit; see [`Document::brackets`].
     brackets: std::cell::RefCell<Option<std::rc::Rc<Vec<crate::brackets::Bracket>>>>,
+    /// What a server last said about the text, as ranges of it; see
+    /// [`crate::diagnostics`]. [`Document::mutate_buffer`] moves them
+    /// with every edit, so they mean the same code after an edit as
+    /// before it.
+    diagnostics: Vec<Finding>,
 }
 
 impl Default for Document {
@@ -140,6 +146,7 @@ impl Document {
             snippet: None,
             pending_snippet: None,
             brackets: std::cell::RefCell::new(None),
+            diagnostics: Vec::new(),
         }
     }
 
@@ -159,6 +166,7 @@ impl Document {
             snippet: None,
             pending_snippet: None,
             brackets: std::cell::RefCell::new(None),
+            diagnostics: Vec::new(),
         };
         doc.history.mark_saved();
         doc.detect_language();
@@ -470,10 +478,15 @@ impl Document {
         // Fold the edit into the snippet's live regions. One that the
         // edit cut across cannot be shifted into meaning anything, so
         // the session ends here rather than pointing at the wrong text.
+        let new_len = text.encode_utf16().count();
         if let Some(session) = self.snippet.as_mut() {
-            if !session.adjust(start, end, text.encode_utf16().count()) {
+            if !session.adjust(start, end, new_len) {
                 self.snippet = None;
             }
+        }
+        for finding in &mut self.diagnostics {
+            (finding.start, finding.end) =
+                diagnostics::shifted((finding.start, finding.end), start, end, new_len);
         }
 
         if let Some((start_byte, old_end_byte, start_position, old_end_position)) = edit_geometry {
@@ -494,6 +507,66 @@ impl Document {
             }
         }
         Ok(())
+    }
+
+    /// Takes a server's findings for this text: a JSON array of
+    /// `{line, character, endLine, endCharacter, severity, message}`
+    /// objects, positioned the LSP way against the text as it is now.
+    /// Replaces whatever was held; an empty array clears it.
+    pub fn set_diagnostics(&mut self, json: &str) {
+        let Ok(serde_json::Value::Array(items)) = serde_json::from_str::<serde_json::Value>(json)
+        else {
+            self.diagnostics.clear();
+            return;
+        };
+        let position = |item: &serde_json::Value, line: &str, character: &str| {
+            let line = item[line].as_u64().unwrap_or(0) as usize;
+            let character = item[character].as_u64().unwrap_or(0) as usize;
+            self.buffer.utf16_offset_at(line, character)
+        };
+        self.diagnostics = items
+            .iter()
+            .map(|item| {
+                let start = position(item, "line", "character");
+                let end = position(item, "endLine", "endCharacter").max(start);
+                Finding {
+                    start,
+                    end,
+                    severity: item["severity"].as_u64().unwrap_or(1) as u8,
+                    message: item["message"].as_str().unwrap_or_default().to_owned(),
+                }
+            })
+            .collect();
+    }
+
+    /// The findings as they stand, on the text as it is now.
+    pub fn diagnostics(&self) -> &[Finding] {
+        &self.diagnostics
+    }
+
+    /// The findings as JSON, in the shape [`Document::set_diagnostics`]
+    /// takes plus each one's `start` and `end` in UTF-16 units, so a
+    /// shell can paint by offset and list by line from one answer.
+    pub fn diagnostics_json(&self) -> String {
+        let items: Vec<serde_json::Value> = self
+            .diagnostics
+            .iter()
+            .map(|finding| {
+                let line = self.buffer.line_at_utf16(finding.start);
+                let end_line = self.buffer.line_at_utf16(finding.end);
+                serde_json::json!({
+                    "line": line,
+                    "character": finding.start - self.buffer.utf16_line_start(line),
+                    "endLine": end_line,
+                    "endCharacter": finding.end - self.buffer.utf16_line_start(end_line),
+                    "severity": finding.severity,
+                    "message": finding.message,
+                    "start": finding.start,
+                    "end": finding.end,
+                })
+            })
+            .collect();
+        serde_json::Value::Array(items).to_string()
     }
 
     /// Expands an LSP snippet body for an insertion at `at`, returning
@@ -908,6 +981,65 @@ fn encode(text: &str, encoding: Encoding) -> (Vec<u8>, Encoding) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn lines_of(document: &Document) -> Vec<(u64, u64, u64, u64)> {
+        let json: serde_json::Value = serde_json::from_str(&document.diagnostics_json()).unwrap();
+        json.as_array()
+            .unwrap()
+            .iter()
+            .map(|item| {
+                (
+                    item["line"].as_u64().unwrap(),
+                    item["character"].as_u64().unwrap(),
+                    item["start"].as_u64().unwrap(),
+                    item["end"].as_u64().unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn findings_ride_with_the_text_above_them() {
+        let mut document = Document::new();
+        document.replace_utf16(0, 0, "use a;
+
+struct Drinker;
+").unwrap();
+        document.set_diagnostics(
+            r#"[{"line":2,"character":7,"endLine":2,"endCharacter":14,"severity":2,"message":"never constructed"}]"#,
+        );
+        assert_eq!(lines_of(&document), vec![(2, 7, 15, 22)]);
+        // Three lines typed at the top move the finding three lines down.
+        document.replace_utf16(0, 0, "use b;
+use c;
+use d;
+").unwrap();
+        assert_eq!(lines_of(&document), vec![(5, 7, 36, 43)]);
+        assert_eq!(document.diagnostics()[0].message, "never constructed");
+        // Typing on the finding's own line, before it, moves it along that line.
+        let line_start = document.buffer.utf16_line_start(5);
+        document.replace_utf16(line_start, line_start, "pub ").unwrap();
+        assert_eq!(lines_of(&document), vec![(5, 11, 40, 47)]);
+        // Undo takes it back the same way.
+        document.undo();
+        assert_eq!(lines_of(&document), vec![(5, 7, 36, 43)]);
+    }
+
+    #[test]
+    fn a_stale_column_lands_on_the_line_and_an_empty_list_clears() {
+        let mut document = Document::new();
+        document.replace_utf16(0, 0, "ab
+cd
+").unwrap();
+        document.set_diagnostics(
+            r#"[{"line":1,"character":40,"endLine":9,"endCharacter":0,"severity":1,"message":"x"}]"#,
+        );
+        assert_eq!(lines_of(&document), vec![(1, 2, 5, 6)]);
+        document.set_diagnostics("[]");
+        assert!(document.diagnostics().is_empty());
+        document.set_diagnostics("not json");
+        assert!(document.diagnostics().is_empty());
+    }
 
     fn temp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("textchum-test-{}", std::process::id()));

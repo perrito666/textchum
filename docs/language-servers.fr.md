@@ -37,7 +37,11 @@ Language Servers ; voir [configuration](configuration.md#projets).
 
 - Les résultats arrivent pendant la frappe (envoyés par lots avec
   temporisation) et marquent le texte concerné : rouge pour les erreurs,
-  orange pour les avertissements, bleu pour les notes.
+  orange pour les avertissements, bleu pour les notes. Une marque reste
+  sur le code qu'elle signale pendant que l'on édite au-dessus ou autour,
+  jusqu'au prochain rapport du serveur ; un lint qui ne tourne qu'à
+  l'enregistrement (celui de cargo, par exemple) se rafraîchit à
+  l'enregistrement suivant.
 - Le sous-titre de la fenêtre les compte (« 2 errors, 1 warning »).
 - **La complétion pendant la frappe** : les suggestions apparaissent
   après les caractères d'identifiant et `.`, filtrées au fil de la

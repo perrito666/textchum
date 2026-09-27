@@ -271,6 +271,25 @@ public final class CoreDocument {
         return Self.takeString(expanded) ?? ""
     }
 
+    /// Hands the document a server's findings, positioned against the
+    /// text as it is now. The core moves them with every edit from
+    /// here on, so ``diagnostics`` always answers for the current text.
+    public func setDiagnostics(_ items: [CoreDiagnostic]) {
+        let json =
+            (try? JSONEncoder().encode(items)).flatMap { String(data: $0, encoding: .utf8) }
+            ?? "[]"
+        _ = Self.withUTF8Pointer(json) { pointer, length in
+            tc_document_set_diagnostics(handle, pointer, length)
+        }
+    }
+
+    /// The findings as they stand: lines and columns of the current
+    /// text, and `start`/`end` in UTF-16 units of it.
+    public var diagnostics: [CoreDiagnostic] {
+        guard let json = Self.takeString(tc_document_diagnostics_json(handle)) else { return [] }
+        return (try? JSONDecoder().decode([CoreDiagnostic].self, from: Data(json.utf8))) ?? []
+    }
+
     /// Starts a tabstop session over the text ``expandSnippet(_:at:)``
     /// returned, now sitting at `origin`. Returns the range to select:
     /// the first placeholder, or where the caret goes when there is
