@@ -45,7 +45,7 @@ enum LSPEdits {
         return byPath
     }
 
-    private static func edits(fromArray array: [[String: Any]]) -> [TextEdit] {
+    static func edits(fromArray array: [[String: Any]]) -> [TextEdit] {
         array.compactMap { raw in
             guard
                 let range = raw["range"] as? [String: Any],

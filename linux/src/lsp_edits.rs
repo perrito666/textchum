@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextEdit {
     pub start_line: i32,
     pub start_character: usize,
@@ -15,7 +15,8 @@ pub struct TextEdit {
     pub new_text: String,
 }
 
-fn edit_from(value: &Value) -> Option<TextEdit> {
+/// One `TextEdit` object, if `value` is one.
+pub fn edit_from(value: &Value) -> Option<TextEdit> {
     let range = &value["range"];
     Some(TextEdit {
         start_line: range["start"]["line"].as_i64()? as i32,

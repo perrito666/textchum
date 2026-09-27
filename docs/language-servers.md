@@ -36,7 +36,10 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
 - The window subtitle counts them ("2 errors, 1 warning").
 - **Completion as you type**: suggestions appear after identifier
   characters and `.`, filtered as you keep typing — ↑/↓ to choose,
-  ⏎ or ⇥ to accept, ⎋ to dismiss, ⌃Space to ask explicitly.
+  ⏎ or ⇥ to accept, ⎋ to dismiss, ⌃Space to ask explicitly. An accepted
+  item replaces the stretch the server names (a postfix completion
+  swallows the receiver and the dot) and brings its extra edits, an
+  import for one, along with it.
 - Resting the mouse over a symbol shows the server's **hover**
   documentation in a popover, with the Markdown servers send rendered
   — code blocks monospaced, emphasis and inline code styled. It only

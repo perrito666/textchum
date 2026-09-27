@@ -4766,7 +4766,7 @@ fn present_picker(
 
 /// Applies LSP text edits to an open page through the buffer (the
 /// choke point carries them into the core, so undo works), bottom-up.
-fn apply_edits_to_page(page: &Rc<Page>, edits: Vec<crate::lsp_edits::TextEdit>) {
+pub(crate) fn apply_edits_to_page(page: &Rc<Page>, edits: Vec<crate::lsp_edits::TextEdit>) {
     let buffer = &page.buffer;
     for edit in crate::lsp_edits::bottom_up(edits) {
         let Some(start) = page::iter_at_lsp(buffer, edit.start_line, edit.start_character)

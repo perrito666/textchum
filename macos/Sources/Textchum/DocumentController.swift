@@ -783,6 +783,19 @@ final class DocumentController: NSResponder {
         }
     }
 
+    /// Sends the pending change now. A request positioned in text the
+    /// server has not received yet is answered for a different context
+    /// — the completion asked 0.12 s after a keystroke against a change
+    /// sent 0.3 s after it, say — so anything that asks about a
+    /// position sends the text first.
+    private func flushLSPChange() {
+        guard let timer = lspChangeTimer, timer.isValid else { return }
+        timer.invalidate()
+        lspChangeTimer = nil
+        guard let lspApp, let path = lspOpenPath else { return }
+        lspApp.lspDidChange(path: path, text: coreDocument.text)
+    }
+
     /// Recomputes the gutter's git marks once typing pauses.
     ///
     /// Debounced and off the main thread: the marks come from asking
@@ -1163,6 +1176,7 @@ final class DocumentController: NSResponder {
         if !deliberate, !isHoverableSymbol(at: index, in: text) { return }
         let (line, character) = Self.lspPosition(ofIndex: index, in: text)
         let about = symbolRange(at: index, in: text)
+        flushLSPChange()
         lspApp.lspHover(path: path, line: line, character: character) { [weak self] json in
             self?.showHover(resultJSON: json, at: point, about: about)
         }
@@ -1300,6 +1314,7 @@ final class DocumentController: NSResponder {
         }
         let text = textView.string as NSString
         let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
+        flushLSPChange()
         lspApp.lspDefinition(path: path, line: line, character: character) { [weak self] json in
             guard let self else { return }
             switch CoreDefinition.decide(
@@ -1328,6 +1343,7 @@ final class DocumentController: NSResponder {
     /// and the answer is that nothing refers to it.
     private func usesOfDefinition(path: String, line: Int, character: Int) {
         guard let lspApp else { return }
+        flushLSPChange()
         lspApp.lspReferences(path: path, line: line, character: character) { [weak self] json in
             guard let self else { return }
             let uses = CoreDefinition.elsewhere(
@@ -1356,6 +1372,7 @@ final class DocumentController: NSResponder {
         guard let lspApp, let path = lspOpenPath, let textView else { return }
         let text = textView.string as NSString
         let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
+        flushLSPChange()
         lspApp.lspReferences(path: path, line: line, character: character) { [weak self] json in
             guard let self else { return }
             let locations = Self.referenceLocations(fromResultJSON: json)
@@ -1520,6 +1537,7 @@ final class DocumentController: NSResponder {
         guard !newName.isEmpty, newName != current else { return }
         let text = textView.string as NSString
         let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
+        flushLSPChange()
         lspApp.lspRename(path: path, line: line, character: character, newName: newName) {
             json in
             let applied =
@@ -1805,6 +1823,7 @@ final class DocumentController: NSResponder {
         guard let lspApp, let path = lspOpenPath, let textView else { return }
         let text = textView.string as NSString
         let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
+        flushLSPChange()
         lspApp.lspCodeAction(path: path, line: line, character: character) {
             [weak self] json in
             guard let self else { return }
@@ -4430,6 +4449,7 @@ final class DocumentController: NSResponder {
         let caret = textView.selectedRange().location
         let (line, character) = Self.lspPosition(
             ofIndex: caret, in: textView.string as NSString)
+        flushLSPChange()
         lspApp.lspCompletion(path: path, line: line, character: character) {
             [weak self] json in
             guard let self, let textView = self.textView else { return }
@@ -4460,11 +4480,38 @@ final class DocumentController: NSResponder {
     /// A snippet is expanded by the core first, and the plain text that
     /// comes back is what the view inserts; the core is then told where
     /// it landed, which starts the tabstop session Tab walks.
-    private func accept(completion item: CompletionPopup.Item) {
+    func accept(completion item: CompletionPopup.Item) {
         guard let textView else { return }
-        let replacementRange =
+        let text = textView.string as NSString
+        let caret = textView.selectedRange().location
+        var replacementRange =
             currentWordPrefix()?.range
-            ?? NSRange(location: textView.selectedRange().location, length: 0)
+            ?? NSRange(location: caret, length: 0)
+        // The server's own range says what its text replaces: a postfix
+        // completion swallows the receiver and the dot, which no word
+        // prefix covers. It described the text the server completed
+        // against, so it is trusted only while it still ends at the caret.
+        if let edit = item.edit {
+            let range = LSPEdits.nsRange(of: edit, in: text)
+            if range.location <= caret, NSMaxRange(range) == caret {
+                replacementRange = range
+            }
+        }
+        coreDocument.beginEditGroup()
+        defer { coreDocument.endEditGroup() }
+        // An import comes with the item; it goes in first, bottom-up so
+        // its own ranges hold, and what landed above the caret moves it.
+        if !item.additionalEdits.isEmpty {
+            var shift = 0
+            for edit in item.additionalEdits {
+                let range = LSPEdits.nsRange(of: edit, in: text)
+                if NSMaxRange(range) <= replacementRange.location {
+                    shift += (edit.newText as NSString).length - range.length
+                }
+            }
+            apply(textEdits: item.additionalEdits)
+            replacementRange.location += shift
+        }
         guard item.isSnippet else {
             coreDocument.cancelSnippet()
             textView.insertText(item.insertText, replacementRange: replacementRange)

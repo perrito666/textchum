@@ -42,7 +42,10 @@ Language Servers ; voir [configuration](configuration.md#projets).
 - **La complétion pendant la frappe** : les suggestions apparaissent
   après les caractères d'identifiant et `.`, filtrées au fil de la
   frappe — ↑/↓ pour choisir, ⏎ ou ⇥ pour accepter, ⎋ pour fermer,
-  ⌃Espace pour les demander explicitement.
+  ⌃Espace pour les demander explicitement. Un élément accepté remplace
+  la portion que nomme le serveur (une complétion *postfix* avale le
+  receveur et le point) et apporte ses éditions supplémentaires, un
+  *import* par exemple.
 - Laisser la souris sur un symbole affiche la documentation **hover** du
   serveur dans une bulle, avec le Markdown envoyé par les serveurs déjà
   rendu — blocs de code en chasse fixe, emphase et code en ligne
