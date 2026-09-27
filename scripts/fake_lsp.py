@@ -35,15 +35,47 @@ def send(payload):
     sys.stdout.buffer.flush()
 
 
+def expect_answers(stdin, checks, held):
+    """Reads until every request id in `checks` has its answer, holding
+    back whatever else arrives meanwhile for the main loop. An answer
+    of the wrong shape ends the server, so the client's tests see it
+    die rather than carry on against a server they have just broken."""
+    while checks:
+        message = read_message(stdin)
+        if message is None:
+            sys.exit(3)
+        if message.get("method") is None and message.get("id") in checks:
+            check = checks.pop(message["id"])
+            if not check(message.get("result")):
+                sys.stderr.write("fake_lsp: bad answer %r\n" % (message,))
+                sys.stderr.flush()
+                sys.exit(3)
+        else:
+            held.append(message)
+
+
 def main():
     stdin = sys.stdin.buffer
     seen = 0
+    held = []
     while True:
-        message = read_message(stdin)
+        message = held.pop(0) if held else read_message(stdin)
         if message is None:
             return
         method = message.get("method")
-        if method == "initialize":
+        if method == "initialized":
+            # Ask what real servers ask, in the protocol's shape: one
+            # entry per configuration item, and the folders as objects.
+            send({"jsonrpc": "2.0", "id": 1000, "method": "workspace/configuration",
+                  "params": {"items": [{"section": "fake"},
+                                       {"section": "fake", "scopeUri": "file:///x"}]}})
+            send({"jsonrpc": "2.0", "id": 1001, "method": "workspace/workspaceFolders"})
+            expect_answers(stdin, {
+                1000: lambda r: isinstance(r, list) and len(r) == 2,
+                1001: lambda r: isinstance(r, list) and len(r) == 1
+                                and "uri" in r[0] and "name" in r[0],
+            }, held)
+        elif method == "initialize":
             send({
                 "jsonrpc": "2.0",
                 "id": message["id"],

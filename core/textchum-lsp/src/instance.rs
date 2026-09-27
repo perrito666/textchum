@@ -209,7 +209,7 @@ fn run_manager(
                     }
                     break;
                 }
-                answer_if_request(&stdin, &message);
+                answer_if_request(&stdin, &root, &message);
             }
             Ok(None) => {
                 status(&events, &server_id, &root, "exited", "during initialize");
@@ -261,7 +261,7 @@ fn run_manager(
                                 });
                             }
                         } else {
-                            answer_if_request(&stdin, &message);
+                            answer_if_request(&stdin, &root, &message);
                         }
                     }
                     // EOF or a broken pipe both mean the server is gone;
@@ -345,12 +345,85 @@ fn run_manager(
     }
 }
 
-/// Replies null to any server→client request so no server ever stalls
-/// waiting on a capability we do not implement yet.
-fn answer_if_request(stdin: &Arc<Mutex<std::process::ChildStdin>>, message: &Value) {
-    if let (Some(id), Some(_method)) = (message.get("id"), message.get("method")) {
-        let reply = json!({"jsonrpc": "2.0", "id": id, "result": null});
-        let _ = write_message(&mut *stdin.lock().unwrap(), &reply);
+/// Answers a server→client request, so no server ever stalls waiting
+/// on a capability the editor does not implement.
+///
+/// The answer has to be the shape the protocol names for the method,
+/// not merely *an* answer: taplo's JSON-RPC layer reads a bare `null`
+/// result as "no result and no error" and panics on it, and it asks
+/// `workspace/configuration` the moment it is initialized. That question
+/// gets the array of nulls the specification prescribes for a client
+/// without settings, and `workspace/workspaceFolders` gets the root the
+/// instance was started for. Everything else the editor cannot answer
+/// is void, and null is its answer.
+fn answer_if_request(
+    stdin: &Arc<Mutex<std::process::ChildStdin>>,
+    root: &Path,
+    message: &Value,
+) {
+    let (Some(id), Some(method)) = (
+        message.get("id"),
+        message.get("method").and_then(Value::as_str),
+    ) else {
+        return;
+    };
+    let reply = json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "result": answer_for(method, message.get("params"), root),
+    });
+    let _ = write_message(&mut *stdin.lock().unwrap(), &reply);
+}
+
+/// The result for a server→client `method` with `params`.
+fn answer_for(method: &str, params: Option<&Value>, root: &Path) -> Value {
+    match method {
+        "workspace/configuration" => {
+            let items = params
+                .and_then(|params| params.get("items"))
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len);
+            Value::Array(vec![Value::Null; items])
+        }
+        "workspace/workspaceFolders" => json!([{
+            "uri": path_to_uri(root),
+            "name": root
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "root".into()),
+        }]),
+        _ => Value::Null,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configuration_is_answered_with_one_null_per_item() {
+        let params = json!({"items": [{"section": "a"}, {"section": "b"}, {"section": "c"}]});
+        let answer = answer_for("workspace/configuration", Some(&params), Path::new("/p"));
+        assert_eq!(answer, json!([null, null, null]));
+    }
+
+    #[test]
+    fn configuration_without_items_is_an_empty_array_not_null() {
+        let answer = answer_for("workspace/configuration", None, Path::new("/p"));
+        assert_eq!(answer, json!([]));
+    }
+
+    #[test]
+    fn workspace_folders_name_the_root() {
+        let answer = answer_for("workspace/workspaceFolders", None, Path::new("/tmp/proj"));
+        assert_eq!(answer[0]["name"], "proj");
+        assert_eq!(answer[0]["uri"], path_to_uri(Path::new("/tmp/proj")));
+    }
+
+    #[test]
+    fn anything_else_is_void() {
+        let answer = answer_for("client/registerCapability", Some(&json!({})), Path::new("/p"));
+        assert_eq!(answer, Value::Null);
     }
 }
 

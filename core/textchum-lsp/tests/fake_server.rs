@@ -431,3 +431,27 @@ fn crashes_report_exited_and_retire_allows_a_fresh_instance() {
         }
     }
 }
+
+#[test]
+fn a_servers_own_questions_get_answers_it_survives() {
+    // The fake asks `workspace/configuration` and `workspace/workspaceFolders`
+    // as soon as it is initialized and exits on an answer of the wrong
+    // shape, so a server still alive at its first diagnostic is the proof.
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-questions");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+
+    let died = |events: &[Event]| {
+        events.iter().any(|event| matches!(event, Event::ServerStatus { status, .. }
+            if status == "exited" || status == "failed"))
+    };
+    let mut seen = Vec::new();
+    collect_until(&events, "first diagnostic or a death", &mut seen, |seen| {
+        died(seen)
+            || seen.iter().any(|event| matches!(event, Event::Diagnostics { json, .. }
+                if json.contains("fake finding #1")))
+    });
+    assert!(!died(&seen), "the server died on one of our answers: {seen:?}");
+}
