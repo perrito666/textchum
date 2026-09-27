@@ -3749,6 +3749,72 @@ func runSmokeTest() -> Int32 {
     }
     print("pointer character index ok (in range everywhere, including off the text)")
 
+    // A server's finding stays on the code it named while the text
+    // above it is edited: the core moves the range in the choke point,
+    // and the shell paints and lists what the core says.
+    do {
+        let ridingCore = CoreDocument()
+        let ridingBench = Workbench(sidebar: nil)
+        let riding = DocumentController(document: ridingCore)
+        ridingBench.add(riding)
+        ridingBench.window?.makeKeyAndOrderFront(nil)
+        guard let ridingView = riding.primaryView else {
+            print("FAIL: no view to type the finding's text into")
+            return 1
+        }
+        ridingView.insertText(
+            "ab\nstruct Drinker;\n", replacementRange: NSRange(location: 0, length: 0))
+        riding.apply(diagnostics: [
+            CoreDiagnostic(
+                line: 1, character: 7, endLine: 1, endCharacter: 14, severity: 2,
+                message: "never constructed")
+        ])
+        let ridingGutter = ridingBench.columns[0].views[0].gutter
+        guard ridingGutter.diagnosticSeverity(ofLine: 2) == 2 else {
+            print("FAIL: the finding did not reach the gutter on its line")
+            return 1
+        }
+        ridingView.insertText(
+            "// one\n// two\n", replacementRange: NSRange(location: 0, length: 0))
+        let placed = ridingCore.diagnostics
+        guard placed.count == 1, placed[0].line == 3, placed[0].start == 24, placed[0].end == 31 else {
+            print("FAIL: the finding did not follow its struct: \(placed)")
+            return 1
+        }
+        guard ridingGutter.diagnosticSeverity(ofLine: 4) == 2,
+            ridingGutter.diagnosticSeverity(ofLine: 2) == nil
+        else {
+            print("FAIL: the gutter kept the finding on the old line")
+            return 1
+        }
+        guard let ridingManager = ridingView.textLayoutManager,
+            let ridingStart = ridingManager.textContentManager?.location(
+                ridingManager.documentRange.location, offsetBy: 24)
+        else {
+            print("FAIL: no layout to read the underline from")
+            return 1
+        }
+        var underlined = false
+        ridingManager.enumerateRenderingAttributes(from: ridingStart, reverse: false) {
+            _, attributes, _ in
+            underlined = attributes[.underlineStyle] != nil
+            return false
+        }
+        guard underlined else {
+            print("FAIL: the underline did not move with the finding")
+            return 1
+        }
+        // Undo takes the lines away and the finding back up with them.
+        riding.performUndo(nil)
+        guard ridingCore.diagnostics.first?.line == 1,
+            ridingGutter.diagnosticSeverity(ofLine: 2) == 2
+        else {
+            print("FAIL: undo did not bring the finding back: \(ridingCore.diagnostics)")
+            return 1
+        }
+    }
+    print("findings ride ok (lines typed above move the finding, the gutter and the underline follow, undo brings it back)")
+
     print("smoke test passed")
     return 0
 }

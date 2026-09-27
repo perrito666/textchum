@@ -683,6 +683,32 @@ char *tc_document_snippet_expand(struct TcDocument *document,
                                  uintptr_t len);
 
 /**
+ * Hands the document a server's findings for its text as it is now:
+ * `len` bytes of a JSON array of `{line, character, endLine,
+ * endCharacter, severity, message}` objects, positioned the LSP way.
+ * The document moves them with every edit from here on, so
+ * [`tc_document_diagnostics_json`] always answers for the current
+ * text. An empty array clears them. Returns false, changing nothing,
+ * on a bad pointer or invalid UTF-8.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `json` must point to
+ * `len` readable bytes.
+ */
+bool tc_document_set_diagnostics(struct TcDocument *document, const char *json, uintptr_t len);
+
+/**
+ * The findings as they stand on the current text: the JSON array
+ * [`tc_document_set_diagnostics`] takes, each object also carrying
+ * `start` and `end` in UTF-16 units. Free with [`tc_string_free`].
+ * Null on a bad pointer.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_diagnostics_json(const struct TcDocument *document);
+
+/**
  * Starts a tabstop session over the text
  * [`tc_document_snippet_expand`] returned, now sitting at `origin`.
  * Writes the range to select into `region_out`: the first placeholder,

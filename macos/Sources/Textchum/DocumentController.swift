@@ -846,14 +846,29 @@ final class DocumentController: NSResponder {
     }
 
     /// Called by the app when a server publishes findings for this path.
+    ///
+    /// The core takes them against the text as it is now and moves
+    /// them with every edit after; what is kept here is its answer,
+    /// read again after each change (see ``refreshDiagnosticsFromCore``).
     func apply(diagnostics: [CoreDiagnostic]) {
-        self.diagnostics = diagnostics
+        coreDocument.setDiagnostics(diagnostics)
+        self.diagnostics = coreDocument.diagnostics
         renderMarks()
         pushDiagnosticsToGutters()
         updateChrome()
         if let panel = infoPanel, panel.mode == .diagnostics, workbench?.focusedDocument === self {
             panel.showDiagnostics(diagnosticRows())
         }
+    }
+
+    /// The findings moved with the last edit inside the core; take its
+    /// word for where they are now before anything paints or lists
+    /// them. A server's stale line would otherwise land on whatever
+    /// code has since moved there.
+    private func refreshDiagnosticsFromCore() {
+        guard !diagnostics.isEmpty else { return }
+        diagnostics = coreDocument.diagnostics
+        pushDiagnosticsToGutters()
     }
 
     // MARK: Hover
@@ -3444,21 +3459,12 @@ final class DocumentController: NSResponder {
             marks.append(
                 .init(range: spelling, color: NSColor.systemPurple.withAlphaComponent(0.18)))
         }
-        var lineStarts: [Int] = [0]
-        if !diagnostics.isEmpty {
-            var index = 0
-            while index < text.length {
-                index = NSMaxRange(text.lineRange(for: NSRange(location: index, length: 0)))
-                lineStarts.append(index)
-            }
-        }
-        func offset(line: Int, column: Int) -> Int {
-            let start = lineStarts[max(0, min(line, lineStarts.count - 1))]
-            return min(start + max(column, 0), text.length)
-        }
+        // Painted by the offsets the core keeps current, not by the
+        // line the server named: the two part ways as soon as the text
+        // above a finding is edited.
         for diagnostic in diagnostics {
-            let from = offset(line: diagnostic.line, column: diagnostic.character)
-            let to = offset(line: diagnostic.endLine, column: diagnostic.endCharacter)
+            let from = min(diagnostic.start, text.length)
+            let to = min(max(diagnostic.end, from), text.length)
             guard to >= from, from < text.length || text.length == 0 else { continue }
             let range = NSRange(
                 location: from, length: min(max(to - from, 1), max(text.length - from, 0)))
@@ -4381,6 +4387,7 @@ final class DocumentController: NSResponder {
             textView.scrollRangeToVisible(NSRange(location: caret, length: 0))
         }
 
+        refreshDiagnosticsFromCore()
         updateChrome()
         refreshDecorations()
         scheduleLSPChange()
@@ -5481,6 +5488,7 @@ extension DocumentController: NSTextViewDelegate {
         // The lines moved; where the folds sit in characters has to be
         // worked out again before the next layout pass.
         foldSpansAreStale = true
+        refreshDiagnosticsFromCore()
         mirrorSnippetStops()
         updateChrome()
         refreshDecorations()

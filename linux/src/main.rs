@@ -1117,6 +1117,32 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             eprintln!("FAIL: diagnostics did not tag the text");
             return 1;
         }
+        // A line typed above the finding moves it down a line: the tag
+        // rides along on its own, and the line the list goes by is read
+        // back from the core, which moved the range in the choke point.
+        let reported_line = handles.document.diagnostics.borrow()[0].line;
+        buffer.insert(&mut buffer.start_iter(), "// above\n");
+        let moved_line = handles.document.diagnostics.borrow()[0].line;
+        let tag_moved = buffer
+            .iter_at_line(reported_line + 1)
+            .is_some_and(|iter| {
+                iter.tags()
+                    .iter()
+                    .any(|tag| tag.name().is_some_and(|name| name.starts_with("diag-")))
+            });
+        if moved_line != reported_line + 1 || !tag_moved {
+            eprintln!(
+                "FAIL: the finding did not follow its line ({reported_line} -> {moved_line}, tag moved: {tag_moved})"
+            );
+            return 1;
+        }
+        let mut from = buffer.start_iter();
+        let mut to = buffer.iter_at_line(1).unwrap_or_else(|| buffer.end_iter());
+        buffer.delete(&mut from, &mut to);
+        if handles.document.diagnostics.borrow()[0].line != reported_line {
+            eprintln!("FAIL: the finding did not come back with its line");
+            return 1;
+        }
 
         // Completion and hover ride the same request/response plumbing.
         use std::cell::RefCell;

@@ -33,6 +33,9 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
 
 - Findings arrive as you type (sent in debounced batches) and mark the
   offending text: red for errors, orange for warnings, blue for notes.
+  A mark stays on the code it was reported for while you edit above or
+  around it, until the server reports again; a lint that only runs on
+  save (cargo's, for one) is refreshed by the next save.
 - The window subtitle counts them ("2 errors, 1 warning").
 - **Completion as you type**: suggestions appear after identifier
   characters and `.`, filtered as you keep typing — ↑/↓ to choose,
