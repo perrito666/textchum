@@ -3724,6 +3724,61 @@ func runSmokeTest() -> Int32 {
     }
     print("auto-close ok (opener brings closer, closer steps over, backspace takes both, quotes by language, a language's own table)")
 
+    // An accepted completion replaces the range the server named, not
+    // the word before the caret: a postfix item swallows `x.dbg`. Its
+    // extra edit — an import at the top — comes along, in one undo step.
+    do {
+        let postfixCore = CoreDocument()
+        let postfixBench = Workbench(sidebar: nil)
+        let postfix = DocumentController(document: postfixCore)
+        postfixBench.add(postfix)
+        postfixBench.window?.makeKeyAndOrderFront(nil)
+        guard let postfixView = postfix.primaryView else {
+            print("FAIL: no view to complete in")
+            return 1
+        }
+        postfixView.insertText("fn main() {\n    let v = x.dbg", replacementRange: NSRange(location: 0, length: 0))
+        let items = CompletionPopup.parse(resultJSON: """
+            [{"label": "dbg!", "filterText": "dbg",
+              "textEdit": {"range": {"start": {"line": 1, "character": 12}, "end": {"line": 1, "character": 17}},
+                           "newText": "dbg!(x)"},
+              "additionalTextEdits": [{"range": {"start": {"line": 0, "character": 0},
+                                                 "end": {"line": 0, "character": 0}},
+                                       "newText": "use std::dbg;\\n"}]},
+             {"label": "elsewhere",
+              "textEdit": {"range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 2}},
+                           "newText": "nope"}}]
+            """)
+        guard items.count == 2, items[0].edit != nil, items[0].additionalEdits.count == 1 else {
+            print("FAIL: the item's own range or its extra edit did not parse: \(items)")
+            return 1
+        }
+        postfix.accept(completion: items[0])
+        let expected = "use std::dbg;\nfn main() {\n    let v = dbg!(x)"
+        guard postfixCore.text == expected, postfixView.string == expected else {
+            print("FAIL: the postfix completion landed as \(postfixCore.text.debugDescription)")
+            return 1
+        }
+        guard postfixView.selectedRange().location == (expected as NSString).length else {
+            print("FAIL: the caret is at \(postfixView.selectedRange().location) after the completion")
+            return 1
+        }
+        postfix.performUndo(nil)
+        guard postfixCore.text == "fn main() {\n    let v = x.dbg" else {
+            print("FAIL: one undo did not take the completion and its import back: \(postfixCore.text.debugDescription)")
+            return 1
+        }
+        // A range that no longer ends at the caret is not trusted: the
+        // word before the caret is replaced instead.
+        postfixView.setSelectedRange(NSRange(location: (postfixCore.text as NSString).length, length: 0))
+        postfix.accept(completion: items[1])
+        guard postfixCore.text == "fn main() {\n    let v = x.nope" else {
+            print("FAIL: a stale range was not left alone: \(postfixCore.text.debugDescription)")
+            return 1
+        }
+    }
+    print("completion range ok (the server's range replaces the receiver too, the import comes along, one undo takes both back, a stale range falls back to the word)")
+
     // Every mouse move over the editor asks which character is under
     // the pointer. The first version of that added a line fragment's
     // own index to a document offset, and NSTextLineFragment answers

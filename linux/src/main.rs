@@ -1239,7 +1239,8 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 *sink.borrow_mut() = Some(
                     page::parse_completion_items(json)
                         .into_iter()
-                        .map(|(label, _, is_snippet)| {
+                        .map(|item| {
+                            let (label, is_snippet) = (item.label, item.is_snippet);
                             if is_snippet {
                                 format!("{label} (snippet)")
                             } else {
@@ -1284,6 +1285,49 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         if !hover.borrow().as_deref().unwrap_or("").contains("fake hover") {
             eprintln!("FAIL: hover text missing");
             return 1;
+        }
+
+        // A completion asked right after typing is answered for the
+        // typed text: the change goes to the server ahead of the
+        // request, or the scripted server answers STALE. Accepting its
+        // postfix item replaces the stretch it named, and the import
+        // that comes with it lands at the top.
+        {
+            let page = workbench.selected().expect("a selected page");
+            let buffer = page.buffer.clone();
+            let before = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+            buffer.insert(&mut buffer.end_iter(), "\nlet v = x.dbg");
+            page::complete_now(&page);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+            while page::completion_items(&page).is_empty() {
+                context.iteration(true);
+                if std::time::Instant::now() > deadline {
+                    eprintln!("FAIL: no completion came for the text just typed");
+                    return 1;
+                }
+            }
+            let labels: Vec<String> = page::completion_items(&page)
+                .iter()
+                .map(|item| item.label.clone())
+                .collect();
+            if labels.iter().any(|label| label == "STALE") {
+                eprintln!("FAIL: the completion was asked against text the server did not have");
+                return 1;
+            }
+            if labels.first().map(String::as_str) != Some("dbg!") {
+                eprintln!("FAIL: the postfix item is not the one on offer: {labels:?}");
+                return 1;
+            }
+            page::accept_completion(&page);
+            let landed = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+            let expected = format!("use std::dbg;\n{before}\nlet v = dbg!(x)");
+            if landed != expected {
+                eprintln!("FAIL: the postfix completion landed as {landed:?}");
+                return 1;
+            }
+            // Back to the text the rest of the checks expect, through
+            // the buffer so the core follows.
+            buffer.set_text(&before);
         }
 
         // The shell holds documents; the UI holds views of them. What

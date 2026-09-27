@@ -84,7 +84,7 @@ struct CompletionState {
     list: gtk::ListBox,
     /// (label, insert text, whether the insert text is a snippet body)
     /// per row.
-    items: RefCell<Vec<(String, String, bool)>>,
+    items: RefCell<Vec<Completion>>,
     /// Character offset where the word being completed starts.
     word_start: Cell<i32>,
 }
@@ -1337,11 +1337,27 @@ pub fn diagnostic_at(
 
 // MARK: Completion
 
+/// One suggestion, reduced from an LSP CompletionItem.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Completion {
+    pub label: String,
+    /// What the server asked to be inserted, verbatim: a snippet body
+    /// when `is_snippet`, plain text otherwise.
+    pub insert: String,
+    pub is_snippet: bool,
+    /// The range the server says `insert` replaces, when it gave one.
+    /// A postfix completion's covers the receiver and the dot, which
+    /// no word prefix would.
+    pub edit: Option<crate::lsp_edits::TextEdit>,
+    /// Edits that come with accepting the item — an import, mostly.
+    pub additional_edits: Vec<crate::lsp_edits::TextEdit>,
+}
+
 /// Parses a completion result — `CompletionItem[]` or a
-/// `CompletionList` — into (label, insert text, is-snippet) triples.
-/// Snippet bodies are carried through unexpanded; the core expands one
-/// when it is accepted, so both shells expand them the same way.
-pub fn parse_completion_items(json: &str) -> Vec<(String, String, bool)> {
+/// `CompletionList` — into suggestions. Snippet bodies are carried
+/// through unexpanded; the core expands one when it is accepted, so
+/// both shells expand them the same way.
+pub fn parse_completion_items(json: &str) -> Vec<Completion> {
     let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
         return Vec::new();
     };
@@ -1367,7 +1383,20 @@ pub fn parse_completion_items(json: &str) -> Vec<(String, String, bool)> {
                 Some(format) => format == 2,
                 None => looks_like_a_snippet(&insert),
             };
-            Some((label, insert, is_snippet))
+            // A plain edit has `range`; an InsertReplaceEdit has `insert`
+            // and `replace`, and `insert` is what typing into it means.
+            let edit = item["textEdit"].as_object().and_then(|text_edit| {
+                let range = text_edit.get("range").or_else(|| text_edit.get("insert"))?;
+                crate::lsp_edits::edit_from(&serde_json::json!({
+                    "range": range,
+                    "newText": text_edit.get("newText")?,
+                }))
+            });
+            let additional_edits = item["additionalTextEdits"]
+                .as_array()
+                .map(|edits| edits.iter().filter_map(crate::lsp_edits::edit_from).collect())
+                .unwrap_or_default();
+            Some(Completion { label, insert, is_snippet, edit, additional_edits })
         })
         .collect()
 }
@@ -1406,9 +1435,30 @@ mod snippet_tests {
             {"label": "undeclared", "insertText": "wrap(${1:x})"}
         ]"#;
         let items = parse_completion_items(json);
-        assert_eq!(items[0], ("frob".into(), "frob(${1:x})".into(), true));
-        assert_eq!(items[1], ("plain".into(), "cost $5".into(), false));
-        assert!(items[2].2);
+        assert_eq!((&items[0].label[..], &items[0].insert[..], items[0].is_snippet), ("frob", "frob(${1:x})", true));
+        assert_eq!((&items[1].label[..], &items[1].insert[..], items[1].is_snippet), ("plain", "cost $5", false));
+        assert!(items[2].is_snippet);
+        assert!(items.iter().all(|item| item.edit.is_none() && item.additional_edits.is_empty()));
+    }
+
+    #[test]
+    fn the_servers_range_and_extra_edits_come_along() {
+        let json = r#"{"items": [{
+            "label": "dbg!", "filterText": "dbg",
+            "textEdit": {"range": {"start": {"line": 3, "character": 8}, "end": {"line": 3, "character": 13}}, "newText": "dbg!(x)"},
+            "additionalTextEdits": [{"range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}}, "newText": "use std::dbg;\n"}]
+        }, {
+            "label": "sub", "textEdit": {"insert": {"start": {"line": 1, "character": 2}, "end": {"line": 1, "character": 4}},
+                                        "replace": {"start": {"line": 1, "character": 2}, "end": {"line": 1, "character": 9}}, "newText": "subtle"}
+        }]}"#;
+        let items = parse_completion_items(json);
+        let edit = items[0].edit.as_ref().unwrap();
+        assert_eq!((edit.start_line, edit.start_character, edit.end_line, edit.end_character), (3, 8, 3, 13));
+        assert_eq!(edit.new_text, "dbg!(x)");
+        assert_eq!(items[0].additional_edits.len(), 1);
+        assert_eq!(items[0].additional_edits[0].new_text, "use std::dbg;\n");
+        let insert = items[1].edit.as_ref().unwrap();
+        assert_eq!((insert.start_character, insert.end_character), (2, 4));
     }
 
     #[test]
@@ -1449,6 +1499,12 @@ fn request_completion(page: &Rc<Page>) {
     let Some(path) = page.path().borrow().clone() else { return };
     let (line, character) = lsp_caret(&page.buffer);
     let shell = Shell::instance();
+    // The server answers for the text it has. The debounced change
+    // would reach it after this request, so the text goes first.
+    {
+        let text = page.state.borrow().document.text();
+        shell.pool.borrow_mut().did_change(Path::new(&path), &text);
+    }
     let id = shell
         .pool
         .borrow_mut()
@@ -1459,13 +1515,13 @@ fn request_completion(page: &Rc<Page>) {
     });
 }
 
-fn show_completions(page: &Rc<Page>, all: Vec<(String, String, bool)>) {
+fn show_completions(page: &Rc<Page>, all: Vec<Completion>) {
     let (word_start, prefix) = word_before_caret(&page.buffer);
     let prefix_lower = prefix.to_lowercase();
-    let matching: Vec<(String, String, bool)> = all
+    let matching: Vec<Completion> = all
         .into_iter()
-        .filter(|(label, _, _)| {
-            prefix_lower.is_empty() || label.to_lowercase().starts_with(&prefix_lower)
+        .filter(|item| {
+            prefix_lower.is_empty() || item.label.to_lowercase().starts_with(&prefix_lower)
         })
         .collect();
     if matching.is_empty() {
@@ -1476,8 +1532,8 @@ fn show_completions(page: &Rc<Page>, all: Vec<(String, String, bool)>) {
     while let Some(child) = page.completion.list.first_child() {
         page.completion.list.remove(&child);
     }
-    for (label, _, _) in &matching {
-        let text = gtk::Label::new(Some(label));
+    for item in &matching {
+        let text = gtk::Label::new(Some(&item.label));
         text.set_xalign(0.0);
         text.set_margin_start(6);
         text.set_margin_end(6);
@@ -1505,25 +1561,49 @@ fn show_completions(page: &Rc<Page>, all: Vec<(String, String, bool)>) {
     page.completion.popover.popup();
 }
 
-fn accept_completion(page: &Rc<Page>) {
+/// The candidates on offer, for the smoke test to look at.
+pub(crate) fn completion_items(page: &Rc<Page>) -> Vec<Completion> {
+    page.completion.items.borrow().clone()
+}
+
+pub(crate) fn accept_completion(page: &Rc<Page>) {
     let index = page
         .completion
         .list
         .selected_row()
         .map(|row| row.index())
         .unwrap_or(0);
-    let chosen = page
-        .completion
-        .items
-        .borrow()
-        .get(index as usize)
-        .map(|(_, insert, is_snippet)| (insert.clone(), *is_snippet));
+    let chosen = page.completion.items.borrow().get(index as usize).cloned();
     page.completion.popover.popdown();
-    let Some((insert, is_snippet)) = chosen else { return };
+    let Some(item) = chosen else { return };
+    let (insert, is_snippet) = (item.insert, item.is_snippet);
 
     let buffer = &page.buffer;
-    let mut start = buffer.iter_at_offset(page.completion.word_start.get());
+    let caret_offset = buffer.iter_at_mark(&buffer.get_insert()).offset();
+    let mut start_offset = page.completion.word_start.get();
+    // The server's own range says what its text replaces: a postfix
+    // completion swallows the receiver and the dot, which no word
+    // prefix covers. It described the text the server completed
+    // against, so it is trusted only while it still ends at the caret.
+    if let Some(edit) = &item.edit {
+        if let (Some(from), Some(to)) = (
+            iter_at_lsp(buffer, edit.start_line, edit.start_character),
+            iter_at_lsp(buffer, edit.end_line, edit.end_character),
+        ) {
+            if from.offset() <= caret_offset && to.offset() == caret_offset {
+                start_offset = from.offset();
+            }
+        }
+    }
+    // An import comes with the item; it goes in first, and a mark
+    // keeps the place to replace while lines land above it.
+    let start_mark = buffer.create_mark(None, &buffer.iter_at_offset(start_offset), true);
+    if !item.additional_edits.is_empty() {
+        crate::workbench::apply_edits_to_page(page, item.additional_edits.clone());
+    }
+    let mut start = buffer.iter_at_mark(&start_mark);
     let mut caret = buffer.iter_at_mark(&buffer.get_insert());
+    buffer.delete_mark(&start_mark);
     // Through the normal buffer path, so the core sees it as typing.
     buffer.delete(&mut start, &mut caret);
     let insert_at = buffer.iter_at_mark(&buffer.get_insert()).offset();

@@ -46,7 +46,10 @@ proyecto en Settings ▸ Language Servers; véase
 - **Autocompletado al escribir**: las sugerencias aparecen tras
   caracteres de identificador y `.`, filtradas mientras se sigue
   escribiendo — ↑/↓ para elegir, ⏎ o ⇥ para aceptar, ⎋ para descartar,
-  ⌃Espacio para pedirlas explícitamente.
+  ⌃Espacio para pedirlas explícitamente. Un elemento aceptado sustituye
+  el tramo que nombra el servidor (un autocompletado *postfix* se traga
+  el receptor y el punto) y trae consigo sus ediciones adicionales, un
+  *import* por ejemplo.
 - Dejar el ratón sobre un símbolo muestra la documentación **hover** del
   servidor en un globo, con el Markdown que envían los servidores ya
   renderizado — bloques de código en monoespaciada, énfasis y código en

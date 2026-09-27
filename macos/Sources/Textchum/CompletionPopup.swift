@@ -20,6 +20,12 @@ final class CompletionPopup: NSObject {
         let isSnippet: Bool
         let sortText: String
         let filterText: String
+        /// The range the server says `insertText` replaces, when it
+        /// gave one. A postfix completion's covers the receiver and the
+        /// dot, which no word prefix would.
+        let edit: LSPEdits.TextEdit?
+        /// Edits that come with accepting the item — an import, mostly.
+        let additionalEdits: [LSPEdits.TextEdit]
     }
 
     private var window: NSWindow?
@@ -48,17 +54,29 @@ final class CompletionPopup: NSObject {
         }
         return rawItems.compactMap { raw -> Item? in
             guard let label = raw["label"] as? String else { return nil }
+            let textEdit = raw["textEdit"] as? [String: Any]
             let insert =
-                (raw["textEdit"] as? [String: Any])?["newText"] as? String
+                textEdit?["newText"] as? String
                 ?? raw["insertText"] as? String
                 ?? label
+            var edit: LSPEdits.TextEdit?
+            // A plain edit has `range`; an InsertReplaceEdit has `insert`
+            // and `replace`, and `insert` is what typing into it means.
+            if let textEdit, let newText = textEdit["newText"] as? String,
+                let range = textEdit["range"] ?? textEdit["insert"]
+            {
+                edit = LSPEdits.edits(fromArray: [["range": range, "newText": newText]]).first
+            }
             return Item(
                 label: label,
                 detail: raw["detail"] as? String ?? "",
                 insertText: insert,
                 isSnippet: Self.isSnippet(raw, insert: insert),
                 sortText: raw["sortText"] as? String ?? label,
-                filterText: (raw["filterText"] as? String ?? label).lowercased()
+                filterText: (raw["filterText"] as? String ?? label).lowercased(),
+                edit: edit,
+                additionalEdits: LSPEdits.edits(
+                    fromArray: raw["additionalTextEdits"] as? [[String: Any]] ?? [])
             )
         }
         .sorted { $0.sortText < $1.sortText }

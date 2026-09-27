@@ -56,6 +56,9 @@ def expect_answers(stdin, checks, held):
 
 def main():
     stdin = sys.stdin.buffer
+    # The text of each open document as the client last sent it, so a
+    # request can be checked against what the server actually has.
+    texts = {}
     seen = 0
     held = []
     while True:
@@ -87,6 +90,10 @@ def main():
         elif method in ("textDocument/didOpen", "textDocument/didChange"):
             seen += 1
             uri = message["params"]["textDocument"]["uri"]
+            if method == "textDocument/didOpen":
+                texts[uri] = message["params"]["textDocument"].get("text", "")
+            elif message["params"].get("contentChanges"):
+                texts[uri] = message["params"]["contentChanges"][-1].get("text", "")
             # Crash on demand, for the client's restart tests.
             changes = message["params"].get("contentChanges", [])
             if any(change.get("text") == "die" for change in changes):
@@ -139,12 +146,39 @@ def main():
                 }],
             })
         elif method == "textDocument/completion":
+            # A position outside the text the client has sent is a
+            # request against text the server has not seen; answering
+            # it with STALE lets the client's tests catch the race.
+            uri = message["params"]["textDocument"]["uri"]
+            position = message["params"]["position"]
+            lines = texts.get(uri, "").split("\n")
+            line, character = position["line"], position["character"]
+            if line >= len(lines) or character > len(lines[line]):
+                send({"jsonrpc": "2.0", "id": message["id"],
+                      "result": [{"label": "STALE"}]})
+                continue
+            # A postfix-style item: its own range swallows the five
+            # characters before the caret, and an import comes with it.
+            postfix = {
+                "label": "dbg!", "kind": 3, "filterText": "dbg", "sortText": "0000",
+                "textEdit": {
+                    "range": {"start": {"line": line, "character": max(0, character - 5)},
+                              "end": {"line": line, "character": character}},
+                    "newText": "dbg!(x)",
+                },
+                "additionalTextEdits": [{
+                    "range": {"start": {"line": 0, "character": 0},
+                              "end": {"line": 0, "character": 0}},
+                    "newText": "use std::dbg;\n",
+                }],
+            }
             send({
                 "jsonrpc": "2.0",
                 "id": message["id"],
                 "result": {
                     "isIncomplete": False,
                     "items": [
+                        postfix,
                         {"label": "fake_function", "kind": 3,
                          "detail": "fn fake_function()",
                          "insertText": "fake_function()", "sortText": "0001"},
