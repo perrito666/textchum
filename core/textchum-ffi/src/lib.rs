@@ -286,6 +286,32 @@ pub unsafe extern "C" fn tc_lsp_hover(
     .unwrap_or(0)
 }
 
+/// Requests the other uses, within the document, of the symbol at an
+/// LSP position; same contract as [`tc_lsp_hover`]. The response's
+/// `result` is an LSP `DocumentHighlight[]`.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_document_highlight(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool.document_highlight(std::path::Path::new(path), line, character)
+    }))
+    .unwrap_or(0)
+}
+
 /// Has the document's language server format `text` and waits for the
 /// result, for the `@format` link of a save chain. Answers a JSON
 /// object: `{"text": …}` with the formatted text, or `{"error": …}`

@@ -3194,6 +3194,13 @@ final class DocumentController: NSResponder {
     }
 
     private func refreshOccurrencesInner() {
+        // A scroll asks this too, for the selected word's occurrences in
+        // the text that came into view. With nothing selected and the
+        // server's marks up, there is nothing to recompute: those were
+        // for the whole document, and the caret moving is what takes
+        // them down (see scheduleSymbolUses).
+        if occurrencesAreSymbolUses, textView?.selectedRange().length == 0 { return }
+        occurrencesAreSymbolUses = false
         let previous = occurrenceRanges
         occurrenceRanges = []
         defer {
@@ -3219,6 +3226,91 @@ final class DocumentController: NSResponder {
         .map { NSRange(location: $0.start, length: $0.end - $0.start) }
         // The selection itself is already marked, by being selected.
         .filter { $0 != selection }
+    }
+
+    // MARK: A symbol's other uses, from the server
+
+    private var symbolUsesTimer: Timer?
+    /// Whether the marks up now are the server's answer rather than a
+    /// selected word's occurrences.
+    private var occurrencesAreSymbolUses = false
+
+    /// Takes the server's marks down: the caret moved, or the text did.
+    private func clearSymbolUses() {
+        guard occurrencesAreSymbolUses else { return }
+        occurrencesAreSymbolUses = false
+        occurrenceRanges = []
+        renderMarks()
+    }
+
+    /// With nothing selected, a caret resting on a name asks the
+    /// server where else that symbol is used, and those places take
+    /// the marks a selected word's occurrences would. The server's
+    /// answer is about the symbol, not its letters: a shadowing
+    /// variable of the same name is left alone, and a use spelled
+    /// through an alias is found.
+    private func scheduleSymbolUses() {
+        symbolUsesTimer?.invalidate()
+        clearSymbolUses()
+        guard appliedMarkOccurrences, lspApp != nil, lspOpenPath != nil, let textView,
+            textView.selectedRange().length == 0
+        else { return }
+        let caret = textView.selectedRange().location
+        let text = textView.string as NSString
+        let isWord = { (index: Int) -> Bool in
+            guard index >= 0, index < text.length,
+                let scalar = UnicodeScalar(text.character(at: index))
+            else { return false }
+            let character = Character(scalar)
+            return character.isLetter || character.isNumber || character == "_"
+        }
+        guard isWord(caret) || isWord(caret - 1) else { return }
+        let version = textVersion
+        symbolUsesTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.requestSymbolUses(at: caret, version: version) }
+            }
+        }
+    }
+
+    private func requestSymbolUses(at caret: Int, version: UInt64) {
+        guard let lspApp, let path = lspOpenPath, let textView,
+            textVersion == version, textView.selectedRange() == NSRange(location: caret, length: 0)
+        else { return }
+        let (line, character) = Self.lspPosition(ofIndex: caret, in: textView.string as NSString)
+        flushLSPChange()
+        lspApp.lspDocumentHighlight(path: path, line: line, character: character) {
+            [weak self] json in
+            guard let self, let textView = self.textView, self.textVersion == version,
+                textView.selectedRange() == NSRange(location: caret, length: 0)
+            else { return }
+            let uses = Self.highlightRanges(
+                fromResultJSON: json, in: textView.string as NSString)
+            guard !uses.isEmpty, uses != self.occurrenceRanges else { return }
+            self.occurrenceRanges = uses
+            self.occurrencesAreSymbolUses = true
+            self.renderMarks()
+        }
+    }
+
+    /// The ranges of a `DocumentHighlight[]` result in `text`.
+    static func highlightRanges(fromResultJSON json: String, in text: NSString) -> [NSRange] {
+        guard let data = json.data(using: .utf8),
+            let found = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+        else { return [] }
+        return found.compactMap { item -> NSRange? in
+            guard let range = item["range"] as? [String: Any],
+                let start = range["start"] as? [String: Any],
+                let end = range["end"] as? [String: Any],
+                let startLine = start["line"] as? Int,
+                let startCharacter = start["character"] as? Int,
+                let endLine = end["line"] as? Int, let endCharacter = end["character"] as? Int
+            else { return nil }
+            let from = LSPEdits.index(ofLine: startLine, character: startCharacter, in: text)
+            let to = LSPEdits.index(ofLine: endLine, character: endCharacter, in: text)
+            return to > from ? NSRange(location: from, length: to - from) : nil
+        }
     }
 
     /// Clears the occurrence marks. Escape says "I am done looking".
@@ -5667,6 +5759,7 @@ extension DocumentController: NSTextViewDelegate {
         // The lines moved; where the folds sit in characters has to be
         // worked out again before the next layout pass.
         foldSpansAreStale = true
+        clearSymbolUses()
         refreshDiagnosticsFromCore()
         mirrorSnippetStops()
         updateChrome()
@@ -5927,6 +6020,7 @@ extension DocumentController: NSTextViewDelegate {
         // old one differently; both go through here.
         refreshBracketMatch()
         refreshOccurrences()
+        scheduleSymbolUses()
         scheduleCaretHover()
     }
 }

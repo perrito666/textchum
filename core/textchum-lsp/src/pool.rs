@@ -709,6 +709,20 @@ impl Pool {
         )
     }
 
+    /// Asks where else in the document the symbol at the position is
+    /// used. The response's `result` is an LSP `DocumentHighlight[]`.
+    pub fn document_highlight(&mut self, path: &Path, line: u32, character: u32) -> u64 {
+        self.request(
+            path,
+            "documentHighlightProvider",
+            "textDocument/documentHighlight",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "position": {"line": line, "character": character},
+            }),
+        )
+    }
+
     pub fn definition(&mut self, path: &Path, line: u32, character: u32) -> u64 {
         self.request(
             path,

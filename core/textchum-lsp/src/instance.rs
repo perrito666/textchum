@@ -326,6 +326,7 @@ fn run_manager(
                         "activeParameterSupport": true
                     }},
                     "definition": {"linkSupport": true},
+                    "documentHighlight": {},
                     "codeAction": {
                         "codeActionLiteralSupport": {"codeActionKind": {"valueSet": [
                             "", "quickfix", "refactor", "refactor.extract",

@@ -43,6 +43,11 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   item replaces the stretch the server names (a postfix completion
   swallows the receiver and the dot) and brings its extra edits, an
   import for one, along with it.
+- **A name's other uses are marked.** With nothing selected, a caret
+  resting on a name marks where else that symbol is used, as the server
+  knows it: a shadowing variable of the same name is left alone.
+  Selecting a word still marks the same text, server or not. Both
+  follow the "mark occurrences" setting.
 - **The call being typed says what it takes.** An opening parenthesis
   or a comma shows the function's signature at the caret, the parameter
   you are on in bold; the closing parenthesis, ⎋, or leaving the line

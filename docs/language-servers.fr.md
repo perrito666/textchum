@@ -50,6 +50,12 @@ Language Servers ; voir [configuration](configuration.md#projets).
   la portion que nomme le serveur (une complétion *postfix* avale le
   receveur et le point) et apporte ses éditions supplémentaires, un
   *import* par exemple.
+- **Les autres usages d'un nom sont marqués.** Sans sélection, un
+  curseur posé sur un nom marque les autres endroits où ce symbole est
+  utilisé, tel que le serveur le connaît : une variable homonyme qui le
+  masque est laissée tranquille. Sélectionner un mot marque toujours le
+  même texte, serveur ou non. Les deux suivent le réglage de marquage
+  des occurrences.
 - **L'appel en cours de frappe dit ce qu'il prend.** Une parenthèse
   ouvrante ou une virgule affiche la signature de la fonction au
   curseur, le paramètre en cours en gras ; la parenthèse fermante, ⎋ ou

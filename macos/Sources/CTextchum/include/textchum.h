@@ -288,6 +288,20 @@ uint64_t tc_lsp_hover(struct TcApp *app,
                       uint32_t character);
 
 /**
+ * Requests the other uses, within the document, of the symbol at an
+ * LSP position; same contract as [`tc_lsp_hover`]. The response's
+ * `result` is an LSP `DocumentHighlight[]`.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_document_highlight(struct TcApp *app,
+                                   const char *path,
+                                   uintptr_t path_len,
+                                   uint32_t line,
+                                   uint32_t character);
+
+/**
  * Has the document's language server format `text` and waits for the
  * result, for the `@format` link of a save chain. Answers a JSON
  * object: `{"text": …}` with the formatted text, or `{"error": …}`

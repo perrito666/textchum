@@ -50,6 +50,12 @@ proyecto en Settings ▸ Language Servers; véase
   el tramo que nombra el servidor (un autocompletado *postfix* se traga
   el receptor y el punto) y trae consigo sus ediciones adicionales, un
   *import* por ejemplo.
+- **Los otros usos de un nombre se marcan.** Sin nada seleccionado, un
+  cursor que descansa sobre un nombre marca dónde más se usa ese
+  símbolo, tal como lo conoce el servidor: una variable que lo oculta
+  con el mismo nombre se deja en paz. Seleccionar una palabra sigue
+  marcando el mismo texto, con servidor o sin él. Ambos siguen el
+  ajuste de marcar ocurrencias.
 - **La llamada que se escribe dice qué recibe.** Un paréntesis de
   apertura o una coma muestra la firma de la función junto al cursor,
   con el parámetro en curso en negrita; el paréntesis de cierre, ⎋ o
