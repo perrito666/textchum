@@ -462,7 +462,7 @@ save-preprocessor chain.
 | Preset | Server | Settings | Before every save |
 |---|---|---|---|
 | Rust | rust-analyzer | checks with clippy | `rustfmt --edition {edition}` |
-| Python | pyright | — | `ruff check --fix …`, then `ruff format` |
+| Python | pyright, with ruff beside it | — | `ruff check --fix …`, then `ruff format` |
 | Go | gopls | staticcheck on | `goimports` |
 | TypeScript and JavaScript | typescript-language-server | — | `prettier --stdin-filepath {path}` |
 | C and C++ | clangd | — | `clang-format --assume-filename={path}` |
@@ -478,10 +478,9 @@ Each preset lists the programs it runs and whether each was found on
 installs nothing itself.
 
 Not there yet: a preset applies to every project (the entries it
-writes can be moved under a project by hand). And where a language's
-linter is a second server — ruff beside pyright, eslint beside the
-TypeScript server — its findings do not show, because a document has
-one server; ruff still fixes and formats on save.
+writes can be moved under a project by hand). And the TypeScript preset
+does not set eslint up as a second server, since eslint's server needs
+the project's own configuration to say anything.
 
 ## Spell checking
 

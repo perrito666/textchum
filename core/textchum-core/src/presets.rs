@@ -37,8 +37,9 @@ pub struct LanguagePreset {
     /// What it does not do that a reader might expect; empty when
     /// there is nothing to own up to.
     pub missing: String,
-    /// (language, server) pairs for `lsp.defaults`. The server is a
-    /// registry id, so the registry supplies its arguments.
+    /// (language, servers) pairs for `lsp.defaults`. Each server is a
+    /// registry id, so the registry supplies its arguments; several
+    /// for one language are joined with ` ;; `.
     pub servers: Vec<(&'static str, &'static str)>,
     /// (server id, settings) pairs for `lsp.settings`.
     pub settings: Vec<(&'static str, Value)>,
@@ -75,12 +76,13 @@ pub fn language_presets() -> Vec<LanguagePreset> {
             id: "python",
             name: "Python".into(),
             summary: tr(
-                "pyright for types and navigation, and ruff fixing and formatting before every save.",
+                "pyright for types and navigation, ruff's findings beside them, and ruff fixing and formatting before every save.",
             ),
-            missing: tr(
-                "ruff's own findings do not show in the editor: a document has one server, and here it is pyright.",
-            ),
-            servers: vec![("python", "pyright")],
+            missing: String::new(),
+            // Two servers on one document: the type checker first, so
+            // it answers hover and completion, and the linter for its
+            // findings and their fixes.
+            servers: vec![("python", "pyright ;; ruff")],
             settings: vec![],
             preprocessors: vec![(
                 "python",
@@ -111,9 +113,7 @@ pub fn language_presets() -> Vec<LanguagePreset> {
             id: "typescript",
             name: tr("TypeScript and JavaScript"),
             summary: tr("typescript-language-server, and prettier before every save."),
-            missing: tr(
-                "eslint's findings do not show in the editor: a document has one server.",
-            ),
+            missing: tr("eslint's findings are not set up by this preset: its server needs a project's own configuration."),
             servers: vec![
                 ("javascript", "typescript-language-server"),
                 ("typescript", "typescript-language-server"),

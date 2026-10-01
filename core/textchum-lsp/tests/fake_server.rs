@@ -535,3 +535,60 @@ fn a_save_is_announced_and_the_client_says_what_it_can_take() {
     assert_eq!(declared["hover"]["contentFormat"][0], "markdown");
     assert_eq!(declared["codeAction"]["resolveSupport"]["properties"][0], "edit");
 }
+
+#[test]
+fn two_servers_share_a_document_and_each_is_asked_what_it_provides() {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/fake_lsp.py")
+        .canonicalize()
+        .unwrap();
+    let script = script.display();
+    // A checker that has no hover, and a second server that does.
+    let configuration = format!(
+        r#"{{"lsp": {{
+            "defaults": {{"rust": "first ;; second"}},
+            "servers": {{
+                "first": {{"command": "python3", "languages": ["rust"],
+                           "args": ["{script}", "--tag", "first", "--without", "hoverProvider"]}},
+                "second": {{"command": "python3", "languages": ["rust"],
+                            "args": ["{script}", "--tag", "second"]}}}}}}}}"#
+    );
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.configure(&configuration);
+    let (root, file) = project("proj-two");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+
+    // Both publish, and the shell is shown the two sets as one.
+    let both = |events: &[Event], count: u32| {
+        events.iter().any(|event| matches!(event, Event::Diagnostics { json, .. }
+            if json.contains(&format!("first finding #{count}"))
+                && json.contains(&format!("second finding #{count}"))))
+    };
+    let mut seen = Vec::new();
+    collect_until(&events, "both servers' findings together", &mut seen, |seen| both(seen, 1));
+    assert_eq!(pool.running().len(), 2, "one instance per server: {:?}", pool.running());
+
+    // A change reaches both.
+    pool.did_change(&file, "fn main() { changed }\n");
+    collect_until(&events, "both servers' fresh findings", &mut seen, |seen| both(seen, 2));
+
+    // Hover is answered by the one that provides it, not the first listed.
+    let hover = pool.hover(&file, 0, 3);
+    collect_until(&events, "a hover", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == hover))
+    });
+    assert!(
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == hover && json.contains("second hover at 0:3"))),
+        "hover went to the server that has none: {seen:?}"
+    );
+
+    // One of them going away takes its findings and leaves the other's.
+    seen.clear();
+    pool.retire("second", &root.to_string_lossy());
+    collect_until(&events, "the findings without the retired server's", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::Diagnostics { json, .. }
+            if json.contains("first finding") && !json.contains("second finding")))
+    });
+}

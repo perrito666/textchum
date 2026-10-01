@@ -54,7 +54,23 @@ def expect_answers(stdin, checks, held):
             held.append(message)
 
 
+def arguments():
+    """`--tag NAME` names this server in what it says, so two of them
+    on one document can be told apart; `--without A,B` leaves those
+    providers out of what it declares at initialize."""
+    tag, without = "fake", set()
+    rest = sys.argv[1:]
+    while rest:
+        flag = rest.pop(0)
+        if flag == "--tag" and rest:
+            tag = rest.pop(0)
+        elif flag == "--without" and rest:
+            without = set(rest.pop(0).split(","))
+    return tag, without
+
+
 def main():
+    tag, without = arguments()
     stdin = sys.stdin.buffer
     # The text of each open document as the client last sent it, so a
     # request can be checked against what the server actually has.
@@ -102,9 +118,22 @@ def main():
             send({
                 "jsonrpc": "2.0",
                 "id": message["id"],
+                # Everything this script answers, said out loud: a
+                # client that routes by provider asks nobody who has
+                # not claimed the request.
                 "result": {"capabilities": {
-                    "textDocumentSync": 1,
-                    "codeActionProvider": {"resolveProvider": True},
+                    name: value for name, value in {
+                        "textDocumentSync": 1,
+                        "codeActionProvider": {"resolveProvider": True},
+                        "hoverProvider": True,
+                        "definitionProvider": True,
+                        "completionProvider": {},
+                        "referencesProvider": True,
+                        "renameProvider": True,
+                        "documentFormattingProvider": True,
+                        "documentSymbolProvider": True,
+                        "executeCommandProvider": {"commands": ["fake.report"]},
+                    }.items() if name not in without
                 }},
             })
         elif method in ("textDocument/didOpen", "textDocument/didChange"):
@@ -129,7 +158,7 @@ def main():
                             "end": {"line": 0, "character": 4},
                         },
                         "severity": 1,
-                        "message": "fake finding #%d" % seen,
+                        "message": "%s finding #%d" % (tag, seen),
                         # A server recognizes its own finding by these,
                         # which is why the client has to hand back what
                         # was published rather than a reconstruction.
@@ -147,7 +176,7 @@ def main():
                 "result": {
                     "contents": {
                         "kind": "markdown",
-                        "value": "fake hover at %d:%d"
+                        "value": tag + " hover at %d:%d"
                         % (position["line"], position["character"]),
                     }
                 },

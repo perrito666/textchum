@@ -491,7 +491,7 @@ lesquels il doit tourner, et la chaîne de préprocesseurs de sauvegarde.
 | Profil | Serveur | Réglages | Avant chaque enregistrement |
 |---|---|---|---|
 | Rust | rust-analyzer | vérifie avec clippy | `rustfmt --edition {edition}` |
-| Python | pyright | — | `ruff check --fix …`, puis `ruff format` |
+| Python | pyright, avec ruff à côté | — | `ruff check --fix …`, puis `ruff format` |
 | Go | gopls | staticcheck activé | `goimports` |
 | TypeScript et JavaScript | typescript-language-server | — | `prettier --stdin-filepath {path}` |
 | C et C++ | clangd | — | `clang-format --assume-filename={path}` |
@@ -507,11 +507,10 @@ trouvé dans `PATH` ; celui qui manque montre la commande qui l'installe.
 L'éditeur n'installe rien lui-même.
 
 Pas encore là : un profil s'applique à tous les projets (les entrées
-qu'il écrit peuvent être déplacées sous un projet à la main). Et là où
-le *linter* d'un langage est un second serveur — ruff à côté de
-pyright, eslint à côté du serveur TypeScript — ses résultats ne
-s'affichent pas, car un document a un seul serveur ; ruff corrige et
-formate tout de même à l'enregistrement.
+qu'il écrit peuvent être déplacées sous un projet à la main). Et le
+profil TypeScript ne configure pas eslint comme second serveur, car le
+serveur d'eslint a besoin de la configuration propre au projet pour
+dire quoi que ce soit.
 
 ## Correction orthographique
 

@@ -2205,7 +2205,10 @@ private struct LanguageServersTab: View {
                                 }
                                 // The id is enough: the registry
                                 // supplies the command and its arguments.
-                                newCommand = server.id
+                                // A second choice joins the first: a
+                                // language can have several servers.
+                                let typed = newCommand.trimmingCharacters(in: .whitespaces)
+                                newCommand = typed.isEmpty ? server.id : typed + " ;; " + server.id
                             }
                             Button(t("Add")) {
                                 model.addLSPEntry(

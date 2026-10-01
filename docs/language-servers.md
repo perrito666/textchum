@@ -189,6 +189,24 @@ The language field lists the languages this build knows and still
 accepts anything typed: a language can be configured before there is a
 grammar for it, and the entry keeps working when one arrives.
 
+### More than one server for a language
+
+A language is often a type checker and a linter, and each is a server
+of its own. An entry lists them with ` ;; ` between:
+
+```json
+{ "lsp": { "defaults": { "python": "pyright ;; ruff" } } }
+```
+
+Every one of them gets the document and its changes, and their findings
+are shown together. A request — hover, completion, go to definition,
+formatting — goes to the first listed server that says it provides it,
+so the order is the order of preference. A code action is asked of the
+server that reported the finding under the caret. If one of them is not
+installed, the others still run.
+
+Not there yet: completions come from one server, not merged from all.
+
 ### Defining a server the editor does not know
 
 `lsp.servers` holds entries of the same shape the built-in table uses,
