@@ -212,6 +212,43 @@ still has servers, and a build that learns a new one offers it without
 the configuration being rewritten. Defining a server does not change
 which one a language gets by default — `lsp.defaults` decides that.
 
+### Settings for a server
+
+Servers take settings — which lints run, how strict the type checker
+is — and `lsp.settings` is where they go: one object per server id,
+keyed by section the way the server asks for it.
+
+```json
+{
+  "lsp": {
+    "settings": {
+      "rust-analyzer": {"rust-analyzer": {"check": {"command": "clippy"}}},
+      "gopls": {"gopls": {"staticcheck": true}},
+      "pyright": {"python": {"analysis": {"typeCheckingMode": "strict"}}}
+    },
+    "init_options": {
+      "typescript-language-server": {"preferences": {"quotePreference": "single"}}
+    }
+  }
+}
+```
+
+The object is pushed to the server once it has started and handed out
+by section when the server asks, which between them is how servers read
+settings. It is the shape of the `settings` table in an nvim-lspconfig
+setup, so one can be carried over as it is. `lsp.init_options` holds
+what a server reads from `initializationOptions` instead. A command
+line typed by hand has no id; its settings are found under the name of
+the command it runs.
+
+A server reads its settings when it starts. Applying a
+[language preset](configuration.md#language-presets) restarts the
+servers; after a hand edit, Settings ▸ Language Servers has the button
+that does.
+
+Not there yet: settings are per server, not per project, and the
+Settings window does not edit them — the presets write the common ones.
+
 ### Naming a server, and pointing at one inside the project
 
 A language's entry takes either the id of a server the editor knows or a

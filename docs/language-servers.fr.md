@@ -222,6 +222,45 @@ propose sans réécriture de la configuration. Définir un serveur ne change
 pas celui qu'un langage utilise par défaut ; c'est `lsp.defaults` qui en
 décide.
 
+### Réglages d'un serveur
+
+Les serveurs prennent des réglages — quels *lints* tournent, quelle
+sévérité pour le vérificateur de types — et `lsp.settings` est leur
+place : un objet par id de serveur, avec les clés par section comme le
+serveur les demande.
+
+```json
+{
+  "lsp": {
+    "settings": {
+      "rust-analyzer": {"rust-analyzer": {"check": {"command": "clippy"}}},
+      "gopls": {"gopls": {"staticcheck": true}},
+      "pyright": {"python": {"analysis": {"typeCheckingMode": "strict"}}}
+    },
+    "init_options": {
+      "typescript-language-server": {"preferences": {"quotePreference": "single"}}
+    }
+  }
+}
+```
+
+L'objet est envoyé au serveur une fois démarré et distribué par section
+quand le serveur le demande, ce qui à eux deux couvre la façon dont les
+serveurs lisent leurs réglages. C'est la forme de la table `settings`
+d'une configuration nvim-lspconfig, que l'on peut donc reprendre telle
+quelle. `lsp.init_options` contient ce qu'un serveur lit dans
+`initializationOptions`. Une ligne de commande tapée à la main n'a pas
+d'id ; ses réglages sont cherchés sous le nom de la commande lancée.
+
+Un serveur lit ses réglages au démarrage. Appliquer un
+[profil de langage](configuration.md#profils-de-langage) redémarre les
+serveurs ; après une modification à la main, Settings ▸ Language
+Servers a le bouton qui le fait.
+
+Pas encore là : les réglages sont par serveur, pas par projet, et la
+fenêtre Settings ne les modifie pas — les profils écrivent les plus
+courants.
+
 ### Nommer un serveur, et en désigner un dans le projet
 
 L'entrée d'un langage accepte l'identifiant d'un serveur connu de

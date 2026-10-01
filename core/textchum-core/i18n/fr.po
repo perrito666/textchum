@@ -25,6 +25,46 @@ msgstr ""
 msgid "Close Tab"
 msgstr "Fermer l'onglet"
 
+#: core/textchum-core/src/presets.rs
+msgid "rust-analyzer checking with clippy, and rustfmt before every save."
+msgstr "rust-analyzer vérifiant avec clippy, et rustfmt avant chaque enregistrement."
+
+#: core/textchum-core/src/presets.rs
+msgid ""
+"pyright for types and navigation, and ruff fixing and formatting before "
+"every save."
+msgstr "pyright pour les types et la navigation, et ruff qui corrige et formate avant chaque enregistrement."
+
+#: core/textchum-core/src/presets.rs
+msgid ""
+"ruff's own findings do not show in the editor: a document has one server, "
+"and here it is pyright."
+msgstr "Les résultats propres à ruff ne s'affichent pas dans l'éditeur : un document a un seul serveur, et ici c'est pyright."
+
+#: core/textchum-core/src/presets.rs
+msgid "gopls with staticcheck on, and goimports before every save."
+msgstr "gopls avec staticcheck activé, et goimports avant chaque enregistrement."
+
+#: core/textchum-core/src/presets.rs
+msgid "TypeScript and JavaScript"
+msgstr "TypeScript et JavaScript"
+
+#: core/textchum-core/src/presets.rs
+msgid "typescript-language-server, and prettier before every save."
+msgstr "typescript-language-server, et prettier avant chaque enregistrement."
+
+#: core/textchum-core/src/presets.rs
+msgid "eslint's findings do not show in the editor: a document has one server."
+msgstr "Les résultats d'eslint ne s'affichent pas dans l'éditeur : un document a un seul serveur."
+
+#: core/textchum-core/src/presets.rs
+msgid "C and C++"
+msgstr "C et C++"
+
+#: core/textchum-core/src/presets.rs
+msgid "clangd, and clang-format before every save."
+msgstr "clangd, et clang-format avant chaque enregistrement."
+
 #: linux/src/keyboard.rs
 msgid "New Tab"
 msgstr "Nouvel onglet"
@@ -969,6 +1009,26 @@ msgstr "Enregistrement automatique après (secondes)"
 msgid "Language Servers"
 msgstr "Serveurs de langage"
 
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Language presets"
+msgstr "Profils de langage"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid ""
+"Each one writes the server, its settings and the save preprocessors a "
+"language is usually worked with, as ordinary entries under Language Servers "
+"and Preprocessors that you can then edit. Tools are looked for on PATH; a "
+"missing one names how to install it."
+msgstr "Chacun écrit le serveur, ses réglages et les préprocesseurs d'enregistrement avec lesquels on travaille d'ordinaire un langage, sous forme d'entrées ordinaires dans Serveurs de langage et Préprocesseurs que l'on peut ensuite modifier. Les outils sont cherchés dans PATH ; celui qui manque indique comment l'installer."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Applied"
+msgstr "Appliqué"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Apply"
+msgstr "Appliquer"
+
 #: linux/src/workbench.rs
 msgid "Default server commands"
 msgstr "Commandes de serveur par défaut"
@@ -1073,7 +1133,7 @@ msgstr "ajouter le chemin de la racine du projet"
 msgid "Remove missing"
 msgstr "Supprimer les manquants"
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Hide presets"
 msgstr "Masquer les profils"
 

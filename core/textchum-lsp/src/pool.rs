@@ -268,6 +268,31 @@ impl Pool {
         crate::registry::server_by_id(id).map(ServerConfig::from)
     }
 
+    /// What the configuration gives a server to run with:
+    /// `lsp.settings.<id>` and `lsp.init_options.<id>`.
+    ///
+    /// ```json
+    /// {"lsp": {"settings": {
+    ///    "rust-analyzer": {"rust-analyzer": {"check": {"command": "clippy"}}},
+    ///    "gopls": {"gopls": {"staticcheck": true}}}}}
+    /// ```
+    ///
+    /// A command line typed by hand has no id of its own, so its
+    /// settings are found under the name of the command it runs.
+    fn options_for(&self, config: &ServerConfig) -> crate::instance::ServerOptions {
+        let key = match config.id.strip_prefix("custom:") {
+            Some(command) => Path::new(command)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| command.to_owned()),
+            None => config.id.clone(),
+        };
+        crate::instance::ServerOptions {
+            settings: self.configured["settings"][&key].clone(),
+            init_options: self.configured["init_options"][&key].clone(),
+        }
+    }
+
     /// The ids a language has servers for, configuration first.
     pub fn servers_for_language(&self, language: &str) -> Vec<String> {
         let mut ids: Vec<String> = self.configured["servers"]
@@ -487,6 +512,7 @@ impl Pool {
                 &root,
                 self.events.clone(),
                 std::sync::Arc::clone(&self.published),
+                self.options_for(&config),
             ) {
                 Ok(instance) => {
                     self.instances.insert(key.clone(), instance);

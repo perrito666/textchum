@@ -2859,6 +2859,39 @@ bool tc_workspace_is_hidden(const char *name,
                             uintptr_t globs_len);
 
 /**
+ * The language presets, for a settings screen: a JSON array of
+ * `{id, name, summary, missing, applied, servers, settings,
+ * preprocessors, tools}` objects, each tool saying whether it was
+ * found on `PATH`. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_language_presets_json(const struct TcConfig *config);
+
+/**
+ * Writes a language preset's servers, settings and preprocessor chains
+ * into the configuration's ordinary sections. Returns false for an id
+ * no preset has. The caller saves the configuration.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `id` must point to
+ * `id_len` readable bytes.
+ */
+bool tc_config_apply_language_preset(struct TcConfig *config, const char *id, uintptr_t id_len);
+
+/**
+ * The Rust edition of the crate the file at `path` belongs to, for
+ * the `{edition}` a save-preprocessor command may name: the nearest
+ * `Cargo.toml`'s, its workspace's when inherited, `2021` when there
+ * is no manifest. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `path` must point to `len` readable bytes.
+ */
+char *tc_rust_edition(const char *path, uintptr_t len);
+
+/**
  * The hidden-glob presets, one per line as `name\x1fglob glob …`,
  * sorted by name. Release with [`tc_string_free`].
  *

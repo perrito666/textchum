@@ -1032,6 +1032,65 @@ public final class CoreConfig {
         tc_config_reset_hide_presets(handle)
     }
 
+    /// One language preset, as the core describes it: what applying it
+    /// would write, which of its tools are on `PATH`, and whether the
+    /// configuration already says all of it.
+    public struct LanguagePreset: Decodable, Identifiable, Equatable, Sendable {
+        public struct Server: Decodable, Equatable, Sendable {
+            public let language: String
+            public let command: String
+        }
+        public struct Settings: Decodable, Equatable, Sendable {
+            public let server: String
+            public let json: String
+        }
+        public struct Chain: Decodable, Equatable, Sendable {
+            public let language: String
+            public let commands: [String]
+        }
+        public struct Tool: Decodable, Equatable, Sendable {
+            public let command: String
+            public let install: String
+            public let found: Bool
+        }
+        public let id: String
+        public let name: String
+        public let summary: String
+        /// What it does not do that a reader might expect; empty when
+        /// there is nothing to own up to.
+        public let missing: String
+        public let applied: Bool
+        public let servers: [Server]
+        public let settings: [Settings]
+        public let preprocessors: [Chain]
+        public let tools: [Tool]
+    }
+
+    /// The language presets the build offers, in the order to show them.
+    public var languagePresets: [LanguagePreset] {
+        guard let cString = tc_config_language_presets_json(handle) else { return [] }
+        defer { tc_string_free(cString) }
+        let json = Data(String(cString: cString).utf8)
+        return (try? JSONDecoder().decode([LanguagePreset].self, from: json)) ?? []
+    }
+
+    /// Writes a preset's servers, settings and preprocessor chains into
+    /// the ordinary sections. False for an id no preset has. The caller
+    /// saves.
+    @discardableResult
+    public func applyLanguagePreset(id: String) -> Bool {
+        var id = id
+        return id.withUTF8 { bytes in
+            tc_config_apply_language_preset(
+                handle,
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count)
+            )
+        }
+    }
+
     /// Whether the navigator reveals the current file as focus moves.
     public var followFile: Bool {
         get { tc_config_follow_file(handle) }
@@ -1052,5 +1111,27 @@ public final class CoreConfig {
             }
             throw CoreIOError(message: message)
         }
+    }
+}
+
+/// What the core reads out of a project's manifests.
+public enum CoreManifests {
+    /// The Rust edition of the crate the file at `path` belongs to, for
+    /// the `{edition}` a save-preprocessor command may name: the
+    /// nearest `Cargo.toml`'s, its workspace's when inherited, 2021
+    /// when there is no manifest.
+    public static func rustEdition(forPath path: String) -> String {
+        var path = path
+        let answer = path.withUTF8 { bytes in
+            tc_rust_edition(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count)
+            )
+        }
+        guard let answer else { return "2021" }
+        defer { tc_string_free(answer) }
+        return String(cString: answer)
     }
 }

@@ -2881,6 +2881,46 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the rename did not move the index")
         return 1
     }
+    // A language preset writes ordinary entries: the server, the
+    // settings it should run with, and the save chain. The list then
+    // knows it is applied, and the chain's {edition} is the crate's.
+    do {
+        let presetDirectory = NSTemporaryDirectory() + "textchum-smoke-presets-\(getpid())"
+        try? FileManager.default.removeItem(atPath: presetDirectory)
+        try? FileManager.default.createDirectory(
+            atPath: presetDirectory + "/crate/src", withIntermediateDirectories: true)
+        let presetConfig = CoreConfig(path: presetDirectory + "/config.json")
+        let offered = presetConfig.languagePresets
+        guard let rust = offered.first(where: { $0.id == "rust" }), !rust.applied,
+            offered.contains(where: { $0.id == "python" }), offered.contains(where: { $0.id == "go" }),
+            rust.tools.contains(where: { $0.command == "rustfmt" })
+        else {
+            print("FAIL: the language presets are not on offer: \(offered.map(\.id))")
+            return 1
+        }
+        guard presetConfig.applyLanguagePreset(id: "rust"), !presetConfig.applyLanguagePreset(id: "cobol") else {
+            print("FAIL: applying a preset did not answer for its id")
+            return 1
+        }
+        let written = presetConfig.lspJSON
+        guard written.contains("\"rust\":\"rust-analyzer\""), written.contains("\"command\":\"clippy\""),
+            presetConfig.languagePresets.first(where: { $0.id == "rust" })?.applied == true
+        else {
+            print("FAIL: the Rust preset wrote \(written)")
+            return 1
+        }
+        try? "[package]\nname = \"a\"\nedition = \"2024\"\n".write(
+            toFile: presetDirectory + "/crate/Cargo.toml", atomically: true, encoding: .utf8)
+        let stamped = Preprocessors.run(
+            commands: ["sed -e s|^|{edition}:|"], on: "fn main() {}\n", in: nil,
+            documentPath: presetDirectory + "/crate/src/main.rs")
+        guard case .success(let output) = stamped, output == "2024:fn main() {}\n" else {
+            print("FAIL: {edition} did not come from the crate's manifest: \(stamped)")
+            return 1
+        }
+    }
+    print("language presets ok (offered with their tools, written as ordinary entries, known as applied, the edition read from the crate)")
+
     // Findings belong to the document, so every view of it agrees.
     let finding = try? JSONDecoder().decode(
         CoreDiagnostic.self,

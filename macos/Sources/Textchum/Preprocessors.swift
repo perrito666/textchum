@@ -1,4 +1,5 @@
 import Foundation
+import TextchumKit
 
 /// Runs the configured save-preprocessor chain: each command receives
 /// the document on stdin and must write the whole document to stdout
@@ -30,12 +31,19 @@ enum Preprocessors {
     ) -> Result<String, Failure> {
         let path = documentPath ?? ""
         let filename = (path as NSString).lastPathComponent
+        // `{edition}` is the crate's Rust edition, which rustfmt cannot
+        // see for itself when it reads stdin. Read only when a command
+        // asks: it is a walk up the tree.
+        let edition =
+            commands.contains { $0.contains("{edition}") }
+            ? CoreManifests.rustEdition(forPath: path) : ""
         var current = text
         for command in commands {
             let words = split(commandLine: command).map { word in
                 word
                     .replacingOccurrences(of: "{path}", with: path)
                     .replacingOccurrences(of: "{filename}", with: filename)
+                    .replacingOccurrences(of: "{edition}", with: edition)
             }
             guard !words.isEmpty else { continue }
             switch pipe(current, through: words, in: directory) {

@@ -32,11 +32,23 @@ pub fn run(
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
+    // `{edition}` is the crate's Rust edition, which rustfmt cannot see
+    // for itself when it reads stdin. Read only when a command asks: it
+    // is a walk up the tree.
+    let edition = if commands.iter().any(|command| command.contains("{edition}")) {
+        textchum_core::presets::rust_edition(Path::new(path))
+    } else {
+        String::new()
+    };
     let mut current = text.to_owned();
     for command in commands {
         let words: Vec<String> = split(command)
             .into_iter()
-            .map(|word| word.replace("{path}", path).replace("{filename}", &filename))
+            .map(|word| {
+                word.replace("{path}", path)
+                    .replace("{filename}", &filename)
+                    .replace("{edition}", &edition)
+            })
             .collect();
         let Some((program, arguments)) = words.split_first() else {
             continue;
@@ -169,6 +181,17 @@ mod tests {
         let commands = vec!["tr a-z A-Z".to_string(), "sed -e s|^|{filename}:|".to_string()];
         let result = run(&commands, "hello\n", None, Some("/tmp/Makefile")).unwrap();
         assert_eq!(result, "Makefile:HELLO\n");
+    }
+
+    #[test]
+    fn the_edition_is_read_from_the_crate_the_file_is_in() {
+        let root = std::env::temp_dir().join(format!("textchum-gtk-edition-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"a\"\nedition = \"2024\"\n").unwrap();
+        let file = root.join("src/main.rs");
+        let commands = vec!["sed -e s|^|{edition}:|".to_string()];
+        let result = run(&commands, "fn main() {}\n", None, Some(&file.to_string_lossy())).unwrap();
+        assert_eq!(result, "2024:fn main() {}\n");
     }
 
     #[test]

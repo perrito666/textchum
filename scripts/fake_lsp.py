@@ -61,6 +61,10 @@ def main():
     texts = {}
     seen = 0
     held = []
+    # What the client told this server about how to run, for the
+    # `fake.report` command to hand back to a test.
+    told = {"initializationOptions": None, "workspace": None,
+            "configuration": None, "changed": None}
     while True:
         message = held.pop(0) if held else read_message(stdin)
         if message is None:
@@ -73,12 +77,24 @@ def main():
                   "params": {"items": [{"section": "fake"},
                                        {"section": "fake", "scopeUri": "file:///x"}]}})
             send({"jsonrpc": "2.0", "id": 1001, "method": "workspace/workspaceFolders"})
+            def configuration(result):
+                told["configuration"] = result
+                return isinstance(result, list) and len(result) == 2
             expect_answers(stdin, {
-                1000: lambda r: isinstance(r, list) and len(r) == 2,
+                1000: configuration,
                 1001: lambda r: isinstance(r, list) and len(r) == 1
                                 and "uri" in r[0] and "name" in r[0],
             }, held)
+        elif method == "workspace/didChangeConfiguration":
+            told["changed"] = message["params"].get("settings")
+        elif method == "workspace/executeCommand":
+            # Only the report is answered; other commands stay as silent
+            # as they were.
+            if message["params"].get("command") == "fake.report":
+                send({"jsonrpc": "2.0", "id": message["id"], "result": told})
         elif method == "initialize":
+            told["initializationOptions"] = message["params"].get("initializationOptions")
+            told["workspace"] = message["params"].get("capabilities", {}).get("workspace")
             send({
                 "jsonrpc": "2.0",
                 "id": message["id"],
