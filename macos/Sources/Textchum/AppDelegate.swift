@@ -300,6 +300,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let mainMenu = makeMainMenu()
         NSApp.mainMenu = mainMenu
         registerMenuActions(in: mainMenu)
+        installChordWindow()
         // Grammars the build does not carry, named in the
         // configuration. One that cannot be opened costs that language
         // and nothing else, so the rest of the launch carries on.
@@ -530,6 +531,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                 let tabs =
                                     self.editors.first?.window?.tabbedWindows?.count ?? 0
                                 NSLog("debug newplacement tabs=\(tabs)")
+                            }
+                        }
+                        return
+                    }
+                    if allArguments[flagIndex + 1] == "chord" {
+                        // scope = the keys to press once it is up, or -.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                guard let self else { return }
+                                self.chordPanel.show(over: NSApp.keyWindow)
+                                for key in scope where scope != "-" {
+                                    self.chordPanel.press(key)
+                                }
                             }
                         }
                         return
@@ -1555,6 +1569,108 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     static func shortcut(for selector: Selector) -> (key: String, modifiers: NSEvent.ModifierFlags)? {
         shortcuts[selector]
+    }
+
+    // MARK: Chord window
+
+    private let chordPanel = ChordPanel()
+    private var chordTimer: Timer?
+    private var chordMonitor: Any?
+
+    /// The flags of a modifier pair as the configuration spells it.
+    static func chordFlags(named pair: String) -> NSEvent.ModifierFlags? {
+        guard !pair.isEmpty else { return nil }
+        var flags: NSEvent.ModifierFlags = []
+        for part in pair.split(separator: "+") {
+            switch part {
+            case "ctrl": flags.insert(.control)
+            case "alt": flags.insert(.option)
+            case "cmd": flags.insert(.command)
+            case "shift": flags.insert(.shift)
+            default: return nil
+            }
+        }
+        return flags
+    }
+
+    /// Watches for the pair of modifiers that opens the chord window,
+    /// and hands the window the keys typed while it is up.
+    ///
+    /// The window opens only when the pair is held on its own for a
+    /// moment. A shortcut that uses the same modifiers presses its key
+    /// well inside that moment, so it is neither delayed nor taken.
+    private func installChordWindow() {
+        guard chordMonitor == nil else { return }
+        chordPanel.onRun = { [weak self] name in
+            guard let item = self?.menuActions[name], let action = item.action else {
+                self?.notify(t("The chord window has no command named {}", name))
+                return
+            }
+            NSApp.sendAction(action, to: item.target, from: item)
+        }
+        let unknown = CoreChords.actions.filter { menuActions[$0] == nil }
+        if !unknown.isEmpty {
+            NSLog("chord window: no menu item for \(unknown)")
+        }
+        chordMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.flagsChanged, .keyDown, .leftMouseDown, .rightMouseDown]
+        ) { [weak self] event in
+            guard let self else { return event }
+            return self.chord(event)
+        }
+    }
+
+    private func chord(_ event: NSEvent) -> NSEvent? {
+        switch event.type {
+        case .flagsChanged:
+            guard let wanted = Self.chordFlags(named: config?.chordModifiers ?? "") else {
+                return event
+            }
+            let held = event.modifierFlags.intersection([.control, .option, .command, .shift])
+            chordTimer?.invalidate()
+            chordTimer = nil
+            if held == wanted, !chordPanel.isShown {
+                chordTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) {
+                    [weak self] _ in
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            // The flags as they are now: a release the
+                            // app never heard of, because it lost the
+                            // keyboard meanwhile, must not open it.
+                            let now = NSEvent.modifierFlags.intersection(
+                                [.control, .option, .command, .shift])
+                            guard now == wanted, NSApp.isActive else { return }
+                            self?.chordPanel.show(over: NSApp.keyWindow)
+                        }
+                    }
+                }
+            }
+            return event
+        case .keyDown:
+            guard chordPanel.isShown else {
+                // A key with the modifiers is a shortcut, not the pair
+                // held on its own: the window stays away.
+                chordTimer?.invalidate()
+                chordTimer = nil
+                return event
+            }
+            // The key as it is with nothing held: the pair may still
+            // be down, and with shift in it `[` would arrive as `{`.
+            if event.keyCode == 53 {
+                chordPanel.close()
+            } else if !event.isARepeat,
+                let key = event.characters(byApplyingModifiers: [])?.lowercased().first
+            {
+                chordPanel.press(key)
+            }
+            // Taken either way: while the window is up, keys are its.
+            return nil
+        case .leftMouseDown, .rightMouseDown:
+            if chordPanel.isShown { chordPanel.close() }
+            return event
+        default:
+            return event
+        }
     }
 
     /// Remembers one key; the main menu walk does this for every item.

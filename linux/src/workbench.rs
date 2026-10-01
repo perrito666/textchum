@@ -140,6 +140,8 @@ pub struct Workbench {
     closing_settled: Cell<bool>,
     title: adw::WindowTitle,
     toasts: adw::ToastOverlay,
+    /// The chord window: commands by one key each.
+    pub chords: Rc<crate::chords::ChordWindow>,
     split: adw::OverlaySplitView,
     buffers_box: gtk::Box,
     tree_box: gtk::Box,
@@ -501,8 +503,11 @@ impl Workbench {
         toolbar.add_top_bar(&header);
         toolbar.add_top_bar(&search_bar);
         toolbar.set_content(Some(&split));
+        // The chord window lies over everything the window shows.
+        let over_all = gtk::Overlay::new();
+        over_all.set_child(Some(&toolbar));
         let toasts = adw::ToastOverlay::new();
-        toasts.set_child(Some(&toolbar));
+        toasts.set_child(Some(&over_all));
 
         let window = adw::ApplicationWindow::builder()
             .application(app)
@@ -511,6 +516,7 @@ impl Workbench {
             .content(&toasts)
             .build();
         search_bar.set_key_capture_widget(Some(&window));
+        let chords = crate::chords::install(&window, &over_all);
         apply_font_size(Shell::instance().config.borrow().font_size());
         // Screenshot-driven verification hooks.
         if std::env::var_os("TEXTCHUM_DEBUG_SIDEBAR").is_some() {
@@ -556,6 +562,7 @@ impl Workbench {
             show_full_paths: std::cell::Cell::new(false),
             explaining: Rc::new(RefCell::new(None)),
             closed_tabs: RefCell::new(Vec::new()),
+            chords,
         });
         WORKBENCHES.with(|list| list.borrow_mut().push(Rc::clone(&workbench)));
 
@@ -7776,6 +7783,38 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
     reset.add_suffix(&reset_button);
     profile_group.add(&reset);
     page.add(&profile_group);
+
+    let chord_group = adw::PreferencesGroup::new();
+    chord_group.set_title(&tr("Chord window"));
+    chord_group.set_description(Some(&tr(
+        "Hold the two keys: the commands are listed, a key each.",
+    )));
+    let pairs = textchum_core::chords::MODIFIER_PAIRS;
+    let mut pair_labels: Vec<String> = vec![tr("Off")];
+    pair_labels.extend(pairs.iter().map(|pair| crate::chords::pair_title(pair)));
+    let pair_refs: Vec<&str> = pair_labels.iter().map(String::as_str).collect();
+    let chord_row = adw::ComboRow::new();
+    chord_row.set_title(&tr("Opened by"));
+    chord_row.set_model(Some(&gtk::StringList::new(&pair_refs)));
+    let chosen_pair = shell.config.borrow().chord_modifiers();
+    chord_row.set_selected(
+        pairs
+            .iter()
+            .position(|pair| *pair == chosen_pair)
+            .map(|index| index as u32 + 1)
+            .unwrap_or(0),
+    );
+    {
+        let shell = Rc::clone(shell);
+        chord_row.connect_selected_notify(move |row| {
+            let selected = row.selected() as usize;
+            let pair = if selected == 0 { None } else { pairs.get(selected - 1).copied() };
+            shell.config.borrow_mut().set_chord_modifiers(pair);
+            shell.save_config();
+        });
+    }
+    chord_group.add(&chord_row);
+    page.add(&chord_group);
 
     let commands = adw::PreferencesGroup::new();
     commands.set_title(&tr("Commands"));

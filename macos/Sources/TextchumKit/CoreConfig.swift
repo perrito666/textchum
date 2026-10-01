@@ -434,6 +434,22 @@ public final class CoreConfig {
         }
     }
 
+    /// The pair of modifier keys that opens the chord window, as the
+    /// configuration spells it (`ctrl+alt`); empty when the window is
+    /// off. Setting anything that is not a known pair turns it off.
+    public var chordModifiers: String {
+        get {
+            guard let raw = tc_config_chord_modifiers(handle) else { return "" }
+            defer { tc_string_free(raw) }
+            return String(cString: raw)
+        }
+        set {
+            newValue.withCString { pointer in
+                tc_config_set_chord_modifiers(handle, pointer, UInt(strlen(pointer)))
+            }
+        }
+    }
+
     /// The profiles saved in the configuration, as name to
     /// action-to-shortcut map.
     public var keyProfilesJSON: String {
@@ -1192,5 +1208,39 @@ public enum CoreTools {
         defer { tc_string_free(cString) }
         let json = Data(String(cString: cString).utf8)
         return (try? JSONDecoder().decode([CoreToolPreset].self, from: json)) ?? []
+    }
+}
+
+/// The chord window's menu, as the core lays it out: commands by one
+/// key each, in groups.
+public enum CoreChords {
+    public struct Entry: Decodable, Equatable, Sendable {
+        public let key: String
+        public let label: String
+        /// The action a key runs; nil for a group.
+        public let action: String?
+        /// A group's own entries; nil for an action.
+        public let items: [Entry]?
+    }
+
+    /// The pairs of modifier keys that can open the window, as the
+    /// configuration spells them.
+    public static let modifierPairs = ["ctrl+alt", "alt+cmd", "ctrl+cmd", "ctrl+shift", "alt+shift"]
+
+    public static var menu: [Entry] {
+        guard let cString = tc_chords_menu_json() else { return [] }
+        defer { tc_string_free(cString) }
+        let json = Data(String(cString: cString).utf8)
+        return (try? JSONDecoder().decode([Entry].self, from: json)) ?? []
+    }
+
+    /// Every action the menu can run.
+    public static var actions: [String] {
+        func collect(_ entries: [Entry]) -> [String] {
+            entries.flatMap { entry in
+                entry.action.map { [$0] } ?? collect(entry.items ?? [])
+            }
+        }
+        return collect(menu)
     }
 }

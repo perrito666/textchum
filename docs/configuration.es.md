@@ -629,6 +629,43 @@ mismo árbol que alimenta el coloreado. Y cuando un atajo se escapa de
 la memoria por completo, la **paleta de comandos** (⇧⌘P) busca de forma
 difusa cualquier acción de menú por su nombre y ejecuta la selección.
 
+### La ventana de acordes
+
+Un atajo de tres o cuatro teclas hay que recordarlo y además alcanzarlo.
+La ventana de acordes funciona al revés: mantenga pulsadas dos teclas
+modificadoras y un pequeño panel lista lo que se puede hacer, con una
+tecla junto a cada comando. Pulse la tecla y el comando se ejecuta.
+
+Está desactivada hasta que se elige un par en Ajustes ▸ Teclado ▸
+**Ventana de acordes**. El archivo guarda la elección como `keys_chord`:
+
+```json
+{ "keys_chord": "ctrl+alt" }
+```
+
+Los pares son `ctrl+alt`, `alt+cmd`, `ctrl+cmd`, `ctrl+shift` y
+`alt+shift`; cualquier otra cosa deja la ventana desactivada. Aquí `cmd`
+es la tecla misma — Comando en macOS, Súper en Linux — porque un par
+son dos teclas pulsadas, no un atajo.
+
+La ventana se abre cuando el par lleva un cuarto de segundo pulsado sin
+nada más, de modo que un atajo que usa esos mismos dos modificadores ni
+se retrasa ni se pierde: su tecla llega antes. Una vez abierta sigue
+abierta aunque se suelten las teclas. Los comandos están en grupos —
+**Archivo**, **Código**, **Ir**, **Buscar**, **Ver** — marcados con un
+`+`; la tecla de un grupo abre su lista, y los comandos más usados (la
+paleta de comandos, la autoría de la línea, Preferencias) están arriba
+sin grupo de por medio. Una tecla que no es nada se rechaza y la ventana sigue ahí;
+Escape o un clic la cierran.
+
+El menú es el mismo en macOS y en Linux, y es fijo: sus teclas todavía
+no se pueden cambiar, y a un comando que no está en él se llega por su
+atajo o por la paleta de comandos. En Linux el escritorio puede
+quedarse con un par — Súper sola suele abrir la vista de actividades, y
+Alt+Mayús cambia la distribución del teclado en algunas
+configuraciones —, en cuyo caso la ventana nunca lo recibe; elija otro
+par.
+
 ## Recarga en vivo
 
 El archivo se vigila mientras Textchum corre: edita `config.json` en

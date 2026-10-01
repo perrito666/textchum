@@ -17,6 +17,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
+#: core/textchum-core/src/chords.rs
+msgid "Code"
+msgstr ""
+
+#: core/textchum-core/src/chords.rs
+msgid "Search"
+msgstr ""
+
 #: core/textchum-core/src/document.rs
 msgid "document has no file path"
 msgstr ""
@@ -85,6 +93,15 @@ msgstr ""
 
 #: core/textchum-core/src/tools.rs
 msgid "Formats with the server's own formatter"
+msgstr ""
+
+#: linux/src/chords.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/ChordPanel.swift
+msgid "Commands"
+msgstr ""
+
+#: linux/src/chords.rs macos/Sources/Textchum/ChordPanel.swift
+msgid "esc closes"
 msgstr ""
 
 #: linux/src/keyboard.rs
@@ -1254,8 +1271,20 @@ msgstr ""
 msgid "Give every command back the shortcut its profile says it has"
 msgstr ""
 
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Chord window"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Hold the two keys: the commands are listed, a key each."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Off"
+msgstr ""
+
 #: linux/src/workbench.rs
-msgid "Commands"
+msgid "Opened by"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
@@ -1317,6 +1346,10 @@ msgstr ""
 
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Language server failed to start"
+msgstr ""
+
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "The chord window has no command named {}"
 msgstr ""
 
 #: macos/Sources/Textchum/AppDelegate.swift
@@ -1870,10 +1903,6 @@ msgstr ""
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "Spell check prose"
-msgstr ""
-
-#: macos/Sources/Textchum/Settings.swift
-msgid "Off"
 msgstr ""
 
 #: macos/Sources/Textchum/Settings.swift

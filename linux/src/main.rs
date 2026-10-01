@@ -4,6 +4,7 @@
 //! owns every document, the shell owns presentation, and every edit
 //! funnels through one choke point.
 
+mod chords;
 mod ctags;
 mod lsp_edits;
 mod keyboard;
@@ -1057,6 +1058,42 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             return 1;
         }
         println!("indentation ok (backspace by level, tab aligns with the block above)");
+    }
+
+    // The chord window lists the core's menu a key each; a group's key
+    // opens it, a command's key names what to run and closes the
+    // window, and a key that is neither is refused.
+    {
+        use chords::Pressed;
+        let chord = &workbench.chords;
+        if chord.is_shown()
+            || !shell::Shell::instance().config.borrow().chord_modifiers().is_empty()
+        {
+            eprintln!("FAIL: the chord window is not off by default");
+            return 1;
+        }
+        chord.show();
+        let top = chord.lines();
+        if !chord.is_shown() || !top.iter().any(|line| line.starts_with("f  +")) {
+            eprintln!("FAIL: the chord window does not list the menu: {top:?}");
+            return 1;
+        }
+        if chord.press('z') != Pressed::Refused || !chord.is_shown() {
+            eprintln!("FAIL: a key that is nothing closed the chord window");
+            return 1;
+        }
+        if chord.press('f') != Pressed::Opened
+            || !chord.lines().iter().any(|line| line.starts_with("s  "))
+            || chord.lines().iter().any(|line| line.starts_with("f  +"))
+        {
+            eprintln!("FAIL: the File group did not open: {:?}", chord.lines());
+            return 1;
+        }
+        if chord.press('s') != Pressed::Ran("save") || chord.is_shown() {
+            eprintln!("FAIL: f then s did not name save and close");
+            return 1;
+        }
+        println!("chord window ok (off by default, lists the menu, a group opens, a command closes it, a stray key is refused)");
     }
 
     let fire = |name: &str| {

@@ -3260,6 +3260,53 @@ pub unsafe extern "C" fn tc_config_keys_profile(config: *const TcConfig) -> *mut
         .unwrap_or(std::ptr::null_mut())
 }
 
+/// The chord window's menu: a JSON array of `{key, label, action}`
+/// and `{key, label, items}` entries, labels already in the interface
+/// language. Release with [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_chords_menu_json() -> *mut c_char {
+    catch_unwind(|| owned_c_string(textchum_core::chords::menu_json()))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// The pair of modifier keys that opens the chord window, as the
+/// configuration spells it (`ctrl+alt`); empty when the window is off.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_chord_modifiers(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(config.inner.chord_modifiers())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Sets the pair that opens the chord window; an empty string, or one
+/// that is not a known pair, turns the window off.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `pair` must point to
+/// `pair_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_chord_modifiers(
+    config: *mut TcConfig,
+    pair: *const c_char,
+    pair_len: usize,
+) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let Some(pair) = (unsafe { str_from_raw(pair, pair_len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        config.inner.set_chord_modifiers((!pair.is_empty()).then_some(pair))
+    }));
+}
+
 /// Chooses a keyboard profile; an empty name returns to the editor's
 /// own bindings.
 ///

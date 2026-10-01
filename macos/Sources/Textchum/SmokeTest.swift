@@ -2849,6 +2849,52 @@ func runSmokeTest() -> Int32 {
     }
     print("preview links ok (the browser gets them, anchors stay, PDF renders)")
 
+    // The chord window lists the menu the core lays out, a key each;
+    // a group's key opens it, a command's key runs it and closes the
+    // window, and a key that is neither is refused.
+    do {
+        let chordConfig = CoreConfig(path: NSTemporaryDirectory() + "textchum-smoke-chord-\(getpid()).json")
+        guard chordConfig.chordModifiers.isEmpty else {
+            print("FAIL: the chord window is not off by default")
+            return 1
+        }
+        chordConfig.chordModifiers = "alt+ctrl"
+        guard chordConfig.chordModifiers == "ctrl+alt",
+            AppDelegate.chordFlags(named: "ctrl+alt") == [.control, .option],
+            AppDelegate.chordFlags(named: "") == nil
+        else {
+            print("FAIL: the chord pair did not round-trip: \(chordConfig.chordModifiers)")
+            return 1
+        }
+        let chords = ChordPanel()
+        var ran: [String] = []
+        chords.onRun = { ran.append($0) }
+        chords.show(over: nil)
+        guard chords.isShown, chords.shownText.contains("f  +"), chords.shownText.contains("p  ") else {
+            print("FAIL: the chord window does not list the menu: \(chords.shownText)")
+            return 1
+        }
+        guard !chords.press("z"), chords.isShown, ran.isEmpty else {
+            print("FAIL: a key that is nothing closed the chord window or ran something")
+            return 1
+        }
+        chords.press("f")
+        guard chords.isShown, chords.shownText.contains("s  "), !chords.shownText.contains("f  +") else {
+            print("FAIL: the File group did not open: \(chords.shownText)")
+            return 1
+        }
+        chords.press("s")
+        guard !chords.isShown, ran == ["save"] else {
+            print("FAIL: f then s did not run save and close: \(ran)")
+            return 1
+        }
+        guard Set(CoreChords.actions).count == CoreChords.actions.count, CoreChords.actions.count > 30 else {
+            print("FAIL: the chord menu's actions are \(CoreChords.actions)")
+            return 1
+        }
+    }
+    print("chord window ok (off by default, lists the menu, a group opens, a command runs and closes, a stray key is refused)")
+
     // Folding hides the lines after the one that opens a block. TextKit
     // 2 lays out what the content storage offers, so what is checked
     // here is the layout itself: the folded lines have to take no room.
