@@ -1127,6 +1127,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .lspResponse:
             break  // routed to its completion handler inside CoreApp
         case let .serverStatus(server, root, status, message):
+            // Not a change of state: what the server is busy with right
+            // now. It shows where the notices are and steps aside when
+            // the work ends, without a line in any log.
+            if status == "progress" {
+                for workbench in Workbench.all {
+                    workbench.statusBar.progress(message.isEmpty ? nil : "\(server): \(message)")
+                }
+                break
+            }
             NSLog("lsp \(server) [\(root)]: \(status) \(message)")
             noteServerStatus(server: server, root: root, status: status, message: message)
             // Said once per server, in the status bar: the file is

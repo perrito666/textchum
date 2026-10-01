@@ -102,6 +102,13 @@ def main():
                 1001: lambda r: isinstance(r, list) and len(r) == 1
                                 and "uri" in r[0] and "name" in r[0],
             }, held)
+            # A piece of work, the way a real server reports indexing.
+            for value in ({"kind": "begin", "title": "Indexing", "message": "0/2",
+                           "percentage": 0},
+                          {"kind": "report", "message": "1/2", "percentage": 50},
+                          {"kind": "end"}):
+                send({"jsonrpc": "2.0", "method": "$/progress",
+                      "params": {"token": "fake-work", "value": value}})
         elif method == "textDocument/didSave":
             told["saved"].append(message["params"]["textDocument"]["uri"])
         elif method == "workspace/didChangeConfiguration":

@@ -737,6 +737,17 @@ impl Shell {
                     }
                 }
                 Event::ServerStatus { status, message, server, root } => {
+                    // Not a change of state: what the server is busy
+                    // with right now. It shows where the notices are
+                    // and steps aside when the work ends, without a
+                    // line in any log.
+                    if status == "progress" {
+                        let text = (!message.is_empty()).then(|| format!("{server}: {message}"));
+                        crate::workbench::Workbench::for_each(|workbench| {
+                            workbench.set_progress(text.as_deref())
+                        });
+                        continue;
+                    }
                     let line = if message.is_empty() {
                         status.clone()
                     } else {

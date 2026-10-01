@@ -721,6 +721,24 @@ impl Workbench {
         set_notice_label(&self.status_notice, text);
     }
 
+    /// What a language server is busy with, shown where the notices are
+    /// while it lasts; `None` puts the last notice back. It is not a
+    /// notice and does not enter the session's list.
+    pub fn set_progress(&self, text: Option<&str>) {
+        match text {
+            Some(text) => self.status_notice.set_label(text),
+            None => {
+                let last = Shell::instance()
+                    .notices
+                    .borrow()
+                    .latest()
+                    .map(|last| last.text.clone())
+                    .unwrap_or_default();
+                set_notice_label(&self.status_notice, &last);
+            }
+        }
+    }
+
     /// The notification area's text, for the smoke test.
     pub fn notice_text(&self) -> String {
         self.status_notice.label().map(|text| text.to_string()).unwrap_or_default()
