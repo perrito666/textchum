@@ -5348,6 +5348,57 @@ pub extern "C" fn tc_tool_presets_json() -> *mut c_char {
         .unwrap_or(std::ptr::null_mut())
 }
 
+/// Sets (or, with `json_len == 0`, removes) the settings a server runs
+/// with: `json_len` bytes of a JSON object keyed by section, under
+/// `lsp.project_settings.<root>.<server>` when `root_len > 0` and
+/// `lsp.settings.<server>` otherwise. Returns false, changing nothing,
+/// when the text is not a JSON object. The caller saves.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; each pointer/length
+/// pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_lsp_settings(
+    config: *mut TcConfig,
+    root: *const c_char,
+    root_len: usize,
+    server: *const c_char,
+    server_len: usize,
+    json: *const c_char,
+    json_len: usize,
+) -> bool {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return false;
+    };
+    let (Some(root), Some(server), Some(json)) = (unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(server, server_len),
+            str_from_raw(json, json_len),
+        )
+    }) else {
+        return false;
+    };
+    if server.trim().is_empty() {
+        return false;
+    }
+    let settings = if json.trim().is_empty() {
+        None
+    } else {
+        match serde_json::from_str::<serde_json::Value>(json) {
+            Ok(value) if value.is_object() => Some(value),
+            _ => return false,
+        }
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        config
+            .inner
+            .set_lsp_settings((!root.is_empty()).then_some(root), server.trim(), settings);
+        true
+    }))
+    .unwrap_or(false)
+}
+
 /// The language presets, for a settings screen: a JSON array of
 /// `{id, name, summary, missing, applied, servers, settings,
 /// preprocessors, tools}` objects, each tool saying whether it was

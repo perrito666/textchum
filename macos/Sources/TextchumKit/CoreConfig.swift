@@ -1032,6 +1032,38 @@ public final class CoreConfig {
         tc_config_reset_hide_presets(handle)
     }
 
+    /// Sets (nil or blank removes) the settings a server runs with: a
+    /// JSON object keyed by section, for one project root or, with a
+    /// nil root, for every project. False, changing nothing, when the
+    /// text is not a JSON object. The caller saves.
+    @discardableResult
+    public func setLSPSettings(root: String?, server: String, json: String?) -> Bool {
+        var root = root ?? ""
+        var server = server
+        var json = json ?? ""
+        return root.withUTF8 { rootBytes in
+            server.withUTF8 { serverBytes in
+                json.withUTF8 { jsonBytes in
+                    tc_config_set_lsp_settings(
+                        handle,
+                        rootBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(rootBytes.count),
+                        serverBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(serverBytes.count),
+                        jsonBytes.baseAddress.map {
+                            UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                        },
+                        UInt(jsonBytes.count)
+                    )
+                }
+            }
+        }
+    }
+
     /// One language preset, as the core describes it: what applying it
     /// would write, which of its tools are on `PATH`, and whether the
     /// configuration already says all of it.

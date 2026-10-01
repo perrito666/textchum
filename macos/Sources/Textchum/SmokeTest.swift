@@ -3005,6 +3005,20 @@ func runSmokeTest() -> Int32 {
             print("FAIL: the Rust preset wrote \(written)")
             return 1
         }
+        // A server's settings, for all projects and for one; text that is
+        // not a JSON object is refused and changes nothing.
+        guard presetConfig.setLSPSettings(
+                root: "/work/api", server: "pyright",
+                json: "{\"python\": {\"analysis\": {\"typeCheckingMode\": \"strict\"}}}"),
+            !presetConfig.setLSPSettings(root: nil, server: "pyright", json: "{not json"),
+            !presetConfig.setLSPSettings(root: nil, server: "pyright", json: "[1, 2]"),
+            presetConfig.lspJSON.contains("\"project_settings\":{\"/work/api\":{\"pyright\""),
+            presetConfig.setLSPSettings(root: "/work/api", server: "pyright", json: nil),
+            !presetConfig.lspJSON.contains("project_settings")
+        else {
+            print("FAIL: a server's settings were not written, refused or removed: \(presetConfig.lspJSON)")
+            return 1
+        }
         try? "[package]\nname = \"a\"\nedition = \"2024\"\n".write(
             toFile: presetDirectory + "/crate/Cargo.toml", atomically: true, encoding: .utf8)
         let stamped = Preprocessors.run(
