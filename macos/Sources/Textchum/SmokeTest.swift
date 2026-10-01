@@ -4055,6 +4055,12 @@ func runSmokeTest() -> Int32 {
                 line: 1, character: 7, endLine: 1, endCharacter: 14, severity: 2,
                 message: "never constructed")
         ])
+        // The finding is boxed, not merely tinted.
+        let boxed = (ridingView as? EditorTextView)?.backgroundMarks.filter { $0.outline != nil }
+        guard boxed?.count == 1, boxed?.first?.range == NSRange(location: 10, length: 7) else {
+            print("FAIL: the finding is not outlined where it is: \(String(describing: boxed))")
+            return 1
+        }
         let ridingGutter = ridingBench.columns[0].views[0].gutter
         guard ridingGutter.diagnosticSeverity(ofLine: 2) == 2 else {
             print("FAIL: the finding did not reach the gutter on its line")
