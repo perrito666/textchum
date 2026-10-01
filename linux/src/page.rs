@@ -373,6 +373,7 @@ impl Page {
         install_word_motion(&page);
         install_context_strip(&page);
         install_spell_follow(&page);
+        install_preview_scroll_sync(&page);
         install_preview_pdf_menu(&page);
         // A file opens already differing from its committed self as
         // often as not, so the marks are wanted on the first paint.
@@ -2018,6 +2019,50 @@ fn scrolled_window_of(page: &Rc<Page>) -> gtk::ScrolledWindow {
         .parent()
         .and_downcast::<gtk::ScrolledWindow>()
         .expect("the view lives in its scrolled window")
+}
+
+fn install_preview_scroll_sync(page: &Rc<Page>) {
+    let Some(web) = page.preview.clone() else { return };
+    let adjustment = scrolled_window_of(page).vadjustment();
+    let web_for_scroll = web.clone();
+    adjustment.connect_value_changed(move |adjustment| {
+        preview_scroll_to_adjustment(&web_for_scroll, adjustment);
+    });
+    let adjustment_for_load = adjustment.clone();
+    web.connect_load_changed(move |web, event| {
+        if event == webkit6::LoadEvent::Finished {
+            preview_scroll_to_adjustment(web, &adjustment_for_load);
+        }
+    });
+
+    let controller = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+    let adjustment_for_preview = adjustment.clone();
+    controller.connect_scroll(move |_, _, dy| {
+        let max = (adjustment_for_preview.upper() - adjustment_for_preview.page_size()).max(0.0);
+        let line = adjustment_for_preview.step_increment().max(40.0);
+        let delta = if dy.abs() <= 10.0 { dy * line } else { dy };
+        adjustment_for_preview.set_value((adjustment_for_preview.value() + delta).clamp(0.0, max));
+        glib::Propagation::Stop
+    });
+    web.add_controller(controller);
+}
+
+fn preview_scroll_to_adjustment(web: &webkit6::WebView, adjustment: &gtk::Adjustment) {
+    let max = adjustment.upper() - adjustment.page_size();
+    let fraction = if max > 0.0 { adjustment.value() / max } else { 0.0 };
+    web.evaluate_javascript(
+        &format!(
+            r#"(() => {{
+                const root = document.scrollingElement || document.documentElement;
+                const max = Math.max(0, root.scrollHeight - innerHeight);
+                root.scrollTo(0, {fraction} * max);
+            }})()"#
+        ),
+        None,
+        None,
+        gtk::gio::Cancellable::NONE,
+        |_| {},
+    );
 }
 
 /// Recomputes the pinned context for a page from its scroll position:
