@@ -108,9 +108,30 @@ final class EditorTextView: NSTextView {
         }
     }
 
-    /// The selection's fixed end while ⌥⇧ arrows extend it; AppKit
-    /// keeps its own anchor private.
+    /// The selection's fixed end, whoever made the selection.
+    ///
+    /// AppKit keeps an anchor of its own for ⇧ arrows, private, and
+    /// forgets it whenever the selection is set from outside — which is
+    /// how the word commands below set theirs. Two anchors that do not
+    /// know about each other meant a selection made one way and
+    /// continued the other found no anchor on record, and extended
+    /// whichever end the arrow pointed at: ⇧← then ⌥⇧→ grew the
+    /// selection at both ends, and it could only grow. So this one is
+    /// kept for every selection the view can see being made, by
+    /// noticing which end stood still (see `setSelectedRanges`), and
+    /// every extending command consults it.
     private var selectionAnchor: Int?
+
+    /// True while a selection is being changed by something known to
+    /// keep one end where it was — AppKit's own extending commands, a
+    /// shift-click — so the end that stood still can be taken as the
+    /// anchor. Any other change is a new selection.
+    private var keepingAnEnd = false
+
+    /// True when the last selection was set by this view rather than
+    /// by AppKit's own extending commands, whose private anchor is
+    /// therefore stale: the next ⇧ arrow has to be worked out here.
+    private var appKitAnchorIsStale = false
 
     /// Moves the selection's free end a word the way the arrow points.
     ///
@@ -142,19 +163,194 @@ final class EditorTextView: NSTextView {
             range, affinity: caret < anchor ? .upstream : .downstream, stillSelecting: false)
         extendingSelection = false
         selectionAnchor = anchor
+        appKitAnchorIsStale = true
         scrollRangeToVisible(NSRange(location: caret, length: 0))
+    }
+
+    /// One of AppKit's own extending commands. While its anchor is in
+    /// step with the one on record here, the command runs as AppKit
+    /// wrote it, which keeps what it does well — the column a run of
+    /// ⇧↓ remembers across a short line. After a selection this view
+    /// set itself, AppKit has no anchor to extend from, so the free
+    /// end is moved here instead: the selection collapses to it, the
+    /// plain movement says where that lands, and the selection is set
+    /// again from the anchor to there.
+    private func extend(
+        pointing forward: Bool, natively native: () -> Void, plainly plain: () -> Void
+    ) {
+        guard appKitAnchorIsStale else {
+            // AppKit moves one end and keeps the other; which one it
+            // kept is read off the result.
+            keepingAnEnd = true
+            native()
+            keepingAnEnd = false
+            return
+        }
+        let selection = selectedRange()
+        let anchor = selectionAnchor ?? (forward ? selection.location : NSMaxRange(selection))
+        let caret = anchor == selection.location ? NSMaxRange(selection) : selection.location
+        extendingSelection = true
+        // Still selecting: the collapsed caret is a step, not a
+        // selection anyone should hear about.
+        super.setSelectedRanges(
+            [NSValue(range: NSRange(location: caret, length: 0))], affinity: .downstream,
+            stillSelecting: true)
+        plain()
+        let landed = selectedRange().location
+        extendingSelection = false
+        extendSelection(to: landed, anchor: anchor)
+    }
+
+    override func moveLeftAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: false, natively: { super.moveLeftAndModifySelection(sender) },
+            plainly: { super.moveLeft(sender) })
+    }
+    override func moveRightAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: true, natively: { super.moveRightAndModifySelection(sender) },
+            plainly: { super.moveRight(sender) })
+    }
+    override func moveBackwardAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: false, natively: { super.moveBackwardAndModifySelection(sender) },
+            plainly: { super.moveBackward(sender) })
+    }
+    override func moveForwardAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: true, natively: { super.moveForwardAndModifySelection(sender) },
+            plainly: { super.moveForward(sender) })
+    }
+    override func moveUpAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: false, natively: { super.moveUpAndModifySelection(sender) },
+            plainly: { super.moveUp(sender) })
+    }
+    override func moveDownAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: true, natively: { super.moveDownAndModifySelection(sender) },
+            plainly: { super.moveDown(sender) })
+    }
+    override func moveToBeginningOfLineAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: false,
+            natively: { super.moveToBeginningOfLineAndModifySelection(sender) },
+            plainly: { super.moveToBeginningOfLine(sender) })
+    }
+    override func moveToEndOfLineAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: true, natively: { super.moveToEndOfLineAndModifySelection(sender) },
+            plainly: { super.moveToEndOfLine(sender) })
+    }
+    override func moveToLeftEndOfLineAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: false,
+            natively: { super.moveToLeftEndOfLineAndModifySelection(sender) },
+            plainly: { super.moveToLeftEndOfLine(sender) })
+    }
+    override func moveToRightEndOfLineAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: true,
+            natively: { super.moveToRightEndOfLineAndModifySelection(sender) },
+            plainly: { super.moveToRightEndOfLine(sender) })
+    }
+    override func moveToBeginningOfParagraphAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: false,
+            natively: { super.moveToBeginningOfParagraphAndModifySelection(sender) },
+            plainly: { super.moveToBeginningOfParagraph(sender) })
+    }
+    override func moveToEndOfParagraphAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: true,
+            natively: { super.moveToEndOfParagraphAndModifySelection(sender) },
+            plainly: { super.moveToEndOfParagraph(sender) })
+    }
+    override func moveParagraphBackwardAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: false,
+            natively: { super.moveParagraphBackwardAndModifySelection(sender) },
+            plainly: { super.moveToBeginningOfParagraph(sender) })
+    }
+    override func moveParagraphForwardAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: true,
+            natively: { super.moveParagraphForwardAndModifySelection(sender) },
+            plainly: { super.moveToEndOfParagraph(sender) })
+    }
+    override func moveToBeginningOfDocumentAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: false,
+            natively: { super.moveToBeginningOfDocumentAndModifySelection(sender) },
+            plainly: { super.moveToBeginningOfDocument(sender) })
+    }
+    override func moveToEndOfDocumentAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: true,
+            natively: { super.moveToEndOfDocumentAndModifySelection(sender) },
+            plainly: { super.moveToEndOfDocument(sender) })
+    }
+    override func pageUpAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: false, natively: { super.pageUpAndModifySelection(sender) },
+            plainly: { super.pageUp(sender) })
+    }
+    override func pageDownAndModifySelection(_ sender: Any?) {
+        extend(
+            pointing: true, natively: { super.pageDownAndModifySelection(sender) },
+            plainly: { super.pageDown(sender) })
     }
 
     override func setSelectedRanges(
         _ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool
     ) {
+        let before = selectedRange()
         super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
-        // Any selection but our own — a click, a drag, a find, a jump —
-        // is a new selection with no anchor yet; the next ⌥⇧ arrow
-        // decides which end holds still.
-        if !extendingSelection { selectionAnchor = nil }
+        if !extendingSelection {
+            // A selection somebody else made. When it was made by
+            // moving one end, the end that stood still is its anchor.
+            // Anything else — a click, a double-click, a find, a jump —
+            // is a new selection with no anchor yet, and the next arrow
+            // decides which end holds still.
+            selectionAnchor = keepingAnEnd ? endThatStoodStill(from: before) : nil
+            appKitAnchorIsStale = false
+        }
         if !tintedLine.isEmpty { setNeedsDisplay(tintedLine) }
         if let line = caretLineRect() { setNeedsDisplay(line) }
+    }
+
+    /// The anchor of a selection that was just changed by moving one
+    /// end: the one already on record if it is still an end, else
+    /// whichever end of the old selection is an end of the new one. A
+    /// selection that shares no end with the last, or both, or is
+    /// empty, has none.
+    private func endThatStoodStill(from before: NSRange) -> Int? {
+        let after = selectedRange()
+        guard after.length > 0 else { return nil }
+        let known = selectionAnchor.map { [$0] } ?? [before.location, NSMaxRange(before)]
+        let still = Set(known).filter { $0 == after.location || $0 == NSMaxRange(after) }
+        return still.count == 1 ? still.first : nil
+    }
+
+    /// A drag selects from where the button went down, and that place
+    /// is its anchor; a shift-click moves one end of what was selected.
+    /// Both run inside `super.mouseDown`, which tracks the mouse until
+    /// the button comes up, so the anchor is settled when it returns.
+    override func mouseDown(with event: NSEvent) {
+        let before = selectedRange()
+        let anchorBefore = selectionAnchor
+        let pressed = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
+        let extending = event.modifierFlags.contains(.shift)
+        super.mouseDown(with: event)
+        let after = selectedRange()
+        if extending {
+            selectionAnchor = anchorBefore
+            selectionAnchor = endThatStoodStill(from: before)
+        } else if after.length > 0, event.clickCount == 1,
+            pressed == after.location || pressed == NSMaxRange(after)
+        {
+            selectionAnchor = pressed
+        }
     }
 
     /// The full-width rectangle of the line holding the caret, in view

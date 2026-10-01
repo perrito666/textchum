@@ -2173,9 +2173,45 @@ func runSmokeTest() -> Int32 {
             print("FAIL: option-shift-right from a double-clicked word gave \(view.selectedRange()), not bar baz")
             return 1
         }
+        // Mixing the arrows: a selection made a character at a time is
+        // given back a word at a time, and the other way round. Each
+        // used to find no anchor left by the other and extend its own
+        // end, so the selection could only grow.
+        view.setSelectedRange(NSRange(location: 11, length: 0))  // after "baz"
+        view.moveLeftAndModifySelection(nil)
+        view.moveLeftAndModifySelection(nil)
+        guard view.selectedRange() == NSRange(location: 9, length: 2) else {
+            print("FAIL: shift-left twice gave \(view.selectedRange())")
+            return 1
+        }
+        view.moveWordRightAndModifySelection(nil)
+        guard view.selectedRange() == NSRange(location: 11, length: 0) else {
+            print("FAIL: option-shift-right after shift-left grew the selection: \(view.selectedRange())")
+            return 1
+        }
+        view.moveWordLeftAndModifySelection(nil)
+        guard view.selectedRange() == NSRange(location: 8, length: 3) else {
+            print("FAIL: option-shift-left from the end gave \(view.selectedRange()), not baz")
+            return 1
+        }
+        view.moveRightAndModifySelection(nil)
+        guard view.selectedRange() == NSRange(location: 9, length: 2) else {
+            print("FAIL: shift-right after option-shift-left grew the selection: \(view.selectedRange())")
+            return 1
+        }
+        view.moveToBeginningOfLineAndModifySelection(nil)
+        guard view.selectedRange() == NSRange(location: 0, length: 11) else {
+            print("FAIL: shift-home after a word selection gave \(view.selectedRange())")
+            return 1
+        }
+        view.moveRightAndModifySelection(nil)
+        guard view.selectedRange() == NSRange(location: 1, length: 10) else {
+            print("FAIL: shift-right after shift-home grew the selection: \(view.selectedRange())")
+            return 1
+        }
         bench.window?.close()
     }
-    print("word selection ok (grows the way the arrow points, from any selection)")
+    print("word selection ok (grows the way the arrow points, from any selection, and gives back what another arrow took)")
 
     // Selecting a word marks its other occurrences, on the layout the
     // view draws from.
