@@ -20,6 +20,7 @@ use std::path::Path;
 use serde_json::{json, Value};
 
 use crate::i18n::tr;
+use crate::tools;
 
 /// A program a preset runs, and how to get it.
 pub struct Tool {
@@ -63,7 +64,7 @@ pub fn language_presets() -> Vec<LanguagePreset> {
             // rustfmt reading stdin does not look at Cargo.toml, and
             // without an edition it assumes 2015; {edition} is the
             // nearest manifest's.
-            preprocessors: vec![("rust", vec!["rustfmt --edition {edition}"])],
+            preprocessors: vec![("rust", vec![tools::command("rustfmt")])],
             tools: vec![
                 Tool { command: "rust-analyzer", install: "rustup component add rust-analyzer" },
                 Tool { command: "cargo-clippy", install: "rustup component add clippy" },
@@ -83,10 +84,7 @@ pub fn language_presets() -> Vec<LanguagePreset> {
             settings: vec![],
             preprocessors: vec![(
                 "python",
-                vec![
-                    "ruff check --fix --exit-zero --no-cache --stdin-filename {path} -",
-                    "ruff format --stdin-filename {path} -",
-                ],
+                vec![tools::command("ruff-fix"), tools::command("ruff-format")],
             )],
             tools: vec![
                 Tool { command: "pyright-langserver", install: "npm install -g pyright" },
@@ -100,7 +98,7 @@ pub fn language_presets() -> Vec<LanguagePreset> {
             missing: String::new(),
             servers: vec![("go", "gopls")],
             settings: vec![("gopls", json!({"gopls": {"staticcheck": true}}))],
-            preprocessors: vec![("go", vec!["goimports"])],
+            preprocessors: vec![("go", vec![tools::command("goimports")])],
             tools: vec![
                 Tool { command: "gopls", install: "go install golang.org/x/tools/gopls@latest" },
                 Tool {
@@ -123,9 +121,9 @@ pub fn language_presets() -> Vec<LanguagePreset> {
             ],
             settings: vec![],
             preprocessors: vec![
-                ("javascript", vec!["prettier --stdin-filepath {path}"]),
-                ("typescript", vec!["prettier --stdin-filepath {path}"]),
-                ("tsx", vec!["prettier --stdin-filepath {path}"]),
+                ("javascript", vec![tools::command("prettier")]),
+                ("typescript", vec![tools::command("prettier")]),
+                ("tsx", vec![tools::command("prettier")]),
             ],
             tools: vec![
                 Tool {
@@ -143,8 +141,8 @@ pub fn language_presets() -> Vec<LanguagePreset> {
             servers: vec![("c", "clangd"), ("cpp", "clangd")],
             settings: vec![],
             preprocessors: vec![
-                ("c", vec!["clang-format --assume-filename={path}"]),
-                ("cpp", vec!["clang-format --assume-filename={path}"]),
+                ("c", vec![tools::command("clang-format")]),
+                ("cpp", vec![tools::command("clang-format")]),
             ],
             tools: vec![
                 Tool { command: "clangd", install: "brew install llvm, or apt install clangd" },

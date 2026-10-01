@@ -43,6 +43,7 @@ pub mod search;
 pub mod snippet;
 pub mod syntax;
 pub mod theme_import;
+pub mod tools;
 pub mod transform;
 pub mod workspace;
 

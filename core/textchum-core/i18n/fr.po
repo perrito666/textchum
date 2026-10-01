@@ -27,23 +27,29 @@ msgstr "Fermer l'onglet"
 
 #: core/textchum-core/src/presets.rs
 msgid "rust-analyzer checking with clippy, and rustfmt before every save."
-msgstr "rust-analyzer vérifiant avec clippy, et rustfmt avant chaque enregistrement."
+msgstr ""
+"rust-analyzer vérifiant avec clippy, et rustfmt avant chaque enregistrement."
 
 #: core/textchum-core/src/presets.rs
 msgid ""
 "pyright for types and navigation, and ruff fixing and formatting before "
 "every save."
-msgstr "pyright pour les types et la navigation, et ruff qui corrige et formate avant chaque enregistrement."
+msgstr ""
+"pyright pour les types et la navigation, et ruff qui corrige et formate "
+"avant chaque enregistrement."
 
 #: core/textchum-core/src/presets.rs
 msgid ""
 "ruff's own findings do not show in the editor: a document has one server, "
 "and here it is pyright."
-msgstr "Les résultats propres à ruff ne s'affichent pas dans l'éditeur : un document a un seul serveur, et ici c'est pyright."
+msgstr ""
+"Les résultats propres à ruff ne s'affichent pas dans l'éditeur : un document "
+"a un seul serveur, et ici c'est pyright."
 
 #: core/textchum-core/src/presets.rs
 msgid "gopls with staticcheck on, and goimports before every save."
-msgstr "gopls avec staticcheck activé, et goimports avant chaque enregistrement."
+msgstr ""
+"gopls avec staticcheck activé, et goimports avant chaque enregistrement."
 
 #: core/textchum-core/src/presets.rs
 msgid "TypeScript and JavaScript"
@@ -55,7 +61,9 @@ msgstr "typescript-language-server, et prettier avant chaque enregistrement."
 
 #: core/textchum-core/src/presets.rs
 msgid "eslint's findings do not show in the editor: a document has one server."
-msgstr "Les résultats d'eslint ne s'affichent pas dans l'éditeur : un document a un seul serveur."
+msgstr ""
+"Les résultats d'eslint ne s'affichent pas dans l'éditeur : un document a un "
+"seul serveur."
 
 #: core/textchum-core/src/presets.rs
 msgid "C and C++"
@@ -64,6 +72,18 @@ msgstr "C et C++"
 #: core/textchum-core/src/presets.rs
 msgid "clangd, and clang-format before every save."
 msgstr "clangd, et clang-format avant chaque enregistrement."
+
+#: core/textchum-core/src/tools.rs
+msgid "Formats the document"
+msgstr "Formate le document"
+
+#: core/textchum-core/src/tools.rs
+msgid "Fixes what its linter can"
+msgstr "Corrige ce que son linter sait corriger"
+
+#: core/textchum-core/src/tools.rs
+msgid "Sorts and tidies the imports"
+msgstr "Trie et range les imports"
 
 #: linux/src/keyboard.rs
 msgid "New Tab"
@@ -1019,7 +1039,12 @@ msgid ""
 "language is usually worked with, as ordinary entries under Language Servers "
 "and Preprocessors that you can then edit. Tools are looked for on PATH; a "
 "missing one names how to install it."
-msgstr "Chacun écrit le serveur, ses réglages et les préprocesseurs d'enregistrement avec lesquels on travaille d'ordinaire un langage, sous forme d'entrées ordinaires dans Serveurs de langage et Préprocesseurs que l'on peut ensuite modifier. Les outils sont cherchés dans PATH ; celui qui manque indique comment l'installer."
+msgstr ""
+"Chacun écrit le serveur, ses réglages et les préprocesseurs d'enregistrement "
+"avec lesquels on travaille d'ordinaire un langage, sous forme d'entrées "
+"ordinaires dans Serveurs de langage et Préprocesseurs que l'on peut ensuite "
+"modifier. Les outils sont cherchés dans PATH ; celui qui manque indique "
+"comment l'installer."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Applied"
@@ -1172,6 +1197,14 @@ msgstr "Rendre à chaque commande le raccourci que son profil indique"
 #: linux/src/workbench.rs
 msgid "Commands"
 msgstr "Commandes"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Known tools"
+msgstr "Outils connus"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Known servers"
+msgstr "Serveurs connus"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Project Records"
@@ -1987,6 +2020,23 @@ msgstr ""
 #: macos/Sources/Textchum/Settings.swift
 msgid "Commands, one per line — Return adds a line"
 msgstr "Commandes, une par ligne : Entrée ajoute une ligne"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "No known tool for this language"
+msgstr "Aucun outil connu pour ce langage"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid ""
+"Adds the command line a known tool takes, so it does not have to be looked up"
+msgstr "Ajoute la ligne de commande que prend un outil connu, pour ne pas avoir à la chercher"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "No known server for this language"
+msgstr "Aucun serveur connu pour ce langage"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "Names a server the editor knows how to start"
+msgstr "Nomme un serveur que l'éditeur sait démarrer"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "commands, one per line"

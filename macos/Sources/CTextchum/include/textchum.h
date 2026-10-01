@@ -2859,6 +2859,15 @@ bool tc_workspace_is_hidden(const char *name,
                             uintptr_t globs_len);
 
 /**
+ * The tools whose command lines the editor knows, for a settings
+ * screen that adds a save preprocessor: a JSON array of `{id, name,
+ * summary, languages, command, program, install, found}`, `found`
+ * saying whether the program is on `PATH` right now. Release with
+ * [`tc_string_free`].
+ */
+char *tc_tool_presets_json(void);
+
+/**
  * The language presets, for a settings screen: a JSON array of
  * `{id, name, summary, missing, applied, servers, settings,
  * preprocessors, tools}` objects, each tool saying whether it was

@@ -6686,6 +6686,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     let add_command = adw::EntryRow::new();
     add_command.set_title(&tr("command (e.g. pylsp)"));
     add_command.set_show_apply_button(true);
+    attach_server_choices(&add_command, &add_language);
     {
         let shell = Rc::clone(&shell);
         let language_row = add_language.clone();
@@ -6784,6 +6785,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
         }
         row.set_text(&chain);
         row.set_show_apply_button(true);
+        attach_tool_choices(&row, None);
         let shell = Rc::clone(&shell);
         row.connect_apply(move |row| {
             let text = row.text();
@@ -6805,6 +6807,7 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     let add_preprocessor_chain = adw::EntryRow::new();
     add_preprocessor_chain.set_title(&tr("commands (e.g. ruff check --fix - ;; black -)"));
     add_preprocessor_chain.set_show_apply_button(true);
+    attach_tool_choices(&add_preprocessor_chain, Some(&add_preprocessor_language));
     {
         let shell = Rc::clone(&shell);
         let root_row = add_preprocessor_root.clone();
@@ -7517,10 +7520,102 @@ fn open_project_roots() -> Vec<String> {
 
 /// Offers a list of paths on a row that still takes any text.
 fn attach_path_choices(row: &adw::EntryRow, tooltip: &str, paths: Vec<String>) {
+    let target = row.clone();
+    let values = paths.clone();
+    attach_choices(row, tooltip, paths, move |index| target.set_text(&values[index]));
+}
+
+/// Offers the tools the core knows the command line of beside a chain
+/// row. Choosing one appends the line it takes — and names the
+/// language, when that row is still empty — so nobody has to look up
+/// that black wants a trailing dash and prettier a file name. A tool
+/// that is not installed is still offered, with how to get it.
+fn attach_tool_choices(chain_row: &adw::EntryRow, language_row: Option<&adw::EntryRow>) {
+    let tools = textchum_core::tools::all();
+    let labels = tools
+        .iter()
+        .map(|tool| {
+            let found = textchum_core::presets::on_path(tool.program());
+            let mut label = format!(
+                "{} {} — {}",
+                if found { "✓" } else { "✗" },
+                tool.name,
+                tool.languages.join(", ")
+            );
+            if !found {
+                label.push_str(&format!(" · {}", tool.install));
+            }
+            label
+        })
+        .collect();
+    let chain = chain_row.clone();
+    let language = language_row.cloned();
+    attach_choices(chain_row, &tr("Known tools"), labels, move |index| {
+        let tool = &tools[index];
+        let current = chain.text().trim().to_string();
+        if current.is_empty() {
+            chain.set_text(tool.command);
+        } else {
+            chain.set_text(&format!("{current} ;; {}", tool.command));
+        }
+        if let Some(language) = &language {
+            if language.text().trim().is_empty() {
+                language.set_text(tool.languages[0]);
+            }
+        }
+        // The row saves on Apply; putting the caret in it is what
+        // brings the button up.
+        chain.grab_focus();
+    });
+}
+
+/// Offers the registered servers beside a command row. Choosing one
+/// writes its id, which the registry turns into the command and the
+/// arguments it needs.
+fn attach_server_choices(command_row: &adw::EntryRow, language_row: &adw::EntryRow) {
+    let servers = textchum_lsp::registry::all();
+    let labels = servers
+        .iter()
+        .map(|server| {
+            let found = textchum_lsp::registry::executable_exists(server.command);
+            let mut label = format!(
+                "{} {} — {}",
+                if found { "✓" } else { "✗" },
+                server.id,
+                server.languages.join(", ")
+            );
+            if !found {
+                label.push_str(&format!(" · {}", server.install_hint));
+            }
+            label
+        })
+        .collect();
+    let command = command_row.clone();
+    let language = language_row.clone();
+    attach_choices(command_row, &tr("Known servers"), labels, move |index| {
+        let server = &servers[index];
+        command.set_text(server.id);
+        if language.text().trim().is_empty() {
+            if let Some(first) = server.languages.first() {
+                language.set_text(first);
+            }
+        }
+        command.grab_focus();
+    });
+}
+
+/// A menu button on an entry row listing `labels`; `choose` is told
+/// which one was picked.
+fn attach_choices(
+    row: &adw::EntryRow,
+    tooltip: &str,
+    labels: Vec<String>,
+    choose: impl Fn(usize) + 'static,
+) {
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
     list.set_activate_on_single_click(true);
-    if paths.is_empty() {
+    if labels.is_empty() {
         // An empty list is a gap the reader has to interpret; say why.
         let label = gtk::Label::new(Some("Nothing to offer"));
         label.set_margin_start(8);
@@ -7530,8 +7625,8 @@ fn attach_path_choices(row: &adw::EntryRow, tooltip: &str, paths: Vec<String>) {
         label.set_sensitive(false);
         list.append(&label);
     }
-    for path in &paths {
-        let label = gtk::Label::new(Some(path));
+    for text in &labels {
+        let label = gtk::Label::new(Some(text));
         label.set_xalign(0.0);
         label.set_margin_start(8);
         label.set_margin_end(8);
@@ -7557,13 +7652,13 @@ fn attach_path_choices(row: &adw::EntryRow, tooltip: &str, paths: Vec<String>) {
     button.set_popover(Some(&popover));
 
     {
-        let row = row.clone();
         let popover = popover.clone();
+        let count = labels.len();
         list.connect_row_activated(move |_, activated| {
-            if let Some(label) = activated.child().and_downcast::<gtk::Label>() {
-                if label.is_sensitive() {
-                    row.set_text(&label.text());
-                }
+            // The "nothing to offer" line is a row too, and not a choice.
+            let index = activated.index();
+            if index >= 0 && (index as usize) < count {
+                choose(index as usize);
             }
             popover.popdown();
         });

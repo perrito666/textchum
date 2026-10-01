@@ -5200,6 +5200,17 @@ pub unsafe extern "C" fn tc_workspace_is_hidden(
     textchum_core::workspace::is_hidden(name, &globs)
 }
 
+/// The tools whose command lines the editor knows, for a settings
+/// screen that adds a save preprocessor: a JSON array of `{id, name,
+/// summary, languages, command, program, install, found}`, `found`
+/// saying whether the program is on `PATH` right now. Release with
+/// [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_tool_presets_json() -> *mut c_char {
+    catch_unwind(|| owned_c_string(textchum_core::tools::tool_presets_json()))
+        .unwrap_or(std::ptr::null_mut())
+}
+
 /// The language presets, for a settings screen: a JSON array of
 /// `{id, name, summary, missing, applied, servers, settings,
 /// preprocessors, tools}` objects, each tool saying whether it was

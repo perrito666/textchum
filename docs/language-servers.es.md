@@ -152,19 +152,25 @@ Textchum encuentra los servidores en el `PATH` — no los instala:
 | YAML | yaml-language-server | `npm install -g yaml-language-server` |
 | TOML | taplo | `brew install taplo` |
 | Markdown | marksman | `brew install marksman` |
+| Elixir | elixir-ls | `brew install elixir-ls` |
+| PHP | intelephense | `npm install -g intelephense` |
+| Dockerfile | docker-langserver | `npm install -g dockerfile-language-server-nodejs` |
+| XML | lemminx | `brew install lemminx` |
+| SQL | sqls | `go install github.com/sqls-server/sqls@latest` |
+| R | languageserver | `R -e 'install.packages("languageserver")'` |
 
 Las plantillas de Go también las atiende `gopls`, C++ lo atiende
 `clangd`, y TypeScript y TSX los servidores de JavaScript. Varios
 lenguajes tienen más de un servidor registrado: Python cuenta con
 `pyright`, `basedpyright`, `pylsp`, `ruff`, `jedi`, `ty` y `pyrefly`;
 JavaScript, TypeScript y TSX con `typescript-language-server`, `vtsls`,
-`deno` y `biome`; Ruby con `ruby-lsp` y `solargraph`.
+`deno` y `biome`; Ruby con `ruby-lsp`, `solargraph` y `rubocop`, este
+último un *linter* para correr junto a uno de los otros dos; PHP con
+`intelephense` y `phpactor`.
 
-PHP tiene gramática pero ningún servidor registrado: los que se usan no
-documentan la línea de órdenes que aceptan, y una entrada adivinada es
-peor que ninguna — `lsp.servers` acepta la que tú conozcas. La tabla
-nombra el que se usa cuando la configuración no dice nada; a los demás
-se los pide por identificador.
+La tabla nombra el que se usa cuando la configuración no dice nada; a
+los demás se los pide por identificador, y `lsp.servers` acepta uno que
+el editor no conozca.
 
 ## Elegir los servidores
 

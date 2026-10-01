@@ -404,6 +404,84 @@ sans sauvegarder — formater avec vos outils plutôt qu'avec le
 formateur du serveur. Le résultat arrive en une seule édition, donc ⌘Z
 l'annule.
 
+### Outils connus
+
+Personne ne devrait avoir à chercher que black veut un tiret final et
+prettier un nom de fichier. Le menu **Known tools** — à côté de chaque
+chaîne dans Settings ▸ Preprocessors, et dans le formulaire qui en
+ajoute une — liste les outils dont l'éditeur connaît la ligne de
+commande pour le langage en question, marque ceux qui sont installés,
+et écrit la ligne quand on en choisit un. Un outil qui n'est pas
+installé est proposé quand même, avec la commande qui l'installe.
+**Known servers** fait de même pour la commande du serveur dans
+Language Servers.
+
+| Outil | Langages | La ligne qu'il écrit |
+|---|---|---|
+| rustfmt | rust | `rustfmt --edition {edition}` |
+| gofmt | go | `gofmt` |
+| goimports | go | `goimports` |
+| gofumpt | go | `gofumpt` |
+| golines | go | `golines` |
+| ruff format | python | `ruff format --stdin-filename {path} -` |
+| ruff check --fix | python | `ruff check --fix --exit-zero --no-cache --stdin-filename {path} -` |
+| ruff (imports) | python | `ruff check --select I --fix --exit-zero --no-cache --stdin-filename {path} -` |
+| black | python | `black --quiet --stdin-filename {path} -` |
+| isort | python | `isort --stdout --filename {path} -` |
+| autopep8 | python | `autopep8 -` |
+| yapf | python | `yapf --quiet` |
+| autoflake | python | `autoflake --remove-all-unused-imports --stdin-display-name {path} -` |
+| usort | python | `usort format -` |
+| prettier | javascript, typescript, tsx, css, html, json, yaml, markdown | `prettier --stdin-filepath {path}` |
+| prettierd | javascript, typescript, tsx, css, html, json, yaml, markdown | `prettierd {path}` |
+| biome | javascript, typescript, tsx, json, css | `biome format --stdin-file-path {path}` |
+| dprint | javascript, typescript, tsx, json, markdown, toml | `dprint fmt --stdin {path}` |
+| eslint_d | javascript, typescript, tsx | `eslint_d --fix-to-stdout --stdin --stdin-filename {path}` |
+| clang-format | c, cpp, java, csharp | `clang-format --assume-filename={path}` |
+| astyle | c, cpp | `astyle` |
+| shfmt | bash | `shfmt -filename {path}` |
+| beautysh | bash | `beautysh -` |
+| stylua | lua | `stylua --search-parent-directories --stdin-filepath {path} -` |
+| zig fmt | zig | `zig fmt --stdin` |
+| terraform fmt | hcl | `terraform fmt -` |
+| tofu fmt | hcl | `tofu fmt -` |
+| packer fmt | hcl | `packer fmt -` |
+| nomad fmt | hcl | `nomad fmt -` |
+| jq | json | `jq .` |
+| fixjson | json | `fixjson` |
+| taplo | toml | `taplo format -` |
+| yamlfmt | yaml | `yamlfmt -` |
+| mdformat | markdown | `mdformat -` |
+| xmllint | xml | `xmllint --format -` |
+| sql-formatter | sql | `sql-formatter` |
+| sqlfmt | sql | `sqlfmt -` |
+| pg_format | sql | `pg_format` |
+| swiftformat | swift | `swiftformat --stdinpath {path}` |
+| rubocop | ruby | `rubocop --auto-correct-all --fail-level fatal --stderr --force-exclusion --stdin {path}` |
+| standardrb | ruby | `standardrb --fix --fail-level fatal --stderr --stdin {path}` |
+| nixfmt | nix | `nixfmt` |
+| alejandra | nix | `alejandra --quiet -` |
+| nixpkgs-fmt | nix | `nixpkgs-fmt` |
+| ormolu | haskell | `ormolu --stdin-input-file {path}` |
+| fourmolu | haskell | `fourmolu --stdin-input-file {path}` |
+| stylish-haskell | haskell | `stylish-haskell` |
+| ocamlformat | ocaml | `ocamlformat --enable-outside-detected-project --name {path} -` |
+| ocp-indent | ocaml | `ocp-indent` |
+| mix format | elixir | `mix format --stdin-filename {path} -` |
+| scalafmt | scala | `scalafmt --stdin` |
+| google-java-format | java | `google-java-format -` |
+| cmake-format | cmake | `cmake-format -` |
+| gersemi | cmake | `gersemi -` |
+
+Une ligne est du texte ordinaire une fois écrite : on peut lui ajouter
+des options, réordonner la chaîne ou la supprimer, comme pour toute
+autre. La table est testée contre ceux de ces outils que possède la
+machine qui lance les tests.
+
+Pas encore là : un outil hors de cette table doit toujours être tapé,
+et les outils qui ne font que réécrire les fichiers sur place, au lieu
+de travailler sur l'entrée standard, ne sont pas listés.
+
 ## Profils de langage
 
 Un langage est rarement un seul outil ; Settings ▸ Presets propose donc

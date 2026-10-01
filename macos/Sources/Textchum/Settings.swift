@@ -2199,6 +2199,14 @@ private struct LanguageServersTab: View {
                             TextField(
                                 "Server command (e.g. pyright-langserver --stdio)",
                                 text: $newCommand)
+                            KnownServersMenu(language: newLanguage) { server in
+                                if newLanguage.trimmingCharacters(in: .whitespaces).isEmpty {
+                                    newLanguage = server.languages.first ?? ""
+                                }
+                                // The id is enough: the registry
+                                // supplies the command and its arguments.
+                                newCommand = server.id
+                            }
                             Button(t("Add")) {
                                 model.addLSPEntry(
                                     scope: newScope, language: newLanguage, command: newCommand)
@@ -2273,9 +2281,19 @@ private struct PreprocessorsTab: View {
                                 CommandsField(entry: entry) { commands in
                                     model.updatePreprocessorEntry(entry, commands: commands)
                                 }
+                                // The field keeps what is typed in it;
+                                // a line added from the menu has to
+                                // rebuild it to be seen.
+                                .id(entry.id + "\n" + entry.commands)
                             }
                             .help(entry.scope.isEmpty ? "All projects" : entry.scope)
                             Spacer()
+                            KnownToolsMenu(language: entry.language) { tool in
+                                model.updatePreprocessorEntry(
+                                    entry,
+                                    commands: entry.commands.isEmpty
+                                        ? tool.command : entry.commands + "\n" + tool.command)
+                            }
                             Button {
                                 model.removePreprocessorEntry(entry)
                             } label: {
@@ -2318,6 +2336,14 @@ private struct PreprocessorsTab: View {
                             CommandsEditor(
                                 placeholder: t("Commands, one per line — Return adds a line"),
                                 text: $newCommands)
+                            KnownToolsMenu(language: newLanguage) { tool in
+                                if newLanguage.trimmingCharacters(in: .whitespaces).isEmpty {
+                                    newLanguage = tool.languages.first ?? ""
+                                }
+                                newCommands =
+                                    newCommands.isEmpty
+                                    ? tool.command : newCommands + "\n" + tool.command
+                            }
                             Button(t("Add")) {
                                 model.addPreprocessorEntry(
                                     scope: newScope,
@@ -2337,6 +2363,78 @@ private struct PreprocessorsTab: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
+    }
+}
+
+/// The tools the core knows the command line of, for the language in
+/// hand: choosing one writes the line it takes, so nobody has to look
+/// up that black wants a trailing dash and prettier a file name. A
+/// tool that is not installed is still offered, with how to get it.
+private struct KnownToolsMenu: View {
+    let language: String
+    let choose: (CoreToolPreset) -> Void
+
+    var body: some View {
+        let wanted = language.trimmingCharacters(in: .whitespaces).lowercased()
+        let tools = CoreTools.presets.filter { wanted.isEmpty || $0.languages.contains(wanted) }
+        Menu(t("Known tools")) {
+            if tools.isEmpty {
+                Text(t("No known tool for this language"))
+            }
+            ForEach(tools) { tool in
+                Button(Self.title(of: tool, namingLanguages: wanted.isEmpty)) { choose(tool) }
+            }
+        }
+        .fixedSize()
+        .help(t("Adds the command line a known tool takes, so it does not have to be looked up"))
+    }
+
+    static func title(of tool: CoreToolPreset, namingLanguages: Bool) -> String {
+        var title = "\(tool.found ? "✓" : "✗") \(tool.name) — \(tool.summary)"
+        if namingLanguages {
+            title += " (\(tool.languages.joined(separator: ", ")))"
+        }
+        if !tool.found {
+            title += " · \(tool.install)"
+        }
+        return title
+    }
+}
+
+/// The registered servers for the language in hand. Choosing one
+/// writes its id, which the registry turns into the command and the
+/// arguments it needs.
+private struct KnownServersMenu: View {
+    let language: String
+    let choose: (CoreLSPRegistry.Server) -> Void
+
+    var body: some View {
+        let wanted = language.trimmingCharacters(in: .whitespaces).lowercased()
+        let servers = CoreLSPRegistry.all.filter {
+            wanted.isEmpty || $0.languages.contains(wanted)
+        }
+        Menu(t("Known servers")) {
+            if servers.isEmpty {
+                Text(t("No known server for this language"))
+            }
+            ForEach(servers, id: \.id) { server in
+                Button(Self.title(of: server, namingLanguages: wanted.isEmpty)) { choose(server) }
+            }
+        }
+        .fixedSize()
+        .help(t("Names a server the editor knows how to start"))
+    }
+
+    static func title(of server: CoreLSPRegistry.Server, namingLanguages: Bool) -> String {
+        let found = CoreLSPRegistry.isInstalled(server.command)
+        var title = "\(found ? "✓" : "✗") \(server.id)"
+        if namingLanguages {
+            title += " (\(server.languages.joined(separator: ", ")))"
+        }
+        if !found {
+            title += " · \(server.installHint)"
+        }
+        return title
     }
 }
 
