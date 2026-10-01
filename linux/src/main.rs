@@ -443,6 +443,7 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.complete", "<Ctrl>space"),
     ("win.quick-open", "<Ctrl>p"),
     ("win.changed-files", "<Ctrl><Alt>p"),
+    ("win.project-symbols", "<Ctrl><Alt>o"),
     ("win.definition", "F12"),
     ("win.sidebar", "F9"),
     ("win.preview", "<Ctrl><Alt>p"),

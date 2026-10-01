@@ -1482,6 +1482,31 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the panel came back \(shownAgain.frame.height)pt tall, not 120")
         return 1
     }
+    // A server's project-wide symbols become rows to pick: the name
+    // first, then the kind, what it sits in, and where.
+    do {
+        let found = CoreSymbols.rows(
+            fromResultJSON: """
+                [{"name": "Server", "kind": 23, "containerName": "net",
+                  "location": {"uri": "file:///work/proj/src/server.rs",
+                               "range": {"start": {"line": 11, "character": 11},
+                                         "end": {"line": 11, "character": 17}}}},
+                 {"name": "remote", "kind": 12, "location": {"uri": "untitled:1"}}]
+                """)
+        guard found.count == 1, found[0].kind == "struct", found[0].line == 11 else {
+            print("FAIL: the project's symbols came out as \(found)")
+            return 1
+        }
+        let row = QuickFinderPanel.Row.symbol(found[0], scope: "/work/proj")
+        guard row.name == "Server", row.tail == "struct in net — src/server.rs:12",
+            row.path == "/work/proj/src/server.rs", row.line == 12
+        else {
+            print("FAIL: the symbol's row reads \(row)")
+            return 1
+        }
+    }
+    print("project symbols ok (reduced to rows: name, kind, container, place)")
+
     // The server's answer about a symbol's uses becomes ranges of the
     // text, in its units; an answer that is not a list marks nothing.
     do {

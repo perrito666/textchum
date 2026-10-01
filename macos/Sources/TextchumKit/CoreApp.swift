@@ -303,6 +303,26 @@ public final class CoreApp {
         router.register(id, completion)
     }
 
+    /// Requests the symbols across the project whose names match
+    /// `query`, from the servers of the document at `path`. False when
+    /// that document has no server that searches symbols, in which case
+    /// the completion is never called. ``CoreSymbols`` reduces the
+    /// answer to rows.
+    @MainActor
+    @discardableResult
+    public func lspWorkspaceSymbol(
+        path: String, query: String, completion: @escaping (String) -> Void
+    ) -> Bool {
+        let id = withUTF8(path) { path, pathLen in
+            withUTF8(query) { query, queryLen in
+                tc_lsp_workspace_symbol(handle, path, pathLen, query, queryLen)
+            }
+        }
+        guard id != 0 else { return false }
+        router.register(id, completion)
+        return true
+    }
+
     /// What asking the server to format on the spot came to.
     public enum FormatAnswer: Equatable, Sendable {
         case formatted(String)
@@ -582,5 +602,36 @@ public struct CoreSignature: Decodable, Equatable, Sendable {
         defer { tc_string_free(reduced) }
         return try? JSONDecoder().decode(
             CoreSignature.self, from: Data(String(cString: reduced).utf8))
+    }
+}
+
+/// One symbol of a project, as a row to pick: reduced by the core from
+/// a server's answer.
+public struct CoreSymbol: Decodable, Equatable, Sendable {
+    public let name: String
+    /// The kind in a word: `function`, `struct`, `constant`…
+    public let kind: String
+    public let container: String
+    public let path: String
+    /// Zero-based.
+    public let line: Int
+    public let character: Int
+}
+
+public enum CoreSymbols {
+    /// The rows of a `workspace/symbol` result.
+    public static func rows(fromResultJSON json: String) -> [CoreSymbol] {
+        var json = json
+        let reduced = json.withUTF8 { bytes in
+            tc_workspace_symbols_json(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count))
+        }
+        guard let reduced else { return [] }
+        defer { tc_string_free(reduced) }
+        return (try? JSONDecoder().decode(
+            [CoreSymbol].self, from: Data(String(cString: reduced).utf8))) ?? []
     }
 }

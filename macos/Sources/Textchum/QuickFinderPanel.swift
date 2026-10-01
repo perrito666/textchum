@@ -17,12 +17,16 @@ final class QuickFinderPanel: NSObject {
         /// The files the branch touches, as an openable list: the pull
         /// request's files, read from git alone.
         case changed
+        /// The project's symbols by name, as its language server knows
+        /// them.
+        case symbols
 
         var title: String {
             switch self {
             case .files: t("Open Quickly")
             case .grep: t("Find in Project")
             case .changed: t("Changed in Branch")
+            case .symbols: t("Go to Symbol in Project")
             }
         }
 
@@ -32,6 +36,7 @@ final class QuickFinderPanel: NSObject {
             switch self {
             case .files, .changed: t("fuzzy file name…")
             case .grep: regex ? t("regular expression…") : t("text to find…")
+            case .symbols: t("symbol name…")
             }
         }
     }
@@ -104,6 +109,20 @@ final class QuickFinderPanel: NSObject {
                 directory: parts.directory, name: parts.name, tail: "")
         }
 
+        /// A symbol: its name is what is read, and the kind, what it
+        /// sits inside and where follow it.
+        static func symbol(_ symbol: CoreSymbol, scope: String) -> Row {
+            let relative =
+                symbol.path.hasPrefix(scope + "/")
+                ? String(symbol.path.dropFirst(scope.count + 1)) : symbol.path
+            let inside = symbol.container.isEmpty ? "" : " in \(symbol.container)"
+            return Row(
+                display: "\(symbol.name) \(symbol.container) \(relative)",
+                path: symbol.path, line: symbol.line + 1,
+                directory: "", name: symbol.name,
+                tail: "\(symbol.kind)\(inside) — \(relative):\(symbol.line + 1)")
+        }
+
         static func hit(_ relative: String, path: String, line: Int, text: String) -> Row {
             let parts = split(relative)
             return Row(
@@ -131,6 +150,12 @@ final class QuickFinderPanel: NSObject {
     }
     /// Opens a result: absolute path, one-based line (0 = just open).
     var onOpen: ((String, Int) -> Void)?
+
+    /// Who to ask for symbols: handed the query, it delivers the rows —
+    /// or nil when there is no language server to ask, which is not the
+    /// same as a query that matched nothing. Set by the caller, which
+    /// knows the document the question is asked from.
+    var symbolSearch: ((String, @escaping ([Row]?) -> Void) -> Void)?
 
     /// Presents the panel for `mode`, scoped to `scope`.
     func show(mode: Mode, scope: String, over window: NSWindow?) {
@@ -160,10 +185,9 @@ final class QuickFinderPanel: NSObject {
         panel.makeFirstResponder(queryField)
         // Files mode indexes the scope once; grep asks the core per
         // query (it streams from disk by design).
-        if mode != .grep {
-            refreshFileIndex(force: true)
-        } else {
-            runSearch()
+        switch mode {
+        case .files, .changed: refreshFileIndex(force: true)
+        case .grep, .symbols: runSearch()
         }
     }
 
@@ -446,6 +470,11 @@ final class QuickFinderPanel: NSObject {
         searchGeneration += 1
         let generation = searchGeneration
 
+        if mode == .symbols {
+            runSymbolSearch(query: query, generation: generation)
+            return
+        }
+
         // Pure core functions, run off the main thread; stale results
         // (an older generation) are dropped on arrival.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -479,6 +508,8 @@ final class QuickFinderPanel: NSObject {
                 } else {
                     status = "\(filtered.count) of \(index.count) files."
                 }
+            case .symbols:
+                break  // answered by the language server, above
             case .grep:
                 if query.isEmpty {
                     status = "Type to search."
@@ -523,6 +554,39 @@ final class QuickFinderPanel: NSObject {
                     }
                 }
             }
+        }
+    }
+
+    /// Asks the language server for the symbols matching `query` and
+    /// lists them. The server answers when it answers; a result for a
+    /// query that has since changed is dropped.
+    private func runSymbolSearch(query: String, generation: Int) {
+        let show = { [weak self] (found: [Row], status: String) in
+            guard let self, self.searchGeneration == generation else { return }
+            self.rows = found
+            self.statusLabel.stringValue = "\(status)   ·   \(Self.keyHint)"
+            self.table.reloadData()
+            if !found.isEmpty {
+                self.table.selectRowIndexes([0], byExtendingSelection: false)
+            }
+        }
+        guard !query.isEmpty else {
+            show([], t("Type part of a symbol's name."))
+            return
+        }
+        guard let symbolSearch else {
+            show([], t("No language server here searches symbols."))
+            return
+        }
+        symbolSearch(query) { found in
+            guard let found else {
+                show([], t("No language server here searches symbols."))
+                return
+            }
+            show(
+                found,
+                found.isEmpty
+                    ? t("No symbol matches.") : tn("{} symbol", "{} symbols", found.count))
         }
     }
 

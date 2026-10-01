@@ -342,7 +342,8 @@ fn run_manager(
                 "workspace": {
                     "configuration": true,
                     "workspaceFolders": true,
-                    "didChangeConfiguration": {"dynamicRegistration": false}
+                    "didChangeConfiguration": {"dynamicRegistration": false},
+                    "symbol": {}
                 },
                 "window": {"workDoneProgress": true}
             },

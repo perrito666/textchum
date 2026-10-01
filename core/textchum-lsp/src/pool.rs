@@ -949,6 +949,20 @@ impl Pool {
         }
     }
 
+    /// Asks for the symbols across the project whose names match
+    /// `query`. The servers are those of `path`, the document the
+    /// question is asked from: a project's symbols are its server's to
+    /// know. The response's `result` is an LSP `SymbolInformation[]` or
+    /// `WorkspaceSymbol[]`.
+    pub fn workspace_symbol(&mut self, path: &Path, query: &str) -> u64 {
+        self.request(
+            path,
+            "workspaceSymbolProvider",
+            "workspace/symbol",
+            serde_json::json!({"query": query}),
+        )
+    }
+
     pub fn document_symbols(&mut self, path: &Path) -> u64 {
         self.request(
             path,

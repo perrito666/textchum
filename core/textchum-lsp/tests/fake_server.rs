@@ -694,3 +694,30 @@ fn a_symbols_other_uses_come_from_the_server() {
     assert_eq!(uses.as_array().map(Vec::len), Some(2));
     assert_eq!(uses[1]["range"]["start"]["character"], 12);
 }
+
+#[test]
+fn a_projects_symbols_are_found_by_name() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-symbols");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    assert_eq!(pool.workspace_symbol(std::path::Path::new("/not/open.rs"), "x"), 0);
+    let asked = pool.workspace_symbol(&file, "serve");
+    let mut seen = Vec::new();
+    collect_until(&events, "the symbols", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == asked))
+    });
+    let answer = seen
+        .iter()
+        .find_map(|event| match event {
+            Event::LspResponse { id, json } if *id == asked => Some(json.clone()),
+            _ => None,
+        })
+        .unwrap();
+    let rows = textchum_core::symbols::rows(&answer);
+    assert_eq!(rows.len(), 2);
+    assert_eq!((rows[0].name.as_str(), rows[0].kind, rows[0].line), ("serve_function", "function", 0));
+    assert_eq!(std::path::Path::new(&rows[0].path), file);
+    assert_eq!(rows[1].kind, "struct");
+}

@@ -295,6 +295,10 @@ impl Workbench {
         file_section.append_submenu(Some(&tr("Open Recent")), &recent_menu);
         file_section.append(Some(&tr("Open Quickly…")), Some("win.quick-open"));
         file_section.append(Some(&tr("Changed in Branch…")), Some("win.changed-files"));
+        file_section.append(
+            Some(&tr("Go to Symbol in Project…")),
+            Some("win.project-symbols"),
+        );
         file_section.append(Some(&tr("Save")), Some("win.save"));
         file_section.append(Some(&tr("Save As…")), Some("win.save-as"));
         file_section.append(Some(&tr("Revert to Saved")), Some("win.revert"));
@@ -2469,6 +2473,15 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .unwrap_or_else(glib::home_dir);
         show_changed_files(workbench, root);
     });
+    add("project-symbols", workbench, |workbench, _| {
+        // A project's symbols are its language server's to know, and
+        // the server is reached through the document in front.
+        let path = workbench.selected().and_then(|page| page.path().borrow().clone());
+        match path {
+            Some(path) => show_symbol_picker(workbench, path),
+            None => workbench.toast(&tr("No language server here searches symbols.")),
+        }
+    });
     add("quick-open", workbench, |workbench, _| {
         let root = workbench
             .selected()
@@ -3447,6 +3460,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Open…", "win.open"),
     ("Open Quickly…", "win.quick-open"),
     ("Changed in Branch…", "win.changed-files"),
+    ("Go to Symbol in Project…", "win.project-symbols"),
     ("Save", "win.save"),
     ("Save As…", "win.save-as"),
     ("Revert to Saved", "win.revert"),
@@ -5036,6 +5050,184 @@ fn show_file_picker(workbench: &Rc<Workbench>, root: PathBuf, index: Vec<String>
                 }
                 return glib::Propagation::Stop;
             }
+            if key == gtk::gdk::Key::Down || key == gtk::gdk::Key::Up {
+                let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
+                let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
+                if let Some(row) = list.row_at_index(next.max(0)) {
+                    list.select_row(Some(&row));
+                }
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        dialog.add_controller(keys);
+    }
+    wire_escape(&dialog, &entry);
+    dialog.present();
+    entry.grab_focus();
+}
+
+/// The project's symbols by name, as the language server of the
+/// document at `path` knows them: type part of a name, pick a row,
+/// land on its declaration.
+fn show_symbol_picker(workbench: &Rc<Workbench>, path: String) {
+    let entry = gtk::SearchEntry::new();
+    entry.set_placeholder_text(Some(&tr("symbol name…")));
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::Browse);
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&list)
+        .vexpand(true)
+        .build();
+    let status = gtk::Label::new(Some(&tr("Type part of a symbol's name.")));
+    status.set_xalign(0.0);
+    status.add_css_class("dim-label");
+    status.set_margin_start(4);
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    content.set_margin_top(10);
+    content.set_margin_bottom(10);
+    content.set_margin_start(10);
+    content.set_margin_end(10);
+    content.append(&entry);
+    content.append(&scrolled);
+    content.append(&status);
+
+    let dialog = adw::Window::builder()
+        .transient_for(&workbench.window)
+        .modal(true)
+        .default_width(620)
+        .default_height(380)
+        .title(tr("Go to Symbol in Project"))
+        .content(&content)
+        .build();
+
+    // The rows on show, by list index; and a count of the questions
+    // asked, so an answer to an earlier query is dropped.
+    let found: Rc<RefCell<Vec<textchum_core::symbols::Symbol>>> = Rc::new(RefCell::new(Vec::new()));
+    let asked = Rc::new(Cell::new(0u64));
+    let root = workspace::project_root_for(Path::new(&path));
+    {
+        let list = list.clone();
+        let status = status.clone();
+        let found = Rc::clone(&found);
+        let asked = Rc::clone(&asked);
+        let path = path.clone();
+        entry.connect_search_changed(move |entry| {
+            let question = asked.get().wrapping_add(1);
+            asked.set(question);
+            let query = entry.text().to_string();
+            let clear = |list: &gtk::ListBox| {
+                while let Some(child) = list.first_child() {
+                    list.remove(&child);
+                }
+            };
+            if query.is_empty() {
+                clear(&list);
+                found.borrow_mut().clear();
+                status.set_text(&tr("Type part of a symbol's name."));
+                return;
+            }
+            let shell = Shell::instance();
+            let id = shell
+                .pool
+                .borrow_mut()
+                .workspace_symbol(Path::new(&path), &query);
+            if id == 0 {
+                clear(&list);
+                found.borrow_mut().clear();
+                status.set_text(&tr("No language server here searches symbols."));
+                return;
+            }
+            let list = list.clone();
+            let status = status.clone();
+            let found = Rc::clone(&found);
+            let asked = Rc::clone(&asked);
+            let root = root.clone();
+            shell.expect_response(id, move |json| {
+                if asked.get() != question {
+                    return;
+                }
+                let symbols = textchum_core::symbols::rows(json);
+                while let Some(child) = list.first_child() {
+                    list.remove(&child);
+                }
+                for symbol in &symbols {
+                    let place = root
+                        .as_deref()
+                        .and_then(|root| Path::new(&symbol.path).strip_prefix(root).ok())
+                        .map(|relative| relative.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| symbol.path.clone());
+                    let inside = if symbol.container.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" in {}", symbol.container)
+                    };
+                    let label = gtk::Label::new(Some(&format!(
+                        "{}   {}{} — {}:{}",
+                        symbol.name,
+                        symbol.kind,
+                        inside,
+                        place,
+                        symbol.line + 1
+                    )));
+                    label.set_xalign(0.0);
+                    label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+                    label.set_margin_start(6);
+                    label.set_margin_top(3);
+                    label.set_margin_bottom(3);
+                    list.append(&label);
+                }
+                status.set_text(&if symbols.is_empty() {
+                    tr("No symbol matches.")
+                } else {
+                    fill(
+                        &tr_n("{} symbol", "{} symbols", symbols.len()),
+                        &[&symbols.len().to_string()],
+                    )
+                });
+                if let Some(first) = list.row_at_index(0) {
+                    list.select_row(Some(&first));
+                }
+                *found.borrow_mut() = symbols;
+            });
+        });
+    }
+
+    let open_row = {
+        let workbench = Rc::clone(workbench);
+        let dialog = dialog.clone();
+        let found = Rc::clone(&found);
+        move |row: &gtk::ListBoxRow| {
+            let chosen = found.borrow().get(row.index().max(0) as usize).cloned();
+            if let Some(symbol) = chosen {
+                dialog.close();
+                workbench.open(
+                    Some(PathBuf::from(symbol.path)),
+                    Some((symbol.line as i32, symbol.character as usize)),
+                );
+            }
+        }
+    };
+    {
+        let open_row = open_row.clone();
+        list.connect_row_activated(move |_, row| open_row(row));
+    }
+    {
+        // The server narrows as the name is typed, so ⏎ opens: there is
+        // no local search to run again.
+        let list = list.clone();
+        let open_row = open_row.clone();
+        entry.connect_activate(move |_| {
+            if let Some(row) = list.selected_row().or_else(|| list.row_at_index(0)) {
+                open_row(&row);
+            }
+        });
+    }
+    {
+        let list = list.clone();
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(move |_, key, _, _| {
             if key == gtk::gdk::Key::Down || key == gtk::gdk::Key::Up {
                 let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
                 let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);

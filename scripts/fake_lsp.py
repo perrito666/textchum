@@ -142,6 +142,7 @@ def main():
                         "executeCommandProvider": {"commands": ["fake.report"]},
                         "signatureHelpProvider": {"triggerCharacters": ["(", ","]},
                         "documentHighlightProvider": True,
+                        "workspaceSymbolProvider": True,
                     }.items() if name not in without
                 }},
             })
@@ -189,6 +190,23 @@ def main():
                         % (position["line"], position["character"]),
                     }
                 },
+            })
+        elif method == "workspace/symbol":
+            # Two symbols whose names carry the query, in the file that
+            # was last opened or changed.
+            query = message["params"]["query"]
+            uri = next(reversed(list(texts)), "file:///nowhere")
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": [
+                    {"name": query + "_function", "kind": 12, "containerName": "fake",
+                     "location": {"uri": uri,
+                                  "range": {"start": {"line": 0, "character": 3},
+                                            "end": {"line": 0, "character": 7}}}},
+                    {"name": query + "Struct", "kind": 23,
+                     "location": {"uri": uri}},
+                ],
             })
         elif method == "textDocument/documentHighlight":
             # The symbol's two uses: where it is asked about, and the

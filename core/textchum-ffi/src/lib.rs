@@ -312,6 +312,52 @@ pub unsafe extern "C" fn tc_lsp_document_highlight(
     .unwrap_or(0)
 }
 
+/// Requests the symbols across the project whose names match `query`,
+/// from the servers of the document at `path`. Returns the request id
+/// whose `TC_EVENT_LSP_RESPONSE` event will carry the answer, or 0
+/// when that document has no server that searches symbols.
+/// [`tc_workspace_symbols_json`] reduces the answer to rows.
+///
+/// # Safety
+/// `app` must be a live app pointer; `path` and `query` must point to
+/// `path_len` and `query_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_workspace_symbol(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    query: *const c_char,
+    query_len: usize,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let (Some(path), Some(query)) =
+        (unsafe { (str_from_raw(path, path_len), str_from_raw(query, query_len)) })
+    else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool.workspace_symbol(std::path::Path::new(path), query)
+    }))
+    .unwrap_or(0)
+}
+
+/// Reduces a `workspace/symbol` result to rows: a JSON array of
+/// `{name, kind, container, path, line, character}`, `kind` in a word
+/// and `line` zero-based. Release with [`tc_string_free`].
+///
+/// # Safety
+/// `json` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_workspace_symbols_json(json: *const c_char, len: usize) -> *mut c_char {
+    let Some(json) = (unsafe { str_from_raw(json, len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(textchum_core::symbols::rows_json(json))))
+        .unwrap_or(std::ptr::null_mut())
+}
+
 /// Has the document's language server format `text` and waits for the
 /// result, for the `@format` link of a save chain. Answers a JSON
 /// object: `{"text": …}` with the formatted text, or `{"error": …}`

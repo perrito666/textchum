@@ -43,6 +43,7 @@ pub mod references;
 pub mod search;
 pub mod signature;
 pub mod snippet;
+pub mod symbols;
 pub mod syntax;
 pub mod theme_import;
 pub mod tools;
