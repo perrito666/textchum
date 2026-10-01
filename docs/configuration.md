@@ -377,6 +377,15 @@ name `runPreprocessors`) runs the chain on demand without saving —
 formatting through your tools instead of the language server's
 formatter. The result lands as one edit, so ⌘Z undoes it.
 
+The link `@format` is not a program: it asks the document's language
+server to format, and the save waits up to two seconds for the answer.
+It is how a formatter that needs the project's own settings gets them —
+rust-analyzer formats with the crate's edition, gopls with its
+configured options — and it can sit anywhere in a chain, before or
+after commands. A server that cannot format (none running, none that
+formats, none that answered in time) does not fail the chain: the text
+goes on as it is and the notification area says why.
+
 ### Known tools
 
 Nobody should have to look up that black wants a trailing dash and

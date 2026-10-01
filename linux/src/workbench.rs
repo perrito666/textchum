@@ -4390,8 +4390,40 @@ fn run_preprocessor_chain(page: &Rc<Page>) -> Result<(), crate::preprocessors::F
         return Ok(());
     };
     let text = page.state.borrow().document.text();
-    let output =
-        crate::preprocessors::run(&commands, &text, root.as_deref(), Some(&path))?;
+    // The `@format` link: the server formats, and the save waits for
+    // it. One that cannot — none running, none that formats, none that
+    // answered in time — does not stop the save: the text goes on as
+    // it is, and the notification area says why.
+    let server_path = page.path().borrow().clone();
+    let server_format = move |text: &str| -> String {
+        let shell = Shell::instance();
+        let answer = match server_path.as_deref() {
+            Some(path) => {
+                let tab_width = shell.config.borrow().tab_width();
+                shell.pool.borrow_mut().format_now(
+                    Path::new(path),
+                    text,
+                    tab_width,
+                    std::time::Duration::from_secs(2),
+                )
+            }
+            None => Err(tr("none is running for this document")),
+        };
+        match answer {
+            Ok(formatted) => formatted,
+            Err(why) => {
+                shell.notify(&fill(&tr("Not formatted by the language server: {}"), &[&why]));
+                text.to_owned()
+            }
+        }
+    };
+    let output = crate::preprocessors::run(
+        &commands,
+        &text,
+        root.as_deref(),
+        Some(&path),
+        Some(&server_format),
+    )?;
     page::apply_whole_document(page, &output);
     Ok(())
 }
@@ -7550,35 +7582,40 @@ fn attach_path_choices(row: &adw::EntryRow, tooltip: &str, paths: Vec<String>) {
 /// that is not installed is still offered, with how to get it.
 fn attach_tool_choices(chain_row: &adw::EntryRow, language_row: Option<&adw::EntryRow>) {
     let tools = textchum_core::tools::all();
-    let labels = tools
-        .iter()
-        .map(|tool| {
-            let found = textchum_core::presets::on_path(tool.program());
-            let mut label = format!(
-                "{} {} — {}",
-                if found { "✓" } else { "✗" },
-                tool.name,
-                tool.languages.join(", ")
-            );
-            if !found {
-                label.push_str(&format!(" · {}", tool.install));
-            }
-            label
-        })
-        .collect();
+    // First, and for every language: the server's own formatter, which
+    // is a chain link and not a program.
+    let mut offered: Vec<(String, &'static str, Option<&'static str>)> = vec![(
+        format!("✓ {} — {}", tr("Language server"), textchum_core::tools::SERVER_FORMAT),
+        textchum_core::tools::SERVER_FORMAT,
+        None,
+    )];
+    offered.extend(tools.iter().map(|tool| {
+        let found = textchum_core::presets::on_path(tool.program());
+        let mut label = format!(
+            "{} {} — {}",
+            if found { "✓" } else { "✗" },
+            tool.name,
+            tool.languages.join(", ")
+        );
+        if !found {
+            label.push_str(&format!(" · {}", tool.install));
+        }
+        (label, tool.command, tool.languages.first().copied())
+    }));
+    let labels = offered.iter().map(|(label, _, _)| label.clone()).collect();
     let chain = chain_row.clone();
     let language = language_row.cloned();
     attach_choices(chain_row, &tr("Known tools"), labels, move |index| {
-        let tool = &tools[index];
+        let (_, command, first_language) = &offered[index];
         let current = chain.text().trim().to_string();
         if current.is_empty() {
-            chain.set_text(tool.command);
+            chain.set_text(command);
         } else {
-            chain.set_text(&format!("{current} ;; {}", tool.command));
+            chain.set_text(&format!("{current} ;; {command}"));
         }
-        if let Some(language) = &language {
+        if let (Some(language), Some(first_language)) = (&language, first_language) {
             if language.text().trim().is_empty() {
-                language.set_text(tool.languages[0]);
+                language.set_text(first_language);
             }
         }
         // The row saves on Apply; putting the caret in it is what

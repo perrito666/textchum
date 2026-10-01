@@ -1482,6 +1482,23 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the panel came back \(shownAgain.frame.height)pt tall, not 120")
         return 1
     }
+    // A chain link can be the language server instead of a program:
+    // `@format` hands the text to whoever formats and takes what comes
+    // back, and with nobody to ask it passes the text on.
+    do {
+        let chain = ["tr a-z A-Z", "@format", "sed -e s|$|!|"]
+        let withServer = Preprocessors.run(
+            commands: chain, on: "abc\n", in: nil, serverFormat: { "<" + $0 })
+        let withoutServer = Preprocessors.run(commands: chain, on: "abc\n", in: nil)
+        guard case .success("<ABC!\n") = withServer, case .success("ABC!\n") = withoutServer,
+            CoreTools.presets.first?.command == Preprocessors.serverFormatLink
+        else {
+            print("FAIL: the @format link did not take its turn in the chain: \(withServer) \(withoutServer)")
+            return 1
+        }
+    }
+    print("server format link ok (takes its turn in the chain, passes the text on when nobody formats)")
+
     // A signature is reduced by the core to one line and the stretch of
     // it that is the parameter being typed, which the balloon sets bold.
     do {

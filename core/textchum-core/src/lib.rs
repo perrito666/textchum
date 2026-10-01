@@ -18,6 +18,7 @@ mod buffer;
 pub mod changes;
 pub mod code_action;
 pub mod definition;
+pub mod edits;
 pub mod diagnostics;
 mod config;
 mod document;

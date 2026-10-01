@@ -26,6 +26,7 @@ pub fn run(
     text: &str,
     directory: Option<&Path>,
     document_path: Option<&str>,
+    server_format: Option<&dyn Fn(&str) -> String>,
 ) -> Result<String, Failure> {
     let path = document_path.unwrap_or("");
     let filename = Path::new(path)
@@ -42,6 +43,15 @@ pub fn run(
     };
     let mut current = text.to_owned();
     for command in commands {
+        // Not a program: the document's language server formats, and
+        // answers with the text as it was when it could not. Without
+        // anyone to ask, the link passes the text on.
+        if command.trim() == textchum_core::tools::SERVER_FORMAT {
+            if let Some(format) = server_format {
+                current = format(&current);
+            }
+            continue;
+        }
         let words: Vec<String> = split(command)
             .into_iter()
             .map(|word| {
@@ -179,7 +189,7 @@ mod tests {
     #[test]
     fn chain_pipes_and_substitutes() {
         let commands = vec!["tr a-z A-Z".to_string(), "sed -e s|^|{filename}:|".to_string()];
-        let result = run(&commands, "hello\n", None, Some("/tmp/Makefile")).unwrap();
+        let result = run(&commands, "hello\n", None, Some("/tmp/Makefile"), None).unwrap();
         assert_eq!(result, "Makefile:HELLO\n");
     }
 
@@ -190,14 +200,25 @@ mod tests {
         std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"a\"\nedition = \"2024\"\n").unwrap();
         let file = root.join("src/main.rs");
         let commands = vec!["sed -e s|^|{edition}:|".to_string()];
-        let result = run(&commands, "fn main() {}\n", None, Some(&file.to_string_lossy())).unwrap();
+        let result = run(&commands, "fn main() {}\n", None, Some(&file.to_string_lossy()), None).unwrap();
         assert_eq!(result, "2024:fn main() {}\n");
+    }
+
+    #[test]
+    fn the_server_link_takes_its_turn_and_passes_the_text_on_alone() {
+        let commands: Vec<String> =
+            ["tr a-z A-Z", "@format", "sed -e s|$|!|"].iter().map(|c| c.to_string()).collect();
+        let format = |text: &str| format!("<{text}");
+        let with_server = run(&commands, "abc\n", None, None, Some(&format)).unwrap();
+        assert_eq!(with_server, "<ABC!\n");
+        let without = run(&commands, "abc\n", None, None, None).unwrap();
+        assert_eq!(without, "ABC!\n");
     }
 
     #[test]
     fn failure_reports_the_command() {
         let commands = vec!["false".to_string()];
-        let error = run(&commands, "x", None, None).unwrap_err();
+        let error = run(&commands, "x", None, None, None).unwrap_err();
         assert_eq!(error.command, "false");
     }
 

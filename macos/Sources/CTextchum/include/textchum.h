@@ -288,6 +288,27 @@ uint64_t tc_lsp_hover(struct TcApp *app,
                       uint32_t character);
 
 /**
+ * Has the document's language server format `text` and waits for the
+ * result, for the `@format` link of a save chain. Answers a JSON
+ * object: `{"text": …}` with the formatted text, or `{"error": …}`
+ * saying why nothing was formatted (no server that formats, or none
+ * that answered within `wait_ms`), which is a reason to carry on with
+ * the text as it is. Blocks the calling thread for up to `wait_ms`.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `app` must be a live app pointer; `path` and `text` must point to
+ * `path_len` and `text_len` readable bytes.
+ */
+char *tc_lsp_format_now(struct TcApp *app,
+                        const char *path,
+                        uintptr_t path_len,
+                        const char *text,
+                        uintptr_t text_len,
+                        uint32_t tab_size,
+                        uint32_t wait_ms);
+
+/**
  * Requests the signature of the call an LSP position is inside; same
  * contract as [`tc_lsp_hover`]. The response's `result` is an LSP
  * `SignatureHelp`, which [`tc_signature_active_json`] reduces to the

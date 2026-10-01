@@ -4771,13 +4771,38 @@ final class DocumentController: NSResponder {
             .map { "Untitled.\($0.fileExtension)" }
         switch Preprocessors.run(
             commands: commands, on: textView.string, in: projectRoot,
-            documentPath: documentPath)
+            documentPath: documentPath,
+            serverFormat: { [weak self] text in self?.formatThroughServer(text) ?? text })
         {
         case .success(let output):
             applyWholeDocument(output)
             return .clean
         case .failure(let failure):
             return .failed(failure)
+        }
+    }
+
+    /// The `@format` link of a save chain: the server formats `text`,
+    /// and the save waits for it. A server that cannot — none running,
+    /// none that formats, none that answered in time — does not stop
+    /// the save: the text goes on as it is, and the notification area
+    /// says why.
+    private func formatThroughServer(_ text: String) -> String {
+        guard let lspApp, let path = lspOpenPath else {
+            workbench?.showNotice(
+                t("Not formatted by the language server: {}", t("none is running for this document")))
+            return text
+        }
+        // The request carries the text itself; a change still waiting
+        // to be sent would only arrive after it and undo the order.
+        lspChangeTimer?.invalidate()
+        lspChangeTimer = nil
+        switch lspApp.lspFormatNow(path: path, text: text, tabSize: appliedTabWidth) {
+        case .formatted(let formatted):
+            return formatted
+        case .skipped(let why):
+            workbench?.showNotice(t("Not formatted by the language server: {}", why))
+            return text
         }
     }
 

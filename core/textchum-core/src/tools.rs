@@ -496,6 +496,12 @@ static TOOLS: &[ToolSpec] = &[
     },
 ];
 
+/// The chain link that is not a program: it asks the document's
+/// language server to format, which is how a formatter that needs the
+/// project's own settings — the crate's edition, gopls's options — gets
+/// them without being told on a command line.
+pub const SERVER_FORMAT: &str = "@format";
+
 /// Every known tool, in the order they are offered.
 pub fn all() -> &'static [ToolSpec] {
     TOOLS
@@ -516,9 +522,19 @@ pub fn command(id: &str) -> &'static str {
 /// summary, languages, command, program, install, found}`, `found`
 /// saying whether the program is on `PATH` right now.
 pub fn tool_presets_json() -> String {
-    let tools: Vec<Value> = TOOLS
-        .iter()
-        .map(|tool| {
+    // First, and for every language: the server's own formatter.
+    let server = serde_json::json!({
+        "id": "server-format",
+        "name": tr("Language server"),
+        "summary": tr("Formats with the server's own formatter"),
+        "languages": [],
+        "command": SERVER_FORMAT,
+        "program": "",
+        "install": "",
+        "found": true,
+    });
+    let tools: Vec<Value> = std::iter::once(server)
+        .chain(TOOLS.iter().map(|tool| {
             serde_json::json!({
                 "id": tool.id,
                 "name": tool.name,
@@ -529,7 +545,7 @@ pub fn tool_presets_json() -> String {
                 "install": tool.install,
                 "found": crate::presets::on_path(tool.program()),
             })
-        })
+        }))
         .collect();
     Value::Array(tools).to_string()
 }

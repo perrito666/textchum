@@ -286,6 +286,50 @@ pub unsafe extern "C" fn tc_lsp_hover(
     .unwrap_or(0)
 }
 
+/// Has the document's language server format `text` and waits for the
+/// result, for the `@format` link of a save chain. Answers a JSON
+/// object: `{"text": …}` with the formatted text, or `{"error": …}`
+/// saying why nothing was formatted (no server that formats, or none
+/// that answered within `wait_ms`), which is a reason to carry on with
+/// the text as it is. Blocks the calling thread for up to `wait_ms`.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `app` must be a live app pointer; `path` and `text` must point to
+/// `path_len` and `text_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_format_now(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    text: *const c_char,
+    text_len: usize,
+    tab_size: u32,
+    wait_ms: u32,
+) -> *mut c_char {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return std::ptr::null_mut();
+    };
+    let (Some(path), Some(text)) =
+        (unsafe { (str_from_raw(path, path_len), str_from_raw(text, text_len)) })
+    else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let answer = match app.pool.format_now(
+            std::path::Path::new(path),
+            text,
+            tab_size,
+            std::time::Duration::from_millis(u64::from(wait_ms)),
+        ) {
+            Ok(formatted) => serde_json::json!({"text": formatted}),
+            Err(why) => serde_json::json!({"error": why}),
+        };
+        owned_c_string(answer.to_string())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Requests the signature of the call an LSP position is inside; same
 /// contract as [`tc_lsp_hover`]. The response's `result` is an LSP
 /// `SignatureHelp`, which [`tc_signature_active_json`] reduces to the
