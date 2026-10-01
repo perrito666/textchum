@@ -72,6 +72,9 @@ pub struct Pool {
     /// What the servers last published about each file, as they
     /// published it — see [`crate::instance::PublishedDiagnostics`].
     published: crate::instance::PublishedDiagnostics,
+    /// Requests somebody is waiting on the spot for; see
+    /// [`crate::instance::Waiters`].
+    waiters: crate::instance::Waiters,
     /// Next client→server request id. Starts above the lifecycle ids
     /// (1 = initialize, 2 = shutdown).
     next_request_id: u64,
@@ -91,6 +94,7 @@ impl Pool {
             workspace_settings: WorkspaceSettings::default(),
             last_activity: HashMap::new(),
             published: Default::default(),
+            waiters: Default::default(),
             next_request_id: 100,
         }
     }
@@ -568,6 +572,7 @@ impl Pool {
                     &root,
                     self.events.clone(),
                     std::sync::Arc::clone(&self.published),
+                    std::sync::Arc::clone(&self.waiters),
                     self.options_for(&config),
                 ) {
                     Ok(instance) => {
@@ -857,6 +862,56 @@ impl Pool {
     /// Requests the document's symbol tree; same contract as
     /// [`Self::hover`]. The response's `result` is an LSP
     /// `DocumentSymbol[]` (hierarchical) or `SymbolInformation[]` (flat).
+    /// Has the document's server format `text` and waits for the
+    /// result, for a save chain: the file is written with what comes
+    /// back, so the answer cannot arrive as an event later.
+    ///
+    /// The server is sent `text` first, since a chain's earlier links
+    /// may have changed it from what the server last saw. A tab-indented
+    /// text is formatted with tabs. `Err` says why nothing was
+    /// formatted — no server that formats, or none that answered in
+    /// time — and is a reason to save the text as it is, not to stop.
+    pub fn format_now(
+        &mut self,
+        path: &Path,
+        text: &str,
+        tab_size: u32,
+        wait: std::time::Duration,
+    ) -> Result<String, String> {
+        if !self.documents.contains_key(path) {
+            return Err("no language server is running for this document".into());
+        }
+        self.did_change(path, text);
+        let uses_tabs = text.contains("\n\t") || text.starts_with('\t');
+        // Registered before the request goes out, so an answer cannot
+        // slip past to the event channel.
+        let (sender, answer) = std::sync::mpsc::channel();
+        let expected = self.next_request_id;
+        if let Ok(mut waiting) = self.waiters.lock() {
+            waiting.insert(expected, sender);
+        }
+        let forget = |waiters: &crate::instance::Waiters| {
+            if let Ok(mut waiting) = waiters.lock() {
+                waiting.remove(&expected);
+            }
+        };
+        let id = self.formatting(path, tab_size, !uses_tabs);
+        if id != expected {
+            forget(&self.waiters);
+            return Err("none of this document's language servers formats".into());
+        }
+        match answer.recv_timeout(wait) {
+            Ok(edits) => Ok(textchum_core::edits::apply(text, &edits)),
+            Err(_) => {
+                forget(&self.waiters);
+                Err(format!(
+                    "the language server did not answer in {:.0} seconds",
+                    wait.as_secs_f64()
+                ))
+            }
+        }
+    }
+
     pub fn document_symbols(&mut self, path: &Path) -> u64 {
         self.request(
             path,

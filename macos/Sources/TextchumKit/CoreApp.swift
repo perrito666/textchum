@@ -284,6 +284,38 @@ public final class CoreApp {
         router.register(id, completion)
     }
 
+    /// What asking the server to format on the spot came to.
+    public enum FormatAnswer: Equatable, Sendable {
+        case formatted(String)
+        /// Nothing was formatted, and why: no server that formats, or
+        /// none that answered in time. A reason to carry on with the
+        /// text as it is.
+        case skipped(String)
+    }
+
+    /// Has the document's server format `text` and waits for the
+    /// result, for the `@format` link of a save chain. Blocks for up to
+    /// `wait` seconds.
+    @MainActor
+    public func lspFormatNow(path: String, text: String, tabSize: Int, wait: TimeInterval = 2)
+        -> FormatAnswer
+    {
+        let answer = withUTF8(path) { path, pathLen in
+            withUTF8(text) { text, textLen in
+                tc_lsp_format_now(
+                    handle, path, pathLen, text, textLen, UInt32(max(1, tabSize)),
+                    UInt32(max(0, wait) * 1000))
+            }
+        }
+        guard let answer else { return .skipped("the language-server pool is not available") }
+        defer { tc_string_free(answer) }
+        let parsed =
+            (try? JSONSerialization.jsonObject(with: Data(String(cString: answer).utf8)))
+            as? [String: Any]
+        if let formatted = parsed?["text"] as? String { return .formatted(formatted) }
+        return .skipped(parsed?["error"] as? String ?? "no answer")
+    }
+
     /// Requests the signature of the call an LSP position is inside;
     /// same contract as ``lspHover(path:line:character:completion:)``.
     /// ``CoreSignature/active(fromResultJSON:)`` reduces the answer.

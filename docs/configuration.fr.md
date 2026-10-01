@@ -404,6 +404,16 @@ sans sauvegarder — formater avec vos outils plutôt qu'avec le
 formateur du serveur. Le résultat arrive en une seule édition, donc ⌘Z
 l'annule.
 
+Le maillon `@format` n'est pas un programme : il demande au serveur de
+langage du document de formater, et l'enregistrement attend la réponse
+jusqu'à deux secondes. C'est ainsi qu'un formateur qui a besoin des
+réglages propres au projet les obtient — rust-analyzer formate avec
+l'édition du *crate*, gopls avec ses options configurées — et il peut
+se placer n'importe où dans une chaîne, avant ou après des commandes. Un
+serveur qui ne peut pas formater (aucun en marche, aucun qui formate,
+aucun qui ait répondu à temps) ne fait pas échouer la chaîne : le texte
+continue tel quel et la zone de notifications dit pourquoi.
+
 ### Outils connus
 
 Personne ne devrait avoir à chercher que black veut un tiret final et

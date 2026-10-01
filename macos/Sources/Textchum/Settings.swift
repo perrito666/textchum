@@ -2379,7 +2379,11 @@ private struct KnownToolsMenu: View {
 
     var body: some View {
         let wanted = language.trimmingCharacters(in: .whitespaces).lowercased()
-        let tools = CoreTools.presets.filter { wanted.isEmpty || $0.languages.contains(wanted) }
+        // A tool with no languages of its own — the server's formatter —
+        // is for all of them.
+        let tools = CoreTools.presets.filter {
+            wanted.isEmpty || $0.languages.isEmpty || $0.languages.contains(wanted)
+        }
         Menu(t("Known tools")) {
             if tools.isEmpty {
                 Text(t("No known tool for this language"))
@@ -2394,7 +2398,7 @@ private struct KnownToolsMenu: View {
 
     static func title(of tool: CoreToolPreset, namingLanguages: Bool) -> String {
         var title = "\(tool.found ? "✓" : "✗") \(tool.name) — \(tool.summary)"
-        if namingLanguages {
+        if namingLanguages, !tool.languages.isEmpty {
             title += " (\(tool.languages.joined(separator: ", ")))"
         }
         if !tool.found {

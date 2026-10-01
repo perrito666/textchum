@@ -8,6 +8,10 @@ import TextchumKit
 /// chain and reports which link broke — the buffer is never replaced
 /// with a partial or empty result.
 enum Preprocessors {
+    /// The chain link that asks the language server instead of running
+    /// a program.
+    static let serverFormatLink = "@format"
+
     struct Failure: Error {
         let command: String
         let details: String
@@ -25,9 +29,15 @@ enum Preprocessors {
     /// `prettier --stdin-filepath {filename}` that infer behavior from
     /// the name while still reading stdin.
     /// Blocking — call it off the main thread or accept the stall.
+    ///
+    /// The link `@format` is not a program: it has the document's
+    /// language server format, through `serverFormat`, which answers
+    /// with the text formatted or, when the server could not, the text
+    /// as it was. Without one the link passes the text on.
     static func run(
         commands: [String], on text: String, in directory: String?,
-        documentPath: String? = nil
+        documentPath: String? = nil,
+        serverFormat: ((String) -> String)? = nil
     ) -> Result<String, Failure> {
         let path = documentPath ?? ""
         let filename = (path as NSString).lastPathComponent
@@ -39,6 +49,10 @@ enum Preprocessors {
             ? CoreManifests.rustEdition(forPath: path) : ""
         var current = text
         for command in commands {
+            if command.trimmingCharacters(in: .whitespaces) == serverFormatLink {
+                current = serverFormat?(current) ?? current
+                continue
+            }
             let words = split(commandLine: command).map { word in
                 word
                     .replacingOccurrences(of: "{path}", with: path)

@@ -646,3 +646,27 @@ fn the_call_being_typed_gets_its_signature_and_its_parameter() {
     // its text rather than by offsets.
     assert_eq!(signature.parameter, Some((13, 19)));
 }
+
+#[test]
+fn a_save_chain_can_have_the_server_format_and_wait_for_it() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-format-now");
+    let wait = Duration::from_secs(10);
+
+    // Nobody to ask yet: a reason, not a hang.
+    let unopened = pool.format_now(&file, "x\n", 4, wait);
+    assert!(unopened.unwrap_err().contains("no language server"));
+
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    // The text handed over is what gets formatted, not what was opened.
+    let formatted = pool.format_now(&file, "let later = 1;\n", 4, wait).expect("formatted");
+    assert_eq!(formatted, "formatted: let later = 1;\n");
+    // The answer went to the waiter, not to the shell as an event.
+    std::thread::sleep(Duration::from_millis(200));
+    let leaked = events.try_iter().any(|event| {
+        matches!(event, Event::LspResponse { json, .. } if json.contains("formatted: "))
+    });
+    assert!(!leaked, "the formatting answer reached the event channel too");
+}

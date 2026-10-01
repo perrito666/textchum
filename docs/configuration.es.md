@@ -396,6 +396,16 @@ la cadena a demanda sin guardar — formatear con tus herramientas en
 vez del formateador del servidor. El resultado llega como una sola
 edición, así que ⌘Z lo deshace.
 
+El eslabón `@format` no es un programa: pide al servidor de lenguaje
+del documento que formatee, y el guardado espera hasta dos segundos la
+respuesta. Es como un formateador que necesita la configuración propia
+del proyecto la obtiene — rust-analyzer formatea con la edición del
+*crate*, gopls con sus opciones configuradas — y puede ir en cualquier
+lugar de una cadena, antes o después de los comandos. Un servidor que
+no puede formatear (ninguno en marcha, ninguno que formatee, ninguno
+que respondiera a tiempo) no hace fallar la cadena: el texto sigue como
+está y el área de notificaciones dice por qué.
+
 ### Herramientas conocidas
 
 Nadie debería tener que averiguar que black quiere un guion al final y

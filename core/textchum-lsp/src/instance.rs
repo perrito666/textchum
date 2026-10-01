@@ -86,6 +86,7 @@ impl Instance {
         root: &Path,
         events: EventSender,
         published: PublishedDiagnostics,
+        waiters: Waiters,
         options: ServerOptions,
     ) -> std::io::Result<Self> {
         let mut child = ProcessCommand::new(&config.command)
@@ -128,7 +129,7 @@ impl Instance {
                 .spawn(move || {
                     run_manager(
                         child, server_id, root, options, capabilities, commands_rx, events,
-                        published,
+                        published, waiters,
                     );
                     let _ = finished_tx.send(());
                 })
@@ -279,6 +280,7 @@ fn run_manager(
     commands: mpsc::Receiver<Command>,
     events: EventSender,
     published: PublishedDiagnostics,
+    waiters: Waiters,
 ) {
     status(&events, &server_id, &root, "starting", "");
     let (stdin, stdout) = {
@@ -430,11 +432,18 @@ fn run_manager(
                                 message.get("id").and_then(Value::as_u64).filter(|id| *id > 2)
                             {
                                 let result = message.get("result").cloned().unwrap_or(Value::Null);
-                                let _ = events.send(Event::LspResponse {
-                                    id,
-                                    json: serde_json::to_string(&result)
-                                        .unwrap_or_else(|_| "null".into()),
-                                });
+                                let json = serde_json::to_string(&result)
+                                    .unwrap_or_else(|_| "null".into());
+                                let waiter =
+                                    waiters.lock().ok().and_then(|mut waiting| waiting.remove(&id));
+                                match waiter {
+                                    Some(waiter) => {
+                                        let _ = waiter.send(json);
+                                    }
+                                    None => {
+                                        let _ = events.send(Event::LspResponse { id, json });
+                                    }
+                                }
                             }
                         } else {
                             answer_if_request(&stdin, &root, &settings, &message);
@@ -679,6 +688,12 @@ mod tests {
 /// server, each publishing its own set, and the shells are shown all
 /// of them together.
 pub type PublishedDiagnostics = Arc<Mutex<HashMap<(String, PathBuf), Value>>>;
+
+/// Requests whose answer somebody is waiting for on the spot, by id.
+/// An answer goes to its waiter instead of the event channel: a save
+/// that asked the server to format has to have the text before it
+/// writes the file, and cannot take it from an event later.
+pub type Waiters = Arc<Mutex<HashMap<u64, mpsc::Sender<String>>>>;
 
 /// Converts a publishDiagnostics notification into a compact core
 /// event, and keeps the original for the requests that need it.

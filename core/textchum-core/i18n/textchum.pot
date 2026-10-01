@@ -79,6 +79,14 @@ msgstr ""
 msgid "Sorts and tidies the imports"
 msgstr ""
 
+#: core/textchum-core/src/tools.rs linux/src/workbench.rs
+msgid "Language server"
+msgstr ""
+
+#: core/textchum-core/src/tools.rs
+msgid "Formats with the server's own formatter"
+msgstr ""
+
 #: linux/src/keyboard.rs
 msgid "New Tab"
 msgstr ""
@@ -757,6 +765,14 @@ msgstr ""
 
 #: linux/src/workbench.rs
 msgid "Could not save the document."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "none is running for this document"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Not formatted by the language server: {}"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift

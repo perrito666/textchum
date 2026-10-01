@@ -34,7 +34,9 @@ msgstr ""
 msgid ""
 "pyright for types and navigation, ruff's findings beside them, and ruff "
 "fixing and formatting before every save."
-msgstr "pyright para tipos y navegación, los hallazgos de ruff a su lado, y ruff corrigiendo y formateando antes de cada guardado."
+msgstr ""
+"pyright para tipos y navegación, los hallazgos de ruff a su lado, y ruff "
+"corrigiendo y formateando antes de cada guardado."
 
 #: core/textchum-core/src/presets.rs
 msgid "gopls with staticcheck on, and goimports before every save."
@@ -52,7 +54,9 @@ msgstr "typescript-language-server, y prettier antes de cada guardado."
 msgid ""
 "eslint's findings are not set up by this preset: its server needs a "
 "project's own configuration."
-msgstr "Este perfil no configura los hallazgos de eslint: su servidor necesita la configuración propia de un proyecto."
+msgstr ""
+"Este perfil no configura los hallazgos de eslint: su servidor necesita la "
+"configuración propia de un proyecto."
 
 #: core/textchum-core/src/presets.rs
 msgid "C and C++"
@@ -73,6 +77,14 @@ msgstr "Corrige lo que su linter puede"
 #: core/textchum-core/src/tools.rs
 msgid "Sorts and tidies the imports"
 msgstr "Ordena y limpia los imports"
+
+#: core/textchum-core/src/tools.rs linux/src/workbench.rs
+msgid "Language server"
+msgstr "Servidor de lenguaje"
+
+#: core/textchum-core/src/tools.rs
+msgid "Formats with the server's own formatter"
+msgstr "Formatea con el formateador propio del servidor"
 
 #: linux/src/keyboard.rs
 msgid "New Tab"
@@ -753,6 +765,14 @@ msgstr "Escribe un comando…"
 #: linux/src/workbench.rs
 msgid "Could not save the document."
 msgstr "No se pudo guardar el documento."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "none is running for this document"
+msgstr "no hay ninguno en marcha para este documento"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Not formatted by the language server: {}"
+msgstr "Sin formatear por el servidor de lenguaje: {}"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Saved without preprocessing — {} failed"
