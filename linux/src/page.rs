@@ -56,6 +56,9 @@ pub struct Page {
     /// within it keeps the balloon: a name read letter by letter is
     /// one name.
     hover_about: Cell<Option<(i32, i32)>>,
+    /// Counts caret moves, so an answer about a symbol's uses that
+    /// arrives after the caret has gone elsewhere is dropped.
+    symbol_uses_asked: Cell<u64>,
     /// The completion popup and its current candidates.
     completion: CompletionState,
     /// The git change bar, and the marks it draws: line number to kind.
@@ -340,6 +343,7 @@ impl Page {
             hover_popover,
             hover_label,
             hover_about: Cell::new(None),
+            symbol_uses_asked: Cell::new(0),
             completion: CompletionState {
                 popover: completion_popover,
                 list: completion_list,
@@ -882,6 +886,68 @@ fn install_occurrence_tag(buffer: &sourceview5::Buffer) {
     let tag = gtk::TextTag::new(Some(OCCURRENCE_TAG));
     tag.set_background_rgba(Some(&gtk::gdk::RGBA::new(0.50, 0.50, 0.50, 0.30)));
     buffer.tag_table().add(&tag);
+}
+
+/// With nothing selected, a caret resting on a name asks the server
+/// where else that symbol is used, and those places take the marks a
+/// selected word's occurrences would. The answer is about the symbol,
+/// not its letters: a shadowing variable of the same name is left
+/// alone.
+pub fn request_symbol_uses(page: &Rc<Page>) {
+    let asked = page.symbol_uses_asked.get().wrapping_add(1);
+    page.symbol_uses_asked.set(asked);
+    let buffer = &page.buffer;
+    if buffer.has_selection() || !Shell::instance().config.borrow().mark_occurrences() {
+        return;
+    }
+    let Some(path) = page.path().borrow().clone() else { return };
+    let caret = buffer.iter_at_mark(&buffer.get_insert());
+    let mut before = caret;
+    let on_a_name =
+        is_word_char(caret.char()) || (before.backward_char() && is_word_char(before.char()));
+    if !on_a_name {
+        return;
+    }
+    let weak = Rc::downgrade(page);
+    glib::timeout_add_local_once(std::time::Duration::from_millis(300), move || {
+        let Some(page) = weak.upgrade() else { return };
+        if page.symbol_uses_asked.get() != asked {
+            return;
+        }
+        let (line, character) = lsp_caret(&page.buffer);
+        let shell = Shell::instance();
+        let id = shell
+            .pool
+            .borrow_mut()
+            .document_highlight(Path::new(&path), line, character);
+        let weak = Rc::downgrade(&page);
+        shell.expect_response(id, move |json| {
+            let Some(page) = weak.upgrade() else { return };
+            if page.symbol_uses_asked.get() != asked {
+                return;
+            }
+            let Ok(serde_json::Value::Array(uses)) =
+                serde_json::from_str::<serde_json::Value>(json)
+            else {
+                return;
+            };
+            let buffer = &page.buffer;
+            buffer.remove_tag_by_name(OCCURRENCE_TAG, &buffer.start_iter(), &buffer.end_iter());
+            for item in &uses {
+                let position = |end: &str| {
+                    let at = &item["range"][end];
+                    iter_at_lsp(
+                        buffer,
+                        at["line"].as_i64().unwrap_or(0) as i32,
+                        at["character"].as_u64().unwrap_or(0) as usize,
+                    )
+                };
+                if let (Some(start), Some(end)) = (position("start"), position("end")) {
+                    buffer.apply_tag_by_name(OCCURRENCE_TAG, &start, &end);
+                }
+            }
+        });
+    });
 }
 
 /// Marks the other places the selected word appears, over the visible
@@ -1811,6 +1877,7 @@ fn install_snippet_keys(page: &Rc<Page>) {
                 glib::idle_add_local_once(move || {
                     if let Some(page) = weak.upgrade() {
                         refresh_occurrences(&page);
+                        request_symbol_uses(&page);
                     }
                 });
             });
@@ -1822,7 +1889,12 @@ fn install_snippet_keys(page: &Rc<Page>) {
         page.view.vadjustment().inspect(|adjustment| {
             adjustment.connect_value_changed(move |_| {
                 let Some(page) = weak.upgrade() else { return };
-                refresh_occurrences(&page);
+                // Only a selection's occurrences depend on what is in
+                // view; a symbol's uses came from the server for the
+                // whole document, and a scroll must not wipe them.
+                if page.buffer.has_selection() {
+                    refresh_occurrences(&page);
+                }
             });
         });
     }

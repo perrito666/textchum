@@ -1482,6 +1482,25 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the panel came back \(shownAgain.frame.height)pt tall, not 120")
         return 1
     }
+    // The server's answer about a symbol's uses becomes ranges of the
+    // text, in its units; an answer that is not a list marks nothing.
+    do {
+        let text = "let 𝔘 = one\nprint(one)\n" as NSString
+        let uses = DocumentController.highlightRanges(
+            fromResultJSON: """
+                [{"range": {"start": {"line": 0, "character": 9}, "end": {"line": 0, "character": 12}}, "kind": 3},
+                 {"range": {"start": {"line": 1, "character": 6}, "end": {"line": 1, "character": 9}}, "kind": 2}]
+                """, in: text)
+        guard uses == [NSRange(location: 9, length: 3), NSRange(location: 19, length: 3)],
+            text.substring(with: uses[1]) == "one",
+            DocumentController.highlightRanges(fromResultJSON: "null", in: text).isEmpty
+        else {
+            print("FAIL: the symbol's uses came out as \(uses)")
+            return 1
+        }
+    }
+    print("symbol uses ok (the server's ranges, in the text's units)")
+
     // A chain link can be the language server instead of a program:
     // `@format` hands the text to whoever formats and takes what comes
     // back, and with nobody to ask it passes the text on.

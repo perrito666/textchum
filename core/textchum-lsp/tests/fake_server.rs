@@ -670,3 +670,27 @@ fn a_save_chain_can_have_the_server_format_and_wait_for_it() {
     });
     assert!(!leaked, "the formatting answer reached the event channel too");
 }
+
+#[test]
+fn a_symbols_other_uses_come_from_the_server() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-highlight");
+    pool.did_open(&file, "rust", "fn main() { main_again(); }\n");
+    let asked = pool.document_highlight(&file, 0, 12);
+    assert_ne!(asked, 0);
+    let mut seen = Vec::new();
+    collect_until(&events, "the uses", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == asked))
+    });
+    let uses: serde_json::Value = seen
+        .iter()
+        .find_map(|event| match event {
+            Event::LspResponse { id, json } if *id == asked => serde_json::from_str(json).ok(),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(uses.as_array().map(Vec::len), Some(2));
+    assert_eq!(uses[1]["range"]["start"]["character"], 12);
+}

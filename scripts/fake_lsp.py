@@ -141,6 +141,7 @@ def main():
                         "documentSymbolProvider": True,
                         "executeCommandProvider": {"commands": ["fake.report"]},
                         "signatureHelpProvider": {"triggerCharacters": ["(", ","]},
+                        "documentHighlightProvider": True,
                     }.items() if name not in without
                 }},
             })
@@ -188,6 +189,21 @@ def main():
                         % (position["line"], position["character"]),
                     }
                 },
+            })
+        elif method == "textDocument/documentHighlight":
+            # The symbol's two uses: where it is asked about, and the
+            # first two characters of the document.
+            position = message["params"]["position"]
+            line, character = position["line"], position["character"]
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": [
+                    {"range": {"start": {"line": 0, "character": 0},
+                               "end": {"line": 0, "character": 2}}, "kind": 3},
+                    {"range": {"start": {"line": line, "character": character},
+                               "end": {"line": line, "character": character + 4}}, "kind": 2},
+                ],
             })
         elif method == "textDocument/signatureHelp":
             # One signature, one parameter named by offsets and one by

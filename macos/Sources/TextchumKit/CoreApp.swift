@@ -284,6 +284,25 @@ public final class CoreApp {
         router.register(id, completion)
     }
 
+    /// Requests the other uses, within the document, of the symbol at
+    /// an LSP position; same contract as
+    /// ``lspHover(path:line:character:completion:)``. The JSON is an LSP
+    /// `DocumentHighlight[]`.
+    @MainActor
+    public func lspDocumentHighlight(
+        path: String,
+        line: Int,
+        character: Int,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_document_highlight(
+                handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
     /// What asking the server to format on the spot came to.
     public enum FormatAnswer: Equatable, Sendable {
         case formatted(String)
