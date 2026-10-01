@@ -3729,7 +3729,13 @@ final class DocumentController: NSResponder {
                     .underlineStyle, value: NSUnderlineStyle.thick.rawValue, for: textRange)
                 target.addRenderingAttribute(.underlineColor, value: color, for: textRange)
             }
-            marks.append(.init(range: range, color: color.withAlphaComponent(0.15)))
+            // A box, not only a tint: at a strength that leaves the text
+            // readable the tint alone is hard to find on a dark theme,
+            // and the outline is what the eye catches.
+            marks.append(
+                .init(
+                    range: range, color: color.withAlphaComponent(0.22),
+                    outline: color.withAlphaComponent(0.9)))
         }
         for view in views {
             (view.textView as? EditorTextView)?.backgroundMarks = marks

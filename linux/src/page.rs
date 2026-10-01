@@ -1178,14 +1178,18 @@ pub fn recolor(buffer: &sourceview5::Buffer) {
 }
 
 /// Squiggle tags for diagnostics: Pango's error underline, tinted per
-/// severity — the macOS background tint's GTK cousin.
+/// severity, over a wash of the same colour. The squiggle alone is
+/// thin and easy to miss in dense code; a tag cannot draw the box the
+/// macOS shell puts around a finding, and the wash is what it can do.
 fn install_diagnostic_tags(buffer: &sourceview5::Buffer) {
     for (name, color) in [("diag-error", "#E4585B"), ("diag-warning", "#E5A54B")] {
         let rgba: gtk::gdk::RGBA = color.parse().unwrap();
+        let wash = gtk::gdk::RGBA::new(rgba.red(), rgba.green(), rgba.blue(), 0.26);
         let tag = gtk::TextTag::builder()
             .name(name)
             .underline(gtk::pango::Underline::Error)
             .underline_rgba(&rgba)
+            .background_rgba(&wash)
             .build();
         buffer.tag_table().add(&tag);
     }

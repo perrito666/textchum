@@ -16,6 +16,10 @@ final class EditorTextView: NSTextView {
     struct BackgroundMark {
         let range: NSRange
         let color: NSColor
+        /// A line drawn around the mark, for the kind that must not be
+        /// missed: a tint alone, at a strength that leaves the text
+        /// readable, all but vanishes on a dark background.
+        var outline: NSColor? = nil
     }
 
     var backgroundMarks: [BackgroundMark] = [] {
@@ -49,7 +53,19 @@ final class EditorTextView: NSTextView {
             layoutManager.enumerateTextSegments(in: textRange, type: .highlight, options: [.rangeNotRequired]) {
                 _, frame, _, _ in
                 let box = frame.offsetBy(dx: origin.x, dy: origin.y)
-                if box.intersects(rect) { box.fill() }
+                guard box.intersects(rect) else { return true }
+                guard let outline = mark.outline else {
+                    box.fill()
+                    return true
+                }
+                // Inset by half the line so the stroke falls on whole
+                // pixels and stays inside the words' own rectangle.
+                let frame = NSBezierPath(
+                    roundedRect: box.insetBy(dx: 0.5, dy: 0.5), xRadius: 2.5, yRadius: 2.5)
+                frame.fill()
+                outline.setStroke()
+                frame.lineWidth = 1
+                frame.stroke()
                 return true
             }
         }
