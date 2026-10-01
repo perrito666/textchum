@@ -50,6 +50,10 @@ Language Servers ; voir [configuration](configuration.md#projets).
   la portion que nomme le serveur (une complétion *postfix* avale le
   receveur et le point) et apporte ses éditions supplémentaires, un
   *import* par exemple.
+- **L'appel en cours de frappe dit ce qu'il prend.** Une parenthèse
+  ouvrante ou une virgule affiche la signature de la fonction au
+  curseur, le paramètre en cours en gras ; la parenthèse fermante, ⎋ ou
+  quitter la ligne la referme.
 - Laisser la souris sur un symbole affiche la documentation **hover** du
   serveur dans une bulle, avec le Markdown envoyé par les serveurs déjà
   rendu — blocs de code en chasse fixe, emphase et code en ligne

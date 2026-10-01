@@ -620,3 +620,29 @@ fn what_a_server_is_busy_with_is_reported_and_then_cleared() {
     assert_eq!(said.first().map(String::as_str), Some("Indexing: 0/2 0%"));
     assert_eq!(said.last().map(String::as_str), Some(""), "and an empty line when it ends");
 }
+
+#[test]
+fn the_call_being_typed_gets_its_signature_and_its_parameter() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-signature");
+    pool.did_open(&file, "rust", "frob(1, \n");
+    let asked = pool.signature_help(&file, 0, 8);
+    let mut seen = Vec::new();
+    collect_until(&events, "a signature", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == asked))
+    });
+    let answer = seen
+        .iter()
+        .find_map(|event| match event {
+            Event::LspResponse { id, json } if *id == asked => Some(json.clone()),
+            _ => None,
+        })
+        .unwrap();
+    let signature = textchum_core::signature::active(&answer).expect("a signature");
+    assert_eq!(signature.label, "frob(x: int, y: str)");
+    // One comma typed: the second parameter, which the server named by
+    // its text rather than by offsets.
+    assert_eq!(signature.parameter, Some((13, 19)));
+}

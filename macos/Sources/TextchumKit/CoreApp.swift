@@ -284,6 +284,24 @@ public final class CoreApp {
         router.register(id, completion)
     }
 
+    /// Requests the signature of the call an LSP position is inside;
+    /// same contract as ``lspHover(path:line:character:completion:)``.
+    /// ``CoreSignature/active(fromResultJSON:)`` reduces the answer.
+    @MainActor
+    public func lspSignatureHelp(
+        path: String,
+        line: Int,
+        character: Int,
+        completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_signature_help(
+                handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
     /// Requests the definition of the symbol at an LSP position; same
     /// contract as ``lspHover(path:line:character:completion:)``. The JSON
     /// is an LSP `Location`, `Location[]`, or `LocationLink[]`.
@@ -481,5 +499,37 @@ public enum CoreLSPRegistry {
                 UInt(bytes.count)
             )
         }
+    }
+}
+
+/// The signature of the call being typed, reduced by the core to the
+/// line to show and the stretch of it that is the current parameter.
+public struct CoreSignature: Decodable, Equatable, Sendable {
+    public let label: String
+    public let start: Int?
+    public let end: Int?
+    public let documentation: String
+
+    /// The active parameter's range in `label`, in UTF-16 units.
+    public var parameterRange: NSRange? {
+        guard let start, let end, end >= start else { return nil }
+        return NSRange(location: start, length: end - start)
+    }
+
+    /// The signature a `signatureHelp` result means; nil when the
+    /// server had nothing to show.
+    public static func active(fromResultJSON json: String) -> CoreSignature? {
+        var json = json
+        let reduced = json.withUTF8 { bytes in
+            tc_signature_active_json(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count))
+        }
+        guard let reduced else { return nil }
+        defer { tc_string_free(reduced) }
+        return try? JSONDecoder().decode(
+            CoreSignature.self, from: Data(String(cString: reduced).utf8))
     }
 }

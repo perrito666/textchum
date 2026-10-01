@@ -1482,6 +1482,37 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the panel came back \(shownAgain.frame.height)pt tall, not 120")
         return 1
     }
+    // A signature is reduced by the core to one line and the stretch of
+    // it that is the parameter being typed, which the balloon sets bold.
+    do {
+        let answer = """
+            {"signatures": [{"label": "frob(x: int, y: str)",
+              "parameters": [{"label": [5, 11]}, {"label": "y: str"}],
+              "documentation": {"kind": "markdown", "value": "Frobs.\\n\\nAt length."}}],
+             "activeSignature": 0, "activeParameter": 1}
+            """
+        guard let signature = CoreSignature.active(fromResultJSON: answer),
+            signature.label == "frob(x: int, y: str)",
+            signature.parameterRange == NSRange(location: 13, length: 6),
+            CoreSignature.active(fromResultJSON: "null") == nil
+        else {
+            print("FAIL: the signature was not reduced to its line and parameter")
+            return 1
+        }
+        let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let shown = DocumentController.signatureAttributedText(signature, font: font)
+        let bold = { (index: Int) -> Bool in
+            (shown.attribute(.font, at: index, effectiveRange: nil) as? NSFont)?
+                .fontDescriptor.symbolicTraits.contains(.bold) == true
+        }
+        guard shown.string == "frob(x: int, y: str)\nFrobs.", bold(13), bold(18), !bold(5), !bold(19)
+        else {
+            print("FAIL: the signature balloon reads \(shown.string.debugDescription)")
+            return 1
+        }
+    }
+    print("signature help ok (one line, the parameter being typed in bold, the first paragraph under it)")
+
     // The known tools are on offer with the line each takes, and the
     // language presets' chains are lines out of the same table.
     do {

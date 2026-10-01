@@ -690,6 +690,20 @@ impl Pool {
 
     /// Requests the definition location(s) of the symbol at an LSP
     /// position; same contract as [`Self::hover`].
+    /// Asks what the call the position is inside takes: its signature,
+    /// and which parameter the position is in.
+    pub fn signature_help(&mut self, path: &Path, line: u32, character: u32) -> u64 {
+        self.request(
+            path,
+            "signatureHelpProvider",
+            "textDocument/signatureHelp",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "position": {"line": line, "character": character},
+            }),
+        )
+    }
+
     pub fn definition(&mut self, path: &Path, line: u32, character: u32) -> u64 {
         self.request(
             path,

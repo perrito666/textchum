@@ -40,6 +40,7 @@ pub mod preview;
 pub mod project_state;
 pub mod references;
 pub mod search;
+pub mod signature;
 pub mod snippet;
 pub mod syntax;
 pub mod theme_import;

@@ -491,6 +491,19 @@ fn install_change_handler(
                 // Completion: identifier characters and '.' ask the
                 // server after a short rest; anything else dismisses.
                 let typed = last_typed.borrow().clone();
+                // Signature help: an opening parenthesis or a comma asks
+                // what the call takes (the parenthesis may arrive with
+                // its closer, when pairs are closed for you); the
+                // closing one puts the answer away.
+                if typed == "(" || typed == "()" || typed == "," {
+                    if let Some(page) = views.iter().find(|view| view.view.has_focus()).cloned() {
+                        request_signature(&page);
+                    }
+                } else if typed == ")" {
+                    for view in &views {
+                        view.hover_popover.popdown();
+                    }
+                }
                 let triggers = typed.len() == 1
                     && typed.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.');
                 if triggers {
@@ -1459,6 +1472,19 @@ mod snippet_tests {
         assert_eq!(items[0].additional_edits[0].new_text, "use std::dbg;\n");
         let insert = items[1].edit.as_ref().unwrap();
         assert_eq!((insert.start_character, insert.end_character), (2, 4));
+    }
+
+    #[test]
+    fn a_signature_marks_its_parameter_and_escapes_the_rest() {
+        let signature = textchum_core::signature::Signature {
+            label: "get<T>(key: &str, or: T)".into(),
+            parameter: Some((7, 16)),
+            documentation: String::new(),
+        };
+        assert_eq!(
+            super::signature_markup(&signature),
+            "<tt>get&lt;T&gt;(<b>key: &amp;str</b>, or: T)</tt>"
+        );
     }
 
     #[test]
@@ -3144,6 +3170,68 @@ fn request_hover(page: &Rc<Page>, iter: gtk::TextIter, deliberate: bool) {
         )));
         page.hover_popover.popup();
     });
+}
+
+/// Asks what the call at the caret takes, and shows the answer in the
+/// balloon hover uses: one line, the parameter being typed in bold.
+fn request_signature(page: &Rc<Page>) {
+    let Some(path) = page.path().borrow().clone() else { return };
+    let (line, character) = lsp_caret(&page.buffer);
+    let shell = Shell::instance();
+    // The server answers for the text it has; the debounced change
+    // would reach it after this request, so the text goes first.
+    {
+        let text = page.state.borrow().document.text();
+        shell.pool.borrow_mut().did_change(Path::new(&path), &text);
+    }
+    let id = shell
+        .pool
+        .borrow_mut()
+        .signature_help(Path::new(&path), line, character);
+    let weak = Rc::downgrade(page);
+    shell.expect_response(id, move |json| {
+        let Some(page) = weak.upgrade() else { return };
+        let Some(signature) = textchum_core::signature::active(json) else {
+            page.hover_popover.popdown();
+            return;
+        };
+        page.hover_about.set(None);
+        page.hover_label.set_markup(&signature_markup(&signature));
+        let caret = page.buffer.iter_at_mark(&page.buffer.get_insert());
+        let rect = page.view.iter_location(&caret);
+        let (wx, wy) = page.view.buffer_to_window_coords(
+            gtk::TextWindowType::Widget,
+            rect.x(),
+            rect.y(),
+        );
+        page.hover_popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(
+            wx,
+            wy,
+            1,
+            rect.height(),
+        )));
+        page.hover_popover.popup();
+    });
+}
+
+/// A signature as Pango markup: the label in monospace, the active
+/// parameter in bold. The stretch is in UTF-16 units, so the label is
+/// cut in those.
+pub fn signature_markup(signature: &textchum_core::signature::Signature) -> String {
+    let units: Vec<u16> = signature.label.encode_utf16().collect();
+    let piece = |from: usize, to: usize| {
+        glib::markup_escape_text(&String::from_utf16_lossy(&units[from..to])).to_string()
+    };
+    let label = match signature.parameter {
+        Some((start, end)) if start <= end && end <= units.len() => format!(
+            "{}<b>{}</b>{}",
+            piece(0, start),
+            piece(start, end),
+            piece(end, units.len())
+        ),
+        _ => piece(0, units.len()),
+    };
+    format!("<tt>{label}</tt>")
 }
 
 /// LSP hover Markdown as Pango markup: fenced code blocks and `code`

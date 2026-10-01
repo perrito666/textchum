@@ -43,6 +43,10 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   item replaces the stretch the server names (a postfix completion
   swallows the receiver and the dot) and brings its extra edits, an
   import for one, along with it.
+- **The call being typed says what it takes.** An opening parenthesis
+  or a comma shows the function's signature at the caret, the parameter
+  you are on in bold; the closing parenthesis, ⎋, or leaving the line
+  puts it away.
 - Resting the mouse over a symbol shows the server's **hover**
   documentation in a popover, with the Markdown servers send rendered
   — code blocks monospaced, emphasis and inline code styled. It only

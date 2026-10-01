@@ -2249,12 +2249,19 @@ final class DocumentController: NSResponder {
             return
         }
 
+        hoverPopover = presentPopover(attributed, at: point)
+    }
+
+    /// A popover holding `attributed`, pointing at `point` in the text
+    /// view. Nil when there is nothing to say.
+    private func presentPopover(_ attributed: NSAttributedString, at point: NSPoint) -> NSPopover? {
+        guard let textView else { return nil }
         // Measured by hand, framed by hand: Auto Layout inside an
         // NSPopover collapsed the wrapping label to a sliver and showed
         // an empty balloon — the popover sized itself while the label
         // laid out at zero. Explicit frames cannot disagree with the
         // popover about geometry.
-        guard attributed.length > 0 else { return }
+        guard attributed.length > 0 else { return nil }
         let label = NSTextField(wrappingLabelWithString: "")
         label.attributedStringValue = attributed
         // Ask the field itself how it wraps — an NSString measurement
@@ -2280,7 +2287,97 @@ final class DocumentController: NSResponder {
             of: textView,
             preferredEdge: .maxY
         )
-        hoverPopover = popover
+        return popover
+    }
+
+    // MARK: Signature help
+
+    /// The balloon naming what the call being typed takes. Its own
+    /// popover, not the hover's: that one closes when the pointer
+    /// moves, and this one belongs to the caret.
+    private var signaturePopover: NSPopover?
+    /// The line the signature was asked on; the caret leaving it puts
+    /// the balloon away.
+    private var signatureLine: Int?
+
+    /// For the smoke test.
+    var hasSignatureBalloon: Bool { signaturePopover != nil }
+
+    /// An opening parenthesis or a comma asks what the call takes; the
+    /// closing parenthesis puts the answer away.
+    private func signatureAfterTyping() {
+        switch lastTypedText {
+        case "(", ",": requestSignatureHelp()
+        case ")": closeSignature()
+        default: break
+        }
+    }
+
+    private func requestSignatureHelp() {
+        guard let lspApp, let path = lspOpenPath, let textView else { return }
+        let caret = textView.selectedRange().location
+        let (line, character) = Self.lspPosition(ofIndex: caret, in: textView.string as NSString)
+        flushLSPChange()
+        lspApp.lspSignatureHelp(path: path, line: line, character: character) {
+            [weak self] json in
+            guard let self, let textView = self.textView else { return }
+            guard let signature = CoreSignature.active(fromResultJSON: json) else {
+                self.closeSignature()
+                return
+            }
+            // Stale if the caret left the line while the server thought.
+            let now = Self.lspPosition(
+                ofIndex: textView.selectedRange().location, in: textView.string as NSString)
+            guard now.0 == line else { return }
+            self.show(signature: signature, onLine: line)
+        }
+    }
+
+    private func show(signature: CoreSignature, onLine line: Int) {
+        guard let textView, let window = textView.window else { return }
+        signaturePopover?.close()
+        let caret = min(textView.selectedRange().location, (textView.string as NSString).length)
+        let screenRect = textView.firstRect(
+            forCharacterRange: NSRange(location: caret, length: 0), actualRange: nil)
+        let point = textView.convert(window.convertFromScreen(screenRect).origin, from: nil)
+        signaturePopover = presentPopover(
+            Self.signatureAttributedText(signature, font: appliedFont), at: point)
+        signatureLine = line
+    }
+
+    private func closeSignature() {
+        signaturePopover?.close()
+        signaturePopover = nil
+        signatureLine = nil
+    }
+
+    /// The signature as it is shown: the label in the editor's font,
+    /// the parameter being typed in bold, and the first paragraph of
+    /// what the server says about the function under it.
+    static func signatureAttributedText(_ signature: CoreSignature, font: NSFont)
+        -> NSAttributedString
+    {
+        let text = NSMutableAttributedString(
+            string: signature.label,
+            attributes: [.font: font, .foregroundColor: NSColor.labelColor])
+        if let range = signature.parameterRange, NSMaxRange(range) <= text.length {
+            text.addAttribute(
+                .font, value: NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask),
+                range: range)
+        }
+        let firstParagraph = signature.documentation
+            .components(separatedBy: "\n\n").first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !firstParagraph.isEmpty {
+            text.append(
+                NSAttributedString(
+                    string: "\n" + firstParagraph,
+                    attributes: [
+                        .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                        .foregroundColor: NSColor.secondaryLabelColor,
+                    ]))
+        }
+        return text
     }
 
     /// Debug hook: scrolls to a fraction of the document, so the
@@ -4601,6 +4698,7 @@ final class DocumentController: NSResponder {
 
     /// Auto-trigger after identifier characters and member access.
     private func completionAfterTyping() {
+        signatureAfterTyping()
         if completionPopup.isVisible {
             if let prefix = currentWordPrefix() {
                 completionPopup.filter(prefix: prefix.text)
@@ -5576,6 +5674,13 @@ extension DocumentController: NSTextViewDelegate {
     /// keeps flowing to the editor. With the popup away, return picks up
     /// the auto-indent path.
     func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        // Escape puts the signature away before it means anything else.
+        if signaturePopover != nil, !completionPopup.isVisible,
+            commandSelector == #selector(NSResponder.cancelOperation(_:))
+        {
+            closeSignature()
+            return true
+        }
         guard completionPopup.isVisible else {
             if coreDocument.isSnippetActive {
                 switch Self.snippetKey(for: commandSelector) {
@@ -5769,6 +5874,15 @@ extension DocumentController: NSTextViewDelegate {
         // caret moved there, so that pane has the keyboard now.
         if let textView = notification.object as? NSTextView {
             workbench?.noteFocus(on: textView)
+            // The signature is about the call on its line; the caret
+            // leaving that line leaves the call.
+            if let asked = signatureLine,
+                Self.lspPosition(
+                    ofIndex: textView.selectedRange().location, in: textView.string as NSString
+                ).0 != asked
+            {
+                closeSignature()
+            }
         }
         workbench?.refreshStatus()
         // A caret move that is not part of an edit (click, arrow keys) ends

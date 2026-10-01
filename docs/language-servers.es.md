@@ -50,6 +50,10 @@ proyecto en Settings ▸ Language Servers; véase
   el tramo que nombra el servidor (un autocompletado *postfix* se traga
   el receptor y el punto) y trae consigo sus ediciones adicionales, un
   *import* por ejemplo.
+- **La llamada que se escribe dice qué recibe.** Un paréntesis de
+  apertura o una coma muestra la firma de la función junto al cursor,
+  con el parámetro en curso en negrita; el paréntesis de cierre, ⎋ o
+  salir de la línea la guarda.
 - Dejar el ratón sobre un símbolo muestra la documentación **hover** del
   servidor en un globo, con el Markdown que envían los servidores ya
   renderizado — bloques de código en monoespaciada, énfasis y código en
