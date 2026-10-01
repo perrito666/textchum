@@ -50,6 +50,12 @@ Language Servers ; voir [configuration](configuration.md#projets).
   la portion que nomme le serveur (une complétion *postfix* avale le
   receveur et le point) et apporte ses éditions supplémentaires, un
   *import* par exemple.
+- **Show Callers** (menu Edit et menu contextuel ; action
+  `showCallers`) liste chaque endroit où la fonction sous le curseur
+  est appelée, dans la liste qu'utilise Find References. Les références
+  répondent à « où ce nom est-il écrit » ; ceci répond à « qu'est-ce
+  qui l'exécute », et laisse de côté la déclaration, les imports et les
+  mentions.
 - **Go to Symbol in Project…** (⌥⌘T, Ctrl+Alt+O sous Linux ; action
   `projectSymbols`) trouve une fonction, un type ou une constante
   n'importe où dans le projet par une partie de son nom, tels que les

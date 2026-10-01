@@ -303,6 +303,42 @@ public final class CoreApp {
         router.register(id, completion)
     }
 
+    /// The first step of asking who calls the function at an LSP
+    /// position. False when the document has no server that knows, in
+    /// which case the completion is never called. The answer goes to
+    /// ``lspIncomingCalls(path:preparedJSON:completion:)`` as it is.
+    @MainActor
+    @discardableResult
+    public func lspPrepareCallHierarchy(
+        path: String, line: Int, character: Int, completion: @escaping (String) -> Void
+    ) -> Bool {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_prepare_call_hierarchy(
+                handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return false }
+        router.register(id, completion)
+        return true
+    }
+
+    /// Asks who calls the item a prepare answer names. False when that
+    /// answer named nothing callable. ``CoreCalls`` reduces the answer
+    /// to places.
+    @MainActor
+    @discardableResult
+    public func lspIncomingCalls(
+        path: String, preparedJSON: String, completion: @escaping (String) -> Void
+    ) -> Bool {
+        let id = withUTF8(path) { path, pathLen in
+            withUTF8(preparedJSON) { prepared, preparedLen in
+                tc_lsp_incoming_calls(handle, path, pathLen, prepared, preparedLen)
+            }
+        }
+        guard id != 0 else { return false }
+        router.register(id, completion)
+        return true
+    }
+
     /// Requests the symbols across the project whose names match
     /// `query`, from the servers of the document at `path`. False when
     /// that document has no server that searches symbols, in which case
@@ -633,5 +669,23 @@ public enum CoreSymbols {
         defer { tc_string_free(reduced) }
         return (try? JSONDecoder().decode(
             [CoreSymbol].self, from: Data(String(cString: reduced).utf8))) ?? []
+    }
+}
+
+public enum CoreCalls {
+    /// An `incomingCalls` result as the `Location[]` a references list
+    /// takes: one place per call site.
+    public static func callersAsLocations(fromResultJSON json: String) -> String {
+        var json = json
+        let reduced = json.withUTF8 { bytes in
+            tc_call_hierarchy_callers_json(
+                bytes.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                },
+                UInt(bytes.count))
+        }
+        guard let reduced else { return "[]" }
+        defer { tc_string_free(reduced) }
+        return String(cString: reduced)
     }
 }

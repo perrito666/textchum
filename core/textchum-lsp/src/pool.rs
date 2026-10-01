@@ -949,6 +949,34 @@ impl Pool {
         }
     }
 
+    /// The first step of asking who calls something: turns a position
+    /// into the item it names. The response's `result` is an LSP
+    /// `CallHierarchyItem[]`, whose first entry goes to
+    /// [`Self::incoming_calls`].
+    pub fn prepare_call_hierarchy(&mut self, path: &Path, line: u32, character: u32) -> u64 {
+        self.request(
+            path,
+            "callHierarchyProvider",
+            "textDocument/prepareCallHierarchy",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "position": {"line": line, "character": character},
+            }),
+        )
+    }
+
+    /// Who calls `item`, which is one a server prepared for a position
+    /// in `path`. The response's `result` is an LSP
+    /// `CallHierarchyIncomingCall[]`.
+    pub fn incoming_calls(&mut self, path: &Path, item: serde_json::Value) -> u64 {
+        self.request(
+            path,
+            "callHierarchyProvider",
+            "callHierarchy/incomingCalls",
+            serde_json::json!({"item": item}),
+        )
+    }
+
     /// Asks for the symbols across the project whose names match
     /// `query`. The servers are those of `path`, the document the
     /// question is asked from: a project's symbols are its server's to

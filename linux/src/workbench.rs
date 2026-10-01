@@ -341,6 +341,7 @@ impl Workbench {
         go_section.append(Some(&tr("Go Back")), Some("win.back"));
         go_section.append(Some(&tr("Go Forward")), Some("win.forward"));
         go_section.append(Some(&tr("Find References")), Some("win.references"));
+        go_section.append(Some(&tr("Show Callers")), Some("win.callers"));
         go_section.append(Some(&tr("Code Actions…")), Some("win.code-actions"));
         go_section.append(Some(&tr("Rename Symbol…")), Some("win.rename"));
         go_section.append(Some(&tr("Format Document")), Some("win.format"));
@@ -3029,6 +3030,52 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             }
         });
     });
+    add("callers", workbench, |workbench, _| {
+        // Who calls the function under the caret, in the list Find
+        // References fills: one row per call site. The protocol asks in
+        // two steps — which item is this, then who calls it — and the
+        // core turns the second answer into places.
+        let Some((page, path)) = workbench
+            .selected()
+            .and_then(|page| {
+                let path = page.path().borrow().clone();
+                path.map(|path| (page, path))
+            })
+        else {
+            workbench.toast(&tr("Save the file first — untitled documents have no server."));
+            return;
+        };
+        let (line, character) = page::lsp_anchor(&page);
+        let shell = Shell::instance();
+        let id = shell
+            .pool
+            .borrow_mut()
+            .prepare_call_hierarchy(Path::new(&path), line, character);
+        if id == 0 {
+            workbench.toast(&tr("No language server here finds callers."));
+            return;
+        }
+        let weak = Rc::downgrade(workbench);
+        shell.expect_response(id, move |prepared| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some(item) = textchum_core::calls::prepared_item(prepared) else {
+                workbench.toast(&tr("There is no function here to find the callers of."));
+                return;
+            };
+            let shell = Shell::instance();
+            let id = shell.pool.borrow_mut().incoming_calls(Path::new(&path), item);
+            let weak = Rc::downgrade(&workbench);
+            shell.expect_response(id, move |json| {
+                let Some(workbench) = weak.upgrade() else { return };
+                let places = textchum_core::calls::callers_as_locations(json);
+                if places == "[]" {
+                    workbench.toast(&tr("Nothing calls this."));
+                } else {
+                    show_locations(&workbench, &tr("Callers"), &places);
+                }
+            });
+        });
+    });
     add("code-actions", workbench, |workbench, _| {
         let Some((page, path)) = workbench
             .selected()
@@ -3474,6 +3521,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Go Back", "win.back"),
     ("Go Forward", "win.forward"),
     ("Find References", "win.references"),
+    ("Show Callers", "win.callers"),
     ("Rename Symbol…", "win.rename"),
     ("Format Document", "win.format"),
     ("Document Outline…", "win.outline"),

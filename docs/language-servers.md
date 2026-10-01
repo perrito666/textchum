@@ -43,6 +43,11 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   item replaces the stretch the server names (a postfix completion
   swallows the receiver and the dot) and brings its extra edits, an
   import for one, along with it.
+- **Show Callers** (Edit menu and the context menu; action
+  `showCallers`) lists every place the function under the caret is
+  called, in the list Find References uses. References answers "where
+  is this name written"; this answers "what runs it", and leaves out
+  the declaration, the imports and the mentions.
 - **Go to Symbol in Project…** (⌥⌘T, Ctrl+Alt+O on Linux; action
   `projectSymbols`) finds a function, type or constant anywhere in the
   project by part of its name, as the server of the document in front

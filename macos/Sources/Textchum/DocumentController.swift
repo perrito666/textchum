@@ -1399,6 +1399,41 @@ final class DocumentController: NSResponder {
         }
     }
 
+    /// Who calls the function under the caret, in the list Find
+    /// References fills: one row per call site. References answers
+    /// "where is this name written"; this answers "what runs it",
+    /// which leaves out the declaration, the imports and the mentions.
+    @objc func showCallers(_ sender: Any?) {
+        guard let lspApp, let path = lspOpenPath, let textView else {
+            NSSound.beep()
+            return
+        }
+        let text = textView.string as NSString
+        let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
+        flushLSPChange()
+        let asked = lspApp.lspPrepareCallHierarchy(path: path, line: line, character: character) {
+            [weak self] prepared in
+            guard let self, let lspApp = self.lspApp else { return }
+            let calls = lspApp.lspIncomingCalls(path: path, preparedJSON: prepared) {
+                [weak self] json in
+                guard let self else { return }
+                let places = Self.referenceLocations(
+                    fromResultJSON: CoreCalls.callersAsLocations(fromResultJSON: json))
+                guard !places.isEmpty else {
+                    self.workbench?.showNotice(t("Nothing calls this."))
+                    return
+                }
+                self.showReferences(places, title: t("Callers"))
+            }
+            if !calls {
+                self.workbench?.showNotice(t("There is no function here to find the callers of."))
+            }
+        }
+        if !asked {
+            workbench?.showNotice(t("No language server here finds callers."))
+        }
+    }
+
     /// Every finding in the document, in the order they appear — which
     /// is the order they are fixed in, and the order the gutter shows
     /// them. Severity is in each row, so a file whose errors matter
@@ -5415,6 +5450,7 @@ extension DocumentController: NSTextViewDelegate {
         }
         if hasServer {
             commands.append(("Find References", #selector(findReferences(_:))))
+            commands.append(("Show Callers", #selector(showCallers(_:))))
             commands.append(("Code Actions…", #selector(showCodeActions(_:))))
             commands.append(("Rename Symbol…", #selector(renameSymbol(_:))))
         }

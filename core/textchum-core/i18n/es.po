@@ -225,6 +225,11 @@ msgstr "Ir a la definición"
 msgid "Find References"
 msgstr "Buscar referencias"
 
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Show Callers"
+msgstr "Mostrar quién llama"
+
 #: linux/src/keyboard.rs
 msgid "Code Actions"
 msgstr "Acciones de código"
@@ -700,6 +705,22 @@ msgstr "No hay adónde volver."
 #: linux/src/workbench.rs
 msgid "Nowhere to go forward to."
 msgstr "No hay adónde avanzar."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "No language server here finds callers."
+msgstr "Ningún servidor de lenguaje busca llamadas aquí."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "There is no function here to find the callers of."
+msgstr "Aquí no hay una función cuyas llamadas buscar."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Nothing calls this."
+msgstr "Nada llama a esto."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Callers"
+msgstr "Quién llama"
 
 #: linux/src/workbench.rs
 msgid "New name"

@@ -13,6 +13,7 @@
 mod app;
 pub mod blame;
 pub mod brackets;
+pub mod calls;
 pub mod vimregex;
 mod buffer;
 pub mod changes;

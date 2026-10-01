@@ -50,6 +50,11 @@ proyecto en Settings ▸ Language Servers; véase
   el tramo que nombra el servidor (un autocompletado *postfix* se traga
   el receptor y el punto) y trae consigo sus ediciones adicionales, un
   *import* por ejemplo.
+- **Show Callers** (menú Edit y menú contextual; acción `showCallers`)
+  lista cada lugar donde se llama a la función bajo el cursor, en la
+  lista que usa Find References. Las referencias responden «dónde está
+  escrito este nombre»; esto responde «qué la ejecuta», y deja fuera la
+  declaración, los *imports* y las menciones.
 - **Go to Symbol in Project…** (⌥⌘T, Ctrl+Alt+O en Linux; acción
   `projectSymbols`) encuentra una función, un tipo o una constante en
   cualquier parte del proyecto por parte de su nombre, tal como los

@@ -1591,6 +1591,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(goBack(_:)): "goBack",
             #selector(goForward(_:)): "goForward",
             #selector(DocumentController.findReferences(_:)): "findReferences",
+            #selector(DocumentController.showCallers(_:)): "showCallers",
             #selector(DocumentController.showFindReplace(_:)): "findAndReplace",
             #selector(DocumentController.showCodeActions(_:)): "codeActions",
             #selector(DocumentController.newColumn(_:)): "newColumn",
@@ -3089,6 +3090,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         references.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(references)
+        editMenu.addItem(
+            NSMenuItem(
+                title: t("Show Callers"),
+                action: #selector(DocumentController.showCallers(_:)),
+                keyEquivalent: ""))
         let codeActionsItem = NSMenuItem(
             title: t("Code Actions…"),
             action: #selector(DocumentController.showCodeActions(_:)),
