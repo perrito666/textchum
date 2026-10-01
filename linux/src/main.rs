@@ -1197,6 +1197,51 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             eprintln!("FAIL: diagnostics did not tag the text");
             return 1;
         }
+        // The inferred types the scripted server gives for every `let`
+        // become labels after their lines, and the setting takes them
+        // down.
+        {
+            let page = workbench.selected().expect("a selected page");
+            let appended_at = page.buffer.end_iter().offset();
+            // The edit sends the text once the typing rests and asks for
+            // the hints then; nothing has to be asked by hand.
+            page.buffer.insert(&mut page.buffer.end_iter(), "\nlet hinted = 1;");
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+            let shown = |page: &Rc<page::Page>| {
+                page.state
+                    .borrow()
+                    .document
+                    .inlay_annotations()
+                    .iter()
+                    .any(|(_, text)| text == "hinted: Fake")
+            };
+            while !shown(&page) {
+                context.iteration(true);
+                if std::time::Instant::now() > deadline {
+                    eprintln!("FAIL: the inferred type never arrived");
+                    return 1;
+                }
+            }
+            page::refresh_inlay_labels(&page);
+            if !page::inlay_label_texts(&page).iter().any(|text| text == "hinted: Fake") {
+                eprintln!("FAIL: the hint is not laid after its line: {:?}", page::inlay_label_texts(&page));
+                return 1;
+            }
+            shell::Shell::instance().config.borrow_mut().set_inlay_hints(false);
+            page::refresh_inlay_labels(&page);
+            if !page::inlay_label_texts(&page).is_empty() {
+                eprintln!("FAIL: turning the hints off left their labels up");
+                return 1;
+            }
+            shell::Shell::instance().config.borrow_mut().set_inlay_hints(true);
+            // Take back only what was appended: replacing the whole
+            // text would wipe the finding's tag, which the next check
+            // is about.
+            let mut from = page.buffer.iter_at_offset(appended_at);
+            let mut to = page.buffer.end_iter();
+            page.buffer.delete(&mut from, &mut to);
+        }
+
         // A line typed above the finding moves it down a line: the tag
         // rides along on its own, and the line the list goes by is read
         // back from the core, which moved the range in the choke point.

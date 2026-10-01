@@ -1118,6 +1118,21 @@ impl Config {
             .unwrap_or(false)
     }
 
+    /// Whether a server's inlay hints — the types it inferred — are
+    /// shown, dimmed, after the line they are about
+    /// (`editor.inlay_hints`, default true).
+    pub fn inlay_hints(&self) -> bool {
+        self.editor()
+            .get("inlay_hints")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
+
+    pub fn set_inlay_hints(&mut self, enabled: bool) {
+        self.editor_mut()
+            .insert("inlay_hints".into(), Value::Bool(enabled));
+    }
+
     /// Whether typing an opening bracket or quote puts its closing half
     /// after the caret (`editor.auto_close_pairs`, default false).
     pub fn auto_close_pairs(&self) -> bool {
@@ -2240,6 +2255,20 @@ mod tests {
         config.save().unwrap();
         let (reloaded, _) = Config::load(&path);
         assert_eq!(reloaded.new_file_target(), OpenTarget::Window);
+    }
+
+    #[test]
+    fn inlay_hints_are_on_until_turned_off_and_a_wrong_type_is_the_default() {
+        let path = temp_path("inlay-hints.json");
+        let (mut config, _) = Config::load(&path);
+        assert!(config.inlay_hints());
+        config.set_inlay_hints(false);
+        config.save().unwrap();
+        let (reloaded, _) = Config::load(&path);
+        assert!(!reloaded.inlay_hints());
+        std::fs::write(&path, r#"{"editor": {"inlay_hints": "yes please"}}"#).unwrap();
+        let (odd, _) = Config::load(&path);
+        assert!(odd.inlay_hints());
     }
 
     #[test]

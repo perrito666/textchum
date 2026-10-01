@@ -31,8 +31,9 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
 
 ## What you see
 
-- Findings arrive as you type (sent in debounced batches) and mark the
-  offending text: red for errors, orange for warnings, blue for notes.
+- Findings arrive as you type (sent in debounced batches) and box the
+  offending text in their colour: red for errors, orange for warnings,
+  blue for notes.
   A mark stays on the code it was reported for while you edit above or
   around it, until the server reports again; a lint that only runs on
   save (cargo's, for one) is refreshed by the next save.
@@ -52,7 +53,17 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   `projectSymbols`) finds a function, type or constant anywhere in the
   project by part of its name, as the server of the document in front
   knows them, and jumps to its declaration.
-- **A name's other uses are marked.** With nothing selected, a caret
+- **Inferred types are shown.** The types a server works out — of a
+  `let` with no annotation, of a closure's argument — appear dimmed
+  after the line they belong to, each with its name: `let d = make();`
+  is followed by `d: Drinker`. They are not part of the text: they
+  cannot be selected or copied, and they stay with their line while you
+  type and are asked for again when the typing pauses. Settings ▸
+  General ▸ "Show the types the language server inferred" turns them
+  off (`editor.inlay_hints`). Not there yet: the hints are gathered at
+  the end of the line rather than placed inside it, and parameter-name
+  hints, which only mean something beside their argument, are left out.
+ With nothing selected, a caret
   resting on a name marks where else that symbol is used, as the server
   knows it: a shadowing variable of the same name is left alone.
   Selecting a word still marks the same text, server or not. Both
@@ -136,11 +147,9 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
 - A missing server is reported once, with the command that installs it;
   everything else about the editor keeps working without it.
 
-Not there yet: inlay hints — the inferred types and parameter names a
-server can have drawn inside a line — are not shown, since neither
-shell's text view can place text that is not in the document. Show
-Callers lists who calls a function, not what it calls. Colouring comes
-from the grammar alone; a server's semantic tokens are not used.
+Not there yet: Show Callers lists who calls a function, not what it
+calls. Colouring comes from the grammar alone; a server's semantic
+tokens are not used.
 
 ## Servers
 

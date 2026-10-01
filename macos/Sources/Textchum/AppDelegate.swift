@@ -1134,6 +1134,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 for workbench in Workbench.all {
                     workbench.statusBar.progress(message.isEmpty ? nil : "\(server): \(message)")
                 }
+                // Work done is when a server that had nothing to say
+                // about a file starts having something: its hints are
+                // asked for again.
+                if message.isEmpty {
+                    for editor in editors { editor.scheduleInlayHints() }
+                }
                 break
             }
             NSLog("lsp \(server) [\(root)]: \(status) \(message)")

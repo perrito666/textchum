@@ -298,6 +298,13 @@ public final class CoreConfig {
         }
     }
 
+    /// Whether a server's inlay hints — the types it inferred — are
+    /// shown, dimmed, after the line they are about.
+    public var inlayHints: Bool {
+        get { tc_config_inlay_hints(handle) }
+        set { tc_config_set_inlay_hints(handle, newValue) }
+    }
+
     /// Whether bracket pairs are coloured by depth.
     public var rainbowBrackets: Bool {
         get { tc_config_rainbow_brackets(handle) }

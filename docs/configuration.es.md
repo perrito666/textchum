@@ -68,6 +68,9 @@ seleccionada; `editor.occurrences_case_sensitive` y
 `editor.occurrences_whole_word` deciden qué cuenta como uno, ambos
 `true` por defecto. `editor.rainbow_brackets` (`false` por defecto) colorea los pares de
 corchetes por profundidad; véase [resaltado](highlighting.md#corchetes).
+`editor.inlay_hints` (`true` por defecto) muestra los tipos que dedujo
+un servidor de lenguaje, atenuados, tras la línea a la que pertenecen;
+véase [servidores de lenguaje](language-servers.md#lo-que-se-ve).
 `editor.context_lines` (`true` por defecto) fija
 la primera línea de cada construcción envolvente en lo alto de la vista
 mientras un cuerpo largo se desplaza; `false` apaga las líneas fijadas.

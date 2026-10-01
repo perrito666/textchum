@@ -312,6 +312,33 @@ pub unsafe extern "C" fn tc_lsp_document_highlight(
     .unwrap_or(0)
 }
 
+/// Requests the inlay hints of the lines `first_line..=last_line` of
+/// the document at `path`. Returns the request id whose response goes
+/// to [`tc_document_set_inlay_hints`] as it is, or 0 when the document
+/// has no server that gives hints.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_inlay_hints(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    first_line: u32,
+    last_line: u32,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool.inlay_hints(std::path::Path::new(path), first_line, last_line)
+    }))
+    .unwrap_or(0)
+}
+
 /// The first step of asking who calls the function at an LSP position;
 /// same contract as [`tc_lsp_hover`]. The response's `result` goes to
 /// [`tc_lsp_incoming_calls`] as it is.
@@ -1240,6 +1267,53 @@ pub unsafe extern "C" fn tc_document_snippet_expand(
         owned_c_string(document.inner.expand_snippet(at, body))
     }))
     .unwrap_or(std::ptr::null_mut())
+}
+
+/// Hands the document a server's inlay hints for its text as it is
+/// now: `len` bytes of the `result` of a `textDocument/inlayHint`
+/// request. The document moves them with every edit from here on, so
+/// [`tc_document_inlay_annotations_json`] always answers for the
+/// current text. Anything that is not a list clears them. Returns
+/// false on a bad pointer or invalid UTF-8.
+///
+/// # Safety
+/// `document` must be a live document pointer; `json` must point to
+/// `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_set_inlay_hints(
+    document: *mut TcDocument,
+    json: *const c_char,
+    len: usize,
+) -> bool {
+    let Some(document) = (unsafe { document.as_mut() }) else {
+        return false;
+    };
+    let Some(json) = (unsafe { str_from_raw(json, len) }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        document.inner.set_inlay_hints(json);
+        true
+    }))
+    .unwrap_or(false)
+}
+
+/// What to show after each line that has inlay hints: a JSON array of
+/// `{line, text}`, `line` zero-based, in line order. A type hint is
+/// written with the name it belongs to; parameter hints are left out.
+/// Free with [`tc_string_free`]. Null on a bad pointer.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_inlay_annotations_json(
+    document: *const TcDocument,
+) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(document.inner.inlay_annotations_json())))
+        .unwrap_or(std::ptr::null_mut())
 }
 
 /// Hands the document a server's findings for its text as it is now:
@@ -2807,6 +2881,31 @@ pub unsafe extern "C" fn tc_config_set_hover_modifier(
             .inner
             .set_hover_modifier((!modifier.is_empty()).then_some(modifier))
     }));
+}
+
+/// Whether a server's inlay hints are shown after the line they are
+/// about (`editor.inlay_hints`).
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_inlay_hints(config: *const TcConfig) -> bool {
+    let Some(config) = (unsafe { config.as_ref() }) else {
+        return true;
+    };
+    catch_unwind(AssertUnwindSafe(|| config.inner.inlay_hints())).unwrap_or(true)
+}
+
+/// Sets whether a server's inlay hints are shown.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_inlay_hints(config: *mut TcConfig, enabled: bool) {
+    let Some(config) = (unsafe { config.as_mut() }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| config.inner.set_inlay_hints(enabled)));
 }
 
 /// Whether bracket pairs are coloured by depth

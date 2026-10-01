@@ -4035,6 +4035,49 @@ func runSmokeTest() -> Int32 {
     }
     print("pointer character index ok (in range everywhere, including off the text)")
 
+    // The types a server inferred are drawn after their lines, each
+    // with its name, and ride with the text; the setting turns them off.
+    do {
+        let hintedCore = CoreDocument()
+        let hintedBench = Workbench(sidebar: nil)
+        let hinted = DocumentController(document: hintedCore)
+        hintedBench.add(hinted)
+        hintedBench.window?.makeKeyAndOrderFront(nil)
+        guard let hintedView = hinted.primaryView as? EditorTextView else {
+            print("FAIL: no view to show hints in")
+            return 1
+        }
+        hintedView.insertText(
+            "fn main() {\n    let d = make();\n}\n", replacementRange: NSRange(location: 0, length: 0))
+        hintedCore.setInlayHints("""
+            [{"position": {"line": 1, "character": 9}, "label": ": Drinker", "kind": 1},
+             {"position": {"line": 1, "character": 17}, "label": "who:", "kind": 2}]
+            """)
+        hinted.refreshInlayNotes()
+        // After "    let d = make();" — twelve for the first line, nineteen more.
+        guard hintedView.lineNotes == [EditorTextView.LineNote(offset: 31, text: "d: Drinker")] else {
+            print("FAIL: the inferred type is not after its line: \(hintedView.lineNotes)")
+            return 1
+        }
+        hintedView.insertText("// top\n", replacementRange: NSRange(location: 0, length: 0))
+        guard hintedView.lineNotes == [EditorTextView.LineNote(offset: 38, text: "d: Drinker")] else {
+            print("FAIL: the hint did not move with its line: \(hintedView.lineNotes)")
+            return 1
+        }
+        let hintsOff = CoreConfig(path: NSTemporaryDirectory() + "textchum-smoke-inlay-\(getpid()).json")
+        guard hintsOff.inlayHints else {
+            print("FAIL: inlay hints are not on by default")
+            return 1
+        }
+        hintsOff.inlayHints = false
+        hinted.apply(settings: EditorSettings(config: hintsOff))
+        guard hintedView.lineNotes.isEmpty else {
+            print("FAIL: turning the hints off left them drawn: \(hintedView.lineNotes)")
+            return 1
+        }
+    }
+    print("inlay hints ok (after their line with their name, riding the text, off when told)")
+
     // A server's finding stays on the code it named while the text
     // above it is edited: the core moves the range in the choke point,
     // and the shell paints and lists what the core says.

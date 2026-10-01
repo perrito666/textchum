@@ -765,6 +765,9 @@ final class DocumentController: NSResponder {
             let language = coreDocument.languageName
         else { return }
         lspApp.lspDidOpen(path: path, language: language, text: coreDocument.text)
+        // A server just started has nothing to say yet; it is asked
+        // again when it reports its work done and when findings arrive.
+        scheduleInlayHints(after: 1.0)
     }
 
     /// Debounced full-text didChange, so servers see keystrokes in
@@ -864,6 +867,9 @@ final class DocumentController: NSResponder {
     /// them with every edit after; what is kept here is its answer,
     /// read again after each change (see ``refreshDiagnosticsFromCore``).
     func apply(diagnostics: [CoreDiagnostic]) {
+        // Findings arriving mean the server has analysed the text as it
+        // is, which is when its hints are worth asking for.
+        scheduleInlayHints()
         coreDocument.setDiagnostics(diagnostics)
         self.diagnostics = coreDocument.diagnostics
         renderMarks()
@@ -3263,6 +3269,75 @@ final class DocumentController: NSResponder {
         .filter { $0 != selection }
     }
 
+    // MARK: Inferred types, after the line
+
+    private var appliedInlayHints = true
+    private var inlayTimer: Timer?
+
+    /// Asks the server, after a pause, for the inlay hints of what is on
+    /// screen. Called whenever the answer may have changed: the text
+    /// settled, the server finished thinking, other lines came into
+    /// view.
+    func scheduleInlayHints(after delay: TimeInterval = 0.4) {
+        inlayTimer?.invalidate()
+        guard appliedInlayHints, lspApp != nil, lspOpenPath != nil else { return }
+        inlayTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.requestInlayHints() }
+            }
+        }
+    }
+
+    private func requestInlayHints() {
+        guard appliedInlayHints, let lspApp, let path = lspOpenPath, let textView,
+            let gutter = views.first?.gutter
+        else { return }
+        let length = (textView.string as NSString).length
+        let painted = highlightRange()?.painted ?? NSRange(location: 0, length: length)
+        // The painted stretch and a margin: what a scroll will show
+        // next should have its answer already.
+        // Never past the last line: a range that ends outside the
+        // document is an error to rust-analyzer, not an empty answer.
+        let first = max(0, gutter.lineIndex(forOffset: painted.location) - 100)
+        let last = min(
+            gutter.lineIndex(forOffset: min(NSMaxRange(painted), length)) + 100,
+            gutter.lineIndex(forOffset: length))
+        let version = textVersion
+        flushLSPChange()
+        lspApp.lspInlayHints(path: path, firstLine: first, lastLine: last) { [weak self] json in
+            // An answer about text that has since changed is dropped;
+            // the edit that changed it asked again.
+            guard let self, self.textVersion == version else { return }
+            self.coreDocument.setInlayHints(json)
+            self.refreshInlayNotes()
+        }
+    }
+
+    /// Reads the hints back from the core, which moved them with every
+    /// edit since the server answered, and hands each view the text to
+    /// draw after its lines.
+    func refreshInlayNotes() {
+        let annotations = appliedInlayHints ? coreDocument.inlayAnnotations : []
+        for view in views {
+            guard let editor = view.textView as? EditorTextView else { continue }
+            let text = editor.string as NSString
+            editor.lineNotes = annotations.compactMap { annotation in
+                let start = view.gutter.lineStart(ofLine: annotation.line)
+                guard start <= text.length else { return nil }
+                let line = text.lineRange(for: NSRange(location: start, length: 0))
+                // The end of the line's own text, before its line break.
+                var end = NSMaxRange(line)
+                while end > line.location,
+                    text.character(at: end - 1) == 10 || text.character(at: end - 1) == 13
+                {
+                    end -= 1
+                }
+                return EditorTextView.LineNote(offset: end, text: annotation.text)
+            }
+        }
+    }
+
     // MARK: A symbol's other uses, from the server
 
     private var symbolUsesTimer: Timer?
@@ -3783,8 +3858,10 @@ final class DocumentController: NSResponder {
                 self.highlightRefreshPending = false
                 guard self.applyHighlights(force: false) else { return }
                 // Scrolling brings fresh text into the painted stretch,
-                // where the selected word may also appear.
+                // where the selected word may also appear, and whose
+                // lines the server has not been asked about yet.
                 self.refreshOccurrences()
+                self.scheduleInlayHints()
                 self.renderMarks()
                 // After a long jump the viewport controller can still
                 // answer with where the view was, so the paint lands on
@@ -4387,6 +4464,15 @@ final class DocumentController: NSResponder {
         appliedTabWidth = settings.tabWidth
         appliedHoverDocs = settings.hoverDocs
         appliedHoverModifier = Self.modifierFlags(named: settings.hoverModifier)
+        if appliedInlayHints != settings.inlayHints {
+            appliedInlayHints = settings.inlayHints
+            if appliedInlayHints {
+                scheduleInlayHints(after: 0.1)
+            } else {
+                inlayTimer?.invalidate()
+                refreshInlayNotes()
+            }
+        }
         if appliedRainbowBrackets != settings.rainbowBrackets {
             appliedRainbowBrackets = settings.rainbowBrackets
             // The colours are rendering attributes over the painted
@@ -4651,6 +4737,8 @@ final class DocumentController: NSResponder {
         scheduleLSPChange()
         schedulePreviewUpdate()
         lineRuler?.invalidateLineStarts()
+        refreshInlayNotes()
+        scheduleInlayHints(after: 0.6)
         assertInSync()
     }
 
@@ -5823,6 +5911,11 @@ extension DocumentController: NSTextViewDelegate {
         completionAfterTyping()
         scheduleAutosave()
         textVersion &+= 1
+        // After the gutters know the new lines: the hints moved with
+        // the edit inside the core, and are asked for afresh once the
+        // typing pauses.
+        refreshInlayNotes()
+        scheduleInlayHints(after: 0.6)
         for view in views {
             updateContextStrip(for: view)
         }

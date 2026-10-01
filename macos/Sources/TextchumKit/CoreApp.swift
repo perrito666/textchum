@@ -303,6 +303,22 @@ public final class CoreApp {
         router.register(id, completion)
     }
 
+    /// Requests the inlay hints of the lines `firstLine...lastLine`. The
+    /// answer goes to ``CoreDocument/setInlayHints(_:)`` as it is; the
+    /// completion is never called when the document has no server that
+    /// gives hints.
+    @MainActor
+    public func lspInlayHints(
+        path: String, firstLine: Int, lastLine: Int, completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_inlay_hints(
+                handle, path, pathLen, UInt32(max(0, firstLine)), UInt32(max(0, lastLine)))
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
     /// The first step of asking who calls the function at an LSP
     /// position. False when the document has no server that knows, in
     /// which case the completion is never called. The answer goes to

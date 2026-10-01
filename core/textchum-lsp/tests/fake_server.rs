@@ -757,3 +757,45 @@ fn who_calls_a_function_is_asked_in_two_steps_and_comes_back_as_places() {
     assert_eq!(lines, vec![3, 5], "one place per call site");
     assert!(calls.contains("caller_of_fake_function"), "the item went back as it came");
 }
+
+#[test]
+fn the_types_a_server_inferred_are_asked_for_by_lines() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-inlay");
+    let text = "fn main() {\n    let first = 1;\n    let second = 2;\n}\n";
+    pool.did_open(&file, "rust", text);
+    // Only the second line of the two that bind something.
+    let asked = pool.inlay_hints(&file, 2, 2);
+    let mut seen = Vec::new();
+    collect_until(&events, "the hints", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == asked))
+    });
+    let answer = seen
+        .iter()
+        .find_map(|event| match event {
+            Event::LspResponse { id, json } if *id == asked => Some(json.clone()),
+            _ => None,
+        })
+        .unwrap();
+    let mut document = textchum_core::Document::new();
+    document.replace_utf16(0, 0, text).unwrap();
+    document.set_inlay_hints(&answer);
+    assert_eq!(document.inlay_annotations(), vec![(2, "second: Fake".to_owned())]);
+
+    // The whole document, ending on its last line and not after it.
+    let asked = pool.inlay_hints(&file, 0, 4);
+    collect_until(&events, "every hint", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == asked))
+    });
+    let answer = seen
+        .iter()
+        .find_map(|event| match event {
+            Event::LspResponse { id, json } if *id == asked => Some(json.clone()),
+            _ => None,
+        })
+        .unwrap();
+    document.set_inlay_hints(&answer);
+    assert_eq!(document.inlay_annotations().len(), 2, "both bindings: {answer}");
+}
