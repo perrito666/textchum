@@ -1563,6 +1563,38 @@ func runSmokeTest() -> Int32 {
     }
     print("server format link ok (takes its turn in the chain, passes the text on when nobody formats)")
 
+    // A balloon's content can be selected, and one longer than a
+    // balloon should be scrolls from its top instead of being cut.
+    do {
+        let font = NSFont.systemFont(ofSize: 12)
+        let short = DocumentController.balloonBody(
+            NSAttributedString(string: "mismatched types", attributes: [.font: font]))
+        let long = DocumentController.balloonBody(
+            NSAttributedString(
+                string: (1...120).map { "line \($0) of the documentation" }.joined(separator: "\n"),
+                attributes: [.font: font]))
+        guard let shortText = short.documentView as? NSTextView,
+            let longText = long.documentView as? NSTextView,
+            shortText.isSelectable, !shortText.isEditable, shortText.string == "mismatched types"
+        else {
+            print("FAIL: a balloon's content is not a text that can be selected")
+            return 1
+        }
+        guard !short.hasVerticalScroller, short.frame.height < 60, short.frame.width < 200 else {
+            print("FAIL: a one-line balloon is \(short.frame.size)")
+            return 1
+        }
+        guard long.hasVerticalScroller,
+            long.frame.height == DocumentController.balloonLimit.height,
+            longText.frame.height > long.frame.height,
+            long.contentView.bounds.origin.y == 0
+        else {
+            print("FAIL: a long balloon does not scroll from its top: \(long.frame.size), content \(longText.frame.height), at \(long.contentView.bounds.origin.y)")
+            return 1
+        }
+    }
+    print("balloon ok (selectable, as small as its text, scrolling from the top when long)")
+
     // A signature is reduced by the core to one line and the stretch of
     // it that is the parameter being typed, which the balloon sets bold.
     do {

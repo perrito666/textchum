@@ -460,3 +460,23 @@ final class EditorTextView: NSTextView {
         return line
     }
 }
+
+/// The inside of a hover balloon. It says when the pointer comes in and
+/// goes out, so the balloon can stay while it is being read, scrolled
+/// or copied from.
+final class BalloonView: NSView {
+    var pointerEntered: (() -> Void)?
+    var pointerLeft: (() -> Void)?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(
+            NSTrackingArea(
+                rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self, userInfo: nil))
+    }
+
+    override func mouseEntered(with event: NSEvent) { pointerEntered?() }
+    override func mouseExited(with event: NSEvent) { pointerLeft?() }
+}

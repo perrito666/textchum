@@ -56,6 +56,12 @@ pub struct Page {
     /// within it keeps the balloon: a name read letter by letter is
     /// one name.
     hover_about: Cell<Option<(i32, i32)>>,
+    /// True while the pointer is inside the balloon itself, where it is
+    /// reading, selecting or scrolling, and the balloon stays.
+    hover_inside: Cell<bool>,
+    /// Counts the reasons to keep the balloon, so a close scheduled
+    /// before one of them is dropped.
+    hover_kept: Cell<u64>,
     /// Counts caret moves, so an answer about a symbol's uses that
     /// arrives after the caret has gone elsewhere is dropped.
     symbol_uses_asked: Cell<u64>,
@@ -336,7 +342,19 @@ impl Page {
         hover_label.set_margin_bottom(6);
         hover_label.set_margin_start(8);
         hover_label.set_margin_end(8);
-        hover_popover.set_child(Some(&hover_label));
+        // What a balloon says is often worth copying, and documentation
+        // is often longer than a balloon should be: the text can be
+        // selected, starts at its top, and scrolls past a cap.
+        hover_label.set_selectable(true);
+        hover_label.set_xalign(0.0);
+        hover_label.set_yalign(0.0);
+        let hover_scroll = gtk::ScrolledWindow::new();
+        hover_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        hover_scroll.set_max_content_height(320);
+        hover_scroll.set_propagate_natural_height(true);
+        hover_scroll.set_propagate_natural_width(true);
+        hover_scroll.set_child(Some(&hover_label));
+        hover_popover.set_child(Some(&hover_scroll));
 
         let page = Rc::new(Page {
             state,
@@ -350,6 +368,8 @@ impl Page {
             hover_popover,
             hover_label,
             hover_about: Cell::new(None),
+            hover_inside: Cell::new(false),
+            hover_kept: Cell::new(0),
             symbol_uses_asked: Cell::new(0),
             inlay_labels: RefCell::new(Vec::new()),
             inlay_asked: Cell::new(0),
@@ -3134,6 +3154,7 @@ fn show_balloon(page: &Rc<Page>, text: &str, x: f64, y: f64, about: Option<(i32,
         1,
         1,
     )));
+    keep_hover(&page);
     page.hover_popover.popup();
 }
 
@@ -3193,6 +3214,14 @@ fn arm_hover(
             let end = end.offset() + char_offset(&line_text(page, found.end_line), found.end_character);
             Some((start, end.max(start + 1)))
         })();
+        // A finding answers for its whole line, so the pointer moving
+        // along the line finds it again and again. Shown once, it
+        // stays where it is: showing it anew at every movement made
+        // the balloon chase the pointer, and no one can read that.
+        if about.is_some() && about == page.hover_about.get() && page.hover_popover.is_visible() {
+            keep_hover(page);
+            return;
+        }
         show_balloon(page, &format!("{}\n{}", found.kind(), found.message), x, y, about);
         return;
     }
@@ -3253,12 +3282,14 @@ fn install_hover(page: &Rc<Page>) {
             if page.hover_popover.is_visible() {
                 if let (Some((start, end)), Some(iter)) = (page.hover_about.get(), iter_under(&page, x, y)) {
                     if (start..end).contains(&iter.offset()) {
+                        keep_hover(&page);
                         return;
                     }
                 }
             }
-            page.hover_popover.popdown();
-            page.hover_about.set(None);
+            // Not closed on the spot: the pointer may be on its way to
+            // the balloon, to scroll it or to select something in it.
+            schedule_hover_close(&page);
             arm_hover(&page, &timer, x, y, controller.current_event_state());
         });
     }
@@ -3273,6 +3304,29 @@ fn install_hover(page: &Rc<Page>) {
         });
     }
     page.view.add_controller(motion);
+
+    // The balloon stays while the pointer is inside it, and closes a
+    // moment after it leaves.
+    let inside = gtk::EventControllerMotion::new();
+    {
+        let weak = Rc::downgrade(page);
+        inside.connect_enter(move |_, _, _| {
+            if let Some(page) = weak.upgrade() {
+                page.hover_inside.set(true);
+                keep_hover(&page);
+            }
+        });
+    }
+    {
+        let weak = Rc::downgrade(page);
+        inside.connect_leave(move |_| {
+            if let Some(page) = weak.upgrade() {
+                page.hover_inside.set(false);
+                schedule_hover_close(&page);
+            }
+        });
+    }
+    page.hover_popover.add_controller(inside);
 
     // The modifier pressed with the pointer already resting on a
     // symbol: that is the ask.
@@ -3291,6 +3345,33 @@ fn install_hover(page: &Rc<Page>) {
         glib::Propagation::Proceed
     });
     page.view.add_controller(keys);
+}
+
+/// Drops any close of the balloon that is waiting: the pointer is back
+/// on the text it is about, or inside it, or it was just shown.
+fn keep_hover(page: &Rc<Page>) {
+    page.hover_kept.set(page.hover_kept.get().wrapping_add(1));
+}
+
+/// Closes the balloon a moment from now, unless something keeps it
+/// first. Closing at once made it unreachable: leaving the word is the
+/// only way to get to the balloon.
+fn schedule_hover_close(page: &Rc<Page>) {
+    if !page.hover_popover.is_visible() {
+        page.hover_about.set(None);
+        return;
+    }
+    keep_hover(page);
+    let scheduled = page.hover_kept.get();
+    let weak = Rc::downgrade(page);
+    glib::timeout_add_local_once(std::time::Duration::from_millis(300), move || {
+        let Some(page) = weak.upgrade() else { return };
+        if page.hover_kept.get() != scheduled || page.hover_inside.get() {
+            return;
+        }
+        page.hover_popover.popdown();
+        page.hover_about.set(None);
+    });
 }
 
 /// Shows hover documentation for the symbol under the caret — works
@@ -3379,6 +3460,7 @@ fn request_hover(page: &Rc<Page>, iter: gtk::TextIter, deliberate: bool) {
             1,
             rect.height(),
         )));
+        keep_hover(&page);
         page.hover_popover.popup();
     });
 }
@@ -3421,6 +3503,7 @@ fn request_signature(page: &Rc<Page>) {
             1,
             rect.height(),
         )));
+        keep_hover(&page);
         page.hover_popover.popup();
     });
 }

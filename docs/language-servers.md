@@ -83,6 +83,11 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   pointer rests; pressing the key with the pointer already on a symbol
   is an ask too. **Show Documentation for Symbol** (⌃⌘H) asks for the
   symbol under the caret on demand — even with mouse hover off.
+- **The balloon can be used.** It stays while the pointer is on the
+  text it is about and while the pointer is inside it, and closes a
+  moment after the pointer leaves both, so it can be reached. Its text
+  can be selected and copied, and documentation longer than the balloon
+  scrolls from its top.
 - **Jump to Definition** (⌃⌘J, or ⌘-click) goes to the symbol under
   the caret — across files, opening or fronting the target as needed.
   On the definition it has nowhere to go, so it answers the question
