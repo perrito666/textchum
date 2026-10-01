@@ -302,6 +302,47 @@ uint64_t tc_lsp_document_highlight(struct TcApp *app,
                                    uint32_t character);
 
 /**
+ * The first step of asking who calls the function at an LSP position;
+ * same contract as [`tc_lsp_hover`]. The response's `result` goes to
+ * [`tc_lsp_incoming_calls`] as it is.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_prepare_call_hierarchy(struct TcApp *app,
+                                       const char *path,
+                                       uintptr_t path_len,
+                                       uint32_t line,
+                                       uint32_t character);
+
+/**
+ * Asks who calls the item a [`tc_lsp_prepare_call_hierarchy`] answer
+ * names: `prepared` is that answer's `result`, `prepared_len` bytes of
+ * JSON. Returns the request id whose response
+ * [`tc_call_hierarchy_callers_json`] reduces to places, or 0 when the
+ * answer named nothing callable or the document has no server.
+ *
+ * # Safety
+ * `app` must be a live app pointer; `path` and `prepared` must point
+ * to `path_len` and `prepared_len` readable bytes.
+ */
+uint64_t tc_lsp_incoming_calls(struct TcApp *app,
+                               const char *path,
+                               uintptr_t path_len,
+                               const char *prepared,
+                               uintptr_t prepared_len);
+
+/**
+ * Reduces an `incomingCalls` result to an LSP `Location[]`, one place
+ * per call site, which is the shape a references list takes. Release
+ * with [`tc_string_free`].
+ *
+ * # Safety
+ * `json` must point to `len` readable bytes.
+ */
+char *tc_call_hierarchy_callers_json(const char *json, uintptr_t len);
+
+/**
  * Requests the symbols across the project whose names match `query`,
  * from the servers of the document at `path`. Returns the request id
  * whose `TC_EVENT_LSP_RESPONSE` event will carry the answer, or 0

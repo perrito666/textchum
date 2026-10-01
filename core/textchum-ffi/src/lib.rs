@@ -312,6 +312,86 @@ pub unsafe extern "C" fn tc_lsp_document_highlight(
     .unwrap_or(0)
 }
 
+/// The first step of asking who calls the function at an LSP position;
+/// same contract as [`tc_lsp_hover`]. The response's `result` goes to
+/// [`tc_lsp_incoming_calls`] as it is.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_prepare_call_hierarchy(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool.prepare_call_hierarchy(std::path::Path::new(path), line, character)
+    }))
+    .unwrap_or(0)
+}
+
+/// Asks who calls the item a [`tc_lsp_prepare_call_hierarchy`] answer
+/// names: `prepared` is that answer's `result`, `prepared_len` bytes of
+/// JSON. Returns the request id whose response
+/// [`tc_call_hierarchy_callers_json`] reduces to places, or 0 when the
+/// answer named nothing callable or the document has no server.
+///
+/// # Safety
+/// `app` must be a live app pointer; `path` and `prepared` must point
+/// to `path_len` and `prepared_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_incoming_calls(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    prepared: *const c_char,
+    prepared_len: usize,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let (Some(path), Some(prepared)) =
+        (unsafe { (str_from_raw(path, path_len), str_from_raw(prepared, prepared_len)) })
+    else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match textchum_core::calls::prepared_item(prepared) {
+            Some(item) => app.pool.incoming_calls(std::path::Path::new(path), item),
+            None => 0,
+        }
+    }))
+    .unwrap_or(0)
+}
+
+/// Reduces an `incomingCalls` result to an LSP `Location[]`, one place
+/// per call site, which is the shape a references list takes. Release
+/// with [`tc_string_free`].
+///
+/// # Safety
+/// `json` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_call_hierarchy_callers_json(
+    json: *const c_char,
+    len: usize,
+) -> *mut c_char {
+    let Some(json) = (unsafe { str_from_raw(json, len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(textchum_core::calls::callers_as_locations(json))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Requests the symbols across the project whose names match `query`,
 /// from the servers of the document at `path`. Returns the request id
 /// whose `TC_EVENT_LSP_RESPONSE` event will carry the answer, or 0

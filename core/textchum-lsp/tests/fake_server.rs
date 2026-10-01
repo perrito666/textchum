@@ -721,3 +721,39 @@ fn a_projects_symbols_are_found_by_name() {
     assert_eq!(std::path::Path::new(&rows[0].path), file);
     assert_eq!(rows[1].kind, "struct");
 }
+
+#[test]
+fn who_calls_a_function_is_asked_in_two_steps_and_comes_back_as_places() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-callers");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    let answer_to = |events: &mpsc::Receiver<Event>, asked: u64, what: &str| -> String {
+        let mut seen = Vec::new();
+        collect_until(events, what, &mut seen, |seen| {
+            seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == asked))
+        });
+        seen.iter()
+            .find_map(|event| match event {
+                Event::LspResponse { id, json } if *id == asked => Some(json.clone()),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let prepared = pool.prepare_call_hierarchy(&file, 0, 4);
+    let prepared = answer_to(&events, prepared, "the prepared item");
+    let item = textchum_core::calls::prepared_item(&prepared).expect("an item");
+    let calls = pool.incoming_calls(&file, item);
+    let calls = answer_to(&events, calls, "the callers");
+    let places: serde_json::Value =
+        serde_json::from_str(&textchum_core::calls::callers_as_locations(&calls)).unwrap();
+    let lines: Vec<u64> = places
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|place| place["range"]["start"]["line"].as_u64().unwrap())
+        .collect();
+    assert_eq!(lines, vec![3, 5], "one place per call site");
+    assert!(calls.contains("caller_of_fake_function"), "the item went back as it came");
+}

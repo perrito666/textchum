@@ -327,6 +327,7 @@ fn run_manager(
                     }},
                     "definition": {"linkSupport": true},
                     "documentHighlight": {},
+                    "callHierarchy": {},
                     "codeAction": {
                         "codeActionLiteralSupport": {"codeActionKind": {"valueSet": [
                             "", "quickfix", "refactor", "refactor.extract",

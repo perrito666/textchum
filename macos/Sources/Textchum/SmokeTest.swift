@@ -1482,6 +1482,26 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the panel came back \(shownAgain.frame.height)pt tall, not 120")
         return 1
     }
+    // Who calls a function comes back as callers with their call sites,
+    // and is shown as places: one per site, in the caller's file.
+    do {
+        let places = CoreCalls.callersAsLocations(
+            fromResultJSON: """
+                [{"from": {"name": "main", "uri": "file:///p/main.rs",
+                           "selectionRange": {"start": {"line": 0, "character": 3}, "end": {"line": 0, "character": 7}}},
+                  "fromRanges": [{"start": {"line": 2, "character": 4}, "end": {"line": 2, "character": 13}},
+                                 {"start": {"line": 5, "character": 4}, "end": {"line": 5, "character": 13}}]}]
+                """)
+        let parsed = (try? JSONSerialization.jsonObject(with: Data(places.utf8))) as? [[String: Any]]
+        guard parsed?.count == 2, parsed?[0]["uri"] as? String == "file:///p/main.rs",
+            CoreCalls.callersAsLocations(fromResultJSON: "null") == "[]"
+        else {
+            print("FAIL: the callers came out as \(places)")
+            return 1
+        }
+    }
+    print("callers ok (one place per call site)")
+
     // A server's project-wide symbols become rows to pick: the name
     // first, then the kind, what it sits in, and where.
     do {

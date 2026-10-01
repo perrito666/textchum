@@ -143,6 +143,7 @@ def main():
                         "signatureHelpProvider": {"triggerCharacters": ["(", ","]},
                         "documentHighlightProvider": True,
                         "workspaceSymbolProvider": True,
+                        "callHierarchyProvider": True,
                     }.items() if name not in without
                 }},
             })
@@ -190,6 +191,31 @@ def main():
                         % (position["line"], position["character"]),
                     }
                 },
+            })
+        elif method == "textDocument/prepareCallHierarchy":
+            uri = message["params"]["textDocument"]["uri"]
+            name_range = {"start": {"line": 0, "character": 3},
+                          "end": {"line": 0, "character": 7}}
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": [{"name": "fake_function", "kind": 12, "uri": uri,
+                            "range": name_range, "selectionRange": name_range}],
+            })
+        elif method == "callHierarchy/incomingCalls":
+            # One caller, in the file the item is in, calling it twice.
+            item = message["params"]["item"]
+            site = lambda line: {"start": {"line": line, "character": 4},
+                                 "end": {"line": line, "character": 17}}
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": [{
+                    "from": {"name": "caller_of_" + item["name"], "kind": 12,
+                             "uri": item["uri"], "range": site(2),
+                             "selectionRange": site(2)},
+                    "fromRanges": [site(3), site(5)],
+                }],
             })
         elif method == "workspace/symbol":
             # Two symbols whose names carry the query, in the file that
