@@ -258,6 +258,14 @@ public final class CoreApp {
         }
     }
 
+    /// Tells the document's server it was written to disk, which is
+    /// when servers that check on save run.
+    public func lspDidSave(path: String) {
+        withUTF8(path) { path, pathLen in
+            tc_lsp_did_save(handle, path, pathLen)
+        }
+    }
+
     /// Requests hover information at an LSP position (zero-based line,
     /// UTF-16 column). The completion receives the response's `result` as
     /// JSON ("null" when the server has nothing to say), on the main

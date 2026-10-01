@@ -590,6 +590,20 @@ impl Pool {
     /// UTF-16 column). Returns the request id whose
     /// [`Event::LspResponse`] will carry the answer, or 0 when the
     /// document has no server.
+    /// Tells the document's server it was written to disk. The text is
+    /// not sent again: the server has it from the last change.
+    pub fn did_save(&mut self, path: &Path) {
+        let Some(key) = self.documents.get(path).cloned() else {
+            return;
+        };
+        if let Some(instance) = self.instances.get(&key) {
+            instance.send(Command::DidSave {
+                path: path.to_owned(),
+            });
+        }
+        self.touch(&key);
+    }
+
     pub fn hover(&mut self, path: &Path, line: u32, character: u32) -> u64 {
         self.request(
             path,

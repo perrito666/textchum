@@ -430,6 +430,16 @@ uint64_t tc_lsp_completion(struct TcApp *app,
 void tc_lsp_did_close(struct TcApp *app, const char *path, uintptr_t path_len);
 
 /**
+ * Tells the document's server it was written to disk, which is when
+ * servers that check on save run. A document with no server is
+ * ignored.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+void tc_lsp_did_save(struct TcApp *app, const char *path, uintptr_t path_len);
+
+/**
  * Creates an empty buffer.
  */
 struct TcBuffer *tc_buffer_new(void);

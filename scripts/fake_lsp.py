@@ -64,7 +64,8 @@ def main():
     # What the client told this server about how to run, for the
     # `fake.report` command to hand back to a test.
     told = {"initializationOptions": None, "workspace": None,
-            "configuration": None, "changed": None}
+            "textDocument": None, "configuration": None, "changed": None,
+            "saved": []}
     while True:
         message = held.pop(0) if held else read_message(stdin)
         if message is None:
@@ -85,6 +86,8 @@ def main():
                 1001: lambda r: isinstance(r, list) and len(r) == 1
                                 and "uri" in r[0] and "name" in r[0],
             }, held)
+        elif method == "textDocument/didSave":
+            told["saved"].append(message["params"]["textDocument"]["uri"])
         elif method == "workspace/didChangeConfiguration":
             told["changed"] = message["params"].get("settings")
         elif method == "workspace/executeCommand":
@@ -95,6 +98,7 @@ def main():
         elif method == "initialize":
             told["initializationOptions"] = message["params"].get("initializationOptions")
             told["workspace"] = message["params"].get("capabilities", {}).get("workspace")
+            told["textDocument"] = message["params"].get("capabilities", {}).get("textDocument")
             send({
                 "jsonrpc": "2.0",
                 "id": message["id"],
