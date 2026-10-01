@@ -39,6 +39,11 @@ pub enum Command {
     DidClose {
         path: PathBuf,
     },
+    /// The document was written to disk. Servers that lint or check on
+    /// save (cargo's lints through rust-analyzer, for one) run then.
+    DidSave {
+        path: PathBuf,
+    },
     /// A client→server request; the response comes back asynchronously as
     /// an [`Event::LspResponse`] carrying the same id.
     Request {
@@ -200,10 +205,30 @@ fn run_manager(
                 "name": root.file_name().map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| "root".into()),
             }],
+            // Each entry is something the shells already do with the
+            // answer. Servers gate richer answers on these: without
+            // snippetSupport rust-analyzer completes a function as its
+            // bare name, and without the code-action literals it can
+            // only offer commands.
             "capabilities": {
                 "textDocument": {
                     "publishDiagnostics": {},
-                    "synchronization": {"didSave": false}
+                    "synchronization": {"didSave": true},
+                    "completion": {"completionItem": {
+                        "snippetSupport": true,
+                        "insertReplaceSupport": true
+                    }},
+                    "hover": {"contentFormat": ["markdown", "plaintext"]},
+                    "definition": {"linkSupport": true},
+                    "codeAction": {
+                        "codeActionLiteralSupport": {"codeActionKind": {"valueSet": [
+                            "", "quickfix", "refactor", "refactor.extract",
+                            "refactor.inline", "refactor.rewrite", "source",
+                            "source.organizeImports"
+                        ]}},
+                        "dataSupport": true,
+                        "resolveSupport": {"properties": ["edit"]}
+                    }
                 },
                 // Said because it is now true: a server that pulls its
                 // settings only asks a client that declares it answers.
@@ -353,6 +378,11 @@ fn run_manager(
             Command::DidClose { path } => json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didClose",
+                "params": {"textDocument": {"uri": path_to_uri(&path)}},
+            }),
+            Command::DidSave { path } => json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didSave",
                 "params": {"textDocument": {"uri": path_to_uri(&path)}},
             }),
             Command::Request { id, method, params } => json!({

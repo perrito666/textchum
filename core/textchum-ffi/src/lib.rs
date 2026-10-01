@@ -569,6 +569,25 @@ pub unsafe extern "C" fn tc_lsp_did_close(app: *mut TcApp, path: *const c_char, 
     }));
 }
 
+/// Tells the document's server it was written to disk, which is when
+/// servers that check on save run. A document with no server is
+/// ignored.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_did_save(app: *mut TcApp, path: *const c_char, path_len: usize) {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        app.pool.did_save(std::path::Path::new(path));
+    }));
+}
+
 /// Creates an empty buffer.
 #[no_mangle]
 pub extern "C" fn tc_buffer_new() -> *mut TcBuffer {

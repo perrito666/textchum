@@ -498,3 +498,40 @@ fn a_server_is_told_its_settings_three_ways() {
         serde_json::json!({"fake": {"lint": "strict"}, "other": 1})
     );
 }
+
+/// Asks the scripted server what it was told, through its report command.
+fn report(pool: &mut Pool, events: &mpsc::Receiver<Event>, file: &std::path::Path) -> serde_json::Value {
+    let mut seen = Vec::new();
+    let report_id = pool.execute_command(file, "fake.report", serde_json::Value::Null);
+    collect_until(events, "the report", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == report_id))
+    });
+    seen.iter()
+        .find_map(|event| match event {
+            Event::LspResponse { id, json } if *id == report_id => serde_json::from_str(json).ok(),
+            _ => None,
+        })
+        .expect("a report")
+}
+
+#[test]
+fn a_save_is_announced_and_the_client_says_what_it_can_take() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-save");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    pool.did_save(&file);
+    // A save of a document nobody opened is nobody's business.
+    pool.did_save(std::path::Path::new("/not/open.rs"));
+
+    let report = report(&mut pool, &events, &file);
+    let saved = report["saved"].as_array().expect("a list of saves");
+    assert_eq!(saved.len(), 1, "one save, announced once: {saved:?}");
+    assert!(saved[0].as_str().unwrap().ends_with("/main.rs"));
+    let declared = &report["textDocument"];
+    assert_eq!(declared["synchronization"]["didSave"], true);
+    assert_eq!(declared["completion"]["completionItem"]["snippetSupport"], true);
+    assert_eq!(declared["hover"]["contentFormat"][0], "markdown");
+    assert_eq!(declared["codeAction"]["resolveSupport"]["properties"][0], "edit");
+}

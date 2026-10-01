@@ -625,10 +625,14 @@ impl Shell {
 
     /// Remembers that this process wrote `path` just now, so the file
     /// monitor does not offer to reload the app's own save.
+    ///
+    /// Every successful save comes through here, so it is also where
+    /// the server is told: the ones that check on save run then.
     pub fn note_own_save(&self, path: &str) {
         self.own_saves
             .borrow_mut()
             .insert(path.to_owned(), std::time::Instant::now());
+        self.pool.borrow_mut().did_save(Path::new(path));
     }
 
     /// Whether a monitor event for `path` is the echo of our own save.

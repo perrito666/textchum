@@ -4065,9 +4065,18 @@ final class DocumentController: NSResponder {
     }
 
     /// Marks a window of time in which file events are our own save.
+    ///
+    /// Every successful save comes through here, so it is also where
+    /// the server is told: the ones that check on save run then, and
+    /// they have the text already from the last change, which is sent
+    /// first if it is still waiting.
     private func noteOwnSave() {
         watcherSuppressedUntil = Date().addingTimeInterval(1.0)
         startWatchingFile()
+        if let path = lspOpenPath {
+            flushLSPChange()
+            lspApp?.lspDidSave(path: path)
+        }
     }
 
     /// The text view, for app-level interactions (⌘-click navigation).
