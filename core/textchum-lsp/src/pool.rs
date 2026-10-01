@@ -310,7 +310,13 @@ impl Pool {
     ///
     /// A command line typed by hand has no id of its own, so its
     /// settings are found under the name of the command it runs.
-    fn options_for(&self, config: &ServerConfig) -> crate::instance::ServerOptions {
+    ///
+    /// `lsp.project_settings.<root>.<id>` is the settings for one
+    /// project, and the whole of them: a project entry replaces the
+    /// default rather than layering over it, like every other
+    /// per-project entry. A nested project takes an ancestor's when
+    /// that ancestor has recursive configuration on.
+    fn options_for(&self, config: &ServerConfig, root: &Path) -> crate::instance::ServerOptions {
         let key = match config.id.strip_prefix("custom:") {
             Some(command) => Path::new(command)
                 .file_name()
@@ -318,8 +324,25 @@ impl Pool {
                 .unwrap_or_else(|| command.to_owned()),
             None => config.id.clone(),
         };
+        let of_project = |dir: &Path| -> Option<serde_json::Value> {
+            let found = &self.configured["project_settings"][dir.to_string_lossy().as_ref()][&key];
+            (!found.is_null()).then(|| found.clone())
+        };
+        let mut settings = of_project(root);
+        if settings.is_none() {
+            let mut ancestor = root.parent();
+            while let Some(dir) = ancestor {
+                if self.workspace_settings.recursive_config(dir) {
+                    if let Some(found) = of_project(dir) {
+                        settings = Some(found);
+                        break;
+                    }
+                }
+                ancestor = dir.parent();
+            }
+        }
         crate::instance::ServerOptions {
-            settings: self.configured["settings"][&key].clone(),
+            settings: settings.unwrap_or_else(|| self.configured["settings"][&key].clone()),
             init_options: self.configured["init_options"][&key].clone(),
         }
     }
@@ -573,7 +596,7 @@ impl Pool {
                     self.events.clone(),
                     std::sync::Arc::clone(&self.published),
                     std::sync::Arc::clone(&self.waiters),
-                    self.options_for(&config),
+                    self.options_for(&config, &root),
                 ) {
                     Ok(instance) => {
                         self.instances.insert(key.clone(), instance);
@@ -1128,6 +1151,26 @@ mod tests {
         assert_eq!(pool.serving_root(&repo, "python"), repo);
         assert_eq!(pool.config_for(&repo, "python").unwrap().id, "pylsp");
         let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn a_projects_settings_replace_the_defaults_for_that_project() {
+        let pool = pool_with(
+            r#"{"lsp": {
+                "settings": {"pyright": {"python": {"analysis": {"typeCheckingMode": "basic"}}},
+                             "server": {"lint": true}},
+                "project_settings": {"/work/api": {"pyright": {"pyright": {"strict": true}}}}}}"#,
+        );
+        let pyright = pool.config_from("pyright", Path::new("/work/api"), "python").unwrap();
+        // The project's object is the whole answer: no "python" section
+        // bleeds in from the default.
+        let api = pool.options_for(&pyright, Path::new("/work/api"));
+        assert_eq!(api.settings, serde_json::json!({"pyright": {"strict": true}}));
+        let site = pool.options_for(&pyright, Path::new("/work/site"));
+        assert_eq!(site.settings["python"]["analysis"]["typeCheckingMode"], "basic");
+        // A hand-typed command line is looked up by the program it runs.
+        let typed = pool.config_from("/opt/bin/server --stdio", Path::new("/work/site"), "x").unwrap();
+        assert_eq!(pool.options_for(&typed, Path::new("/work/site")).settings["lint"], true);
     }
 
     #[test]

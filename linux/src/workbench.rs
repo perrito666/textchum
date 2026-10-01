@@ -6761,6 +6761,104 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     servers.add(&servers_group);
     servers.add(&projects_group);
 
+    // Server settings: what a server runs with, as the JSON object it
+    // is pushed and asked for by section — for every project, or for
+    // one root.
+    let settings_group = adw::PreferencesGroup::new();
+    settings_group.set_title(&tr("Server settings"));
+    settings_group.set_description(Some(&tr(
+        "Settings a server runs with, as a JSON object keyed by section — {\"rust-analyzer\": {\"check\": {\"command\": \"clippy\"}}} — for every project or for one root. A project's object replaces the default one.",
+    )));
+    let settings_entries: Vec<(Option<String>, String, String)> = {
+        let parsed = serde_json::from_str::<serde_json::Value>(&shell.config.borrow().lsp_json())
+            .unwrap_or_default();
+        let mut entries = Vec::new();
+        for (server, settings) in parsed["settings"].as_object().into_iter().flatten() {
+            entries.push((None, server.clone(), settings.to_string()));
+        }
+        for (root, servers) in parsed["project_settings"].as_object().into_iter().flatten() {
+            for (server, settings) in servers.as_object().into_iter().flatten() {
+                entries.push((Some(root.clone()), server.clone(), settings.to_string()));
+            }
+        }
+        entries
+    };
+    // Text that is not a JSON object is not saved, and the row says so:
+    // a half-typed brace must not replace settings that work.
+    let write_settings = |shell: &Rc<Shell>, root: Option<&str>, server: &str, text: &str| -> bool {
+        let settings = if text.trim().is_empty() {
+            None
+        } else {
+            match serde_json::from_str::<serde_json::Value>(text) {
+                Ok(value) if value.is_object() => Some(value),
+                _ => return false,
+            }
+        };
+        shell.config.borrow_mut().set_lsp_settings(root, server, settings);
+        shell.save_config();
+        shell.reconfigure_pool();
+        true
+    };
+    for (root, server, json) in settings_entries {
+        let row = adw::EntryRow::new();
+        match &root {
+            None => row.set_title(&glib::markup_escape_text(&server)),
+            Some(root) => {
+                let basename = std::path::Path::new(root)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| root.clone());
+                row.set_title(&glib::markup_escape_text(&format!("{server} — {basename}")));
+                row.set_tooltip_text(Some(root));
+            }
+        }
+        row.set_text(&json);
+        row.set_show_apply_button(true);
+        let shell = Rc::clone(&shell);
+        row.connect_apply(move |row| {
+            if write_settings(&shell, root.as_deref(), &server, &row.text()) {
+                row.remove_css_class("error");
+            } else {
+                row.add_css_class("error");
+            }
+        });
+        settings_group.add(&row);
+    }
+    let add_settings_root = adw::EntryRow::new();
+    add_settings_root.set_title(&tr("project root (empty = default for all projects)"));
+    attach_path_choices(&add_settings_root, "Open projects", open_project_roots());
+    let add_settings_server = adw::EntryRow::new();
+    add_settings_server.set_title(&tr("server (e.g. rust-analyzer)"));
+    let add_settings_json = adw::EntryRow::new();
+    add_settings_json.set_title(&tr("settings as a JSON object"));
+    add_settings_json.set_show_apply_button(true);
+    {
+        let shell = Rc::clone(&shell);
+        let root_row = add_settings_root.clone();
+        let server_row = add_settings_server.clone();
+        add_settings_json.connect_apply(move |row| {
+            let root = root_row.text().trim().to_string();
+            let server = server_row.text().trim().to_string();
+            let text = row.text();
+            if server.is_empty() || text.trim().is_empty() {
+                return;
+            }
+            let root = (!root.is_empty()).then_some(root.as_str());
+            if write_settings(&shell, root, &server, &text) {
+                row.remove_css_class("error");
+                root_row.set_text("");
+                server_row.set_text("");
+                row.set_text("");
+            } else {
+                row.add_css_class("error");
+            }
+        });
+    }
+    settings_group.add(&add_settings_root);
+    settings_group.add(&add_settings_server);
+    settings_group.add(&add_settings_json);
+    servers.add(&settings_group);
+
     // Save preprocessors: the same chains the macOS Settings edit —
     // one command per link, ` ;; ` separating links in these rows
     // (the file stores them as an array, one per line).

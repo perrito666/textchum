@@ -2940,6 +2940,25 @@ bool tc_workspace_is_hidden(const char *name,
 char *tc_tool_presets_json(void);
 
 /**
+ * Sets (or, with `json_len == 0`, removes) the settings a server runs
+ * with: `json_len` bytes of a JSON object keyed by section, under
+ * `lsp.project_settings.<root>.<server>` when `root_len > 0` and
+ * `lsp.settings.<server>` otherwise. Returns false, changing nothing,
+ * when the text is not a JSON object. The caller saves.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; each pointer/length
+ * pair must describe readable bytes.
+ */
+bool tc_config_set_lsp_settings(struct TcConfig *config,
+                                const char *root,
+                                uintptr_t root_len,
+                                const char *server,
+                                uintptr_t server_len,
+                                const char *json,
+                                uintptr_t json_len);
+
+/**
  * The language presets, for a settings screen: a JSON array of
  * `{id, name, summary, missing, applied, servers, settings,
  * preprocessors, tools}` objects, each tool saying whether it was

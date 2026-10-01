@@ -372,30 +372,48 @@ impl Config {
         prune_empty(top, "lsp");
     }
 
-    /// The settings a server runs with (`lsp.settings.<server>`): the
-    /// object the pool pushes to it and answers its configuration
-    /// questions from, keyed by section.
-    pub fn lsp_settings(&self, server: &str) -> Option<&Value> {
-        self.root.get("lsp")?.get("settings")?.get(server)
+    /// The settings a server runs with: the object the pool pushes to
+    /// it and answers its configuration questions from, keyed by
+    /// section. `lsp.settings.<server>` for every project, or
+    /// `lsp.project_settings.<root>.<server>` for one — which, like
+    /// every per-project entry, is the whole answer for that project
+    /// and not a layer over the default.
+    pub fn lsp_settings(&self, root: Option<&str>, server: &str) -> Option<&Value> {
+        let lsp = self.root.get("lsp")?;
+        match root {
+            Some(root) => lsp.get("project_settings")?.get(root)?.get(server),
+            None => lsp.get("settings")?.get(server),
+        }
     }
 
-    /// Sets (or, with `None`, removes) a server's settings. Empty
-    /// sections are pruned.
-    pub fn set_lsp_settings(&mut self, server: &str, settings: Option<Value>) {
+    /// Sets (or, with `None`, removes) a server's settings, for one
+    /// project root or for all. Empty sections are pruned.
+    pub fn set_lsp_settings(&mut self, root: Option<&str>, server: &str, settings: Option<Value>) {
         let top = self
             .root
             .as_object_mut()
             .expect("config root is always an object");
         let lsp = ensure_object(top, "lsp");
-        let section = ensure_object(lsp, "settings");
-        match settings {
-            Some(settings) => {
-                section.insert(server.into(), settings);
-            }
-            None => {
-                section.remove(server);
+        {
+            let section = match root {
+                Some(root) => ensure_object(ensure_object(lsp, "project_settings"), root),
+                None => ensure_object(lsp, "settings"),
+            };
+            match settings {
+                Some(settings) => {
+                    section.insert(server.into(), settings);
+                }
+                None => {
+                    section.remove(server);
+                }
             }
         }
+        if let Some(root) = root {
+            if let Some(Value::Object(projects)) = lsp.get_mut("project_settings") {
+                prune_empty(projects, root);
+            }
+        }
+        prune_empty(lsp, "project_settings");
         prune_empty(lsp, "settings");
         prune_empty(top, "lsp");
     }
@@ -413,7 +431,7 @@ impl Config {
             self.set_lsp_entry(None, language, Some(server));
         }
         for (server, settings) in &preset.settings {
-            self.set_lsp_settings(server, Some(settings.clone()));
+            self.set_lsp_settings(None, server, Some(settings.clone()));
         }
         for (language, chain) in &preset.preprocessors {
             self.set_preprocessor_entry(None, language, Some(&chain.join("\n")));
@@ -430,7 +448,7 @@ impl Config {
         }) && preset
             .settings
             .iter()
-            .all(|(server, settings)| self.lsp_settings(server) == Some(settings))
+            .all(|(server, settings)| self.lsp_settings(None, server) == Some(settings))
             && preset
                 .preprocessors
                 .iter()
@@ -2263,10 +2281,20 @@ mod tests {
         let mut edited = reloaded;
         edited.set_preprocessor_entry(None, "rust", Some("rustfmt --edition 2018"));
         assert!(!applied(&edited, "rust"));
-        edited.set_lsp_settings("rust-analyzer", None);
-        assert!(edited.lsp_settings("rust-analyzer").is_none());
+        edited.set_lsp_settings(None, "rust-analyzer", None);
+        assert!(edited.lsp_settings(None, "rust-analyzer").is_none());
         let lsp: Value = serde_json::from_str(&edited.lsp_json()).unwrap();
         assert!(lsp.get("settings").is_none(), "an emptied section is pruned");
+
+        // One project can have its own, which stands apart from the default.
+        let strict = serde_json::json!({"python": {"analysis": {"typeCheckingMode": "strict"}}});
+        edited.set_lsp_settings(Some("/work/api"), "pyright", Some(strict.clone()));
+        assert_eq!(edited.lsp_settings(Some("/work/api"), "pyright"), Some(&strict));
+        assert!(edited.lsp_settings(None, "pyright").is_none());
+        assert!(edited.lsp_settings(Some("/work/site"), "pyright").is_none());
+        edited.set_lsp_settings(Some("/work/api"), "pyright", None);
+        let lsp: Value = serde_json::from_str(&edited.lsp_json()).unwrap();
+        assert!(lsp.get("project_settings").is_none(), "and prunes the same way");
     }
 
     #[test]

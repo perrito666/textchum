@@ -321,6 +321,7 @@ final class SettingsModel: ObservableObject {
             NSLog("could not save configuration: \(error)")
         }
         reloadLSPEntries()
+        reloadServerSettings()
         reloadPreprocessorEntries()
         reloadLanguagePresets()
         onChange?()
@@ -414,6 +415,7 @@ final class SettingsModel: ObservableObject {
         autosaveSeconds = Int(config.autosaveSeconds)
         isLoading = false
         reloadLSPEntries()
+        reloadServerSettings()
         reloadWorkspaceEntries()
         reloadPreprocessorEntries()
         reloadHidePresets()
@@ -455,6 +457,7 @@ final class SettingsModel: ObservableObject {
         self.occurrencesWholeWord = config.occurrencesWholeWord
         self.isLoading = false
         reloadLSPEntries()
+        reloadServerSettings()
         reloadWorkspaceEntries()
         reloadPreprocessorEntries()
         reloadHidePresets()
@@ -792,9 +795,66 @@ final class SettingsModel: ObservableObject {
             NSLog("could not save configuration: \(error)")
         }
         reloadLSPEntries()
+        reloadServerSettings()
         // Editing what a preset wrote stops it being "applied".
         reloadLanguagePresets()
         onChange?()
+    }
+
+    // MARK: Server settings
+
+    /// One server's settings: the JSON object it is pushed and asked
+    /// for by section, for every project or for one.
+    struct ServerSettingsEntry: Identifiable, Equatable {
+        /// Project root path; empty means every project.
+        let scope: String
+        let server: String
+        /// Pretty-printed, for the editor.
+        let json: String
+
+        var id: String { "\(scope)|\(server)" }
+        var scopeLabel: String {
+            scope.isEmpty ? "Default" : (scope as NSString).lastPathComponent
+        }
+    }
+
+    @Published private(set) var serverSettingsEntries: [ServerSettingsEntry] = []
+
+    private func reloadServerSettings() {
+        var entries: [ServerSettingsEntry] = []
+        let pretty = { (object: Any) -> String in
+            (try? JSONSerialization.data(
+                withJSONObject: object, options: [.prettyPrinted, .sortedKeys]))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        }
+        if let data = config.lspJSON.data(using: .utf8),
+            let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        {
+            for (server, settings) in parsed["settings"] as? [String: Any] ?? [:] {
+                entries.append(
+                    ServerSettingsEntry(scope: "", server: server, json: pretty(settings)))
+            }
+            for (root, servers) in parsed["project_settings"] as? [String: [String: Any]] ?? [:] {
+                for (server, settings) in servers {
+                    entries.append(
+                        ServerSettingsEntry(scope: root, server: server, json: pretty(settings)))
+                }
+            }
+        }
+        serverSettingsEntries = entries.sorted { ($0.scope, $0.server) < ($1.scope, $1.server) }
+    }
+
+    /// Writes a server's settings. False, saving nothing, when the text
+    /// is not a JSON object: a half-typed brace must not replace
+    /// settings that work.
+    @discardableResult
+    func setServerSettings(scope: String, server: String, json: String?) -> Bool {
+        let server = server.trimmingCharacters(in: .whitespaces)
+        guard !server.isEmpty else { return false }
+        let root = scope.isEmpty ? nil : (scope as NSString).expandingTildeInPath
+        guard config.setLSPSettings(root: root, server: server, json: json) else { return false }
+        persistLSPChange()
+        return true
     }
 
     // MARK: Save preprocessors
@@ -2057,6 +2117,10 @@ private struct LanguageServersTab: View {
     @State private var newScope = ""
     @State private var newLanguage = ""
     @State private var newCommand = ""
+    @State private var settingsScope = ""
+    @State private var settingsServer = ""
+    @State private var settingsJSON = ""
+    @State private var settingsRefused = false
 
     var body: some View {
         // One scrolling column per tab: a settings screen that
@@ -2224,6 +2288,78 @@ private struct LanguageServersTab: View {
                     .padding(6)
                 }
 
+                // What a server runs with: which lints, how strict. The
+                // object is the one the server is pushed and asked for
+                // by section, so it is edited as what it is.
+                GroupBox(t("Server settings")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(t("Settings a server runs with, as a JSON object keyed by section — {\"rust-analyzer\": {\"check\": {\"command\": \"clippy\"}}} — for every project or for one root. A project's object replaces the default one."))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ForEach(model.serverSettingsEntries) { entry in
+                            HStack(alignment: .top, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(entry.scopeLabel)
+                                            .fontWeight(.semibold)
+                                        Text(entry.server)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    ServerSettingsField(entry: entry) { json in
+                                        model.setServerSettings(
+                                            scope: entry.scope, server: entry.server, json: json)
+                                    }
+                                    .id(entry.id + "\n" + entry.json)
+                                }
+                                .help(entry.scope.isEmpty ? "All projects" : entry.scope)
+                                Spacer()
+                                Button {
+                                    model.setServerSettings(
+                                        scope: entry.scope, server: entry.server, json: nil)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            PathPicker(
+                                text: $settingsScope,
+                                placeholder: t("Project root (empty = default for all projects)"))
+                            EditableCombo(
+                                text: $settingsServer,
+                                placeholder: t("Server (e.g. rust-analyzer)"),
+                                options: CoreLSPRegistry.all.map(\.id)
+                            )
+                            .frame(width: 200)
+                        }
+                        HStack(alignment: .top, spacing: 8) {
+                            CommandsEditor(
+                                placeholder: t("Settings as a JSON object"),
+                                text: $settingsJSON)
+                            Button(t("Add")) {
+                                settingsRefused = !model.setServerSettings(
+                                    scope: settingsScope, server: settingsServer,
+                                    json: settingsJSON)
+                                if !settingsRefused {
+                                    settingsScope = ""
+                                    settingsServer = ""
+                                    settingsJSON = ""
+                                }
+                            }
+                            .disabled(settingsServer.isEmpty || settingsJSON.isEmpty)
+                        }
+                        if settingsRefused {
+                            Text(t("Not a JSON object, so not saved."))
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .textFieldStyle(.roundedBorder)
+                    .padding(6)
+                }
+
                 HStack {
                     Text(t("Changes apply to servers started afterwards."))
                         .font(.caption)
@@ -2366,6 +2502,47 @@ private struct PreprocessorsTab: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
+    }
+}
+
+/// One server's settings, edited as the JSON they are and committed
+/// when focus leaves. Text that is not a JSON object is not saved, and
+/// says so: a half-typed brace must not replace settings that work.
+private struct ServerSettingsField: View {
+    let entry: SettingsModel.ServerSettingsEntry
+    let commit: (String) -> Bool
+    @State private var text: String
+    @State private var refused = false
+
+    init(entry: SettingsModel.ServerSettingsEntry, commit: @escaping (String) -> Bool) {
+        self.entry = entry
+        self.commit = commit
+        _text = State(initialValue: entry.json)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            CommandsEditor(placeholder: t("Settings as a JSON object"), text: $text) {
+                commitIfChanged()
+            }
+            if refused {
+                Text(t("Not a JSON object, so not saved."))
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .onDisappear(perform: commitIfChanged)
+    }
+
+    private func commitIfChanged() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            text = entry.json
+            refused = false
+            return
+        }
+        guard trimmed != entry.json else { return }
+        refused = !commit(trimmed)
     }
 }
 

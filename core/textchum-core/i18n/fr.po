@@ -1116,6 +1116,29 @@ msgstr "langage (par exemple python)"
 msgid "command (e.g. pylsp)"
 msgstr "commande (par exemple pylsp)"
 
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Server settings"
+msgstr "Réglages des serveurs"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid ""
+"Settings a server runs with, as a JSON object keyed by section — {\"rust-"
+"analyzer\": {\"check\": {\"command\": \"clippy\"}}} — for every project or "
+"for one root. A project's object replaces the default one."
+msgstr "Les réglages avec lesquels tourne un serveur, sous forme d'objet JSON avec une clé par section — {\"rust-analyzer\": {\"check\": {\"command\": \"clippy\"}}} — pour tous les projets ou pour une racine. L'objet d'un projet remplace celui par défaut."
+
+#: linux/src/workbench.rs
+msgid "project root (empty = default for all projects)"
+msgstr "racine du projet (vide = par défaut pour tous)"
+
+#: linux/src/workbench.rs
+msgid "server (e.g. rust-analyzer)"
+msgstr "serveur (p. ex. rust-analyzer)"
+
+#: linux/src/workbench.rs
+msgid "settings as a JSON object"
+msgstr "réglages sous forme d'objet JSON"
+
 #: linux/src/workbench.rs
 msgid "Save preprocessors"
 msgstr "Préprocesseurs d'enregistrement"
@@ -1127,10 +1150,6 @@ msgstr "Sauvegarder quand même si une chaîne échoue"
 #: linux/src/workbench.rs
 msgid "A toast says so, instead of a question"
 msgstr "Une notification le dit, au lieu d'une question"
-
-#: linux/src/workbench.rs
-msgid "project root (empty = default for all projects)"
-msgstr "racine du projet (vide = par défaut pour tous)"
 
 #: linux/src/workbench.rs
 msgid "commands (e.g. ruff check --fix - ;; black -)"
@@ -2008,6 +2027,18 @@ msgstr "Aucun projet ouvert"
 #: macos/Sources/Textchum/Settings.swift
 msgid "Language (e.g. python)"
 msgstr "Langage (par exemple python)"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "Server (e.g. rust-analyzer)"
+msgstr "Serveur (p. ex. rust-analyzer)"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "Settings as a JSON object"
+msgstr "Réglages sous forme d'objet JSON"
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "Not a JSON object, so not saved."
+msgstr "Ce n'est pas un objet JSON : non enregistré."
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "Changes apply to servers started afterwards."

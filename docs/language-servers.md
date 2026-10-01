@@ -278,8 +278,14 @@ A server reads its settings when it starts. Applying a
 servers; after a hand edit, Settings ▸ Language Servers has the button
 that does.
 
-Not there yet: settings are per server, not per project, and the
-Settings window does not edit them — the presets write the common ones.
+Settings ▸ Language Servers edits these under **Server settings**: one
+JSON object per server, for every project or for one root. A project's
+object lives under `lsp.project_settings.<root>.<server>` and, like
+every per-project entry, replaces the default rather than adding to it.
+Text that is not a JSON object is not saved, and the field says so.
+
+Not there yet: `lsp.init_options` is edited by hand, and is not per
+project.
 
 ### Naming a server, and pointing at one inside the project
 

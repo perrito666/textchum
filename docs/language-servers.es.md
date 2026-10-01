@@ -288,8 +288,14 @@ Un servidor lee su configuración al arrancar. Aplicar un
 los servidores; tras una edición a mano, Settings ▸ Language Servers
 tiene el botón que lo hace.
 
-Todavía no: la configuración es por servidor, no por proyecto, y la
-ventana de Settings no la edita — los perfiles escriben las habituales.
+Settings ▸ Language Servers las edita en **Server settings**: un objeto
+JSON por servidor, para todos los proyectos o para una raíz. El objeto
+de un proyecto vive en `lsp.project_settings.<raíz>.<servidor>` y, como
+toda entrada por proyecto, sustituye a la de por defecto en vez de
+sumarse a ella. Un texto que no es un objeto JSON no se guarda, y el
+campo lo dice.
+
+Todavía no: `lsp.init_options` se edita a mano, y no es por proyecto.
 
 ### Nombrar un servidor y apuntar a uno dentro del proyecto
 
