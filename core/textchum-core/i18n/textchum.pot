@@ -37,14 +37,8 @@ msgstr ""
 
 #: core/textchum-core/src/presets.rs
 msgid ""
-"pyright for types and navigation, and ruff fixing and formatting before "
-"every save."
-msgstr ""
-
-#: core/textchum-core/src/presets.rs
-msgid ""
-"ruff's own findings do not show in the editor: a document has one server, "
-"and here it is pyright."
+"pyright for types and navigation, ruff's findings beside them, and ruff "
+"fixing and formatting before every save."
 msgstr ""
 
 #: core/textchum-core/src/presets.rs
@@ -60,7 +54,9 @@ msgid "typescript-language-server, and prettier before every save."
 msgstr ""
 
 #: core/textchum-core/src/presets.rs
-msgid "eslint's findings do not show in the editor: a document has one server."
+msgid ""
+"eslint's findings are not set up by this preset: its server needs a "
+"project's own configuration."
 msgstr ""
 
 #: core/textchum-core/src/presets.rs

@@ -32,19 +32,9 @@ msgstr ""
 
 #: core/textchum-core/src/presets.rs
 msgid ""
-"pyright for types and navigation, and ruff fixing and formatting before "
-"every save."
-msgstr ""
-"pyright pour les types et la navigation, et ruff qui corrige et formate "
-"avant chaque enregistrement."
-
-#: core/textchum-core/src/presets.rs
-msgid ""
-"ruff's own findings do not show in the editor: a document has one server, "
-"and here it is pyright."
-msgstr ""
-"Les résultats propres à ruff ne s'affichent pas dans l'éditeur : un document "
-"a un seul serveur, et ici c'est pyright."
+"pyright for types and navigation, ruff's findings beside them, and ruff "
+"fixing and formatting before every save."
+msgstr "pyright pour les types et la navigation, les résultats de ruff à côté, et ruff qui corrige et formate avant chaque enregistrement."
 
 #: core/textchum-core/src/presets.rs
 msgid "gopls with staticcheck on, and goimports before every save."
@@ -60,10 +50,10 @@ msgid "typescript-language-server, and prettier before every save."
 msgstr "typescript-language-server, et prettier avant chaque enregistrement."
 
 #: core/textchum-core/src/presets.rs
-msgid "eslint's findings do not show in the editor: a document has one server."
-msgstr ""
-"Les résultats d'eslint ne s'affichent pas dans l'éditeur : un document a un "
-"seul serveur."
+msgid ""
+"eslint's findings are not set up by this preset: its server needs a "
+"project's own configuration."
+msgstr "Ce profil ne configure pas les résultats d'eslint : son serveur a besoin de la configuration propre à un projet."
 
 #: core/textchum-core/src/presets.rs
 msgid "C and C++"
@@ -2028,7 +2018,9 @@ msgstr "Aucun outil connu pour ce langage"
 #: macos/Sources/Textchum/Settings.swift
 msgid ""
 "Adds the command line a known tool takes, so it does not have to be looked up"
-msgstr "Ajoute la ligne de commande que prend un outil connu, pour ne pas avoir à la chercher"
+msgstr ""
+"Ajoute la ligne de commande que prend un outil connu, pour ne pas avoir à la "
+"chercher"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "No known server for this language"
@@ -2112,3 +2104,16 @@ msgstr "Ouvrez un fichier depuis l'arbre, ou avec ⌘O."
 #: macos/Sources/Textchum/Workbench.swift
 msgid "No file here."
 msgstr "Aucun fichier ici."
+
+#~ msgid ""
+#~ "ruff's own findings do not show in the editor: a document has one server, "
+#~ "and here it is pyright."
+#~ msgstr ""
+#~ "Les résultats propres à ruff ne s'affichent pas dans l'éditeur : un "
+#~ "document a un seul serveur, et ici c'est pyright."
+
+#~ msgid ""
+#~ "eslint's findings do not show in the editor: a document has one server."
+#~ msgstr ""
+#~ "Les résultats d'eslint ne s'affichent pas dans l'éditeur : un document a "
+#~ "un seul serveur."

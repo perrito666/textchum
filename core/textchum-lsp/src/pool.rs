@@ -49,8 +49,13 @@ type InstanceKey = (String, PathBuf);
 pub struct Pool {
     events: EventSender,
     instances: HashMap<InstanceKey, Instance>,
-    /// Which instance each open document talks to.
-    documents: HashMap<PathBuf, InstanceKey>,
+    /// Which instances each open document talks to, in the order the
+    /// configuration names them. A request goes to the first that
+    /// provides what is asked; notifications go to all.
+    documents: HashMap<PathBuf, Vec<InstanceKey>>,
+    /// Which instance last offered code actions for a document, since
+    /// resolving one or running its command is that server's business.
+    acting: HashMap<PathBuf, InstanceKey>,
     /// Per-document LSP version counter.
     versions: HashMap<PathBuf, i64>,
     /// (server, root) pairs that failed to start; not retried.
@@ -78,6 +83,7 @@ impl Pool {
             events,
             instances: HashMap::new(),
             documents: HashMap::new(),
+            acting: HashMap::new(),
             versions: HashMap::new(),
             failed: HashSet::new(),
             overrides: Vec::new(),
@@ -128,6 +134,10 @@ impl Pool {
     pub fn shutdown_all(&mut self) {
         self.instances.clear();
         self.documents.clear();
+        self.acting.clear();
+        if let Ok(mut published) = self.published.lock() {
+            published.clear();
+        }
         self.versions.clear();
         self.last_activity.clear();
     }
@@ -143,14 +153,31 @@ impl Pool {
             crate::log::log(&format!("retired {server} at {root}"));
         }
         self.last_activity.remove(&key);
+        self.acting.retain(|_, acting| *acting != key);
+        let mut orphaned = Vec::new();
         self.documents.retain(|path, routed| {
-            if *routed == key {
+            if !routed.contains(&key) {
+                return true;
+            }
+            routed.retain(|other| *other != key);
+            orphaned.push(path.clone());
+            if routed.is_empty() {
                 self.versions.remove(path);
                 false
             } else {
                 true
             }
         });
+        // What the server said about those files went with it; the
+        // shells are told what is left, or its marks would stay up
+        // with nobody behind them.
+        if let Ok(mut published) = self.published.lock() {
+            for path in orphaned {
+                if published.remove(&(key.0.clone(), path.clone())).is_some() {
+                    let _ = self.events.send(crate::instance::findings_event(&published, &path));
+                }
+            }
+        }
     }
 
     /// Instances no document has needed for a while are shut down; the
@@ -160,7 +187,7 @@ impl Pool {
 
     fn sweep_idle(&mut self) {
         let now = std::time::Instant::now();
-        let in_use: HashSet<&InstanceKey> = self.documents.values().collect();
+        let in_use: HashSet<&InstanceKey> = self.documents.values().flatten().collect();
         let idle: Vec<InstanceKey> = self
             .instances
             .keys()
@@ -352,8 +379,39 @@ impl Pool {
 
     /// Resolves the server for a (root, language): user project entry →
     /// user default → programmatic override → built-in registry.
+    #[cfg(test)]
     fn config_for(&self, root: &Path, language: &str) -> Option<ServerConfig> {
-        if let Some(command_line) = self.configured_command(root, language) {
+        self.configs_for(root, language).into_iter().next()
+    }
+
+    /// Every server for a (root, language), in the order the
+    /// configuration names them. An entry lists more than one with
+    /// ` ;; ` between them — `"python": "pyright ;; ruff"` — the
+    /// separator a preprocessor chain uses for its links. A language is
+    /// often a type checker and a linter, and each is its own server.
+    fn configs_for(&self, root: &Path, language: &str) -> Vec<ServerConfig> {
+        match self.configured_command(root, language) {
+            Some(entry) => entry
+                .split(";;")
+                .map(str::trim)
+                .filter(|one| !one.is_empty())
+                .filter_map(|one| self.config_from(one, root, language))
+                .collect(),
+            None => self
+                .overrides
+                .iter()
+                .find(|c| c.languages.iter().any(|l| l == language))
+                .cloned()
+                .or_else(|| server_for_language(language).map(ServerConfig::from))
+                .into_iter()
+                .collect(),
+        }
+    }
+
+    /// One configured server: an id the registry or `lsp.servers`
+    /// knows, or a command line.
+    fn config_from(&self, command_line: &str, root: &Path, language: &str) -> Option<ServerConfig> {
+        {
             // A value naming a server the registry knows takes that
             // server's command and its required arguments. Several
             // servers serve one language and only the first is reachable
@@ -399,19 +457,14 @@ impl Pool {
                     ));
                 }
             }
-            return Some(ServerConfig {
+            Some(ServerConfig {
                 id: format!("custom:{command}"),
                 command,
                 args,
                 languages: vec![language.to_owned()],
                 install_hint: format!("configured in Settings for {language}"),
-            });
+            })
         }
-        self.overrides
-            .iter()
-            .find(|c| c.languages.iter().any(|l| l == language))
-            .cloned()
-            .or_else(|| server_for_language(language).map(ServerConfig::from))
     }
 
     /// The root whose server instance looks after the project at `root`.
@@ -486,102 +539,119 @@ impl Pool {
                 format!(" (serving the nested project {})", project.display())
             }
         ));
-        let Some(config) = self.config_for(&root, language) else {
+        let configs = self.configs_for(&root, language);
+        if configs.is_empty() {
             crate::log::log(&format!(
                 "no server for language {language}: not configured and not in the registry"
             ));
             return;
-        };
-        crate::log::log(&format!(
-            "server for {language}: {} ({} {:?})",
-            config.id, config.command, config.args
-        ));
-        let key = (config.id.clone(), root.clone());
-        if self.failed.contains(&key) {
-            crate::log::log(&format!(
-                "{} at {} failed earlier this session; not retrying until \
-                 restart or configuration change",
-                config.id,
-                root.display()
-            ));
-            return;
         }
-        if !self.instances.contains_key(&key) {
-            match Instance::spawn(
-                &config,
-                &root,
-                self.events.clone(),
-                std::sync::Arc::clone(&self.published),
-                self.options_for(&config),
-            ) {
-                Ok(instance) => {
-                    self.instances.insert(key.clone(), instance);
-                }
-                Err(error) => {
-                    crate::log::log(&format!(
-                        "spawn failed for {} ({}): {error}; PATH={}",
-                        config.id,
-                        config.command,
-                        std::env::var("PATH").unwrap_or_default()
-                    ));
-                    self.failed.insert(key);
-                    let _ = self.events.send(Event::ServerStatus {
-                        server: config.id.clone(),
-                        root: root.to_string_lossy().into_owned(),
-                        status: "not-found".into(),
-                        message: format!(
-                            "{} is not installed (install with: {})",
-                            config.command, config.install_hint
-                        ),
-                    });
-                    return;
+        let mut serving = Vec::new();
+        for config in configs {
+            crate::log::log(&format!(
+                "server for {language}: {} ({} {:?})",
+                config.id, config.command, config.args
+            ));
+            let key = (config.id.clone(), root.clone());
+            if self.failed.contains(&key) {
+                crate::log::log(&format!(
+                    "{} at {} failed earlier this session; not retrying until \
+                     restart or configuration change",
+                    config.id,
+                    root.display()
+                ));
+                continue;
+            }
+            if !self.instances.contains_key(&key) {
+                match Instance::spawn(
+                    &config,
+                    &root,
+                    self.events.clone(),
+                    std::sync::Arc::clone(&self.published),
+                    self.options_for(&config),
+                ) {
+                    Ok(instance) => {
+                        self.instances.insert(key.clone(), instance);
+                    }
+                    Err(error) => {
+                        crate::log::log(&format!(
+                            "spawn failed for {} ({}): {error}; PATH={}",
+                            config.id,
+                            config.command,
+                            std::env::var("PATH").unwrap_or_default()
+                        ));
+                        self.failed.insert(key);
+                        let _ = self.events.send(Event::ServerStatus {
+                            server: config.id.clone(),
+                            root: root.to_string_lossy().into_owned(),
+                            status: "not-found".into(),
+                            message: format!(
+                                "{} is not installed (install with: {})",
+                                config.command, config.install_hint
+                            ),
+                        });
+                        // One server missing is one feature missing:
+                        // the others still start.
+                        continue;
+                    }
                 }
             }
+            serving.push(key);
+        }
+        if serving.is_empty() {
+            return;
         }
         let version = 1;
         self.versions.insert(path.to_owned(), version);
-        self.documents.insert(path.to_owned(), key.clone());
-        self.instances[&key].send(Command::DidOpen {
-            path: path.to_owned(),
-            language: language.to_owned(),
-            version,
-            text: text.to_owned(),
-        });
-        self.touch(&key);
+        for key in &serving {
+            self.instances[key].send(Command::DidOpen {
+                path: path.to_owned(),
+                language: language.to_owned(),
+                version,
+                text: text.to_owned(),
+            });
+            self.touch(key);
+        }
+        self.documents.insert(path.to_owned(), serving);
         self.sweep_idle();
     }
 
     /// Announces new document contents (full-text sync).
     pub fn did_change(&mut self, path: &Path, text: &str) {
-        let Some(key) = self.documents.get(path).cloned() else {
+        let Some(keys) = self.documents.get(path).cloned() else {
             return;
         };
-        let version = self
+        let version = *self
             .versions
             .entry(path.to_owned())
             .and_modify(|v| *v += 1)
             .or_insert(1);
-        if let Some(instance) = self.instances.get(&key) {
-            instance.send(Command::DidChange {
-                path: path.to_owned(),
-                version: *version,
-                text: text.to_owned(),
-            });
+        for key in &keys {
+            if let Some(instance) = self.instances.get(key) {
+                instance.send(Command::DidChange {
+                    path: path.to_owned(),
+                    version,
+                    text: text.to_owned(),
+                });
+            }
+            self.touch(key);
         }
-        self.touch(&key);
     }
 
     /// Announces a closed document. The instance stays warm for the next
     /// open (idle shutdown is a later refinement).
     pub fn did_close(&mut self, path: &Path) {
-        if let Some(key) = self.documents.remove(path) {
+        self.acting.remove(path);
+        if let Some(keys) = self.documents.remove(path) {
             self.versions.remove(path);
-            if let Some(instance) = self.instances.get(&key) {
-                instance.send(Command::DidClose {
-                    path: path.to_owned(),
-                });
+            for key in &keys {
+                if let Some(instance) = self.instances.get(key) {
+                    instance.send(Command::DidClose {
+                        path: path.to_owned(),
+                    });
+                }
+                self.touch(key);
             }
-            self.touch(&key);
         }
         self.sweep_idle();
     }
@@ -593,20 +663,23 @@ impl Pool {
     /// Tells the document's server it was written to disk. The text is
     /// not sent again: the server has it from the last change.
     pub fn did_save(&mut self, path: &Path) {
-        let Some(key) = self.documents.get(path).cloned() else {
+        let Some(keys) = self.documents.get(path).cloned() else {
             return;
         };
-        if let Some(instance) = self.instances.get(&key) {
-            instance.send(Command::DidSave {
-                path: path.to_owned(),
-            });
+        for key in &keys {
+            if let Some(instance) = self.instances.get(key) {
+                instance.send(Command::DidSave {
+                    path: path.to_owned(),
+                });
+            }
+            self.touch(key);
         }
-        self.touch(&key);
     }
 
     pub fn hover(&mut self, path: &Path, line: u32, character: u32) -> u64 {
         self.request(
             path,
+            "hoverProvider",
             "textDocument/hover",
             serde_json::json!({
                 "textDocument": {"uri": crate::uri::path_to_uri(path)},
@@ -620,6 +693,7 @@ impl Pool {
     pub fn definition(&mut self, path: &Path, line: u32, character: u32) -> u64 {
         self.request(
             path,
+            "definitionProvider",
             "textDocument/definition",
             serde_json::json!({
                 "textDocument": {"uri": crate::uri::path_to_uri(path)},
@@ -634,6 +708,7 @@ impl Pool {
     pub fn completion(&mut self, path: &Path, line: u32, character: u32) -> u64 {
         self.request(
             path,
+            "completionProvider",
             "textDocument/completion",
             serde_json::json!({
                 "textDocument": {"uri": crate::uri::path_to_uri(path)},
@@ -648,6 +723,7 @@ impl Pool {
     pub fn references(&mut self, path: &Path, line: u32, character: u32) -> u64 {
         self.request(
             path,
+            "referencesProvider",
             "textDocument/references",
             serde_json::json!({
                 "textDocument": {"uri": crate::uri::path_to_uri(path)},
@@ -663,6 +739,7 @@ impl Pool {
     pub fn rename(&mut self, path: &Path, line: u32, character: u32, new_name: &str) -> u64 {
         self.request(
             path,
+            "renameProvider",
             "textDocument/rename",
             serde_json::json!({
                 "textDocument": {"uri": crate::uri::path_to_uri(path)},
@@ -684,18 +761,40 @@ impl Pool {
     /// Same contract as [`Self::hover`]. The response's `result` is an
     /// array of `Command` and `CodeAction`.
     pub fn code_action(&mut self, path: &Path, line: u32, character: u32) -> u64 {
-        let diagnostics = self
-            .published
-            .lock()
-            .ok()
-            .and_then(|published| published.get(path).cloned())
-            .map(|found| {
-                textchum_core::code_action::diagnostics_at(&found.to_string(), line, character)
-            })
-            .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
+        // The server that reported the finding under the caret is the
+        // one to ask how to fix it: with a type checker and a linter on
+        // one document, the first to offer code actions would otherwise
+        // be asked about the other's findings and know nothing of them.
+        let keys = self.documents.get(path).cloned().unwrap_or_default();
+        let found_by = |key: &InstanceKey| -> serde_json::Value {
+            self.published
+                .lock()
+                .ok()
+                .and_then(|published| published.get(&(key.0.clone(), path.to_owned())).cloned())
+                .map(|found| {
+                    textchum_core::code_action::diagnostics_at(&found.to_string(), line, character)
+                })
+                .unwrap_or_else(|| serde_json::Value::Array(Vec::new()))
+        };
+        let offers = |key: &&InstanceKey| {
+            self.instances
+                .get(*key)
+                .is_some_and(|instance| instance.provides("codeActionProvider") != Some(false))
+        };
+        let chosen = keys
+            .iter()
+            .filter(offers)
+            .find(|key| found_by(key).as_array().is_some_and(|found| !found.is_empty()))
+            .or_else(|| keys.iter().find(offers))
+            .cloned();
+        let Some(key) = chosen else {
+            return 0;
+        };
+        let diagnostics = found_by(&key);
         let position = serde_json::json!({"line": line, "character": character});
-        self.request(
-            path,
+        self.acting.insert(path.to_owned(), key.clone());
+        self.request_to(
+            &key,
             "textDocument/codeAction",
             serde_json::json!({
                 "textDocument": {"uri": crate::uri::path_to_uri(path)},
@@ -705,28 +804,26 @@ impl Pool {
         )
     }
 
-    /// Fills in a code action a server sent without its edit.
-    ///
-    /// Servers are allowed to answer cheaply and compute the edit only
-    /// for the action actually chosen, so this sends the action back
-    /// and gets the same one with `edit` filled in.
+    /// Asks the server that offered `action` to fill in its edit.
     pub fn resolve_code_action(&mut self, path: &Path, action: serde_json::Value) -> u64 {
-        self.request(path, "codeAction/resolve", action)
+        match self.acting.get(path).cloned() {
+            Some(key) => self.request_to(&key, "codeAction/resolve", action),
+            None => self.request(path, "codeActionProvider", "codeAction/resolve", action),
+        }
     }
 
-    /// Runs a command a code action carried instead of an edit — the
-    /// server does the work and sends back whatever edits it makes.
+    /// Runs a command a code action named, on the server that named it.
     pub fn execute_command(
         &mut self,
         path: &Path,
         command: &str,
         arguments: serde_json::Value,
     ) -> u64 {
-        self.request(
-            path,
-            "workspace/executeCommand",
-            serde_json::json!({"command": command, "arguments": arguments}),
-        )
+        let params = serde_json::json!({"command": command, "arguments": arguments});
+        match self.acting.get(path).cloned() {
+            Some(key) => self.request_to(&key, "workspace/executeCommand", params),
+            None => self.request(path, "executeCommandProvider", "workspace/executeCommand", params),
+        }
     }
 
     /// Requests whole-document formatting; same contract as
@@ -734,6 +831,7 @@ impl Pool {
     pub fn formatting(&mut self, path: &Path, tab_size: u32, insert_spaces: bool) -> u64 {
         self.request(
             path,
+            "documentFormattingProvider",
             "textDocument/formatting",
             serde_json::json!({
                 "textDocument": {"uri": crate::uri::path_to_uri(path)},
@@ -748,6 +846,7 @@ impl Pool {
     pub fn document_symbols(&mut self, path: &Path) -> u64 {
         self.request(
             path,
+            "documentSymbolProvider",
             "textDocument/documentSymbol",
             serde_json::json!({
                 "textDocument": {"uri": crate::uri::path_to_uri(path)},
@@ -757,13 +856,37 @@ impl Pool {
 
     /// Sends a request to the document's instance; the response arrives as
     /// an [`Event::LspResponse`] with the returned id (0 = no instance).
-    fn request(&mut self, path: &Path, method: &str, params: serde_json::Value) -> u64 {
-        let Some(key) = self.documents.get(path).cloned() else {
+    /// Sends a request about `path` to the first of its servers that
+    /// provides `provider`. One that has not answered initialize yet
+    /// has not said no, and is asked.
+    fn request(
+        &mut self,
+        path: &Path,
+        provider: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> u64 {
+        let Some(keys) = self.documents.get(path) else {
             return 0;
         };
         // A retired (crashed) instance may still be routed until the
         // shell re-announces; a request to it has no one to answer.
-        let Some(instance) = self.instances.get(&key) else {
+        let chosen = keys
+            .iter()
+            .find(|key| {
+                self.instances
+                    .get(*key)
+                    .is_some_and(|instance| instance.provides(provider) != Some(false))
+            })
+            .cloned();
+        match chosen {
+            Some(key) => self.request_to(&key, method, params),
+            None => 0,
+        }
+    }
+
+    fn request_to(&mut self, key: &InstanceKey, method: &str, params: serde_json::Value) -> u64 {
+        let Some(instance) = self.instances.get(key) else {
             return 0;
         };
         let id = self.next_request_id;
@@ -773,7 +896,7 @@ impl Pool {
             method: method.to_owned(),
             params,
         });
-        self.touch(&key);
+        self.touch(key);
         id
     }
 

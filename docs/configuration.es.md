@@ -483,7 +483,7 @@ guardado.
 | Perfil | Servidor | Configuración | Antes de cada guardado |
 |---|---|---|---|
 | Rust | rust-analyzer | comprueba con clippy | `rustfmt --edition {edition}` |
-| Python | pyright | — | `ruff check --fix …`, luego `ruff format` |
+| Python | pyright, con ruff al lado | — | `ruff check --fix …`, luego `ruff format` |
 | Go | gopls | staticcheck activado | `goimports` |
 | TypeScript y JavaScript | typescript-language-server | — | `prettier --stdin-filepath {path}` |
 | C y C++ | clangd | — | `clang-format --assume-filename={path}` |
@@ -499,11 +499,10 @@ en `PATH`; el que falta muestra el comando que lo instala. El editor no
 instala nada por su cuenta.
 
 Todavía no: un perfil se aplica a todos los proyectos (las entradas que
-escribe se pueden mover a un proyecto a mano). Y donde el *linter* de
-un lenguaje es un segundo servidor — ruff junto a pyright, eslint junto
-al servidor de TypeScript — sus hallazgos no se muestran, porque un
-documento tiene un solo servidor; ruff igualmente corrige y formatea al
-guardar.
+escribe se pueden mover a un proyecto a mano). Y el perfil de
+TypeScript no configura eslint como segundo servidor, porque el
+servidor de eslint necesita la configuración propia del proyecto para
+decir algo.
 
 ## Corrección ortográfica
 

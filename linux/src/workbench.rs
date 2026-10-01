@@ -7594,7 +7594,14 @@ fn attach_server_choices(command_row: &adw::EntryRow, language_row: &adw::EntryR
     let language = language_row.clone();
     attach_choices(command_row, &tr("Known servers"), labels, move |index| {
         let server = &servers[index];
-        command.set_text(server.id);
+        // A second choice joins the first: a language can have several
+        // servers.
+        let typed = command.text().trim().to_string();
+        if typed.is_empty() {
+            command.set_text(server.id);
+        } else {
+            command.set_text(&format!("{typed} ;; {}", server.id));
+        }
         if language.text().trim().is_empty() {
             if let Some(first) = server.languages.first() {
                 language.set_text(first);

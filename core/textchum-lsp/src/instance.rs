@@ -73,6 +73,9 @@ pub struct Instance {
     finished: mpsc::Receiver<()>,
     manager: Option<JoinHandle<()>>,
     child: Arc<Mutex<Child>>,
+    /// What the server said it can do, once it has said: the
+    /// `capabilities` of its initialize result.
+    capabilities: Arc<Mutex<Option<Value>>>,
 }
 
 impl Instance {
@@ -114,14 +117,19 @@ impl Instance {
 
         let (commands_tx, commands_rx) = mpsc::channel::<Command>();
         let (finished_tx, finished_rx) = mpsc::channel::<()>();
+        let capabilities = Arc::new(Mutex::new(None));
         let manager = {
             let child = Arc::clone(&child);
+            let capabilities = Arc::clone(&capabilities);
             let server_id = config.id.clone();
             let root = root.to_owned();
             std::thread::Builder::new()
                 .name(format!("lsp-{server_id}"))
                 .spawn(move || {
-                    run_manager(child, server_id, root, options, commands_rx, events, published);
+                    run_manager(
+                        child, server_id, root, options, capabilities, commands_rx, events,
+                        published,
+                    );
                     let _ = finished_tx.send(());
                 })
                 .expect("failed to spawn LSP manager thread")
@@ -131,7 +139,17 @@ impl Instance {
             finished: finished_rx,
             manager: Some(manager),
             child,
+            capabilities,
         })
+    }
+
+    /// Whether the server said it provides `provider` (`hoverProvider`,
+    /// `documentFormattingProvider`, …). `None` while it has not
+    /// answered initialize yet, which is not a no.
+    pub fn provides(&self, provider: &str) -> Option<bool> {
+        let capabilities = self.capabilities.lock().ok()?;
+        let said = capabilities.as_ref()?;
+        Some(!matches!(said.get(provider), None | Some(Value::Null) | Some(Value::Bool(false))))
     }
 
     pub fn send(&self, command: Command) {
@@ -177,6 +195,7 @@ fn run_manager(
     server_id: String,
     root: PathBuf,
     options: ServerOptions,
+    capabilities: Arc<Mutex<Option<Value>>>,
     commands: mpsc::Receiver<Command>,
     events: EventSender,
     published: PublishedDiagnostics,
@@ -258,6 +277,9 @@ fn run_manager(
                         status(&events, &server_id, &root, "failed", &error.to_string());
                         return;
                     }
+                    if let Ok(mut said) = capabilities.lock() {
+                        *said = Some(message["result"]["capabilities"].clone());
+                    }
                     break;
                 }
                 answer_if_request(&stdin, &root, &options.settings, &message);
@@ -309,7 +331,7 @@ fn run_manager(
                         if message.get("method").and_then(Value::as_str)
                             == Some("textDocument/publishDiagnostics")
                         {
-                            publish_diagnostics(&events, &published, &message);
+                            publish_diagnostics(&events, &published, &server_id, &message);
                         } else if message.get("method").is_none() {
                             // A response to one of our requests. Ids 1–2
                             // (initialize/shutdown) are lifecycle traffic;
@@ -557,42 +579,64 @@ mod tests {
 /// needs the diagnostic the server actually published: `code`, `data`
 /// and `source` are how a server recognizes its own finding and offers
 /// the fix for it, and a reconstructed one gets a shrug.
-pub type PublishedDiagnostics = Arc<Mutex<HashMap<PathBuf, Value>>>;
+///
+/// Keyed by server as well as file: a document can have more than one
+/// server, each publishing its own set, and the shells are shown all
+/// of them together.
+pub type PublishedDiagnostics = Arc<Mutex<HashMap<(String, PathBuf), Value>>>;
 
 /// Converts a publishDiagnostics notification into a compact core
 /// event, and keeps the original for the requests that need it.
 fn publish_diagnostics(
     events: &EventSender,
     published: &PublishedDiagnostics,
+    server: &str,
     message: &Value,
 ) {
     let params = &message["params"];
     let Some(path) = params["uri"].as_str().and_then(uri_to_path) else {
         return;
     };
-    if let Ok(mut published) = published.lock() {
-        published.insert(path.clone(), params["diagnostics"].clone());
-    }
-    let diagnostics: Vec<Value> = params["diagnostics"]
-        .as_array()
-        .map(|items| {
-            items
-                .iter()
-                .map(|d| {
-                    json!({
-                        "line": d["range"]["start"]["line"],
-                        "character": d["range"]["start"]["character"],
-                        "endLine": d["range"]["end"]["line"],
-                        "endCharacter": d["range"]["end"]["character"],
-                        "severity": d["severity"].as_u64().unwrap_or(1),
-                        "message": d["message"].as_str().unwrap_or(""),
-                    })
-                })
-                .collect()
+    let Ok(mut published) = published.lock() else {
+        return;
+    };
+    published.insert((server.to_owned(), path.clone()), params["diagnostics"].clone());
+    let _ = events.send(findings_event(&published, &path));
+}
+
+/// The event that tells a shell what is known about `path`: every
+/// server's findings for it together, in the compact shape a mark
+/// needs. One server publishing replaces its own set and leaves the
+/// others' standing.
+pub(crate) fn findings_event(
+    published: &HashMap<(String, PathBuf), Value>,
+    path: &Path,
+) -> Event {
+    let mut servers: Vec<&String> = published
+        .keys()
+        .filter(|(_, file)| file == path)
+        .map(|(server, _)| server)
+        .collect();
+    // An order that does not depend on the hash map's.
+    servers.sort();
+    let diagnostics: Vec<Value> = servers
+        .into_iter()
+        .filter_map(|server| published.get(&(server.clone(), path.to_owned())))
+        .filter_map(Value::as_array)
+        .flatten()
+        .map(|d| {
+            json!({
+                "line": d["range"]["start"]["line"],
+                "character": d["range"]["start"]["character"],
+                "endLine": d["range"]["end"]["line"],
+                "endCharacter": d["range"]["end"]["character"],
+                "severity": d["severity"].as_u64().unwrap_or(1),
+                "message": d["message"].as_str().unwrap_or(""),
+            })
         })
-        .unwrap_or_default();
-    let _ = events.send(Event::Diagnostics {
+        .collect();
+    Event::Diagnostics {
         path: path.to_string_lossy().into_owned(),
         json: serde_json::to_string(&diagnostics).unwrap_or_else(|_| "[]".into()),
-    });
+    }
 }

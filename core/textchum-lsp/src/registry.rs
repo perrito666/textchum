@@ -415,7 +415,7 @@ mod tests {
             let named = preset
                 .servers
                 .iter()
-                .map(|(_, server)| *server)
+                .flat_map(|(_, servers)| servers.split(";;").map(str::trim))
                 .chain(preset.settings.iter().map(|(server, _)| *server));
             for server in named {
                 assert!(server_by_id(server).is_some(), "{} names {server}", preset.id);

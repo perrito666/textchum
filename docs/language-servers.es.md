@@ -195,6 +195,26 @@ sigue aceptando cualquier texto: se puede configurar un lenguaje antes
 de que exista una gramática para él, y la entrada sigue sirviendo
 cuando llega.
 
+### Más de un servidor para un lenguaje
+
+Un lenguaje suele ser un comprobador de tipos y un *linter*, y cada uno
+es un servidor por sí mismo. Una entrada los lista con ` ;; ` entre
+ellos:
+
+```json
+{ "lsp": { "defaults": { "python": "pyright ;; ruff" } } }
+```
+
+Todos reciben el documento y sus cambios, y sus hallazgos se muestran
+juntos. Una petición — *hover*, autocompletado, ir a la definición,
+formato — va al primer servidor listado que dice ofrecerla, así que el
+orden es el orden de preferencia. Una acción de código se pide al
+servidor que informó del hallazgo bajo el cursor. Si uno no está
+instalado, los demás corren igual.
+
+Todavía no: el autocompletado viene de un servidor, no se combina el de
+todos.
+
 ### Definir un servidor que el editor no conoce
 
 `lsp.servers` guarda entradas con la misma forma que usa la tabla

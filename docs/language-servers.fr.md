@@ -198,6 +198,26 @@ et accepte toujours n'importe quel texte : un langage peut être
 configuré avant qu'une grammaire existe pour lui, et l'entrée sert
 encore quand elle arrive.
 
+### Plus d'un serveur pour un langage
+
+Un langage, c'est souvent un vérificateur de types et un *linter*, et
+chacun est un serveur à part entière. Une entrée les liste avec ` ;; `
+entre eux :
+
+```json
+{ "lsp": { "defaults": { "python": "pyright ;; ruff" } } }
+```
+
+Tous reçoivent le document et ses modifications, et leurs résultats
+s'affichent ensemble. Une requête — *hover*, complétion, aller à la
+définition, formatage — va au premier serveur listé qui dit la fournir ;
+l'ordre est donc l'ordre de préférence. Une action de code est demandée
+au serveur qui a signalé le résultat sous le curseur. Si l'un d'eux
+n'est pas installé, les autres tournent quand même.
+
+Pas encore là : la complétion vient d'un seul serveur, elle n'est pas
+fusionnée entre tous.
+
 ### Définir un serveur que l'éditeur ne connaît pas
 
 `lsp.servers` contient des entrées de la même forme que la table
