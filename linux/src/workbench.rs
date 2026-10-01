@@ -6474,6 +6474,26 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     }
     editor_group.add(&rainbow_row);
 
+    let inlay_row = adw::SwitchRow::new();
+    inlay_row.set_title(&tr("Show the types the language server inferred, after the line"));
+    inlay_row.set_subtitle(&tr("Dimmed, at the end of the line each is about"));
+    inlay_row.set_active(shell.config.borrow().inlay_hints());
+    {
+        let shell = Rc::clone(&shell);
+        inlay_row.connect_active_notify(move |row| {
+            shell.config.borrow_mut().set_inlay_hints(row.is_active());
+            shell.save_config();
+            // Off takes the labels down at once; on asks the servers.
+            Workbench::for_each(|workbench| {
+                for page in workbench.all_pages() {
+                    crate::page::refresh_inlay_labels(&page);
+                    crate::page::request_inlay_hints(&page);
+                }
+            });
+        });
+    }
+    editor_group.add(&inlay_row);
+
     let auto_close_row = adw::SwitchRow::new();
     auto_close_row.set_title(&tr("Close brackets and quotes as they are typed"));
     auto_close_row.set_subtitle(&tr("An opening half brings its closing half; the closer typed steps over it"));

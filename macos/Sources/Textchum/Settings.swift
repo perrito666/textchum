@@ -13,6 +13,7 @@ struct EditorSettings {
     let contextLines: Bool
     /// Whether bracket pairs are coloured by depth.
     let rainbowBrackets: Bool
+    let inlayHints: Bool
     /// Whether typing an opening bracket or quote puts its closing half
     /// after the caret.
     let autoClosePairs: Bool
@@ -68,6 +69,7 @@ struct EditorSettings {
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
         self.rainbowBrackets = config.rainbowBrackets
+        self.inlayHints = config.inlayHints
         self.autoClosePairs = config.autoClosePairs
         self.pairTables = config.pairTables
         self.hoverDocs = config.hoverDocs
@@ -161,6 +163,9 @@ final class SettingsModel: ObservableObject {
     }
     @Published var rainbowBrackets: Bool {
         didSet { persist { $0.rainbowBrackets = rainbowBrackets } }
+    }
+    @Published var inlayHints: Bool {
+        didSet { persist { $0.inlayHints = inlayHints } }
     }
     @Published var autoClosePairs: Bool {
         didSet { persist { $0.autoClosePairs = autoClosePairs } }
@@ -393,6 +398,7 @@ final class SettingsModel: ObservableObject {
         lineNumbers = config.lineNumbers
         contextLines = config.contextLines
         rainbowBrackets = config.rainbowBrackets
+        inlayHints = config.inlayHints
         autoClosePairs = config.autoClosePairs
         gitMarks = config.gitMarks
         mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
@@ -435,6 +441,7 @@ final class SettingsModel: ObservableObject {
         self.lineNumbers = config.lineNumbers
         self.contextLines = config.contextLines
         self.rainbowBrackets = config.rainbowBrackets
+        self.inlayHints = config.inlayHints
         self.autoClosePairs = config.autoClosePairs
         self.gitMarks = config.gitMarks
         self.mergeBaseBranches = config.mergeBaseBranches.joined(separator: "\n")
@@ -1174,6 +1181,9 @@ struct GeneralSettingsTab: View {
             Toggle(t("Close brackets and quotes as they are typed"), isOn: $model.autoClosePairs)
             Toggle(t("Pin enclosing context lines"), isOn: $model.contextLines)
             Toggle(t("Colour bracket pairs by depth"), isOn: $model.rainbowBrackets)
+            Toggle(
+                t("Show the types the language server inferred, after the line"),
+                isOn: $model.inlayHints)
             Picker(t("Gutter marks compare against"), selection: $model.gitMarks) {
                 Text(t("The last commit")).tag("head")
                 Text(t("Where the branch forked")).tag("branch")

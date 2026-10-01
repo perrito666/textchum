@@ -949,6 +949,30 @@ impl Pool {
         }
     }
 
+    /// Asks for the inlay hints of the lines `first_line..=last_line`:
+    /// the types the server inferred, and the parameter names of calls.
+    /// The response's `result` is an LSP `InlayHint[]`.
+    ///
+    /// `last_line` has to be a line the document has. A range that
+    /// ends on a line past the last is an error to rust-analyzer, which
+    /// answers it with nothing at all; a column past the end of a line
+    /// is not, the protocol says it means the end of the line, and that
+    /// is how the whole of the last line is asked for.
+    pub fn inlay_hints(&mut self, path: &Path, first_line: u32, last_line: u32) -> u64 {
+        self.request(
+            path,
+            "inlayHintProvider",
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "range": {
+                    "start": {"line": first_line, "character": 0},
+                    "end": {"line": last_line, "character": 1_000_000},
+                },
+            }),
+        )
+    }
+
     /// The first step of asking who calls something: turns a position
     /// into the item it names. The response's `result` is an LSP
     /// `CallHierarchyItem[]`, whose first entry goes to

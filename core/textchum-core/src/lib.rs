@@ -31,6 +31,7 @@ pub mod hugo;
 pub mod i18n;
 pub mod icons;
 pub mod indent;
+pub mod inlay;
 pub mod keys;
 pub mod markdown;
 pub mod occurrences;

@@ -26,6 +26,20 @@ final class EditorTextView: NSTextView {
         didSet { needsDisplay = true }
     }
 
+    /// Text shown after the end of a line, dimmed: what the language
+    /// server inferred about it. It is not in the document, so it
+    /// cannot be selected, copied or edited, and it sits in the empty
+    /// space past the line's last character, where it moves nothing.
+    struct LineNote: Equatable {
+        /// The UTF-16 offset of the end of the line's own text.
+        let offset: Int
+        let text: String
+    }
+
+    var lineNotes: [LineNote] = [] {
+        didSet { if oldValue != lineNotes { needsDisplay = true } }
+    }
+
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
         if let line = caretLineRect(), line.intersects(rect) {
@@ -34,6 +48,49 @@ final class EditorTextView: NSTextView {
             tintedLine = line
         }
         drawBackgroundMarks(in: rect)
+        drawLineNotes(in: rect)
+    }
+
+    private func drawLineNotes(in rect: NSRect) {
+        guard !lineNotes.isEmpty, let layoutManager = textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            // Only what is laid out for the viewport is asked about:
+            // asking for a line's rectangle lays the line out, and
+            // forcing layout far from the viewport is what once made a
+            // scroll snap back to the top.
+            let viewport = layoutManager.textViewportLayoutController.viewportRange
+        else { return }
+        let origin = textContainerOrigin
+        let length = (string as NSString).length
+        let font = self.font ?? .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.textColor.withAlphaComponent(0.4),
+        ]
+        // A gap of two characters, so the note reads as beside the line
+        // and not as part of it.
+        let gap = ("  " as NSString).size(withAttributes: attributes).width
+        for note in lineNotes {
+            guard note.offset <= length,
+                let location = contentManager.location(
+                    layoutManager.documentRange.location, offsetBy: note.offset),
+                viewport.contains(location) || viewport.endLocation.compare(location) == .orderedSame,
+                let range = NSTextRange(location: location, end: location)
+            else { continue }
+            var caret: NSRect?
+            layoutManager.enumerateTextSegments(
+                in: range, type: .standard, options: [.upstreamAffinity]
+            ) { _, frame, _, _ in
+                caret = frame
+                return false
+            }
+            guard let caret else { continue }
+            let at = NSPoint(x: caret.maxX + origin.x + gap, y: caret.minY + origin.y)
+            let box = NSRect(x: at.x, y: at.y, width: max(0, bounds.maxX - at.x), height: caret.height)
+            if box.intersects(rect) {
+                (note.text as NSString).draw(at: at, withAttributes: attributes)
+            }
+        }
     }
 
     private func drawBackgroundMarks(in rect: NSRect) {

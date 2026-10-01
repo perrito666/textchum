@@ -1053,6 +1053,14 @@ msgid "Each nesting level of (), [] and {} in a colour of its own"
 msgstr "Chaque niveau d'imbrication de (), [] et {} dans sa propre couleur"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Show the types the language server inferred, after the line"
+msgstr "Afficher les types inférés par le serveur de langage, après la ligne"
+
+#: linux/src/workbench.rs
+msgid "Dimmed, at the end of the line each is about"
+msgstr "Estompés, à la fin de la ligne que chacun concerne"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Close brackets and quotes as they are typed"
 msgstr "Fermer les crochets et les guillemets à la frappe"
 

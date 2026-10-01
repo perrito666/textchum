@@ -746,6 +746,16 @@ impl Shell {
                         crate::workbench::Workbench::for_each(|workbench| {
                             workbench.set_progress(text.as_deref())
                         });
+                        // Work done is when a server that had nothing to
+                        // say about a file starts having something: its
+                        // hints are asked for again.
+                        if text.is_none() {
+                            crate::workbench::Workbench::for_each(|workbench| {
+                                for page in workbench.all_pages() {
+                                    crate::page::request_inlay_hints(&page);
+                                }
+                            });
+                        }
                         continue;
                     }
                     let line = if message.is_empty() {

@@ -66,6 +66,9 @@ the selected word appears; `editor.occurrences_case_sensitive` and
 by default.
 `editor.rainbow_brackets` (`false` by default) colours bracket pairs by
 depth; see [highlighting](highlighting.md#brackets).
+`editor.inlay_hints` (`true` by default) shows the types a language
+server inferred, dimmed, after the line they belong to; see
+[language servers](language-servers.md#what-you-see).
 `editor.context_lines` (`true` by default) pins the first line of each
 enclosing construct at the top of the view while a long body scrolls;
 `false` switches the pins off.

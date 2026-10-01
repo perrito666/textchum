@@ -271,6 +271,30 @@ public final class CoreDocument {
         return Self.takeString(expanded) ?? ""
     }
 
+    /// Hands the document a server's inlay hints — the result of an
+    /// inlay-hint request, as it came — positioned against the text as
+    /// it is now. The core moves them with every edit from here on.
+    public func setInlayHints(_ resultJSON: String) {
+        _ = Self.withUTF8Pointer(resultJSON) { pointer, length in
+            tc_document_set_inlay_hints(handle, pointer, length)
+        }
+    }
+
+    /// What to show after each line that has hints: zero-based line
+    /// and text, in line order.
+    public var inlayAnnotations: [(line: Int, text: String)] {
+        guard let json = Self.takeString(tc_document_inlay_annotations_json(handle)),
+            let parsed = (try? JSONSerialization.jsonObject(with: Data(json.utf8)))
+                as? [[String: Any]]
+        else { return [] }
+        return parsed.compactMap { item in
+            guard let line = item["line"] as? Int, let text = item["text"] as? String else {
+                return nil
+            }
+            return (line, text)
+        }
+    }
+
     /// Hands the document a server's findings, positioned against the
     /// text as it is now. The core moves them with every edit from
     /// here on, so ``diagnostics`` always answers for the current text.

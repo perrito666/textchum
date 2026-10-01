@@ -70,6 +70,9 @@ endroits où apparaît le mot sélectionné ;
 décident ce qui compte comme tel, tous deux `true` par défaut.
 `editor.rainbow_brackets` (`false` par défaut) colore les paires de
 crochets selon la profondeur ; voir [coloration](highlighting.md#crochets).
+`editor.inlay_hints` (`true` par défaut) affiche les types qu'un
+serveur de langage a inférés, estompés, après la ligne à laquelle ils
+appartiennent ; voir [serveurs de langage](language-servers.md#ce-que-lon-voit).
 `editor.context_lines` (`true` par défaut) épingle la première ligne de
 chaque construction englobante en haut de la vue pendant qu'un long
 corps défile ; `false` retire les épingles.

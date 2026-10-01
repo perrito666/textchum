@@ -328,6 +328,7 @@ fn run_manager(
                     "definition": {"linkSupport": true},
                     "documentHighlight": {},
                     "callHierarchy": {},
+                    "inlayHint": {},
                     "codeAction": {
                         "codeActionLiteralSupport": {"codeActionKind": {"valueSet": [
                             "", "quickfix", "refactor", "refactor.extract",

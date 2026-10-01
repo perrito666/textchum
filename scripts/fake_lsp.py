@@ -144,6 +144,7 @@ def main():
                         "documentHighlightProvider": True,
                         "workspaceSymbolProvider": True,
                         "callHierarchyProvider": True,
+                        "inlayHintProvider": True,
                     }.items() if name not in without
                 }},
             })
@@ -192,6 +193,31 @@ def main():
                     }
                 },
             })
+        elif method == "textDocument/inlayHint":
+            # Every `let NAME =` in the asked range is given a type, and
+            # the first line a parameter hint a client should leave out.
+            uri = message["params"]["textDocument"]["uri"]
+            asked = message["params"]["range"]
+            hints = [{"position": {"line": asked["start"]["line"], "character": 0},
+                      "label": "arg:", "kind": 2}]
+            lines = texts.get(uri, "").split("\n")
+            # A range ending past the last line is an error to a real
+            # server, which then says nothing; so it is here.
+            if asked["end"]["line"] >= len(lines):
+                send({"jsonrpc": "2.0", "id": message["id"],
+                      "error": {"code": -32602, "message": "line out of range"}})
+                continue
+            for number in range(asked["start"]["line"], asked["end"]["line"] + 1):
+                at = lines[number].find("let ")
+                if at < 0 or "=" not in lines[number][at:]:
+                    continue
+                name = lines[number][at + 4:].split("=")[0].rstrip()
+                hints.append({
+                    "position": {"line": number, "character": at + 4 + len(name)},
+                    "label": [{"value": ": "}, {"value": "Fake"}],
+                    "kind": 1,
+                })
+            send({"jsonrpc": "2.0", "id": message["id"], "result": hints})
         elif method == "textDocument/prepareCallHierarchy":
             uri = message["params"]["textDocument"]["uri"]
             name_range = {"start": {"line": 0, "character": 3},

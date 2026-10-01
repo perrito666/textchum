@@ -123,6 +123,11 @@ pub struct Document {
     /// with every edit, so they mean the same code after an edit as
     /// before it.
     diagnostics: Vec<Finding>,
+    /// The server's inlay hints, as positions in the text; see
+    /// [`crate::inlay`]. Moved by [`Document::mutate_buffer`] like the
+    /// findings, so they keep to their lines between one answer from
+    /// the server and the next.
+    inlay_hints: Vec<crate::inlay::Hint>,
 }
 
 impl Default for Document {
@@ -147,6 +152,7 @@ impl Document {
             pending_snippet: None,
             brackets: std::cell::RefCell::new(None),
             diagnostics: Vec::new(),
+            inlay_hints: Vec::new(),
         }
     }
 
@@ -167,6 +173,7 @@ impl Document {
             pending_snippet: None,
             brackets: std::cell::RefCell::new(None),
             diagnostics: Vec::new(),
+            inlay_hints: Vec::new(),
         };
         doc.history.mark_saved();
         doc.detect_language();
@@ -488,6 +495,15 @@ impl Document {
             (finding.start, finding.end) =
                 diagnostics::shifted((finding.start, finding.end), start, end, new_len);
         }
+        self.inlay_hints.retain_mut(|hint| {
+            match crate::inlay::shifted(hint.offset, start, end, new_len) {
+                Some(offset) => {
+                    hint.offset = offset;
+                    true
+                }
+                None => false,
+            }
+        });
 
         if let Some((start_byte, old_end_byte, start_position, old_end_position)) = edit_geometry {
             let new_end_byte = start_byte + text.len();
@@ -567,6 +583,85 @@ impl Document {
             })
             .collect();
         serde_json::Value::Array(items).to_string()
+    }
+
+    /// Takes a server's inlay hints for this text: the `result` of a
+    /// `textDocument/inlayHint` request, positioned against the text
+    /// as it is now. Replaces whatever was held; anything that is not
+    /// a list clears it.
+    pub fn set_inlay_hints(&mut self, json: &str) {
+        let Ok(serde_json::Value::Array(items)) = serde_json::from_str::<serde_json::Value>(json)
+        else {
+            self.inlay_hints.clear();
+            return;
+        };
+        let mut hints: Vec<crate::inlay::Hint> = items
+            .iter()
+            .map(|item| {
+                let position = &item["position"];
+                // A label is a string, or parts each with a value.
+                let label = match &item["label"] {
+                    serde_json::Value::String(text) => text.clone(),
+                    serde_json::Value::Array(parts) => parts
+                        .iter()
+                        .filter_map(|part| part["value"].as_str())
+                        .collect::<String>(),
+                    _ => String::new(),
+                };
+                crate::inlay::Hint {
+                    offset: self.buffer.utf16_offset_at(
+                        position["line"].as_u64().unwrap_or(0) as usize,
+                        position["character"].as_u64().unwrap_or(0) as usize,
+                    ),
+                    label,
+                    kind: item["kind"].as_u64().unwrap_or(0) as u8,
+                }
+            })
+            .collect();
+        hints.sort_by_key(|hint| hint.offset);
+        self.inlay_hints = hints;
+    }
+
+    /// The text to show after each line that has hints: (zero-based
+    /// line, text), in line order. A type hint is written with the name
+    /// that stands before it in the text as it is now.
+    pub fn inlay_annotations(&self) -> Vec<(usize, String)> {
+        let rope = self.buffer.rope();
+        let mut lines: Vec<(usize, Vec<String>)> = Vec::new();
+        for hint in &self.inlay_hints {
+            let at = rope.utf16_cu_to_char(hint.offset.min(rope.len_utf16_cu()));
+            let mut from = at;
+            while from > 0 {
+                let character = rope.char(from - 1);
+                if !(character.is_alphanumeric() || character == '_') {
+                    break;
+                }
+                from -= 1;
+            }
+            let name: String = rope.slice(from..at).chars().collect();
+            let Some(piece) = crate::inlay::piece(hint, &name) else {
+                continue;
+            };
+            let line = rope.char_to_line(at);
+            match lines.last_mut() {
+                Some((last, pieces)) if *last == line => pieces.push(piece),
+                _ => lines.push((line, vec![piece])),
+            }
+        }
+        lines
+            .into_iter()
+            .map(|(line, pieces)| (line, crate::inlay::joined(&pieces)))
+            .collect()
+    }
+
+    /// [`Self::inlay_annotations`] as a JSON array of `{line, text}`.
+    pub fn inlay_annotations_json(&self) -> String {
+        let annotations: Vec<serde_json::Value> = self
+            .inlay_annotations()
+            .into_iter()
+            .map(|(line, text)| serde_json::json!({"line": line, "text": text}))
+            .collect();
+        serde_json::Value::Array(annotations).to_string()
     }
 
     /// Expands an LSP snippet body for an insertion at `at`, returning
@@ -1023,6 +1118,44 @@ use d;
         // Undo takes it back the same way.
         document.undo();
         assert_eq!(lines_of(&document), vec![(5, 7, 36, 43)]);
+    }
+
+    #[test]
+    fn inferred_types_are_listed_after_their_line_and_stay_on_it() {
+        let mut document = Document::new();
+        document
+            .replace_utf16(0, 0, "fn main() {\n    let d = make();\n    let (a, b) = pair(d, 2);\n}\n")
+            .unwrap();
+        document.set_inlay_hints(
+            r#"[
+              {"position": {"line": 1, "character": 9}, "label": ": Drinker", "kind": 1},
+              {"position": {"line": 2, "character": 13}, "label": [{"value": ": "}, {"value": "u8"}], "kind": 1},
+              {"position": {"line": 2, "character": 10}, "label": ": i32", "kind": 1},
+              {"position": {"line": 2, "character": 21}, "label": "who:", "kind": 2}
+            ]"#,
+        );
+        assert_eq!(
+            document.inlay_annotations(),
+            vec![(1, "d: Drinker".to_owned()), (2, "a: i32, b: u8".to_owned())],
+            "in the order they are written, each with its name, parameters left out"
+        );
+        // A line typed above moves them down with their code.
+        document.replace_utf16(0, 0, "// note\n").unwrap();
+        let lines: Vec<usize> = document.inlay_annotations().iter().map(|(line, _)| *line).collect();
+        assert_eq!(lines, vec![2, 3]);
+        // Renaming on the line is reflected at once; the type is the
+        // server's last word until it is asked again.
+        let name = document.buffer.utf16_offset_at(2, 8);
+        document.replace_utf16(name, name + 1, "drinker").unwrap();
+        assert_eq!(document.inlay_annotations()[0], (2, "drinker: Drinker".to_owned()));
+        // Deleting the code a hint was about takes the hint with it.
+        let line = document.buffer.utf16_line_start(3);
+        let next = document.buffer.utf16_line_start(4);
+        document.replace_utf16(line, next, "").unwrap();
+        assert_eq!(document.inlay_annotations().len(), 1);
+        assert!(document.inlay_annotations_json().contains("\"text\":\"drinker: Drinker\""));
+        document.set_inlay_hints("null");
+        assert!(document.inlay_annotations().is_empty());
     }
 
     #[test]

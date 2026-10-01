@@ -302,6 +302,21 @@ uint64_t tc_lsp_document_highlight(struct TcApp *app,
                                    uint32_t character);
 
 /**
+ * Requests the inlay hints of the lines `first_line..=last_line` of
+ * the document at `path`. Returns the request id whose response goes
+ * to [`tc_document_set_inlay_hints`] as it is, or 0 when the document
+ * has no server that gives hints.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_inlay_hints(struct TcApp *app,
+                            const char *path,
+                            uintptr_t path_len,
+                            uint32_t first_line,
+                            uint32_t last_line);
+
+/**
  * The first step of asking who calls the function at an LSP position;
  * same contract as [`tc_lsp_hover`]. The response's `result` goes to
  * [`tc_lsp_incoming_calls`] as it is.
@@ -821,6 +836,31 @@ char *tc_document_snippet_expand(struct TcDocument *document,
                                  uintptr_t at,
                                  const char *body,
                                  uintptr_t len);
+
+/**
+ * Hands the document a server's inlay hints for its text as it is
+ * now: `len` bytes of the `result` of a `textDocument/inlayHint`
+ * request. The document moves them with every edit from here on, so
+ * [`tc_document_inlay_annotations_json`] always answers for the
+ * current text. Anything that is not a list clears them. Returns
+ * false on a bad pointer or invalid UTF-8.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `json` must point to
+ * `len` readable bytes.
+ */
+bool tc_document_set_inlay_hints(struct TcDocument *document, const char *json, uintptr_t len);
+
+/**
+ * What to show after each line that has inlay hints: a JSON array of
+ * `{line, text}`, `line` zero-based, in line order. A type hint is
+ * written with the name it belongs to; parameter hints are left out.
+ * Free with [`tc_string_free`]. Null on a bad pointer.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_inlay_annotations_json(const struct TcDocument *document);
 
 /**
  * Hands the document a server's findings for its text as it is now:
@@ -1706,6 +1746,23 @@ char *tc_config_hover_modifier(const struct TcConfig *config);
 void tc_config_set_hover_modifier(struct TcConfig *config,
                                   const char *modifier,
                                   uintptr_t modifier_len);
+
+/**
+ * Whether a server's inlay hints are shown after the line they are
+ * about (`editor.inlay_hints`).
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+bool tc_config_inlay_hints(const struct TcConfig *config);
+
+/**
+ * Sets whether a server's inlay hints are shown.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+void tc_config_set_inlay_hints(struct TcConfig *config, bool enabled);
 
 /**
  * Whether bracket pairs are coloured by depth

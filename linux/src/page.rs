@@ -59,6 +59,13 @@ pub struct Page {
     /// Counts caret moves, so an answer about a symbol's uses that
     /// arrives after the caret has gone elsewhere is dropped.
     symbol_uses_asked: Cell<u64>,
+    /// The inferred types shown after lines: labels laid over the view
+    /// at the end of their lines, in buffer coordinates, so they
+    /// scroll with the text and are not part of it.
+    inlay_labels: RefCell<Vec<gtk::Label>>,
+    /// Counts edits and requests, so an answer about text that has
+    /// since changed is dropped.
+    inlay_asked: Cell<u64>,
     /// The completion popup and its current candidates.
     completion: CompletionState,
     /// The git change bar, and the marks it draws: line number to kind.
@@ -344,6 +351,8 @@ impl Page {
             hover_label,
             hover_about: Cell::new(None),
             symbol_uses_asked: Cell::new(0),
+            inlay_labels: RefCell::new(Vec::new()),
+            inlay_asked: Cell::new(0),
             completion: CompletionState {
                 popover: completion_popover,
                 list: completion_list,
@@ -428,6 +437,19 @@ fn install_change_handler(
                     "shell and core disagree about the document"
                 );
                 refresh_diagnostics(&document);
+                // The hints moved with the edit inside the core; the
+                // labels follow once the view has laid the text out
+                // again, and an answer still on its way is for text
+                // that is gone.
+                for view in document.views() {
+                    view.inlay_asked.set(view.inlay_asked.get().wrapping_add(1));
+                    let weak = Rc::downgrade(&view);
+                    glib::idle_add_local_once(move || {
+                        if let Some(view) = weak.upgrade() {
+                            refresh_inlay_labels(&view);
+                        }
+                    });
+                }
                 if !recolor_pending.replace(true) {
                     let document = Rc::clone(&document);
                     let pending = Rc::clone(&recolor_pending);
@@ -461,6 +483,10 @@ fn install_change_handler(
                                 update_preview(&view);
                                 crate::spell::run(&view);
                                 refresh_change_marks(&view);
+                                // The typing has paused and the server
+                                // has the text: its hints are asked for
+                                // afresh.
+                                request_inlay_hints(&view);
                             }
                         },
                     );
@@ -886,6 +912,98 @@ fn install_occurrence_tag(buffer: &sourceview5::Buffer) {
     let tag = gtk::TextTag::new(Some(OCCURRENCE_TAG));
     tag.set_background_rgba(Some(&gtk::gdk::RGBA::new(0.50, 0.50, 0.50, 0.30)));
     buffer.tag_table().add(&tag);
+}
+
+// MARK: Inferred types, after the line
+
+/// Asks the server for the inlay hints of what is on screen and a
+/// margin around it. Called whenever the answer may have changed: the
+/// text settled, the server finished thinking, other lines came into
+/// view.
+pub fn request_inlay_hints(page: &Rc<Page>) {
+    let shell = Shell::instance();
+    if !shell.config.borrow().inlay_hints() {
+        return;
+    }
+    let Some(path) = page.path().borrow().clone() else { return };
+    let visible = page.view.visible_rect();
+    let (top, _) = page.view.line_at_y(visible.y());
+    let (bottom, _) = page.view.line_at_y(visible.y() + visible.height());
+    // Never past the last line: a range that ends outside the document
+    // is an error to rust-analyzer, not an empty answer.
+    let last_line = (page.buffer.line_count() - 1).max(0);
+    let first = (top.line() - 100).max(0) as u32;
+    let last = (bottom.line() + 100).min(last_line) as u32;
+    let asked = page.inlay_asked.get().wrapping_add(1);
+    page.inlay_asked.set(asked);
+    let id = shell.pool.borrow_mut().inlay_hints(Path::new(&path), first, last);
+    let weak = Rc::downgrade(page);
+    shell.expect_response(id, move |json| {
+        let Some(page) = weak.upgrade() else { return };
+        // An answer about text that has since changed, or to a
+        // question since asked again, is dropped.
+        if page.inlay_asked.get() != asked {
+            return;
+        }
+        page.state.borrow_mut().document.set_inlay_hints(json);
+        for view in page.document.views() {
+            refresh_inlay_labels(&view);
+        }
+    });
+}
+
+/// The texts of the labels up now, for the smoke test.
+pub fn inlay_label_texts(page: &Rc<Page>) -> Vec<String> {
+    page.inlay_labels
+        .borrow()
+        .iter()
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// Puts the hints the core holds after their lines: one dimmed label
+/// per line, laid over the view at the end of the line's text. The
+/// labels are not in the buffer, so they cannot be selected or edited,
+/// and they sit in the empty space past the last character, where they
+/// move nothing.
+pub fn refresh_inlay_labels(page: &Rc<Page>) {
+    for label in page.inlay_labels.borrow_mut().drain(..) {
+        page.view.remove(&label);
+    }
+    if !Shell::instance().config.borrow().inlay_hints() {
+        return;
+    }
+    let annotations = page.state.borrow().document.inlay_annotations();
+    if annotations.is_empty() {
+        return;
+    }
+    // The view's own font, so the note lines up with the code.
+    let font = page.view.pango_context().font_description();
+    let mut labels = Vec::new();
+    for (line, text) in annotations {
+        let Some(mut end) = page.buffer.iter_at_line(line as i32) else {
+            continue;
+        };
+        if !end.ends_line() {
+            end.forward_to_line_end();
+        }
+        let place = page.view.iter_location(&end);
+        let label = gtk::Label::new(Some(&text));
+        label.add_css_class("dim-label");
+        // Clicks past the end of a line still place the caret.
+        label.set_can_target(false);
+        if let Some(font) = &font {
+            let attributes = gtk::pango::AttrList::new();
+            attributes.insert(gtk::pango::AttrFontDesc::new(font));
+            label.set_attributes(Some(&attributes));
+        }
+        // A gap of about two characters, so the note reads as beside
+        // the line and not as part of it.
+        page.view
+            .add_overlay(&label, place.x() + place.height(), place.y());
+        labels.push(label);
+    }
+    *page.inlay_labels.borrow_mut() = labels;
 }
 
 /// With nothing selected, a caret resting on a name asks the server
@@ -1357,6 +1475,11 @@ pub fn apply_diagnostics(handles: &PageHandles, json: &str) {
     *handles.problems.borrow_mut() = parts.join(", ");
     *handles.document.diagnostics.borrow_mut() = kept;
     crate::workbench::refresh_subtitle(handles);
+    // Findings arriving mean the server has analysed the text as it
+    // is, which is when its hints are worth asking for.
+    for view in handles.document.views() {
+        request_inlay_hints(&view);
+    }
 }
 
 /// The findings the core holds, as the shell keeps them.
@@ -1899,6 +2022,18 @@ fn install_snippet_keys(page: &Rc<Page>) {
                 if page.buffer.has_selection() {
                     refresh_occurrences(&page);
                 }
+                // Other lines came into view, which the server has not
+                // been asked about; once the scrolling rests.
+                let asked = page.inlay_asked.get().wrapping_add(1);
+                page.inlay_asked.set(asked);
+                let weak = Rc::downgrade(&page);
+                glib::timeout_add_local_once(std::time::Duration::from_millis(300), move || {
+                    if let Some(page) = weak.upgrade() {
+                        if page.inlay_asked.get() == asked {
+                            request_inlay_hints(&page);
+                        }
+                    }
+                });
             });
         });
     }
