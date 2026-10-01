@@ -2239,6 +2239,19 @@ func runSmokeTest() -> Int32 {
         }
         bench.showNotice("second thing")
         bench.showNotice("second thing")
+        // What a server is busy with borrows the place and gives it back.
+        bench.statusBar.progress("rust-analyzer: Indexing 3/80")
+        guard bench.statusBar.displayedNotice == "rust-analyzer: Indexing 3/80",
+            bench.statusBar.noticeText == "second thing", log.count == 2
+        else {
+            print("FAIL: progress did not show over the notice: \(bench.statusBar.displayedNotice)")
+            return 1
+        }
+        bench.statusBar.progress(nil)
+        guard bench.statusBar.displayedNotice == "second thing" else {
+            print("FAIL: the notice did not come back after the work: \(bench.statusBar.displayedNotice)")
+            return 1
+        }
         guard log.count == 2, bench.statusBar.noticeText == "second thing",
             bench.statusBar.historyText().hasSuffix(notice),
             bench.statusBar.historyText().contains("second thing")

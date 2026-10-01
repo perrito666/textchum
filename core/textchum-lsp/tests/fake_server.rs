@@ -592,3 +592,31 @@ fn two_servers_share_a_document_and_each_is_asked_what_it_provides() {
             if json.contains("first finding") && !json.contains("second finding")))
     });
 }
+
+#[test]
+fn what_a_server_is_busy_with_is_reported_and_then_cleared() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-progress");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+
+    let progress = |events: &[Event]| -> Vec<String> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                Event::ServerStatus { status, message, .. } if status == "progress" => {
+                    Some(message.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let mut seen = Vec::new();
+    collect_until(&events, "the work to begin and end", &mut seen, |seen| {
+        progress(seen).last().is_some_and(String::is_empty)
+    });
+    let said = progress(&seen);
+    assert_eq!(said.first().map(String::as_str), Some("Indexing: 0/2 0%"));
+    assert_eq!(said.last().map(String::as_str), Some(""), "and an empty line when it ends");
+}

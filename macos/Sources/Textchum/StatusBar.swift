@@ -130,12 +130,29 @@ final class StatusBar: NSView {
         let firstLine =
             text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true)
             .first.map(String.init) ?? text
-        notice.title = firstLine
+        noticeLine = firstLine
         notice.toolTip = text
+        notice.title = progressLine ?? noticeLine
     }
 
+    /// What a language server is busy with — indexing, checking — shown
+    /// where the notices are while it lasts, and gone when the work is:
+    /// `nil` puts the last notice back. It is not a notice and does not
+    /// enter the session's list, which a server reporting ten times a
+    /// second would otherwise fill.
+    func progress(_ text: String?) {
+        progressLine = text
+        notice.title = progressLine ?? noticeLine
+    }
+
+    private var noticeLine = ""
+    private var progressLine: String?
+
     /// For the smoke test: the last word, if anything has been said.
-    var noticeText: String? { notice.title.isEmpty ? nil : notice.title }
+    var noticeText: String? { noticeLine.isEmpty ? nil : noticeLine }
+
+    /// For the smoke test: what the notification area shows right now.
+    var displayedNotice: String { notice.title }
 
     /// The session's notices as the list shows them: newest first, each
     /// with the time it was said.

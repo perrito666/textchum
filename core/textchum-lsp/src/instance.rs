@@ -188,6 +188,86 @@ fn status(events: &EventSender, server: &str, root: &Path, status: &str, message
     });
 }
 
+/// What a server says it is busy with: indexing, checking, loading a
+/// workspace. A server that looks idle and answers nothing for a minute
+/// after a project opens is usually doing exactly this, and saying so
+/// in `$/progress` notifications nobody was reading.
+#[derive(Default)]
+struct Progress {
+    /// The title each running piece of work began with, by its token.
+    titles: HashMap<String, String>,
+    last: Option<std::time::Instant>,
+}
+
+impl Progress {
+    /// Reports arrive many times a second; one in a while is plenty for
+    /// a line of text.
+    const QUIET: Duration = Duration::from_millis(150);
+
+    fn busy(&self) -> bool {
+        !self.titles.is_empty()
+    }
+
+    /// Folds one `$/progress` notification in. Returns the line to show
+    /// — empty when the last piece of work ended — or `None` when this
+    /// notification changes nothing worth redrawing.
+    fn take(&mut self, message: &Value) -> Option<String> {
+        let params = &message["params"];
+        let token = match &params["token"] {
+            Value::String(token) => token.clone(),
+            other => other.to_string(),
+        };
+        let value = &params["value"];
+        match value["kind"].as_str()? {
+            "begin" => {
+                let title = value["title"].as_str().unwrap_or_default().to_owned();
+                self.titles.insert(token, title.clone());
+                self.last = Some(std::time::Instant::now());
+                Some(Self::line(&title, value))
+            }
+            "report" => {
+                let title = self.titles.get(&token)?.clone();
+                if self.last.is_some_and(|last| last.elapsed() < Self::QUIET) {
+                    return None;
+                }
+                self.last = Some(std::time::Instant::now());
+                Some(Self::line(&title, value))
+            }
+            "end" => {
+                self.titles.remove(&token)?;
+                // Other work still running keeps its line until its
+                // next report; the last to end clears it.
+                self.titles.is_empty().then(String::new)
+            }
+            _ => None,
+        }
+    }
+
+    fn line(title: &str, value: &Value) -> String {
+        let mut line = title.to_owned();
+        if let Some(detail) = value["message"].as_str().filter(|detail| !detail.is_empty()) {
+            line.push_str(": ");
+            line.push_str(detail);
+        }
+        if let Some(percentage) = value["percentage"].as_u64() {
+            line.push_str(&format!(" {percentage}%"));
+        }
+        line
+    }
+}
+
+/// Progress is not a transition, so it goes to the shell without a
+/// line in the log: `status` is `progress`, and an empty message means
+/// the work is done.
+fn send_progress(events: &EventSender, server: &str, root: &Path, text: &str) {
+    let _ = events.send(Event::ServerStatus {
+        server: server.to_owned(),
+        root: root.to_string_lossy().into_owned(),
+        status: "progress".to_owned(),
+        message: text.to_owned(),
+    });
+}
+
 /// The manager thread body: handshake, then the command loop. The reader
 /// thread is started after the handshake succeeds.
 fn run_manager(
@@ -255,7 +335,8 @@ fn run_manager(
                     "configuration": true,
                     "workspaceFolders": true,
                     "didChangeConfiguration": {"dynamicRegistration": false}
-                }
+                },
+                "window": {"workDoneProgress": true}
             },
         },
     });
@@ -323,15 +404,19 @@ fn run_manager(
         let orderly = Arc::clone(&orderly);
         let published = Arc::clone(&published);
         let settings = options.settings.clone();
+        let mut progress = Progress::default();
         std::thread::Builder::new()
             .name(format!("lsp-{server_id}-reader"))
             .spawn(move || loop {
                 match read_message(&mut stdout) {
                     Ok(Some(message)) => {
-                        if message.get("method").and_then(Value::as_str)
-                            == Some("textDocument/publishDiagnostics")
-                        {
+                        let method = message.get("method").and_then(Value::as_str);
+                        if method == Some("textDocument/publishDiagnostics") {
                             publish_diagnostics(&events, &published, &server_id, &message);
+                        } else if method == Some("$/progress") {
+                            if let Some(text) = progress.take(&message) {
+                                send_progress(&events, &server_id, &root, &text);
+                            }
                         } else if message.get("method").is_none() {
                             // A response to one of our requests. Ids 1–2
                             // (initialize/shutdown) are lifecycle traffic;
@@ -353,6 +438,11 @@ fn run_manager(
                     // EOF or a broken pipe both mean the server is gone;
                     // the shell decides what to tell the user.
                     Ok(None) | Err(_) => {
+                        // Whatever it was in the middle of, it is not
+                        // doing it any more.
+                        if progress.busy() {
+                            send_progress(&events, &server_id, &root, "");
+                        }
                         let expected = orderly.load(std::sync::atomic::Ordering::SeqCst);
                         status(
                             &events,

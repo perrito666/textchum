@@ -31,7 +31,9 @@ pub enum Event {
     /// line, UTF-16 column).
     Diagnostics { path: String, json: String },
     /// A language-server instance changed state. `status` is one of
-    /// `starting`, `running`, `not-found`, `failed`, `exited`.
+    /// `starting`, `running`, `not-found`, `failed`, `exited`, `closed`
+    /// — or `progress`, which is not a change of state: `message` is
+    /// what the server is busy with, and empty when it has finished.
     ServerStatus {
         server: String,
         root: String,
