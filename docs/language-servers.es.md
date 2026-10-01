@@ -50,6 +50,11 @@ proyecto en Settings ▸ Language Servers; véase
   el tramo que nombra el servidor (un autocompletado *postfix* se traga
   el receptor y el punto) y trae consigo sus ediciones adicionales, un
   *import* por ejemplo.
+- **Go to Symbol in Project…** (⌥⌘T, Ctrl+Alt+O en Linux; acción
+  `projectSymbols`) encuentra una función, un tipo o una constante en
+  cualquier parte del proyecto por parte de su nombre, tal como los
+  conoce el servidor del documento en primer plano, y salta a su
+  declaración.
 - **Los otros usos de un nombre se marcan.** Sin nada seleccionado, un
   cursor que descansa sobre un nombre marca dónde más se usa ese
   símbolo, tal como lo conoce el servidor: una variable que lo oculta

@@ -1617,6 +1617,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.goToBlockEnd(_:)): "goToBlockEnd",
             #selector(DocumentController.triggerCompletion(_:)): "complete",
             #selector(findInProject(_:)): "findInProject",
+            #selector(goToSymbolInProject(_:)): "projectSymbols",
             #selector(NSSplitViewController.toggleSidebar(_:)): "toggleNavigator",
             #selector(DocumentController.togglePreview(_:)): "togglePreview",
             #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
@@ -2395,6 +2396,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showQuickFinder(mode: .grep)
     }
 
+    /// Find → Go to Symbol in Project: the project's symbols by name,
+    /// asked of the language server of the document in front, since a
+    /// project's symbols are its server's to know.
+    @objc func goToSymbolInProject(_ sender: Any?) {
+        let key = NSApp.keyWindow?.windowController as? Workbench
+        let path = key?.focusedDocument?.coreDocument.path
+        let scope = currentScope
+        quickFinder.symbolSearch = { [weak self] query, deliver in
+            guard let coreApp = self?.coreApp, let path else {
+                deliver(nil)
+                return
+            }
+            let asked = coreApp.lspWorkspaceSymbol(path: path, query: query) { json in
+                deliver(
+                    CoreSymbols.rows(fromResultJSON: json).map {
+                        QuickFinderPanel.Row.symbol($0, scope: scope)
+                    })
+            }
+            if !asked { deliver(nil) }
+        }
+        showQuickFinder(mode: .symbols)
+    }
+
     /// Go → Changed in Branch: the files the work in progress touches,
     /// behind the same fuzzy filter as Open Quickly.
     @objc func openChangedFiles(_ sender: Any?) {
@@ -3157,6 +3181,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         findInProject.keyEquivalentModifierMask = [.command, .shift]
         findMenu.addItem(findInProject)
+        let projectSymbols = NSMenuItem(
+            title: t("Go to Symbol in Project…"),
+            action: #selector(goToSymbolInProject(_:)),
+            keyEquivalent: "t"
+        )
+        projectSymbols.keyEquivalentModifierMask = [.command, .option]
+        findMenu.addItem(projectSymbols)
         let findMenuItem = NSMenuItem(title: t("Find"), action: nil, keyEquivalent: "")
         findMenuItem.submenu = findMenu
         editMenu.addItem(findMenuItem)

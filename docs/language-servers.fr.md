@@ -50,6 +50,11 @@ Language Servers ; voir [configuration](configuration.md#projets).
   la portion que nomme le serveur (une complétion *postfix* avale le
   receveur et le point) et apporte ses éditions supplémentaires, un
   *import* par exemple.
+- **Go to Symbol in Project…** (⌥⌘T, Ctrl+Alt+O sous Linux ; action
+  `projectSymbols`) trouve une fonction, un type ou une constante
+  n'importe où dans le projet par une partie de son nom, tels que les
+  connaît le serveur du document au premier plan, et saute à sa
+  déclaration.
 - **Les autres usages d'un nom sont marqués.** Sans sélection, un
   curseur posé sur un nom marque les autres endroits où ce symbole est
   utilisé, tel que le serveur le connaît : une variable homonyme qui le

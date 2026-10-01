@@ -109,6 +109,11 @@ msgid "Changed in Branch"
 msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "Go to Symbol in Project"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Save"
@@ -410,6 +415,10 @@ msgid "Changed in Branch…"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Go to Symbol in Project…"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Save As…"
 msgstr ""
 
@@ -611,6 +620,10 @@ msgstr ""
 
 #: linux/src/workbench.rs
 msgid "Save the file first — an untitled document has no path."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "No language server here searches symbols."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
@@ -818,6 +831,24 @@ msgstr ""
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
 msgid "fuzzy file name…"
 msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "symbol name…"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "Type part of a symbol's name."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "No symbol matches."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "{} symbol"
+msgid_plural "{} symbols"
+msgstr[0] ""
+msgstr[1] ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
 msgid "Read the query as a regular expression"

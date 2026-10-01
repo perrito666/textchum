@@ -109,6 +109,11 @@ msgid "Changed in Branch"
 msgstr "Modifié dans la branche"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "Go to Symbol in Project"
+msgstr "Aller à un symbole du projet"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Save"
@@ -410,6 +415,10 @@ msgid "Changed in Branch…"
 msgstr "Modifié dans la branche…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Go to Symbol in Project…"
+msgstr "Aller à un symbole du projet…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Save As…"
 msgstr "Enregistrer sous…"
 
@@ -615,6 +624,10 @@ msgstr "Aucune définition trouvée."
 msgid "Save the file first — an untitled document has no path."
 msgstr ""
 "Enregistrez d'abord le fichier — un document sans titre n'a pas de chemin."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "No language server here searches symbols."
+msgstr "Aucun serveur de langage ne cherche de symboles ici."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Go"
@@ -822,6 +835,24 @@ msgstr "La branche ne touche aucun fichier."
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
 msgid "fuzzy file name…"
 msgstr "nom de fichier approximatif…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "symbol name…"
+msgstr "nom de symbole…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "Type part of a symbol's name."
+msgstr "Tapez une partie du nom d'un symbole."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "No symbol matches."
+msgstr "Aucun symbole ne correspond."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "{} symbol"
+msgid_plural "{} symbols"
+msgstr[0] "{} symbole"
+msgstr[1] "{} symboles"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
 msgid "Read the query as a regular expression"
@@ -1125,7 +1156,11 @@ msgid ""
 "Settings a server runs with, as a JSON object keyed by section — {\"rust-"
 "analyzer\": {\"check\": {\"command\": \"clippy\"}}} — for every project or "
 "for one root. A project's object replaces the default one."
-msgstr "Les réglages avec lesquels tourne un serveur, sous forme d'objet JSON avec une clé par section — {\"rust-analyzer\": {\"check\": {\"command\": \"clippy\"}}} — pour tous les projets ou pour une racine. L'objet d'un projet remplace celui par défaut."
+msgstr ""
+"Les réglages avec lesquels tourne un serveur, sous forme d'objet JSON avec "
+"une clé par section — {\"rust-analyzer\": {\"check\": {\"command\": "
+"\"clippy\"}}} — pour tous les projets ou pour une racine. L'objet d'un "
+"projet remplace celui par défaut."
 
 #: linux/src/workbench.rs
 msgid "project root (empty = default for all projects)"

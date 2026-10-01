@@ -302,6 +302,33 @@ uint64_t tc_lsp_document_highlight(struct TcApp *app,
                                    uint32_t character);
 
 /**
+ * Requests the symbols across the project whose names match `query`,
+ * from the servers of the document at `path`. Returns the request id
+ * whose `TC_EVENT_LSP_RESPONSE` event will carry the answer, or 0
+ * when that document has no server that searches symbols.
+ * [`tc_workspace_symbols_json`] reduces the answer to rows.
+ *
+ * # Safety
+ * `app` must be a live app pointer; `path` and `query` must point to
+ * `path_len` and `query_len` readable bytes.
+ */
+uint64_t tc_lsp_workspace_symbol(struct TcApp *app,
+                                 const char *path,
+                                 uintptr_t path_len,
+                                 const char *query,
+                                 uintptr_t query_len);
+
+/**
+ * Reduces a `workspace/symbol` result to rows: a JSON array of
+ * `{name, kind, container, path, line, character}`, `kind` in a word
+ * and `line` zero-based. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `json` must point to `len` readable bytes.
+ */
+char *tc_workspace_symbols_json(const char *json, uintptr_t len);
+
+/**
  * Has the document's language server format `text` and waits for the
  * result, for the `@format` link of a save chain. Answers a JSON
  * object: `{"text": …}` with the formatted text, or `{"error": …}`

@@ -18,6 +18,7 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("open", n_("Open"), "win.open"),
     ("openQuickly", n_("Open Quickly"), "win.quick-open"),
     ("changedFiles", n_("Changed in Branch"), "win.changed-files"),
+    ("projectSymbols", n_("Go to Symbol in Project"), "win.project-symbols"),
     ("save", n_("Save"), "win.save"),
     ("saveAs", n_("Save As"), "win.save-as"),
     ("revertToSaved", n_("Revert to Saved"), "win.revert"),

@@ -43,6 +43,10 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   item replaces the stretch the server names (a postfix completion
   swallows the receiver and the dot) and brings its extra edits, an
   import for one, along with it.
+- **Go to Symbol in Project…** (⌥⌘T, Ctrl+Alt+O on Linux; action
+  `projectSymbols`) finds a function, type or constant anywhere in the
+  project by part of its name, as the server of the document in front
+  knows them, and jumps to its declaration.
 - **A name's other uses are marked.** With nothing selected, a caret
   resting on a name marks where else that symbol is used, as the server
   knows it: a shadowing variable of the same name is left alone.

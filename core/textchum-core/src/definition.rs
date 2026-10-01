@@ -199,7 +199,7 @@ fn located(value: &Value) -> Option<Located> {
     })
 }
 
-fn uri_path(uri: &str) -> Option<String> {
+pub(crate) fn uri_path(uri: &str) -> Option<String> {
     let rest = uri.strip_prefix("file://")?;
     // A host is never there in practice; a path always is.
     let rest = rest.strip_prefix("localhost").unwrap_or(rest);
