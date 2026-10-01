@@ -605,6 +605,41 @@ and runs the selection. Go to Block Start/End (⌃⌥↑/⌃⌥↓ by default) j
 innermost multi-line syntax block around the caret, courtesy of the
 same tree that powers highlighting.
 
+### The chord window
+
+A shortcut of three or four keys has to be remembered and then reached
+for. The chord window is the other way round: hold two modifier keys,
+and a small panel lists what can be done, one key beside each command.
+Press the key and the command runs.
+
+It is off until a pair is chosen in Settings ▸ Keyboard ▸ **Chord
+window**. The file holds the choice as `keys_chord`:
+
+```json
+{ "keys_chord": "ctrl+alt" }
+```
+
+The pairs are `ctrl+alt`, `alt+cmd`, `ctrl+cmd`, `ctrl+shift` and
+`alt+shift`; anything else leaves the window off. Here `cmd` is the key
+itself — Command on macOS, Super on Linux — because a pair is two keys
+held, not a shortcut.
+
+The window opens when the pair has been held on its own for a quarter
+of a second, so a shortcut that uses the same two modifiers is neither
+delayed nor taken: its key arrives first. Once open it stays open with
+the keys let go. Commands are in groups — **File**, **Code**, **Go**,
+**Search**, **View** — marked with a `+`; a group's key opens its list,
+and the most used commands (the command palette, blame, Preferences)
+sit at the top with no group between. A key that is nothing is refused
+and the window stays; Escape or a click closes it.
+
+The menu is the same on macOS and Linux, and it is fixed: the keys in
+it cannot be changed yet, and a command not in it is reached through
+its shortcut or the command palette. On Linux the desktop may keep a
+pair for itself — Super on its own often opens the activities view, and
+Alt+Shift switches keyboard layouts on some setups — in which case the
+window never hears it; pick another pair.
+
 ## Live reload
 
 The file is watched while Textchum runs: edit `config.json` in another

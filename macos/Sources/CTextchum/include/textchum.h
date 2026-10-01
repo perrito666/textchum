@@ -1985,6 +1985,33 @@ void tc_config_remember_icon_pack(struct TcConfig *config, const char *path, uin
 char *tc_config_keys_profile(const struct TcConfig *config);
 
 /**
+ * The chord window's menu: a JSON array of `{key, label, action}`
+ * and `{key, label, items}` entries, labels already in the interface
+ * language. Release with [`tc_string_free`].
+ */
+char *tc_chords_menu_json(void);
+
+/**
+ * The pair of modifier keys that opens the chord window, as the
+ * configuration spells it (`ctrl+alt`); empty when the window is off.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_chord_modifiers(const struct TcConfig *config);
+
+/**
+ * Sets the pair that opens the chord window; an empty string, or one
+ * that is not a known pair, turns the window off.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `pair` must point to
+ * `pair_len` readable bytes.
+ */
+void tc_config_set_chord_modifiers(struct TcConfig *config, const char *pair, uintptr_t pair_len);
+
+/**
  * Chooses a keyboard profile; an empty name returns to the editor's
  * own bindings.
  *

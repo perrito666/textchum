@@ -412,6 +412,7 @@ final class SettingsModel: ObservableObject {
         projectStateSweep = config.projectStateSweep
         projectStateKeepDays = config.projectStateKeepDays
         keysProfile = config.keysProfile
+        chordModifiers = config.chordModifiers
         markOccurrences = config.markOccurrences
         occurrencesCaseSensitive = config.occurrencesCaseSensitive
         occurrencesWholeWord = config.occurrencesWholeWord
@@ -459,6 +460,7 @@ final class SettingsModel: ObservableObject {
         self.spellWords = config.spellWords.joined(separator: "\n")
         self.autosaveSeconds = Int(config.autosaveSeconds)
         self.keysProfile = config.keysProfile
+        self.chordModifiers = config.chordModifiers
         self.markOccurrences = config.markOccurrences
         self.occurrencesCaseSensitive = config.occurrencesCaseSensitive
         self.occurrencesWholeWord = config.occurrencesWholeWord
@@ -568,6 +570,10 @@ final class SettingsModel: ObservableObject {
     /// The chosen keyboard profile; empty is the editor's own bindings.
     @Published var keysProfile: String {
         didSet { persist { $0.keysProfile = keysProfile } }
+    }
+    /// The pair of modifiers that opens the chord window; empty for off.
+    @Published var chordModifiers: String {
+        didSet { persist { $0.chordModifiers = chordModifiers } }
     }
 
     /// The profiles that can be chosen: the bundled ones and any saved
@@ -806,6 +812,19 @@ final class SettingsModel: ObservableObject {
         // Editing what a preset wrote stops it being "applied".
         reloadLanguagePresets()
         onChange?()
+    }
+
+    /// A modifier pair as its keys: `ctrl+alt` is ⌃⌥.
+    static func chordPairTitle(_ pair: String) -> String {
+        pair.split(separator: "+").map { part -> String in
+            switch part {
+            case "ctrl": "⌃"
+            case "alt": "⌥"
+            case "cmd": "⌘"
+            case "shift": "⇧"
+            default: String(part)
+            }
+        }.joined()
     }
 
     // MARK: Server settings
@@ -1692,6 +1711,22 @@ private struct KeyboardTab: View {
                     .frame(width: 320)
                     Button(t("Reset changes")) { model.clearKeyBindings() }
                         .disabled(model.keyOverrides.isEmpty)
+                    Spacer()
+                }
+
+                // The chord window: two modifiers held on their own
+                // list the commands, a key each.
+                HStack(spacing: 8) {
+                    Picker(t("Chord window"), selection: $model.chordModifiers) {
+                        Text(t("Off")).tag("")
+                        ForEach(CoreChords.modifierPairs, id: \.self) { pair in
+                            Text(SettingsModel.chordPairTitle(pair)).tag(pair)
+                        }
+                    }
+                    .frame(width: 320)
+                    Text(t("Hold the two keys: the commands are listed, a key each."))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                     Spacer()
                 }
 

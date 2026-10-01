@@ -11,6 +11,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: core/textchum-core/src/chords.rs
+msgid "Code"
+msgstr "Código"
+
+#: core/textchum-core/src/chords.rs
+msgid "Search"
+msgstr "Buscar"
+
 #: core/textchum-core/src/document.rs
 msgid "document has no file path"
 msgstr "el documento no tiene ruta de archivo"
@@ -85,6 +93,15 @@ msgstr "Servidor de lenguaje"
 #: core/textchum-core/src/tools.rs
 msgid "Formats with the server's own formatter"
 msgstr "Formatea con el formateador propio del servidor"
+
+#: linux/src/chords.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/ChordPanel.swift
+msgid "Commands"
+msgstr "Comandos"
+
+#: linux/src/chords.rs macos/Sources/Textchum/ChordPanel.swift
+msgid "esc closes"
+msgstr "esc cierra"
 
 #: linux/src/keyboard.rs
 msgid "New Tab"
@@ -1281,9 +1298,21 @@ msgstr "Descartar los cambios"
 msgid "Give every command back the shortcut its profile says it has"
 msgstr "Devolver a cada comando el atajo que dice su perfil"
 
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Chord window"
+msgstr "Ventana de acordes"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Hold the two keys: the commands are listed, a key each."
+msgstr "Mantenga pulsadas las dos teclas: se listan los comandos, cada uno con su tecla."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Off"
+msgstr "Desactivado"
+
 #: linux/src/workbench.rs
-msgid "Commands"
-msgstr "Comandos"
+msgid "Opened by"
+msgstr "Se abre con"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Known tools"
@@ -1345,6 +1374,10 @@ msgstr "No hay servidor de lenguaje para este proyecto"
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Language server failed to start"
 msgstr "El servidor de lenguaje no arrancó"
+
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "The chord window has no command named {}"
+msgstr "La ventana de acordes no tiene ningún comando llamado {}"
 
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "The icon pack could not be used"
@@ -1910,10 +1943,6 @@ msgstr "  Solo palabras completas"
 #: macos/Sources/Textchum/Settings.swift
 msgid "Spell check prose"
 msgstr "Corrección ortográfica de la prosa"
-
-#: macos/Sources/Textchum/Settings.swift
-msgid "Off"
-msgstr "Desactivado"
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "Automatic by content"

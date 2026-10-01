@@ -643,6 +643,46 @@ alimente déjà la coloration. Et quand un raccourci échappe tout à fait
 à la mémoire, la **palette de commandes** (⇧⌘P) cherche floue n'importe
 quelle action de menu par son nom et exécute la sélection.
 
+### La fenêtre d'accords
+
+Un raccourci de trois ou quatre touches, il faut s'en souvenir puis
+l'atteindre. La fenêtre d'accords fait l'inverse : maintenez deux
+touches de modification, et un petit panneau liste ce qui peut être
+fait, une touche à côté de chaque commande. Appuyez sur la touche et la
+commande s'exécute.
+
+Elle est désactivée tant qu'une paire n'est pas choisie dans Réglages ▸
+Clavier ▸ **Fenêtre d'accords**. Le fichier garde ce choix sous
+`keys_chord` :
+
+```json
+{ "keys_chord": "ctrl+alt" }
+```
+
+Les paires sont `ctrl+alt`, `alt+cmd`, `ctrl+cmd`, `ctrl+shift` et
+`alt+shift` ; toute autre valeur laisse la fenêtre désactivée. Ici `cmd`
+est la touche elle-même — Commande sur macOS, Super sur Linux — car une
+paire, ce sont deux touches maintenues, pas un raccourci.
+
+La fenêtre s'ouvre quand la paire est maintenue seule depuis un quart de
+seconde ; un raccourci qui utilise ces deux mêmes modificateurs n'est
+donc ni retardé ni intercepté : sa touche arrive avant. Une fois
+ouverte, elle le reste, touches relâchées. Les commandes sont rangées
+en groupes — **Fichier**, **Code**, **Aller**, **Rechercher**,
+**Présentation** — marqués d'un `+` ; la touche d'un groupe ouvre sa
+liste, et les commandes les plus utilisées (la palette de commandes,
+le blâme de la ligne, Préférences) sont en haut, sans groupe entre deux. Une touche
+qui ne correspond à rien est refusée et la fenêtre reste ; Échap ou un
+clic la ferme.
+
+Le menu est le même sur macOS et sur Linux, et il est fixe : ses touches
+ne peuvent pas encore être changées, et une commande qui n'y figure pas
+s'atteint par son raccourci ou par la palette de commandes. Sur Linux,
+le bureau peut garder une paire pour lui — Super seule ouvre souvent la
+vue d'activités, et Alt+Maj change la disposition du clavier sur
+certaines configurations —, auquel cas la fenêtre ne la reçoit jamais ;
+choisissez une autre paire.
+
 ## Rechargement à chaud
 
 Le fichier est surveillé pendant que Textchum tourne : éditez

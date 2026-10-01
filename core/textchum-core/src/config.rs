@@ -1491,6 +1491,35 @@ impl Config {
             .to_owned()
     }
 
+    /// The pair of modifier keys that opens the chord window
+    /// (`keys_chord`): `"ctrl+alt"` and the like, or empty when the
+    /// window is off, which it is unless a known pair is named.
+    pub fn chord_modifiers(&self) -> String {
+        self.root
+            .get("keys_chord")
+            .and_then(Value::as_str)
+            .and_then(crate::chords::modifier_pair)
+            .unwrap_or_default()
+            .to_owned()
+    }
+
+    /// Sets the pair that opens the chord window; `None`, empty, or
+    /// anything that is not a known pair turns it off.
+    pub fn set_chord_modifiers(&mut self, pair: Option<&str>) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        match pair.and_then(crate::chords::modifier_pair) {
+            Some(pair) => {
+                top.insert("keys_chord".into(), Value::String(pair.to_owned()));
+            }
+            None => {
+                top.remove("keys_chord");
+            }
+        }
+    }
+
     pub fn set_keys_profile(&mut self, name: Option<&str>) {
         let top = self
             .root
@@ -2324,6 +2353,22 @@ mod tests {
         edited.set_lsp_settings(Some("/work/api"), "pyright", None);
         let lsp: Value = serde_json::from_str(&edited.lsp_json()).unwrap();
         assert!(lsp.get("project_settings").is_none(), "and prunes the same way");
+    }
+
+    #[test]
+    fn the_chord_window_is_off_until_a_known_pair_is_named() {
+        let path = temp_path("chord.json");
+        let (mut config, _) = Config::load(&path);
+        assert_eq!(config.chord_modifiers(), "");
+        config.set_chord_modifiers(Some("alt+ctrl"));
+        config.save().unwrap();
+        let (mut reloaded, _) = Config::load(&path);
+        assert_eq!(reloaded.chord_modifiers(), "ctrl+alt", "stored in the one spelling");
+        reloaded.set_chord_modifiers(Some("hyper+meh"));
+        assert_eq!(reloaded.chord_modifiers(), "");
+        std::fs::write(&path, r#"{"keys_chord": "space"}"#).unwrap();
+        let (odd, _) = Config::load(&path);
+        assert_eq!(odd.chord_modifiers(), "");
     }
 
     #[test]

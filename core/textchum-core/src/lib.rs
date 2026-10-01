@@ -17,6 +17,7 @@ pub mod calls;
 pub mod vimregex;
 mod buffer;
 pub mod changes;
+pub mod chords;
 pub mod code_action;
 pub mod definition;
 pub mod edits;

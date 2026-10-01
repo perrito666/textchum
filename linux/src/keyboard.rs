@@ -123,6 +123,13 @@ mod tests {
     }
 
     #[test]
+    fn every_command_in_the_chord_window_can_be_run() {
+        for name in textchum_core::chords::actions() {
+            assert!(gtk_action(name).is_some(), "the chord window offers {name}, which is no command here");
+        }
+    }
+
+    #[test]
     fn an_accelerator_reads_back_as_a_spec() {
         assert_eq!(spec_from_accel("<Ctrl><Shift>f").as_deref(), Some("cmd+shift+f"));
         assert_eq!(spec_from_accel("F12").as_deref(), Some("f12"));
