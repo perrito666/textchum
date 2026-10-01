@@ -380,6 +380,14 @@ leen stdin pero deducen su comportamiento del nombre, como el
 `--stdin-filepath` de Prettier. Un documento sin título ofrece
 `Untitled` más la extensión de su lenguaje.
 
+`{edition}` se expande a la edición de Rust del *crate* al que
+pertenece el documento: la del `Cargo.toml` más cercano, o la de su
+*workspace* cuando el paquete la hereda. rustfmt, leyendo de la entrada
+estándar, nunca ve el manifiesto y formatea como 2015 si no se le dice
+otra cosa, así que `rustfmt --edition {edition}` es como una cadena
+formatea igual que `cargo fmt`. Un archivo fuera de todo *crate* recibe
+2021.
+
 Una entrada de proyecto reemplaza la cadena por defecto para ese
 lenguaje, nunca se añade a ella. La ventana de Ajustes edita esta misma
 sección bajo Servidores de lenguaje, y **Edición ▸ Ejecutar
@@ -387,6 +395,38 @@ preprocesadores** (⌃⌥⌘F, nombre de acción `runPreprocessors`) ejecuta
 la cadena a demanda sin guardar — formatear con tus herramientas en
 vez del formateador del servidor. El resultado llega como una sola
 edición, así que ⌘Z lo deshace.
+
+## Perfiles de lenguaje
+
+Un lenguaje rara vez es una sola herramienta, así que Settings ▸
+Presets ofrece los habituales como un conjunto: el servidor, la
+configuración con la que debe correr y la cadena de preprocesadores de
+guardado.
+
+| Perfil | Servidor | Configuración | Antes de cada guardado |
+|---|---|---|---|
+| Rust | rust-analyzer | comprueba con clippy | `rustfmt --edition {edition}` |
+| Python | pyright | — | `ruff check --fix …`, luego `ruff format` |
+| Go | gopls | staticcheck activado | `goimports` |
+| TypeScript y JavaScript | typescript-language-server | — | `prettier --stdin-filepath {path}` |
+| C y C++ | clangd | — | `clang-format --assume-filename={path}` |
+
+**Apply** escribe entradas corrientes — `lsp.defaults`, `lsp.settings`
+y `preprocessors.defaults` — y reinicia los servidores. Nada recuerda
+que se usó un perfil: lo que escribió es tuyo para editar en Language
+Servers y Preprocessors, y el botón dice **Applied** mientras la
+configuración siga diciendo todo lo que el perfil escribiría.
+
+Cada perfil lista los programas que ejecuta y si cada uno se encontró
+en `PATH`; el que falta muestra el comando que lo instala. El editor no
+instala nada por su cuenta.
+
+Todavía no: un perfil se aplica a todos los proyectos (las entradas que
+escribe se pueden mover a un proyecto a mano). Y donde el *linter* de
+un lenguaje es un segundo servidor — ruff junto a pyright, eslint junto
+al servidor de TypeScript — sus hallazgos no se muestran, porque un
+documento tiene un solo servidor; ruff igualmente corrige y formatea al
+guardar.
 
 ## Corrección ortográfica
 

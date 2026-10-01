@@ -350,6 +350,23 @@ mod tests {
     }
 
     #[test]
+    fn every_language_preset_names_servers_the_registry_has() {
+        // A preset writes a server's id, and the pool resolves an id to
+        // a command through this table: one that is not here would be
+        // run as a command line with no arguments.
+        for preset in textchum_core::presets::language_presets() {
+            let named = preset
+                .servers
+                .iter()
+                .map(|(_, server)| *server)
+                .chain(preset.settings.iter().map(|(server, _)| *server));
+            for server in named {
+                assert!(server_by_id(server).is_some(), "{} names {server}", preset.id);
+            }
+        }
+    }
+
+    #[test]
     fn ids_are_unique() {
         let mut seen = std::collections::HashSet::new();
         for spec in all() {

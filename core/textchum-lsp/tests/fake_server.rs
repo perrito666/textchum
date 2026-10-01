@@ -455,3 +455,46 @@ fn a_servers_own_questions_get_answers_it_survives() {
     });
     assert!(!died(&seen), "the server died on one of our answers: {seen:?}");
 }
+
+#[test]
+fn a_server_is_told_its_settings_three_ways() {
+    // Init options at the handshake, the settings pushed once it is
+    // initialized, and the section it asks for by name: the scripted
+    // server reports back what it was told.
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.configure(
+        r#"{"lsp": {
+            "settings": {"fake": {"fake": {"lint": "strict"}, "other": 1}},
+            "init_options": {"fake": {"mode": "fast"}}}}"#,
+    );
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("proj-settings");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+
+    let mut seen = Vec::new();
+    collect_until(&events, "first diagnostic", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::Diagnostics { .. }))
+    });
+    let report_id = pool.execute_command(&file, "fake.report", serde_json::Value::Null);
+    collect_until(&events, "the report", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == report_id))
+    });
+    let report: serde_json::Value = seen
+        .iter()
+        .find_map(|event| match event {
+            Event::LspResponse { id, json } if *id == report_id => serde_json::from_str(json).ok(),
+            _ => None,
+        })
+        .expect("a report");
+    assert_eq!(report["initializationOptions"], serde_json::json!({"mode": "fast"}));
+    assert_eq!(report["workspace"]["configuration"], serde_json::json!(true));
+    assert_eq!(
+        report["configuration"],
+        serde_json::json!([{"lint": "strict"}, {"lint": "strict"}])
+    );
+    assert_eq!(
+        report["changed"],
+        serde_json::json!({"fake": {"lint": "strict"}, "other": 1})
+    );
+}

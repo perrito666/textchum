@@ -300,6 +300,33 @@ final class SettingsModel: ObservableObject {
         persistWorkspaceChange()
     }
 
+    // MARK: Language presets
+
+    /// What the build offers per language: a server, its settings and
+    /// a save-preprocessor chain, with which tools were found.
+    @Published private(set) var languagePresets: [CoreConfig.LanguagePreset] = []
+
+    private func reloadLanguagePresets() {
+        languagePresets = config.languagePresets
+    }
+
+    /// Writes the preset into the ordinary sections and restarts the
+    /// servers, since one already running was started with the old
+    /// settings.
+    func applyLanguagePreset(id: String) {
+        guard config.applyLanguagePreset(id: id) else { return }
+        do {
+            try config.save()
+        } catch {
+            NSLog("could not save configuration: \(error)")
+        }
+        reloadLSPEntries()
+        reloadPreprocessorEntries()
+        reloadLanguagePresets()
+        onChange?()
+        onRestartServers?()
+    }
+
     // MARK: Hide presets
 
     /// The named glob sets the hide editors offer, sorted by name.
@@ -328,6 +355,7 @@ final class SettingsModel: ObservableObject {
             NSLog("could not save configuration: \(error)")
         }
         reloadHidePresets()
+        reloadLanguagePresets()
         onChange?()
     }
 
@@ -389,6 +417,7 @@ final class SettingsModel: ObservableObject {
         reloadWorkspaceEntries()
         reloadPreprocessorEntries()
         reloadHidePresets()
+        reloadLanguagePresets()
     }
 
     init(config: CoreConfig) {
@@ -429,6 +458,7 @@ final class SettingsModel: ObservableObject {
         reloadWorkspaceEntries()
         reloadPreprocessorEntries()
         reloadHidePresets()
+        reloadLanguagePresets()
     }
 
     // MARK: Workspace behavior
@@ -762,6 +792,8 @@ final class SettingsModel: ObservableObject {
             NSLog("could not save configuration: \(error)")
         }
         reloadLSPEntries()
+        // Editing what a preset wrote stops it being "applied".
+        reloadLanguagePresets()
         onChange?()
     }
 
@@ -848,6 +880,8 @@ final class SettingsModel: ObservableObject {
             NSLog("could not save configuration: \(error)")
         }
         reloadPreprocessorEntries()
+        // Editing what a preset wrote stops it being "applied".
+        reloadLanguagePresets()
         onChange?()
     }
 
@@ -1189,6 +1223,22 @@ private struct PresetsTab: View {
         // nobody can reach.
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                Text(t("Language presets"))
+                    .font(.headline)
+                Text(t("Each one writes the server, its settings and the save preprocessors a language is usually worked with, as ordinary entries under Language Servers and Preprocessors that you can then edit. Tools are looked for on PATH; a missing one names how to install it."))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(model.languagePresets) { preset in
+                    LanguagePresetRow(preset: preset) {
+                        model.applyLanguagePreset(id: preset.id)
+                    }
+                }
+
+                Divider()
+
+                Text(t("Hide presets"))
+                    .font(.headline)
                 Text("Named glob sets the hide editors can add in one click. They are yours to change: edit any preset and this list replaces the built-in one, so removals stick.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -1243,6 +1293,46 @@ private struct PresetsTab: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
+    }
+}
+
+/// One language preset: what it sets up, the tools it runs and whether
+/// each was found, and the button that writes it.
+private struct LanguagePresetRow: View {
+    let preset: CoreConfig.LanguagePreset
+    let apply: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(preset.name)
+                    .fontWeight(.semibold)
+                Text(preset.summary)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(preset.tools, id: \.command) { tool in
+                    HStack(spacing: 6) {
+                        Image(systemName: tool.found ? "checkmark.circle.fill" : "xmark.circle")
+                            .foregroundStyle(tool.found ? Color.green : Color.orange)
+                        // A missing tool says how to get it, selectable
+                        // so the command can be copied to a terminal.
+                        Text(tool.found ? tool.command : "\(tool.command) — \(tool.install)")
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                }
+                if !preset.missing.isEmpty {
+                    Text(preset.missing)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer()
+            Button(preset.applied ? t("Applied") : t("Apply"), action: apply)
+                .disabled(preset.applied)
+        }
+        .padding(.vertical, 4)
     }
 }
 

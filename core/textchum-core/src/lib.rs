@@ -34,6 +34,7 @@ pub mod occurrences;
 pub mod motion;
 pub mod notices;
 pub mod pairs;
+pub mod presets;
 pub mod preview;
 pub mod project_state;
 pub mod references;

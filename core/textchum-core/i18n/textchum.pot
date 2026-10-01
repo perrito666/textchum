@@ -31,6 +31,46 @@ msgstr ""
 msgid "Close Tab"
 msgstr ""
 
+#: core/textchum-core/src/presets.rs
+msgid "rust-analyzer checking with clippy, and rustfmt before every save."
+msgstr ""
+
+#: core/textchum-core/src/presets.rs
+msgid ""
+"pyright for types and navigation, and ruff fixing and formatting before "
+"every save."
+msgstr ""
+
+#: core/textchum-core/src/presets.rs
+msgid ""
+"ruff's own findings do not show in the editor: a document has one server, "
+"and here it is pyright."
+msgstr ""
+
+#: core/textchum-core/src/presets.rs
+msgid "gopls with staticcheck on, and goimports before every save."
+msgstr ""
+
+#: core/textchum-core/src/presets.rs
+msgid "TypeScript and JavaScript"
+msgstr ""
+
+#: core/textchum-core/src/presets.rs
+msgid "typescript-language-server, and prettier before every save."
+msgstr ""
+
+#: core/textchum-core/src/presets.rs
+msgid "eslint's findings do not show in the editor: a document has one server."
+msgstr ""
+
+#: core/textchum-core/src/presets.rs
+msgid "C and C++"
+msgstr ""
+
+#: core/textchum-core/src/presets.rs
+msgid "clangd, and clang-format before every save."
+msgstr ""
+
 #: linux/src/keyboard.rs
 msgid "New Tab"
 msgstr ""
@@ -324,6 +364,10 @@ msgstr ""
 msgid "Copy Forge URL for Line"
 msgstr ""
 
+#: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "A configured grammar could not be loaded"
+msgstr ""
+
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "New with Format…"
 msgstr ""
@@ -418,6 +462,10 @@ msgid "Import Theme"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Install Grammar…"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "About Textchum"
 msgstr ""
 
@@ -447,6 +495,10 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
 msgid "What this file is treated as — click to change it"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "What the editor had to say — click for the whole list"
 msgstr ""
 
 #: linux/src/workbench.rs
@@ -767,6 +819,24 @@ msgstr ""
 msgid "Nothing was imported. {}"
 msgstr ""
 
+#: linux/src/workbench.rs
+msgid "Choose a tree-sitter grammar's repository"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/GrammarInstall.swift
+msgid "The grammar was not installed"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/GrammarInstall.swift
+msgid ""
+"Files of its types open as it from now on, and the ones already open are "
+"coloured."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "Nothing to report yet."
+msgstr ""
+
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "General"
 msgstr ""
@@ -935,6 +1005,26 @@ msgstr ""
 msgid "Language Servers"
 msgstr ""
 
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Language presets"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid ""
+"Each one writes the server, its settings and the save preprocessors a "
+"language is usually worked with, as ordinary entries under Language Servers "
+"and Preprocessors that you can then edit. Tools are looked for on PATH; a "
+"missing one names how to install it."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Applied"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Apply"
+msgstr ""
+
 #: linux/src/workbench.rs
 msgid "Default server commands"
 msgstr ""
@@ -1033,7 +1123,7 @@ msgstr ""
 msgid "Remove missing"
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Hide presets"
 msgstr ""
 
@@ -1530,6 +1620,16 @@ msgstr ""
 
 #: macos/Sources/Textchum/FindReplaceBar.swift
 msgid "{} matches"
+msgstr ""
+
+#: macos/Sources/Textchum/GrammarInstall.swift
+msgid ""
+"Choose a tree-sitter grammar's repository: a folder with src/parser.c and "
+"queries/highlights.scm."
+msgstr ""
+
+#: macos/Sources/Textchum/GrammarInstall.swift
+msgid "Install"
 msgstr ""
 
 #: macos/Sources/Textchum/InfoPanel.swift
