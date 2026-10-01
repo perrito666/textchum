@@ -245,6 +245,7 @@ pub struct Shell {
     pub pool: RefCell<Pool>,
     events: RefCell<Receiver<Event>>,
     pub pages: RefCell<HashMap<String, Rc<PageHandles>>>,
+    pub chum_wait_sentinels: RefCell<HashMap<String, String>>,
     callbacks: RefCell<HashMap<u64, Box<dyn FnOnce(&str)>>>,
     /// Paths this process just wrote, so the file monitor can tell the
     /// app's own saves from external changes.
@@ -389,6 +390,7 @@ impl Shell {
                 pool: RefCell::new(pool),
                 events: RefCell::new(receiver),
                 pages: RefCell::new(HashMap::new()),
+                chum_wait_sentinels: RefCell::new(HashMap::new()),
                 callbacks: RefCell::new(HashMap::new()),
                 own_saves: RefCell::new(HashMap::new()),
                 own_config_save: std::cell::Cell::new(None),
@@ -413,6 +415,12 @@ impl Shell {
             *cell.borrow_mut() = Some(Rc::clone(&shell));
             shell
         })
+    }
+
+    pub fn release_chum_wait(&self, path: &str) {
+        if let Some(sentinel) = self.chum_wait_sentinels.borrow_mut().remove(path) {
+            let _ = std::fs::remove_file(sentinel);
+        }
     }
 
     /// Pushes the configuration's `lsp` + `workspace` sections into the

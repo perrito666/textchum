@@ -18,6 +18,7 @@ mod workbench;
 
 use adw::prelude::*;
 use gtk::gio;
+use std::rc::Rc;
 use workbench::Workbench;
 use textchum_core::i18n::{fill, tr, tr_n};
 
@@ -256,6 +257,23 @@ fn main() -> gtk::glib::ExitCode {
         // a GFile whose basename is the +number.
         let mut pending_line: Option<i32> = None;
         for file in files {
+            let uri = file.uri();
+            if let Some(request) = chum_url(uri.as_ref()) {
+                let at = request.line.map(|line| ((line - 1).max(0), 0));
+                if let Some(wait) = request.wait.as_ref() {
+                    shell::Shell::instance()
+                        .chum_wait_sentinels
+                        .borrow_mut()
+                        .insert(request.path.to_string_lossy().into_owned(), wait.clone());
+                }
+                let target = if request.target.as_deref() == Some("window") {
+                    Workbench::new(app)
+                } else {
+                    Rc::clone(&workbench)
+                };
+                target.open(Some(request.path), at);
+                continue;
+            }
             let Some(path) = file.path() else { continue };
             let name = path
                 .file_name()
@@ -339,6 +357,67 @@ fn main() -> gtk::glib::ExitCode {
         }
     }
     app.run_with_args(&arguments)
+}
+
+struct ChumURL {
+    path: std::path::PathBuf,
+    line: Option<i32>,
+    target: Option<String>,
+    wait: Option<String>,
+}
+
+fn chum_url(uri: &str) -> Option<ChumURL> {
+    let query = uri.strip_prefix("textchum://open?")?;
+    let mut path = None;
+    let mut line = None;
+    let mut target = None;
+    let mut wait = None;
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        match key {
+            "path" => path = Some(std::path::PathBuf::from(percent_decode(value)?)),
+            "line" => line = percent_decode(value)?.parse().ok(),
+            "target" => target = Some(percent_decode(value)?),
+            "wait" => wait = Some(percent_decode(value)?),
+            _ => {}
+        }
+    }
+    Some(ChumURL { path: path?, line, target, wait })
+}
+
+fn percent_decode(input: &str) -> Option<String> {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let hex = bytes.get(index + 1..index + 3)?;
+            let text = std::str::from_utf8(hex).ok()?;
+            out.push(u8::from_str_radix(text, 16).ok()?);
+            index += 3;
+        } else {
+            out.push(if bytes[index] == b'+' { b' ' } else { bytes[index] });
+            index += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_chum_url() {
+        let request = chum_url(
+            "textchum://open?path=%2Ftmp%2Fhello%20there.md&line=42&target=window",
+        )
+        .unwrap();
+        assert_eq!(request.path, std::path::PathBuf::from("/tmp/hello there.md"));
+        assert_eq!(request.line, Some(42));
+        assert_eq!(request.target.as_deref(), Some("window"));
+        assert_eq!(request.wait, None);
+    }
 }
 
 /// Applies the configuration's `keys` section — the same action names

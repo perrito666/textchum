@@ -120,8 +120,9 @@ Closing without saving leaves the file untouched, which git reads as an
 aborted commit — the same gesture as `:q!`. If Textchum quits (or is
 gone), waiting chums are released rather than left hanging.
 
-It works through the `textchum://` URL scheme, so the app bundle
-(`make app`) must have been launched at least once to register it.
+It works through the `textchum://` URL scheme. On macOS, the app bundle
+(`make app`) must have been launched at least once to register it; on
+Linux, the desktop entry installed by the package registers it.
 
 ## Linux (experimental)
 

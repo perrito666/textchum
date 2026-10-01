@@ -1195,11 +1195,10 @@ impl Workbench {
                 continue;
             }
             if let Some(path) = document.path.borrow().clone() {
-                Shell::instance().pages.borrow_mut().remove(&path);
-                Shell::instance()
-                    .pool
-                    .borrow_mut()
-                    .did_close(Path::new(&path));
+                let shell = Shell::instance();
+                shell.pages.borrow_mut().remove(&path);
+                shell.release_chum_wait(&path);
+                shell.pool.borrow_mut().did_close(Path::new(&path));
             }
             Shell::instance().close_document(document.id);
         }
@@ -1419,11 +1418,10 @@ impl Workbench {
             let overflow = closed.len().saturating_sub(CLOSED_TAB_MEMORY);
             closed.drain(..overflow);
             drop(closed);
-            Shell::instance().pages.borrow_mut().remove(&path);
-            Shell::instance()
-                .pool
-                .borrow_mut()
-                .did_close(Path::new(&path));
+            let shell = Shell::instance();
+            shell.pages.borrow_mut().remove(&path);
+            shell.release_chum_wait(&path);
+            shell.pool.borrow_mut().did_close(Path::new(&path));
         }
         Shell::instance().close_document(document.id);
         crate::session::save();
