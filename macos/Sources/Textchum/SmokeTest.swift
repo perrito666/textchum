@@ -1482,6 +1482,22 @@ func runSmokeTest() -> Int32 {
         print("FAIL: the panel came back \(shownAgain.frame.height)pt tall, not 120")
         return 1
     }
+    // The known tools are on offer with the line each takes, and the
+    // language presets' chains are lines out of the same table.
+    do {
+        let known = CoreTools.presets
+        guard let black = known.first(where: { $0.id == "black" }),
+            black.command == "black --quiet --stdin-filename {path} -", black.program == "black",
+            black.languages == ["python"], !black.summary.isEmpty, !black.install.isEmpty,
+            known.first(where: { $0.id == "rustfmt" })?.command.contains("{edition}") == true,
+            known.contains(where: { $0.languages.contains("typescript") })
+        else {
+            print("FAIL: the known tools are not on offer: \(known.map(\.id))")
+            return 1
+        }
+    }
+    print("known tools ok (offered by language, each with the line it takes)")
+
     // Diagnostics reach the gutter: the line's number takes the colour.
     let firstView = panelBench.columns[0].views[0]
     firstView.gutter.setDiagnostics([1: 1])

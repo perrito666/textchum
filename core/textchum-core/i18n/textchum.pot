@@ -71,6 +71,18 @@ msgstr ""
 msgid "clangd, and clang-format before every save."
 msgstr ""
 
+#: core/textchum-core/src/tools.rs
+msgid "Formats the document"
+msgstr ""
+
+#: core/textchum-core/src/tools.rs
+msgid "Fixes what its linter can"
+msgstr ""
+
+#: core/textchum-core/src/tools.rs
+msgid "Sorts and tidies the imports"
+msgstr ""
+
 #: linux/src/keyboard.rs
 msgid "New Tab"
 msgstr ""
@@ -1164,6 +1176,14 @@ msgid "Commands"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Known tools"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
+msgid "Known servers"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Project Records"
 msgstr ""
 
@@ -1959,6 +1979,23 @@ msgstr ""
 
 #: macos/Sources/Textchum/Settings.swift
 msgid "Commands, one per line — Return adds a line"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "No known tool for this language"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid ""
+"Adds the command line a known tool takes, so it does not have to be looked up"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "No known server for this language"
+msgstr ""
+
+#: macos/Sources/Textchum/Settings.swift
+msgid "Names a server the editor knows how to start"
 msgstr ""
 
 #: macos/Sources/Textchum/Settings.swift

@@ -1135,3 +1135,30 @@ public enum CoreManifests {
         return String(cString: answer)
     }
 }
+
+/// One tool the core knows the command line of, as a save preprocessor.
+public struct CoreToolPreset: Decodable, Identifiable, Equatable, Sendable {
+    public let id: String
+    /// What it is called, as its users call it.
+    public let name: String
+    /// What it does to the document, in a few words.
+    public let summary: String
+    public let languages: [String]
+    /// The whole command line: stdin in, stdout out.
+    public let command: String
+    public let program: String
+    public let install: String
+    /// Whether the program is on `PATH` right now.
+    public let found: Bool
+}
+
+/// The table of known tools, so a settings screen can offer "black"
+/// and write the line black takes.
+public enum CoreTools {
+    public static var presets: [CoreToolPreset] {
+        guard let cString = tc_tool_presets_json() else { return [] }
+        defer { tc_string_free(cString) }
+        let json = Data(String(cString: cString).utf8)
+        return (try? JSONDecoder().decode([CoreToolPreset].self, from: json)) ?? []
+    }
+}

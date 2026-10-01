@@ -377,6 +377,82 @@ name `runPreprocessors`) runs the chain on demand without saving —
 formatting through your tools instead of the language server's
 formatter. The result lands as one edit, so ⌘Z undoes it.
 
+### Known tools
+
+Nobody should have to look up that black wants a trailing dash and
+prettier a file name. The **Known tools** menu — beside every chain in
+Settings ▸ Preprocessors, and in the form that adds one — lists the
+tools the editor knows the command line of for the language in hand,
+marks which are installed, and writes the line when one is chosen. A
+tool that is not installed is still offered, with the command that
+installs it. **Known servers** does the same for the server command
+under Language Servers.
+
+| Tool | Languages | The line it writes |
+|---|---|---|
+| rustfmt | rust | `rustfmt --edition {edition}` |
+| gofmt | go | `gofmt` |
+| goimports | go | `goimports` |
+| gofumpt | go | `gofumpt` |
+| golines | go | `golines` |
+| ruff format | python | `ruff format --stdin-filename {path} -` |
+| ruff check --fix | python | `ruff check --fix --exit-zero --no-cache --stdin-filename {path} -` |
+| ruff (imports) | python | `ruff check --select I --fix --exit-zero --no-cache --stdin-filename {path} -` |
+| black | python | `black --quiet --stdin-filename {path} -` |
+| isort | python | `isort --stdout --filename {path} -` |
+| autopep8 | python | `autopep8 -` |
+| yapf | python | `yapf --quiet` |
+| autoflake | python | `autoflake --remove-all-unused-imports --stdin-display-name {path} -` |
+| usort | python | `usort format -` |
+| prettier | javascript, typescript, tsx, css, html, json, yaml, markdown | `prettier --stdin-filepath {path}` |
+| prettierd | javascript, typescript, tsx, css, html, json, yaml, markdown | `prettierd {path}` |
+| biome | javascript, typescript, tsx, json, css | `biome format --stdin-file-path {path}` |
+| dprint | javascript, typescript, tsx, json, markdown, toml | `dprint fmt --stdin {path}` |
+| eslint_d | javascript, typescript, tsx | `eslint_d --fix-to-stdout --stdin --stdin-filename {path}` |
+| clang-format | c, cpp, java, csharp | `clang-format --assume-filename={path}` |
+| astyle | c, cpp | `astyle` |
+| shfmt | bash | `shfmt -filename {path}` |
+| beautysh | bash | `beautysh -` |
+| stylua | lua | `stylua --search-parent-directories --stdin-filepath {path} -` |
+| zig fmt | zig | `zig fmt --stdin` |
+| terraform fmt | hcl | `terraform fmt -` |
+| tofu fmt | hcl | `tofu fmt -` |
+| packer fmt | hcl | `packer fmt -` |
+| nomad fmt | hcl | `nomad fmt -` |
+| jq | json | `jq .` |
+| fixjson | json | `fixjson` |
+| taplo | toml | `taplo format -` |
+| yamlfmt | yaml | `yamlfmt -` |
+| mdformat | markdown | `mdformat -` |
+| xmllint | xml | `xmllint --format -` |
+| sql-formatter | sql | `sql-formatter` |
+| sqlfmt | sql | `sqlfmt -` |
+| pg_format | sql | `pg_format` |
+| swiftformat | swift | `swiftformat --stdinpath {path}` |
+| rubocop | ruby | `rubocop --auto-correct-all --fail-level fatal --stderr --force-exclusion --stdin {path}` |
+| standardrb | ruby | `standardrb --fix --fail-level fatal --stderr --stdin {path}` |
+| nixfmt | nix | `nixfmt` |
+| alejandra | nix | `alejandra --quiet -` |
+| nixpkgs-fmt | nix | `nixpkgs-fmt` |
+| ormolu | haskell | `ormolu --stdin-input-file {path}` |
+| fourmolu | haskell | `fourmolu --stdin-input-file {path}` |
+| stylish-haskell | haskell | `stylish-haskell` |
+| ocamlformat | ocaml | `ocamlformat --enable-outside-detected-project --name {path} -` |
+| ocp-indent | ocaml | `ocp-indent` |
+| mix format | elixir | `mix format --stdin-filename {path} -` |
+| scalafmt | scala | `scalafmt --stdin` |
+| google-java-format | java | `google-java-format -` |
+| cmake-format | cmake | `cmake-format -` |
+| gersemi | cmake | `gersemi -` |
+
+A line is ordinary text once written: add flags to it, reorder the
+chain, or delete it, as with any other. The table is tested against
+whichever of these tools the machine running the tests has.
+
+Not there yet: a tool outside this table still has to be typed, and
+tools that only rewrite files in place, rather than work over standard
+input, are not listed.
+
 ## Language presets
 
 A language is rarely one tool, so Settings ▸ Presets offers the common

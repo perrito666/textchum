@@ -396,6 +396,83 @@ la cadena a demanda sin guardar — formatear con tus herramientas en
 vez del formateador del servidor. El resultado llega como una sola
 edición, así que ⌘Z lo deshace.
 
+### Herramientas conocidas
+
+Nadie debería tener que averiguar que black quiere un guion al final y
+prettier un nombre de archivo. El menú **Known tools** — junto a cada
+cadena en Settings ▸ Preprocessors, y en el formulario que añade una —
+lista las herramientas cuya línea de comando el editor conoce para el
+lenguaje en cuestión, marca cuáles están instaladas, y escribe la línea
+al elegir una. Una herramienta que no está instalada se ofrece igual,
+con el comando que la instala. **Known servers** hace lo mismo para el
+comando del servidor en Language Servers.
+
+| Herramienta | Lenguajes | La línea que escribe |
+|---|---|---|
+| rustfmt | rust | `rustfmt --edition {edition}` |
+| gofmt | go | `gofmt` |
+| goimports | go | `goimports` |
+| gofumpt | go | `gofumpt` |
+| golines | go | `golines` |
+| ruff format | python | `ruff format --stdin-filename {path} -` |
+| ruff check --fix | python | `ruff check --fix --exit-zero --no-cache --stdin-filename {path} -` |
+| ruff (imports) | python | `ruff check --select I --fix --exit-zero --no-cache --stdin-filename {path} -` |
+| black | python | `black --quiet --stdin-filename {path} -` |
+| isort | python | `isort --stdout --filename {path} -` |
+| autopep8 | python | `autopep8 -` |
+| yapf | python | `yapf --quiet` |
+| autoflake | python | `autoflake --remove-all-unused-imports --stdin-display-name {path} -` |
+| usort | python | `usort format -` |
+| prettier | javascript, typescript, tsx, css, html, json, yaml, markdown | `prettier --stdin-filepath {path}` |
+| prettierd | javascript, typescript, tsx, css, html, json, yaml, markdown | `prettierd {path}` |
+| biome | javascript, typescript, tsx, json, css | `biome format --stdin-file-path {path}` |
+| dprint | javascript, typescript, tsx, json, markdown, toml | `dprint fmt --stdin {path}` |
+| eslint_d | javascript, typescript, tsx | `eslint_d --fix-to-stdout --stdin --stdin-filename {path}` |
+| clang-format | c, cpp, java, csharp | `clang-format --assume-filename={path}` |
+| astyle | c, cpp | `astyle` |
+| shfmt | bash | `shfmt -filename {path}` |
+| beautysh | bash | `beautysh -` |
+| stylua | lua | `stylua --search-parent-directories --stdin-filepath {path} -` |
+| zig fmt | zig | `zig fmt --stdin` |
+| terraform fmt | hcl | `terraform fmt -` |
+| tofu fmt | hcl | `tofu fmt -` |
+| packer fmt | hcl | `packer fmt -` |
+| nomad fmt | hcl | `nomad fmt -` |
+| jq | json | `jq .` |
+| fixjson | json | `fixjson` |
+| taplo | toml | `taplo format -` |
+| yamlfmt | yaml | `yamlfmt -` |
+| mdformat | markdown | `mdformat -` |
+| xmllint | xml | `xmllint --format -` |
+| sql-formatter | sql | `sql-formatter` |
+| sqlfmt | sql | `sqlfmt -` |
+| pg_format | sql | `pg_format` |
+| swiftformat | swift | `swiftformat --stdinpath {path}` |
+| rubocop | ruby | `rubocop --auto-correct-all --fail-level fatal --stderr --force-exclusion --stdin {path}` |
+| standardrb | ruby | `standardrb --fix --fail-level fatal --stderr --stdin {path}` |
+| nixfmt | nix | `nixfmt` |
+| alejandra | nix | `alejandra --quiet -` |
+| nixpkgs-fmt | nix | `nixpkgs-fmt` |
+| ormolu | haskell | `ormolu --stdin-input-file {path}` |
+| fourmolu | haskell | `fourmolu --stdin-input-file {path}` |
+| stylish-haskell | haskell | `stylish-haskell` |
+| ocamlformat | ocaml | `ocamlformat --enable-outside-detected-project --name {path} -` |
+| ocp-indent | ocaml | `ocp-indent` |
+| mix format | elixir | `mix format --stdin-filename {path} -` |
+| scalafmt | scala | `scalafmt --stdin` |
+| google-java-format | java | `google-java-format -` |
+| cmake-format | cmake | `cmake-format -` |
+| gersemi | cmake | `gersemi -` |
+
+Una línea es texto corriente una vez escrita: se le pueden añadir
+opciones, reordenar la cadena o borrarla, como con cualquier otra. La
+tabla se prueba contra las herramientas que tenga la máquina que corre
+las pruebas.
+
+Todavía no: una herramienta fuera de esta tabla hay que escribirla a
+mano, y las que solo reescriben archivos en el lugar, en vez de
+trabajar sobre la entrada estándar, no están listadas.
+
 ## Perfiles de lenguaje
 
 Un lenguaje rara vez es una sola herramienta, así que Settings ▸

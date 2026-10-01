@@ -266,6 +266,63 @@ static SERVERS: &[ServerSpec] = &[
         args: &["server"],
         languages: &["markdown"],
         install_hint: "brew install marksman",
+    },    ServerSpec {
+        id: "elixir-ls",
+        command: "elixir-ls",
+        args: &[],
+        languages: &["elixir"],
+        install_hint: "brew install elixir-ls",
+    },
+    ServerSpec {
+        id: "intelephense",
+        command: "intelephense",
+        args: &["--stdio"],
+        languages: &["php"],
+        install_hint: "npm install -g intelephense",
+    },
+    ServerSpec {
+        id: "phpactor",
+        command: "phpactor",
+        args: &["language-server"],
+        languages: &["php"],
+        install_hint: "composer global require phpactor/phpactor",
+    },
+    ServerSpec {
+        id: "docker-langserver",
+        command: "docker-langserver",
+        args: &["--stdio"],
+        languages: &["dockerfile"],
+        install_hint: "npm install -g dockerfile-language-server-nodejs",
+    },
+    ServerSpec {
+        id: "lemminx",
+        command: "lemminx",
+        args: &[],
+        languages: &["xml"],
+        install_hint: "brew install lemminx",
+    },
+    ServerSpec {
+        id: "sqls",
+        command: "sqls",
+        args: &[],
+        languages: &["sql"],
+        install_hint: "go install github.com/sqls-server/sqls@latest",
+    },
+    ServerSpec {
+        id: "r-languageserver",
+        command: "R",
+        args: &["--no-echo", "-e", "languageserver::run()"],
+        languages: &["r"],
+        install_hint: "R -e 'install.packages(\"languageserver\")'",
+    },
+    // rubocop as a server is a linter, not a replacement for the two
+    // above: it is asked for by id, usually beside one of them.
+    ServerSpec {
+        id: "rubocop",
+        command: "rubocop",
+        args: &["--lsp"],
+        languages: &["ruby"],
+        install_hint: "gem install rubocop",
     },
 ];
 
