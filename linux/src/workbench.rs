@@ -6382,6 +6382,58 @@ fn show_preferences(parent: &adw::ApplicationWindow) {
     let servers = adw::PreferencesPage::new();
     servers.set_title(&tr("Language Servers"));
     servers.set_icon_name(Some("network-workgroup-symbolic"));
+    // Language presets: the server, its settings and the save
+    // preprocessors a language is usually worked with, written as the
+    // ordinary entries the groups below edit.
+    let language_presets = adw::PreferencesGroup::new();
+    language_presets.set_title(&tr("Language presets"));
+    language_presets.set_description(Some(&tr(
+        "Each one writes the server, its settings and the save preprocessors a language is usually worked with, as ordinary entries under Language Servers and Preprocessors that you can then edit. Tools are looked for on PATH; a missing one names how to install it.",
+    )));
+    let listed: serde_json::Value =
+        serde_json::from_str(&shell.config.borrow().language_presets_json()).unwrap_or_default();
+    for preset in listed.as_array().into_iter().flatten() {
+        let row = adw::ActionRow::new();
+        row.set_title(&glib::markup_escape_text(preset["name"].as_str().unwrap_or_default()));
+        let mut lines = vec![preset["summary"].as_str().unwrap_or_default().to_owned()];
+        for tool in preset["tools"].as_array().into_iter().flatten() {
+            let command = tool["command"].as_str().unwrap_or_default();
+            if tool["found"] == true {
+                lines.push(format!("✓ {command}"));
+            } else {
+                // A missing tool says how to get it.
+                lines.push(format!(
+                    "✗ {command} — {}",
+                    tool["install"].as_str().unwrap_or_default()
+                ));
+            }
+        }
+        if let Some(missing) = preset["missing"].as_str().filter(|missing| !missing.is_empty()) {
+            lines.push(missing.to_owned());
+        }
+        row.set_subtitle(&glib::markup_escape_text(&lines.join("\n")));
+        let applied = preset["applied"] == true;
+        let button = gtk::Button::with_label(&if applied { tr("Applied") } else { tr("Apply") });
+        button.set_valign(gtk::Align::Center);
+        button.set_sensitive(!applied);
+        {
+            let shell = Rc::clone(&shell);
+            let id = preset["id"].as_str().unwrap_or_default().to_owned();
+            button.connect_clicked(move |button| {
+                let written = shell.config.borrow_mut().apply_language_preset(&id);
+                if written {
+                    shell.save_config();
+                    shell.reconfigure_pool();
+                    button.set_sensitive(false);
+                    button.set_label(&tr("Applied"));
+                }
+            });
+        }
+        row.add_suffix(&button);
+        language_presets.add(&row);
+    }
+    servers.add(&language_presets);
+
     let servers_group = adw::PreferencesGroup::new();
     servers_group.set_title(&tr("Default server commands"));
     servers_group.set_description(Some(

@@ -211,6 +211,44 @@ dice nada tiene servidores igualmente, y una versión que aprende uno
 nuevo lo ofrece sin reescribir la configuración. Definir un servidor no
 cambia cuál usa un lenguaje por omisión: eso lo decide `lsp.defaults`.
 
+### Configuración para un servidor
+
+Los servidores aceptan configuración — qué *lints* corren, cuán
+estricto es el comprobador de tipos — y `lsp.settings` es donde va: un
+objeto por id de servidor, con las claves por sección tal como el
+servidor las pide.
+
+```json
+{
+  "lsp": {
+    "settings": {
+      "rust-analyzer": {"rust-analyzer": {"check": {"command": "clippy"}}},
+      "gopls": {"gopls": {"staticcheck": true}},
+      "pyright": {"python": {"analysis": {"typeCheckingMode": "strict"}}}
+    },
+    "init_options": {
+      "typescript-language-server": {"preferences": {"quotePreference": "single"}}
+    }
+  }
+}
+```
+
+El objeto se envía al servidor una vez que arrancó y se entrega por
+sección cuando el servidor pregunta, que entre las dos es como los
+servidores leen su configuración. Es la forma de la tabla `settings` de
+una configuración de nvim-lspconfig, así que una se puede traer tal
+cual. `lsp.init_options` contiene lo que un servidor lee de
+`initializationOptions`. Una línea de comando escrita a mano no tiene
+id; su configuración se busca bajo el nombre del comando que ejecuta.
+
+Un servidor lee su configuración al arrancar. Aplicar un
+[perfil de lenguaje](configuration.md#perfiles-de-lenguaje) reinicia
+los servidores; tras una edición a mano, Settings ▸ Language Servers
+tiene el botón que lo hace.
+
+Todavía no: la configuración es por servidor, no por proyecto, y la
+ventana de Settings no la edita — los perfiles escriben las habituales.
+
 ### Nombrar un servidor y apuntar a uno dentro del proyecto
 
 La entrada de un lenguaje acepta el identificador de un servidor que el

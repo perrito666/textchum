@@ -372,6 +372,109 @@ impl Config {
         prune_empty(top, "lsp");
     }
 
+    /// The settings a server runs with (`lsp.settings.<server>`): the
+    /// object the pool pushes to it and answers its configuration
+    /// questions from, keyed by section.
+    pub fn lsp_settings(&self, server: &str) -> Option<&Value> {
+        self.root.get("lsp")?.get("settings")?.get(server)
+    }
+
+    /// Sets (or, with `None`, removes) a server's settings. Empty
+    /// sections are pruned.
+    pub fn set_lsp_settings(&mut self, server: &str, settings: Option<Value>) {
+        let top = self
+            .root
+            .as_object_mut()
+            .expect("config root is always an object");
+        let lsp = ensure_object(top, "lsp");
+        let section = ensure_object(lsp, "settings");
+        match settings {
+            Some(settings) => {
+                section.insert(server.into(), settings);
+            }
+            None => {
+                section.remove(server);
+            }
+        }
+        prune_empty(lsp, "settings");
+        prune_empty(top, "lsp");
+    }
+
+    /// Writes what a language preset stands for into the ordinary
+    /// sections: its servers under `lsp.defaults`, their settings under
+    /// `lsp.settings`, its chains under `preprocessors.defaults`. Each
+    /// entry replaces what was there for that language or server, the
+    /// way a hand edit would. Returns false for an id no preset has.
+    pub fn apply_language_preset(&mut self, id: &str) -> bool {
+        let Some(preset) = crate::presets::language_preset(id) else {
+            return false;
+        };
+        for (language, server) in &preset.servers {
+            self.set_lsp_entry(None, language, Some(server));
+        }
+        for (server, settings) in &preset.settings {
+            self.set_lsp_settings(server, Some(settings.clone()));
+        }
+        for (language, chain) in &preset.preprocessors {
+            self.set_preprocessor_entry(None, language, Some(&chain.join("\n")));
+        }
+        true
+    }
+
+    /// Whether the configuration says everything the preset would
+    /// write — applied and not edited since.
+    fn language_preset_applied(&self, preset: &crate::presets::LanguagePreset) -> bool {
+        let defaults = self.root.get("lsp").and_then(|lsp| lsp.get("defaults"));
+        preset.servers.iter().all(|(language, server)| {
+            defaults.and_then(|d| d.get(*language)).and_then(Value::as_str) == Some(*server)
+        }) && preset
+            .settings
+            .iter()
+            .all(|(server, settings)| self.lsp_settings(server) == Some(settings))
+            && preset
+                .preprocessors
+                .iter()
+                .all(|(language, chain)| self.preprocessor_commands(None, language) == *chain)
+    }
+
+    /// The language presets for a settings screen: what each would
+    /// write, which of its tools are on `PATH` right now, and whether
+    /// the configuration already says all of it. A JSON array of
+    /// `{id, name, summary, missing, applied, servers: [{language,
+    /// command}], settings: [{server, json}], preprocessors:
+    /// [{language, commands}], tools: [{command, install, found}]}`.
+    pub fn language_presets_json(&self) -> String {
+        let presets: Vec<Value> = crate::presets::language_presets()
+            .iter()
+            .map(|preset| {
+                serde_json::json!({
+                    "id": preset.id,
+                    "name": preset.name,
+                    "summary": preset.summary,
+                    "missing": preset.missing,
+                    "applied": self.language_preset_applied(preset),
+                    "servers": preset.servers.iter().map(|(language, command)| {
+                        serde_json::json!({"language": language, "command": command})
+                    }).collect::<Vec<_>>(),
+                    "settings": preset.settings.iter().map(|(server, settings)| {
+                        serde_json::json!({"server": server, "json": settings.to_string()})
+                    }).collect::<Vec<_>>(),
+                    "preprocessors": preset.preprocessors.iter().map(|(language, commands)| {
+                        serde_json::json!({"language": language, "commands": commands})
+                    }).collect::<Vec<_>>(),
+                    "tools": preset.tools.iter().map(|tool| {
+                        serde_json::json!({
+                            "command": tool.command,
+                            "install": tool.install,
+                            "found": crate::presets::on_path(tool.command),
+                        })
+                    }).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        Value::Array(presets).to_string()
+    }
+
     /// The save-preprocessor section (`preprocessors`), serialized:
     /// `{"defaults": {lang: [cmd, ...]}, "projects": {root: {lang: [...]}}}`.
     /// Empty object when unset.
@@ -2119,6 +2222,51 @@ mod tests {
         config.save().unwrap();
         let (reloaded, _) = Config::load(&path);
         assert_eq!(reloaded.new_file_target(), OpenTarget::Window);
+    }
+
+    #[test]
+    fn a_language_preset_writes_ordinary_entries_and_knows_when_they_stand() {
+        let path = temp_path("language-preset.json");
+        let (mut config, _) = Config::load(&path);
+        let applied = |config: &Config, id: &str| {
+            let listed: Value = serde_json::from_str(&config.language_presets_json()).unwrap();
+            listed
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|preset| preset["id"] == id)
+                .map(|preset| preset["applied"] == true)
+                .unwrap()
+        };
+        assert!(!applied(&config, "rust"));
+        assert!(config.apply_language_preset("rust"));
+        assert!(!config.apply_language_preset("cobol"));
+        config.save().unwrap();
+
+        let (reloaded, warning) = Config::load(&path);
+        assert!(warning.is_none());
+        let lsp: Value = serde_json::from_str(&reloaded.lsp_json()).unwrap();
+        assert_eq!(lsp["defaults"]["rust"], "rust-analyzer");
+        assert_eq!(
+            lsp["settings"]["rust-analyzer"]["rust-analyzer"]["check"]["command"],
+            "clippy"
+        );
+        assert_eq!(
+            reloaded.preprocessor_commands(None, "rust"),
+            vec!["rustfmt --edition {edition}"]
+        );
+        assert!(applied(&reloaded, "rust"));
+        assert!(!applied(&reloaded, "go"));
+
+        // A preset is a starting point: editing what it wrote is allowed,
+        // and the list stops calling it applied.
+        let mut edited = reloaded;
+        edited.set_preprocessor_entry(None, "rust", Some("rustfmt --edition 2018"));
+        assert!(!applied(&edited, "rust"));
+        edited.set_lsp_settings("rust-analyzer", None);
+        assert!(edited.lsp_settings("rust-analyzer").is_none());
+        let lsp: Value = serde_json::from_str(&edited.lsp_json()).unwrap();
+        assert!(lsp.get("settings").is_none(), "an emptied section is pruned");
     }
 
     #[test]

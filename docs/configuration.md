@@ -363,12 +363,49 @@ document's absolute path and bare name — for tools that read stdin but
 infer their behavior from the name, like Prettier's `--stdin-filepath`.
 An untitled document offers `Untitled` plus its language's extension.
 
+`{edition}` expands to the Rust edition of the crate the document
+belongs to: the nearest `Cargo.toml`'s, or its workspace's when the
+package inherits it. rustfmt reading standard input never sees the
+manifest and formats as 2015 unless told, so `rustfmt --edition
+{edition}` is how a chain formats the way `cargo fmt` would. A file
+outside any crate gets 2021.
+
 A project entry replaces the default chain for that language, never
 appends to it. The Settings window edits the same section under
 Language Servers, and **Edit ▸ Run Save Preprocessors** (⌃⌥⌘F, action
 name `runPreprocessors`) runs the chain on demand without saving —
 formatting through your tools instead of the language server's
 formatter. The result lands as one edit, so ⌘Z undoes it.
+
+## Language presets
+
+A language is rarely one tool, so Settings ▸ Presets offers the common
+ones as a set: the server, the settings it should run with, and the
+save-preprocessor chain.
+
+| Preset | Server | Settings | Before every save |
+|---|---|---|---|
+| Rust | rust-analyzer | checks with clippy | `rustfmt --edition {edition}` |
+| Python | pyright | — | `ruff check --fix …`, then `ruff format` |
+| Go | gopls | staticcheck on | `goimports` |
+| TypeScript and JavaScript | typescript-language-server | — | `prettier --stdin-filepath {path}` |
+| C and C++ | clangd | — | `clang-format --assume-filename={path}` |
+
+**Apply** writes ordinary entries — `lsp.defaults`, `lsp.settings` and
+`preprocessors.defaults` — and restarts the servers. Nothing remembers
+that a preset was used: what it wrote is yours to edit under Language
+Servers and Preprocessors, and the button reads **Applied** for as long
+as the configuration still says everything the preset would write.
+
+Each preset lists the programs it runs and whether each was found on
+`PATH`; a missing one shows the command that installs it. The editor
+installs nothing itself.
+
+Not there yet: a preset applies to every project (the entries it
+writes can be moved under a project by hand). And where a language's
+linter is a second server — ruff beside pyright, eslint beside the
+TypeScript server — its findings do not show, because a document has
+one server; ruff still fixes and formats on save.
 
 ## Spell checking
 

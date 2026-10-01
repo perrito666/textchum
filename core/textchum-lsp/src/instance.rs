@@ -49,6 +49,20 @@ pub enum Command {
     Shutdown,
 }
 
+/// What the configuration gives a server to run with.
+#[derive(Debug, Clone, Default)]
+pub struct ServerOptions {
+    /// `lsp.settings.<id>`: the settings object, keyed by section the
+    /// way servers ask for it — `{"rust-analyzer": {"check": …}}`,
+    /// `{"gopls": {…}}` — which is also how an nvim-lspconfig
+    /// `settings` table is written. Pushed once the server is
+    /// initialized, and handed out by section when it asks.
+    pub settings: Value,
+    /// `lsp.init_options.<id>`: sent verbatim as
+    /// `initializationOptions`, for the servers that read theirs there.
+    pub init_options: Value,
+}
+
 pub struct Instance {
     commands: mpsc::Sender<Command>,
     finished: mpsc::Receiver<()>,
@@ -64,6 +78,7 @@ impl Instance {
         root: &Path,
         events: EventSender,
         published: PublishedDiagnostics,
+        options: ServerOptions,
     ) -> std::io::Result<Self> {
         let mut child = ProcessCommand::new(&config.command)
             .args(&config.args)
@@ -101,7 +116,7 @@ impl Instance {
             std::thread::Builder::new()
                 .name(format!("lsp-{server_id}"))
                 .spawn(move || {
-                    run_manager(child, server_id, root, commands_rx, events, published);
+                    run_manager(child, server_id, root, options, commands_rx, events, published);
                     let _ = finished_tx.send(());
                 })
                 .expect("failed to spawn LSP manager thread")
@@ -156,6 +171,7 @@ fn run_manager(
     child: Arc<Mutex<Child>>,
     server_id: String,
     root: PathBuf,
+    options: ServerOptions,
     commands: mpsc::Receiver<Command>,
     events: EventSender,
     published: PublishedDiagnostics,
@@ -172,7 +188,7 @@ fn run_manager(
     let mut stdout = BufReader::new(stdout);
 
     // --- Handshake -----------------------------------------------------
-    let initialize = json!({
+    let mut initialize = json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
@@ -188,10 +204,20 @@ fn run_manager(
                 "textDocument": {
                     "publishDiagnostics": {},
                     "synchronization": {"didSave": false}
+                },
+                // Said because it is now true: a server that pulls its
+                // settings only asks a client that declares it answers.
+                "workspace": {
+                    "configuration": true,
+                    "workspaceFolders": true,
+                    "didChangeConfiguration": {"dynamicRegistration": false}
                 }
             },
         },
     });
+    if !options.init_options.is_null() {
+        initialize["params"]["initializationOptions"] = options.init_options.clone();
+    }
     if write_message(&mut *stdin.lock().unwrap(), &initialize).is_err() {
         status(&events, &server_id, &root, "failed", "could not write initialize");
         return;
@@ -209,7 +235,7 @@ fn run_manager(
                     }
                     break;
                 }
-                answer_if_request(&stdin, &root, &message);
+                answer_if_request(&stdin, &root, &options.settings, &message);
             }
             Ok(None) => {
                 status(&events, &server_id, &root, "exited", "during initialize");
@@ -223,6 +249,18 @@ fn run_manager(
     }
     let initialized = json!({"jsonrpc": "2.0", "method": "initialized", "params": {}});
     let _ = write_message(&mut *stdin.lock().unwrap(), &initialized);
+    // Servers split on how they take settings: some read what is pushed
+    // here, some ask `workspace/configuration` and are answered from the
+    // same object. Doing both is what nvim's client does, and neither
+    // kind minds the other half.
+    if !options.settings.is_null() {
+        let changed = json!({
+            "jsonrpc": "2.0",
+            "method": "workspace/didChangeConfiguration",
+            "params": {"settings": options.settings},
+        });
+        let _ = write_message(&mut *stdin.lock().unwrap(), &changed);
+    }
     status(&events, &server_id, &root, "running", "");
 
     // --- Reader thread -------------------------------------------------
@@ -237,6 +275,7 @@ fn run_manager(
         let root = root.clone();
         let orderly = Arc::clone(&orderly);
         let published = Arc::clone(&published);
+        let settings = options.settings.clone();
         std::thread::Builder::new()
             .name(format!("lsp-{server_id}-reader"))
             .spawn(move || loop {
@@ -261,7 +300,7 @@ fn run_manager(
                                 });
                             }
                         } else {
-                            answer_if_request(&stdin, &root, &message);
+                            answer_if_request(&stdin, &root, &settings, &message);
                         }
                     }
                     // EOF or a broken pipe both mean the server is gone;
@@ -352,13 +391,15 @@ fn run_manager(
 /// not merely *an* answer: taplo's JSON-RPC layer reads a bare `null`
 /// result as "no result and no error" and panics on it, and it asks
 /// `workspace/configuration` the moment it is initialized. That question
-/// gets the array of nulls the specification prescribes for a client
-/// without settings, and `workspace/workspaceFolders` gets the root the
-/// instance was started for. Everything else the editor cannot answer
-/// is void, and null is its answer.
+/// gets an array with one entry per item — the configured settings'
+/// section the item names, or the null the specification prescribes
+/// when there is none — and `workspace/workspaceFolders` gets the root
+/// the instance was started for. Everything else the editor cannot
+/// answer is void, and null is its answer.
 fn answer_if_request(
     stdin: &Arc<Mutex<std::process::ChildStdin>>,
     root: &Path,
+    settings: &Value,
     message: &Value,
 ) {
     let (Some(id), Some(method)) = (
@@ -370,21 +411,52 @@ fn answer_if_request(
     let reply = json!({
         "jsonrpc": "2.0",
         "id": id,
-        "result": answer_for(method, message.get("params"), root),
+        "result": answer_for(method, message.get("params"), root, settings),
     });
     let _ = write_message(&mut *stdin.lock().unwrap(), &reply);
 }
 
+/// The part of `settings` a server asks for by `section`.
+///
+/// No section means all of it. A section is looked for whole first —
+/// `rust-analyzer` is a key, not a path — and then walked by its dots,
+/// the way pyright asks for `python.analysis` out of
+/// `{"python": {"analysis": …}}`. What is not there is null, which
+/// every server reads as "use your default".
+fn section_of(settings: &Value, section: Option<&str>) -> Value {
+    let Some(section) = section.filter(|section| !section.is_empty()) else {
+        return settings.clone();
+    };
+    if let Some(whole) = settings.get(section) {
+        return whole.clone();
+    }
+    let mut at = settings;
+    for part in section.split('.') {
+        match at.get(part) {
+            Some(next) => at = next,
+            None => return Value::Null,
+        }
+    }
+    at.clone()
+}
+
 /// The result for a server→client `method` with `params`.
-fn answer_for(method: &str, params: Option<&Value>, root: &Path) -> Value {
+fn answer_for(method: &str, params: Option<&Value>, root: &Path, settings: &Value) -> Value {
     match method {
-        "workspace/configuration" => {
-            let items = params
+        "workspace/configuration" => Value::Array(
+            params
                 .and_then(|params| params.get("items"))
                 .and_then(Value::as_array)
-                .map_or(0, Vec::len);
-            Value::Array(vec![Value::Null; items])
-        }
+                .map(|items| {
+                    items
+                        .iter()
+                        .map(|item| {
+                            section_of(settings, item.get("section").and_then(Value::as_str))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        ),
         "workspace/workspaceFolders" => json!([{
             "uri": path_to_uri(root),
             "name": root
@@ -403,26 +475,47 @@ mod tests {
     #[test]
     fn configuration_is_answered_with_one_null_per_item() {
         let params = json!({"items": [{"section": "a"}, {"section": "b"}, {"section": "c"}]});
-        let answer = answer_for("workspace/configuration", Some(&params), Path::new("/p"));
+        let answer = answer_for("workspace/configuration", Some(&params), Path::new("/p"), &Value::Null);
         assert_eq!(answer, json!([null, null, null]));
     }
 
     #[test]
     fn configuration_without_items_is_an_empty_array_not_null() {
-        let answer = answer_for("workspace/configuration", None, Path::new("/p"));
+        let answer = answer_for("workspace/configuration", None, Path::new("/p"), &Value::Null);
         assert_eq!(answer, json!([]));
     }
 
     #[test]
     fn workspace_folders_name_the_root() {
-        let answer = answer_for("workspace/workspaceFolders", None, Path::new("/tmp/proj"));
+        let answer = answer_for("workspace/workspaceFolders", None, Path::new("/tmp/proj"), &Value::Null);
         assert_eq!(answer[0]["name"], "proj");
         assert_eq!(answer[0]["uri"], path_to_uri(Path::new("/tmp/proj")));
     }
 
     #[test]
+    fn configuration_hands_out_the_settings_by_section() {
+        let settings = json!({
+            "rust-analyzer": {"check": {"command": "clippy"}},
+            "python": {"analysis": {"typeCheckingMode": "strict"}},
+        });
+        let params = json!({"items": [
+            {"section": "rust-analyzer"},
+            {"section": "python.analysis"},
+            {"section": "python.analysis.typeCheckingMode"},
+            {"section": "nothing.here"},
+            {},
+        ]});
+        let answer = answer_for("workspace/configuration", Some(&params), Path::new("/p"), &settings);
+        assert_eq!(answer[0], json!({"check": {"command": "clippy"}}));
+        assert_eq!(answer[1], json!({"typeCheckingMode": "strict"}));
+        assert_eq!(answer[2], json!("strict"));
+        assert_eq!(answer[3], Value::Null);
+        assert_eq!(answer[4], settings);
+    }
+
+    #[test]
     fn anything_else_is_void() {
-        let answer = answer_for("client/registerCapability", Some(&json!({})), Path::new("/p"));
+        let answer = answer_for("client/registerCapability", Some(&json!({})), Path::new("/p"), &Value::Null);
         assert_eq!(answer, Value::Null);
     }
 }
