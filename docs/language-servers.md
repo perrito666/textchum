@@ -136,6 +136,12 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
 - A missing server is reported once, with the command that installs it;
   everything else about the editor keeps working without it.
 
+Not there yet: inlay hints — the inferred types and parameter names a
+server can have drawn inside a line — are not shown, since neither
+shell's text view can place text that is not in the document. Show
+Callers lists who calls a function, not what it calls. Colouring comes
+from the grammar alone; a server's semantic tokens are not used.
+
 ## Servers
 
 Textchum finds servers on `PATH` — it does not install them:

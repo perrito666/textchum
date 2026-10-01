@@ -145,6 +145,14 @@ Language Servers ; voir [configuration](configuration.md#projets).
   l'installe ; tout le reste de l'éditeur continue de fonctionner sans
   lui.
 
+Pas encore là : les *inlay hints* — les types inférés et les noms de
+paramètres qu'un serveur peut faire dessiner dans une ligne — ne sont
+pas affichés, car la vue de texte d'aucun des deux *shells* ne sait
+placer du texte qui n'est pas dans le document. Show Callers liste qui
+appelle une fonction, pas ce qu'elle appelle. La coloration vient de la
+grammaire seule ; les *semantic tokens* d'un serveur ne sont pas
+utilisés.
+
 ## Serveurs
 
 Textchum trouve les serveurs sur le `PATH` — il ne les installe pas :

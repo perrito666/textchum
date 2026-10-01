@@ -141,6 +141,13 @@ proyecto en Settings ▸ Language Servers; véase
 - Un servidor ausente se informa una sola vez, con el comando que lo
   instala; todo lo demás del editor sigue funcionando sin él.
 
+Todavía no: las *inlay hints* — los tipos inferidos y los nombres de
+parámetros que un servidor puede hacer dibujar dentro de una línea — no
+se muestran, porque la vista de texto de ninguno de los dos *shells*
+puede colocar texto que no está en el documento. Show Callers lista
+quién llama a una función, no a qué llama ella. El coloreado viene solo
+de la gramática; los *semantic tokens* de un servidor no se usan.
+
 ## Servidores
 
 Textchum encuentra los servidores en el `PATH` — no los instala:
