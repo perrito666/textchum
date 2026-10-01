@@ -892,7 +892,9 @@ final class DocumentController: NSResponder {
         // The armed hover would otherwise fire over whatever the mouse
         // came to rest on outside the text — the status bar, say.
         hoverTimer?.invalidate()
-        closeBalloon()
+        // Not closed on the spot: the pointer may be on its way to the
+        // balloon, to scroll it or to select something in it.
+        scheduleBalloonClose()
         lastPointerPoint = nil
     }
 
@@ -906,9 +908,40 @@ final class DocumentController: NSResponder {
     private var lastPointerPoint: NSPoint?
 
     private func closeBalloon() {
+        balloonCloseTimer?.invalidate()
+        balloonCloseTimer = nil
+        pointerInBalloon = false
         hoverPopover?.close()
         hoverPopover = nil
         balloonRange = nil
+    }
+
+    /// True while the pointer is inside the balloon itself, where it is
+    /// reading, selecting or scrolling, and the balloon stays.
+    private var pointerInBalloon = false
+    private var balloonCloseTimer: Timer?
+
+    /// Closes the balloon a moment from now, unless the pointer comes
+    /// back to the text it is about or arrives inside it first. Closing
+    /// at once made the balloon unreachable: leaving the word is the
+    /// only way to get to it.
+    private func scheduleBalloonClose() {
+        guard hoverPopover != nil else { return }
+        balloonCloseTimer?.invalidate()
+        balloonCloseTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, !self.pointerInBalloon else { return }
+                    self.closeBalloon()
+                }
+            }
+        }
+    }
+
+    private func keepBalloon() {
+        balloonCloseTimer?.invalidate()
+        balloonCloseTimer = nil
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -918,9 +951,10 @@ final class DocumentController: NSResponder {
         if let balloonRange, hoverPopover?.isShown == true,
             let index = characterIndex(at: point), NSLocationInRange(index, balloonRange)
         {
+            keepBalloon()
             return
         }
-        closeBalloon()
+        scheduleBalloonClose()
         // Under the pinned context the text is hidden; documenting it
         // from there would explain a line nobody is looking at.
         if let strip = focusedView?.contextStrip, !strip.isHidden,
@@ -958,7 +992,18 @@ final class DocumentController: NSResponder {
             let diagnostic = diagnostic(atOffset: index)
         {
             hoverTimer?.invalidate()
-            let about = textView.flatMap { nsRange(of: diagnostic, in: $0.string as NSString) }
+            // The stretch the balloon is kept over is the stretch the
+            // finding can be pointed at, which for an empty range is one
+            // character. Remembering the empty range itself made every
+            // pointer movement a departure: the balloon closed, the same
+            // finding was found again, and it opened again, in a loop.
+            let about = textView
+                .flatMap { nsRange(of: diagnostic, in: $0.string as NSString) }
+                .map { $0.length == 0 ? NSRange(location: $0.location, length: 1) : $0 }
+            if let about, about == balloonRange, hoverPopover?.isShown == true {
+                keepBalloon()
+                return
+            }
             hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) {
                 [weak self] _ in
                 DispatchQueue.main.async {
@@ -2274,6 +2319,9 @@ final class DocumentController: NSResponder {
     /// without closing it.
     private func showBalloon(_ attributed: NSAttributedString, at point: NSPoint, about: NSRange? = nil) {
         guard textView != nil else { return }
+        // A close still pending was for the balloon this one replaces.
+        keepBalloon()
+        pointerInBalloon = false
         hoverPopover?.close()
         balloonRange = about
         // With the panel docked, what the bubble would have said goes
@@ -2284,44 +2332,106 @@ final class DocumentController: NSResponder {
             return
         }
 
-        hoverPopover = presentPopover(attributed, at: point)
+        hoverPopover = presentPopover(
+            attributed, at: point, about: about,
+            pointerEntered: { [weak self] in
+                self?.pointerInBalloon = true
+                self?.keepBalloon()
+            },
+            pointerLeft: { [weak self] in
+                self?.pointerInBalloon = false
+                self?.scheduleBalloonClose()
+            })
     }
 
-    /// A popover holding `attributed`, pointing at `point` in the text
-    /// view. Nil when there is nothing to say.
-    private func presentPopover(_ attributed: NSAttributedString, at point: NSPoint) -> NSPopover? {
+    /// The most a balloon grows to before its content scrolls.
+    static let balloonLimit = NSSize(width: 520, height: 320)
+
+    /// What a balloon holds: `attributed` in a text view that can be
+    /// selected from, inside a scroll view no larger than
+    /// ``balloonLimit``. Documentation is often longer than a balloon
+    /// should be; it starts at its top and scrolls, where a label sized
+    /// to fit was shown centred with its beginning cut off.
+    static func balloonBody(_ attributed: NSAttributedString) -> NSScrollView {
+        let inset = NSSize(width: 10, height: 8)
+        let widest = balloonLimit.width - 2 * inset.width
+        // Laid out by the view that will show it, so the measure and
+        // the display cannot disagree about where a line wraps.
+        let text = NSTextView(frame: NSRect(x: 0, y: 0, width: balloonLimit.width, height: 10))
+        text.isEditable = false
+        text.isSelectable = true
+        text.drawsBackground = false
+        text.textContainerInset = inset
+        text.isVerticallyResizable = true
+        text.isHorizontallyResizable = false
+        text.textContainer?.widthTracksTextView = false
+        text.textContainer?.lineFragmentPadding = 0
+        text.textContainer?.containerSize = NSSize(
+            width: widest, height: CGFloat.greatestFiniteMagnitude)
+        text.textStorage?.setAttributedString(attributed)
+        var used = NSSize(width: widest, height: 16)
+        if let layout = text.layoutManager, let container = text.textContainer {
+            layout.ensureLayout(for: container)
+            used = layout.usedRect(for: container).size
+        }
+        let fitted = NSSize(
+            width: ceil(used.width) + 2 * inset.width + 2,
+            height: ceil(used.height) + 2 * inset.height)
+        let shown = NSSize(
+            width: min(fitted.width, balloonLimit.width),
+            height: min(fitted.height, balloonLimit.height))
+        text.textContainer?.containerSize = NSSize(
+            width: shown.width - 2 * inset.width, height: CGFloat.greatestFiniteMagnitude)
+        text.frame = NSRect(x: 0, y: 0, width: shown.width, height: fitted.height)
+        let scroll = NSScrollView(frame: NSRect(origin: .zero, size: shown))
+        scroll.drawsBackground = false
+        scroll.borderType = .noBorder
+        scroll.hasVerticalScroller = fitted.height > shown.height
+        scroll.autohidesScrollers = true
+        scroll.documentView = text
+        return scroll
+    }
+
+    /// A popover holding `attributed`, pointing at the text it is about
+    /// — `about`, or failing that the line under `point`. Nil when there
+    /// is nothing to say.
+    ///
+    /// Pointing at the text and not at the pointer keeps the balloon
+    /// out from under the pointer: one that lands there takes the
+    /// pointer away from the text view, which reads as the pointer
+    /// leaving, closes the balloon, and starts it over.
+    private func presentPopover(
+        _ attributed: NSAttributedString, at point: NSPoint, about: NSRange? = nil,
+        pointerEntered: (() -> Void)? = nil, pointerLeft: (() -> Void)? = nil
+    ) -> NSPopover? {
         guard let textView else { return nil }
-        // Measured by hand, framed by hand: Auto Layout inside an
-        // NSPopover collapsed the wrapping label to a sliver and showed
-        // an empty balloon — the popover sized itself while the label
-        // laid out at zero. Explicit frames cannot disagree with the
-        // popover about geometry.
         guard attributed.length > 0 else { return nil }
-        let label = NSTextField(wrappingLabelWithString: "")
-        label.attributedStringValue = attributed
-        // Ask the field itself how it wraps — an NSString measurement
-        // can disagree with the control by a word, clipping the tail.
-        let fitted = label.sizeThatFits(NSSize(width: 480, height: 800))
-        let textSize = NSSize(
-            width: ceil(fitted.width) + 4, height: ceil(fitted.height) + 2)
-        label.frame = NSRect(x: 12, y: 10, width: textSize.width, height: textSize.height)
-        let container = NSView(
-            frame: NSRect(
-                x: 0, y: 0,
-                width: textSize.width + 24, height: textSize.height + 20))
-        container.addSubview(label)
+        let body = Self.balloonBody(attributed)
+        let container = BalloonView(frame: body.frame)
+        container.pointerEntered = pointerEntered
+        container.pointerLeft = pointerLeft
+        container.addSubview(body)
         let controller = NSViewController()
         controller.view = container
 
+        var anchor = NSRect(x: point.x - 1, y: point.y - 8, width: 2, height: 16)
+        if let about, about.length > 0, let window = textView.window,
+            NSMaxRange(about) <= (textView.string as NSString).length
+        {
+            let onScreen = textView.firstRect(forCharacterRange: about, actualRange: nil)
+            if onScreen.width > 0, onScreen.height > 0 {
+                anchor = textView.convert(window.convertFromScreen(onScreen), from: nil)
+            }
+        }
+
         let popover = NSPopover()
         popover.behavior = .transient
+        // No growing and shrinking: a balloon that animates in and out
+        // while the pointer moves along a line is hard to read.
+        popover.animates = false
         popover.contentViewController = controller
         popover.contentSize = container.frame.size
-        popover.show(
-            relativeTo: NSRect(origin: point, size: NSSize(width: 1, height: 1)),
-            of: textView,
-            preferredEdge: .maxY
-        )
+        popover.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
         return popover
     }
 

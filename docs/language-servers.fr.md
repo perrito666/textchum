@@ -84,6 +84,11 @@ Language Servers ; voir [configuration](configuration.md#projets).
   pointeur déjà sur un symbole est aussi une demande. **Afficher la
   documentation du symbole** (⌃⌘H) la demande pour le symbole sous le
   curseur — même souris désactivée.
+- **La bulle est utilisable.** Elle reste tant que le pointeur est sur
+  le texte qu'elle concerne et tant qu'il est dans la bulle, et se
+  ferme un instant après qu'il a quitté les deux ; on peut donc
+  l'atteindre. Son texte se sélectionne et se copie, et une
+  documentation plus longue que la bulle défile depuis son début.
 - **Aller à la définition** (⌃⌘J, ou ⌘-clic) rejoint le symbole sous
   le curseur — d'un fichier à l'autre, en ouvrant ou en ramenant la
   cible au premier plan au besoin. Sur la définition il n'a nulle part

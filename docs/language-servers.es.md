@@ -83,6 +83,11 @@ proyecto en Settings ▸ Language Servers; véase
   también la pide. **Mostrar documentación del símbolo** (⌃⌘H) la pide
   para el símbolo bajo el cursor a demanda — incluso con el hover del
   ratón apagado.
+- **El globo se puede usar.** Se queda mientras el puntero está sobre
+  el texto al que se refiere y mientras está dentro del globo, y se
+  cierra un momento después de que el puntero deja ambos, así que se
+  puede llegar a él. Su texto se puede seleccionar y copiar, y la
+  documentación más larga que el globo se desplaza desde su inicio.
 - **Saltar a la definición** (⌃⌘J, o ⌘-clic) va al símbolo bajo el
   cursor — entre archivos, abriendo o trayendo al frente el destino
   según haga falta. Sobre la definición no tiene adónde ir, así que
