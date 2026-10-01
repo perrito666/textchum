@@ -2273,7 +2273,7 @@ final class DocumentController: NSResponder {
     /// `about` is the text it explains, which the pointer may cross
     /// without closing it.
     private func showBalloon(_ attributed: NSAttributedString, at point: NSPoint, about: NSRange? = nil) {
-        guard let textView else { return }
+        guard textView != nil else { return }
         hoverPopover?.close()
         balloonRange = about
         // With the panel docked, what the bubble would have said goes
