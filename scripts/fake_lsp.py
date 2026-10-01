@@ -140,6 +140,7 @@ def main():
                         "documentFormattingProvider": True,
                         "documentSymbolProvider": True,
                         "executeCommandProvider": {"commands": ["fake.report"]},
+                        "signatureHelpProvider": {"triggerCharacters": ["(", ","]},
                     }.items() if name not in without
                 }},
             })
@@ -186,6 +187,28 @@ def main():
                         "value": tag + " hover at %d:%d"
                         % (position["line"], position["character"]),
                     }
+                },
+            })
+        elif method == "textDocument/signatureHelp":
+            # One signature, one parameter named by offsets and one by
+            # its text; the active one is the count of commas before
+            # the position on its line.
+            uri = message["params"]["textDocument"]["uri"]
+            position = message["params"]["position"]
+            lines = texts.get(uri, "").split("\n")
+            before = lines[position["line"]][:position["character"]] \
+                if position["line"] < len(lines) else ""
+            send({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": {
+                    "signatures": [{
+                        "label": "frob(x: int, y: str)",
+                        "parameters": [{"label": [5, 11]}, {"label": "y: str"}],
+                        "documentation": {"kind": "markdown", "value": "Frobs."},
+                    }],
+                    "activeSignature": 0,
+                    "activeParameter": before.count(","),
                 },
             })
         elif method == "textDocument/definition":

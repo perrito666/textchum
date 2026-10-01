@@ -288,6 +288,33 @@ uint64_t tc_lsp_hover(struct TcApp *app,
                       uint32_t character);
 
 /**
+ * Requests the signature of the call an LSP position is inside; same
+ * contract as [`tc_lsp_hover`]. The response's `result` is an LSP
+ * `SignatureHelp`, which [`tc_signature_active_json`] reduces to the
+ * line to show.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_signature_help(struct TcApp *app,
+                               const char *path,
+                               uintptr_t path_len,
+                               uint32_t line,
+                               uint32_t character);
+
+/**
+ * Reduces a `SignatureHelp` result to the signature it means, as
+ * `{label, start, end, documentation}`: `start` and `end` are the
+ * active parameter's stretch of `label` in UTF-16 units, null when
+ * none is marked. Null when the server had nothing to show. Release
+ * with [`tc_string_free`].
+ *
+ * # Safety
+ * `json` must point to `len` readable bytes.
+ */
+char *tc_signature_active_json(const char *json, uintptr_t len);
+
+/**
  * Requests the definition location(s) of the symbol at an LSP position;
  * same contract as [`tc_lsp_hover`]. The response's `result` is an LSP
  * `Location`, `Location[]`, or `LocationLink[]`.

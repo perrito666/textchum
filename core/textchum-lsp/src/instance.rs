@@ -318,6 +318,11 @@ fn run_manager(
                         "insertReplaceSupport": true
                     }},
                     "hover": {"contentFormat": ["markdown", "plaintext"]},
+                    "signatureHelp": {"signatureInformation": {
+                        "documentationFormat": ["markdown", "plaintext"],
+                        "parameterInformation": {"labelOffsetSupport": true},
+                        "activeParameterSupport": true
+                    }},
                     "definition": {"linkSupport": true},
                     "codeAction": {
                         "codeActionLiteralSupport": {"codeActionKind": {"valueSet": [

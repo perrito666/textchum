@@ -286,6 +286,54 @@ pub unsafe extern "C" fn tc_lsp_hover(
     .unwrap_or(0)
 }
 
+/// Requests the signature of the call an LSP position is inside; same
+/// contract as [`tc_lsp_hover`]. The response's `result` is an LSP
+/// `SignatureHelp`, which [`tc_signature_active_json`] reduces to the
+/// line to show.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_signature_help(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        app.pool.signature_help(std::path::Path::new(path), line, character)
+    }))
+    .unwrap_or(0)
+}
+
+/// Reduces a `SignatureHelp` result to the signature it means, as
+/// `{label, start, end, documentation}`: `start` and `end` are the
+/// active parameter's stretch of `label` in UTF-16 units, null when
+/// none is marked. Null when the server had nothing to show. Release
+/// with [`tc_string_free`].
+///
+/// # Safety
+/// `json` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_signature_active_json(json: *const c_char, len: usize) -> *mut c_char {
+    let Some(json) = (unsafe { str_from_raw(json, len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        textchum_core::signature::active_json(json)
+            .map(owned_c_string)
+            .unwrap_or(std::ptr::null_mut())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Requests the definition location(s) of the symbol at an LSP position;
 /// same contract as [`tc_lsp_hover`]. The response's `result` is an LSP
 /// `Location`, `Location[]`, or `LocationLink[]`.
