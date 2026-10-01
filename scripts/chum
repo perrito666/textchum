@@ -67,7 +67,7 @@ print(url)
 EOF
 )
             open "$url" || {
-                echo "chum: could not reach Textchum — build and launch it once: make app && open dist/Textchum.app" >&2
+                echo "chum: could not reach Textchum — launch the app once, or install the Linux desktop entry" >&2
                 exit 1
             }
             opened=$((opened + 1))
@@ -82,7 +82,7 @@ done
 # A vanished app releases everything — a hung git would be worse.
 for sentinel in $sentinels; do
     while [ -e "$sentinel" ]; do
-        if ! pgrep -xq Textchum; then
+        if ! pgrep -xq Textchum && ! pgrep -xq textchum && ! pgrep -xq textchum-gtk; then
             rm -f "$sentinel"
             break
         fi
