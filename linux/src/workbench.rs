@@ -3897,7 +3897,7 @@ fn filterable_picker(
                 let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
                 let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
                 if let Some(row) = list.row_at_index(next.max(0)) {
-                    list.select_row(Some(&row));
+                    page::select_in_view(&list, &row);
                 }
                 glib::Propagation::Stop
             }
@@ -4022,7 +4022,7 @@ fn show_palette(workbench: &Rc<Workbench>) {
                 let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
                 let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
                 if let Some(row) = list.row_at_index(next.max(0)) {
-                    list.select_row(Some(&row));
+                    page::select_in_view(&list, &row);
                 }
                 glib::Propagation::Stop
             }
@@ -5102,7 +5102,7 @@ fn show_file_picker(workbench: &Rc<Workbench>, root: PathBuf, index: Vec<String>
                 let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
                 let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
                 if let Some(row) = list.row_at_index(next.max(0)) {
-                    list.select_row(Some(&row));
+                    page::select_in_view(&list, &row);
                 }
                 return glib::Propagation::Stop;
             }
@@ -5280,7 +5280,7 @@ fn show_symbol_picker(workbench: &Rc<Workbench>, path: String) {
                 let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
                 let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
                 if let Some(row) = list.row_at_index(next.max(0)) {
-                    list.select_row(Some(&row));
+                    page::select_in_view(&list, &row);
                 }
                 return glib::Propagation::Stop;
             }

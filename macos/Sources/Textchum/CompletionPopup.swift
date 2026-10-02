@@ -1,7 +1,8 @@
 import AppKit
 
-/// The completion popup: a borderless child window under the caret with
-/// the server's suggestions, filtered live as the user keeps typing.
+/// The completion popup: a borderless child window by the caret with
+/// the server's suggestions, filtered live as the user keeps typing. It
+/// goes under the caret, or over it where the screen ends too soon.
 ///
 /// The popup never owns the keyboard — the text view keeps first
 /// responder, and the window controller forwards ↑/↓/⏎/⎋ here while the
@@ -33,6 +34,11 @@ final class CompletionPopup: NSObject {
     private var allItems: [Item] = []
     private var filtered: [Item] = []
     private(set) var isVisible = false
+    /// The caret the list was shown for and the screen it has to stay
+    /// on, kept so that a list which grows or shrinks as it is filtered
+    /// is placed again by the same rule, its edge by the caret staying
+    /// where it is.
+    private var anchor: (caret: NSRect, visible: NSRect)?
     /// Called with the chosen item when the user accepts.
     var onAccept: ((Item) -> Void)?
 
@@ -107,8 +113,27 @@ final class CompletionPopup: NSObject {
 
     // MARK: Presentation
 
+    /// Where a list `height` tall goes for a caret at `caret`, on a
+    /// screen whose usable part is `visible`: under the caret when it
+    /// fits there, over it when it does not and there is more room.
+    /// Where neither side has the room, the roomier one is taken and
+    /// the list is made to fit it; it scrolls, so nothing is lost.
+    static func frame(
+        height: CGFloat, caret: NSRect, visible: NSRect
+    ) -> (frame: NSRect, above: Bool) {
+        let width: CGFloat = 460
+        let gap: CGFloat = 4
+        let roomBelow = caret.minY - gap - visible.minY
+        let roomAbove = visible.maxY - caret.maxY - gap
+        let above = height > roomBelow && roomAbove > roomBelow
+        let fitted = min(height, max(above ? roomAbove : roomBelow, 60))
+        let x = max(visible.minX, min(caret.minX - 24, visible.maxX - width))
+        let y = above ? caret.maxY + gap : caret.minY - gap - fitted
+        return (NSRect(x: x, y: y, width: width, height: fitted), above)
+    }
+
     /// Shows the popup with `items`, pre-filtered by `prefix`, anchored
-    /// below the caret's screen rectangle.
+    /// to the caret's screen rectangle.
     func show(items: [Item], prefix: String, below caretRect: NSRect, parent: NSWindow) {
         allItems = items
         buildWindowIfNeeded(parent: parent)
@@ -117,12 +142,16 @@ final class CompletionPopup: NSObject {
             dismiss()
             return
         }
-        let height = min(CGFloat(filtered.count), 9) * (table.rowHeight + 2) + 8
-        let originY = caretRect.minY - height - 4
+        // The screen the caret is on, which is not always the one most
+        // of the window is on.
+        let screen =
+            NSScreen.screens.first { $0.frame.contains(caretRect.origin) }
+            ?? parent.screen ?? NSScreen.main
+        let anchor = (caret: caretRect, visible: screen?.visibleFrame ?? .infinite)
+        self.anchor = anchor
         window.setFrame(
-            NSRect(x: caretRect.minX - 24, y: originY, width: 460, height: height),
-            display: true
-        )
+            Self.frame(height: listHeight, caret: anchor.caret, visible: anchor.visible).frame,
+            display: true)
         if window.parent == nil {
             parent.addChildWindow(window, ordered: .above)
         }
@@ -151,13 +180,17 @@ final class CompletionPopup: NSObject {
         table.reloadData()
         table.selectRowIndexes([0], byExtendingSelection: false)
         table.scrollRowToVisible(0)
-        if isVisible, let window {
-            var frame = window.frame
-            let height = min(CGFloat(filtered.count), 9) * (table.rowHeight + 2) + 8
-            frame.origin.y += frame.height - height
-            frame.size.height = height
-            window.setFrame(frame, display: true)
+        if isVisible, let window, let anchor {
+            window.setFrame(
+                Self.frame(height: listHeight, caret: anchor.caret, visible: anchor.visible)
+                    .frame,
+                display: true)
         }
+    }
+
+    /// The height that shows what matches, up to nine rows of it.
+    private var listHeight: CGFloat {
+        min(CGFloat(filtered.count), 9) * (table.rowHeight + 2) + 8
     }
 
     func dismiss() {

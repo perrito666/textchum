@@ -1033,6 +1033,52 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         println!("blame ok (buffer-aware, uncommitted lines, past the end, outside a repo)");
     }
 
+    // A selection moved in a list that does not have the keyboard is
+    // scrolled into view: the completion list and the filtered pickers
+    // are walked with the arrows while the focus stays in the text.
+    {
+        let list = gtk::ListBox::new();
+        for index in 0..60 {
+            list.append(&gtk::Label::new(Some(&format!("row {index}"))));
+        }
+        let scrolled = gtk::ScrolledWindow::builder().child(&list).build();
+        let window = gtk::Window::builder()
+            .default_width(200)
+            .default_height(120)
+            .child(&scrolled)
+            .build();
+        window.present();
+        let adjustment = scrolled.vadjustment();
+        let context = glib::MainContext::default();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while adjustment.page_size() <= 0.0 || adjustment.upper() <= adjustment.page_size() {
+            if !context.iteration(false) {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            if std::time::Instant::now() > deadline {
+                eprintln!("FAIL: the scratch list was never laid out");
+                return 1;
+            }
+        }
+        let (Some(far), Some(first)) = (list.row_at_index(45), list.row_at_index(0)) else {
+            eprintln!("FAIL: the scratch list has no rows");
+            return 1;
+        };
+        page::select_in_view(&list, &far);
+        let scrolled_to = adjustment.value();
+        if scrolled_to <= 0.0 || list.selected_row().map(|row| row.index()) != Some(45) {
+            eprintln!("FAIL: selecting row 45 left the list at {scrolled_to}");
+            return 1;
+        }
+        page::select_in_view(&list, &first);
+        if adjustment.value() != 0.0 {
+            eprintln!("FAIL: selecting the first row left the list at {}", adjustment.value());
+            return 1;
+        }
+        window.destroy();
+        println!("list selection ok (a row selected out of sight is scrolled to, both ways)");
+    }
+
     // Backspace in a line's leading spaces takes a whole indent, and
     // one character anywhere else; Tab in the indentation lines up with
     // the block above. It is the position that decides.

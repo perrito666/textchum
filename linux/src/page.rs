@@ -1653,6 +1653,26 @@ fn show_completions(page: &Rc<Page>, all: Vec<Completion>) {
     page.completion.popover.popup();
 }
 
+/// Selects `row` and scrolls its list so the row can be seen.
+///
+/// Selecting is not enough. A list box keeps the row with the keyboard
+/// focus in view, and in these lists the focus stays where the user is
+/// typing — the editor, a filter field — so a selection moved with the
+/// arrows would walk out of sight.
+pub(crate) fn select_in_view(list: &gtk::ListBox, row: &gtk::ListBoxRow) {
+    list.select_row(Some(row));
+    let Some(scrolled) = list
+        .ancestor(gtk::ScrolledWindow::static_type())
+        .and_downcast::<gtk::ScrolledWindow>()
+    else {
+        return;
+    };
+    if let Some(bounds) = row.compute_bounds(list) {
+        let top = f64::from(bounds.y());
+        scrolled.vadjustment().clamp_page(top, top + f64::from(bounds.height()));
+    }
+}
+
 /// The candidates on offer, for the smoke test to look at.
 pub(crate) fn completion_items(page: &Rc<Page>) -> Vec<Completion> {
     page.completion.items.borrow().clone()
@@ -2617,7 +2637,7 @@ fn install_completion_keys(page: &Rc<Page>) {
             Key::Down => {
                 let next = list.selected_row().map(|row| row.index() + 1).unwrap_or(0);
                 if let Some(row) = list.row_at_index(next) {
-                    list.select_row(Some(&row));
+                    select_in_view(list, &row);
                 }
                 glib::Propagation::Stop
             }
@@ -2625,7 +2645,7 @@ fn install_completion_keys(page: &Rc<Page>) {
                 let previous =
                     list.selected_row().map(|row| row.index() - 1).unwrap_or(0);
                 if let Some(row) = list.row_at_index(previous.max(0)) {
-                    list.select_row(Some(&row));
+                    select_in_view(list, &row);
                 }
                 glib::Propagation::Stop
             }

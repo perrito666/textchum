@@ -34,18 +34,8 @@ final class ListPanel: NSObject {
         }
     }
 
-    /// The field forwards the arrows and ⏎ to the list, so the list can
-    /// be walked without leaving what you are typing.
-    private final class QueryField: NSTextField {
-        var onKey: ((NSEvent) -> Bool)?
-        override func keyDown(with event: NSEvent) {
-            if onKey?(event) == true { return }
-            super.keyDown(with: event)
-        }
-    }
-
     private var panel: NSPanel?
-    private let queryField = QueryField()
+    private let queryField = NSTextField()
     private let table = KeyableTableView()
     private let scroll = NSScrollView()
     /// Every row given, headings included.
@@ -96,6 +86,19 @@ final class ListPanel: NSObject {
 
     func close() {
         panel?.orderOut(nil)
+    }
+
+    /// Debug hook: a key pressed in the panel, sent the way the window
+    /// server sends one, so it takes the path a real key takes — to the
+    /// field editor when the caret is in the filter field.
+    func debugPress(keyCode: UInt16, characters: String) {
+        guard let panel,
+            let event = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode)
+        else { return }
+        panel.sendEvent(event)
     }
 
     // MARK: Rows
@@ -180,15 +183,6 @@ final class ListPanel: NSObject {
         panel.contentMinSize = NSSize(width: 360, height: 200)
 
         queryField.delegate = self
-        queryField.onKey = { [weak self] event in
-            guard let self else { return false }
-            switch event.keyCode {
-            case 125: self.moveSelection(by: 1); return true  // down
-            case 126: self.moveSelection(by: -1); return true  // up
-            case 36, 76: self.chooseSelection(); return true  // return, enter
-            default: return false
-            }
-        }
 
         table.addTableColumn(NSTableColumn(identifier: .init("row")))
         table.onReturn = { [weak self] in self?.chooseSelection() }
@@ -293,5 +287,32 @@ extension ListPanel: NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDele
 
     func controlTextDidChange(_ notification: Notification) {
         applyFilter()
+    }
+
+    /// The arrows and ⏎ typed in the field go to the list, so the list
+    /// can be walked without leaving what is being typed.
+    ///
+    /// They are heard here and not in the field's `keyDown`: a field
+    /// with the caret in it is not the first responder, its editor is,
+    /// and a key never reaches the field itself.
+    func control(
+        _ control: NSControl, textView: NSTextView, doCommandBy selector: Selector
+    ) -> Bool {
+        switch selector {
+        case #selector(NSResponder.moveDown(_:)):
+            moveSelection(by: 1)
+            return true
+        case #selector(NSResponder.moveUp(_:)):
+            moveSelection(by: -1)
+            return true
+        case #selector(NSResponder.insertNewline(_:)):
+            chooseSelection()
+            return true
+        case #selector(NSResponder.cancelOperation(_:)):
+            panel?.orderOut(nil)
+            return true
+        default:
+            return false
+        }
     }
 }
