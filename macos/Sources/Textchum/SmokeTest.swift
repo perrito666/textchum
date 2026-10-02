@@ -928,6 +928,72 @@ func runSmokeTest() -> Int32 {
     }
     print("go to line ok (compiler shapes, drive letters, clamping)")
 
+    // A list with a filter field opens with the caret in the field and
+    // its first item selected. Return there chooses that item, and the
+    // arrows move the selection, with nothing typed: the keys go to
+    // the field's editor, and the list has to hear of them from it.
+    do {
+        let list = ListPanel()
+        var chosen: [Int] = []
+        let rows: [ListPanel.Row] = [
+            .heading("Here"), .item("first"), .item("second"), .item("third"),
+        ]
+        list.show(rows: rows, over: nil, title: "smoke", placeholder: "filter…") {
+            chosen.append($0)
+        }
+        list.debugPress(keyCode: 36, characters: "\r")
+        guard chosen == [0] else {
+            print("FAIL: Return in an empty filter field did not choose the first item: \(chosen)")
+            return 1
+        }
+        list.show(rows: rows, over: nil, title: "smoke", placeholder: "filter…") {
+            chosen.append($0)
+        }
+        list.debugPress(keyCode: 125, characters: "\u{F701}")
+        list.debugPress(keyCode: 125, characters: "\u{F701}")
+        list.debugPress(keyCode: 126, characters: "\u{F700}")
+        list.debugPress(keyCode: 36, characters: "\r")
+        guard chosen == [0, 1] else {
+            print("FAIL: the arrows did not move the selection from the filter field: \(chosen)")
+            return 1
+        }
+        // Without a field the table has the keyboard, and Return still
+        // chooses.
+        list.show(rows: rows, over: nil, title: "smoke") { chosen.append($0) }
+        list.debugPress(keyCode: 36, characters: "\r")
+        guard chosen == [0, 1, 0] else {
+            print("FAIL: Return in a list without a field did not choose: \(chosen)")
+            return 1
+        }
+        list.close()
+    }
+    print("list keys ok (Return chooses the first item with nothing typed, arrows move from the field)")
+
+    // The completion list goes under the caret while the screen has
+    // the room, over it when the caret is near the bottom, and is made
+    // to fit where neither side has enough. It never leaves the screen
+    // sideways either.
+    do {
+        let visible = NSRect(x: 0, y: 40, width: 1440, height: 860)
+        let middle = CompletionPopup.frame(
+            height: 188, caret: NSRect(x: 300, y: 500, width: 1, height: 16), visible: visible)
+        let low = CompletionPopup.frame(
+            height: 188, caret: NSRect(x: 300, y: 90, width: 1, height: 16), visible: visible)
+        let cramped = CompletionPopup.frame(
+            height: 188, caret: NSRect(x: 1430, y: 100, width: 1, height: 16),
+            visible: NSRect(x: 0, y: 40, width: 1440, height: 180))
+        guard !middle.above, middle.frame.maxY == 496, middle.frame.height == 188,
+            low.above, low.frame.minY == 110, low.frame.height == 188,
+            visible.contains(low.frame),
+            cramped.above, cramped.frame.height == 100, cramped.frame.maxX == 1440,
+            cramped.frame.maxY <= 220
+        else {
+            print("FAIL: completion placement: \(middle) \(low) \(cramped)")
+            return 1
+        }
+    }
+    print("completion placement ok (under the caret, over it near the bottom, fitted when cramped)")
+
     // Find References splits its answer: what calls this, then what
     // checks it. Telling them apart is a convention, so the rules are
     // held here — including the ones that must not fire.
