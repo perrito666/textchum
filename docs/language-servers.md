@@ -150,9 +150,12 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   answered without its edit is sent back to be finished before it is
   applied, and one that carries a command rather than an edit is run by
   the server.
-- **Rename Symbol…** (⌃⌘R) renames across the whole workspace: open
-  windows edit in place (undo works per window), files nobody has open
-  are rewritten on disk.
+- **Rename Symbol** (⌃⌘R) asks in place: the name under the caret
+  becomes a field where it stands, prefilled and selected, with its
+  other uses in the document marked meanwhile. Return renames across
+  the whole workspace — open windows edit in place (undo works per
+  window), files nobody has open are rewritten on disk — and Escape,
+  or the keyboard going elsewhere, leaves everything as it was.
 - **Format Document** (⌥⇧⌘F) asks the server first and falls back to
   the save-preprocessor chain — so formatting works on untitled
   documents and languages without a server, whenever a chain is

@@ -253,7 +253,7 @@ msgid "Code Actions"
 msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
-#: macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Rename Symbol"
 msgstr ""
 
@@ -458,10 +458,6 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Code Actions…"
-msgstr ""
-
-#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
-msgid "Rename Symbol…"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
@@ -740,12 +736,8 @@ msgstr ""
 msgid "Callers"
 msgstr ""
 
-#: linux/src/workbench.rs
-msgid "New name"
-msgstr ""
-
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
-msgid "Rename"
+msgid "Put the caret on a name first."
 msgstr ""
 
 #: linux/src/workbench.rs
@@ -1673,6 +1665,10 @@ msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "symbol…"
+msgstr ""
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Nothing to rename here"
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift

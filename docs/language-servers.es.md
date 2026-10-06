@@ -157,10 +157,13 @@ proyecto en Settings ▸ Language Servers; véase
   nada. Una acción que el servidor mandó sin su edición se le devuelve
   para que la termine antes de aplicarla, y una que trae un comando en
   vez de una edición la ejecuta el servidor.
-- **Renombrar símbolo…** (⌃⌘R) renombra en todo el espacio de trabajo:
-  las ventanas abiertas se editan en el sitio (el deshacer funciona por
-  ventana) y los archivos que nadie tiene abiertos se reescriben en
-  disco.
+- **Renombrar símbolo** (⌃⌘R) pregunta en el sitio: el nombre bajo el
+  cursor se convierte en un campo ahí donde está, relleno y
+  seleccionado, con sus otros usos en el documento marcados mientras
+  tanto. Retorno renombra en todo el espacio de trabajo — las ventanas
+  abiertas se editan en el sitio (el deshacer funciona por ventana) y
+  los archivos que nadie tiene abiertos se reescriben en disco — y
+  Escape, o el teclado yéndose a otra parte, lo deja todo como estaba.
 - **Formatear documento** (⌥⇧⌘F) reformatea a través del servidor,
   conservando tabuladores si el documento sangra con tabuladores y
   espacios en caso contrario.

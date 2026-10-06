@@ -252,7 +252,7 @@ msgid "Code Actions"
 msgstr "Acciones de código"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
-#: macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Rename Symbol"
 msgstr "Renombrar símbolo"
 
@@ -458,10 +458,6 @@ msgstr "Transformar"
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Code Actions…"
 msgstr "Acciones de código…"
-
-#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
-msgid "Rename Symbol…"
-msgstr "Renombrar símbolo…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Document Outline…"
@@ -739,13 +735,9 @@ msgstr "Nada llama a esto."
 msgid "Callers"
 msgstr "Quién llama"
 
-#: linux/src/workbench.rs
-msgid "New name"
-msgstr "Nombre nuevo"
-
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
-msgid "Rename"
-msgstr "Renombrar"
+msgid "Put the caret on a name first."
+msgstr "Ponga antes el cursor sobre un nombre."
 
 #: linux/src/workbench.rs
 msgid "The server offered no outline."
@@ -1304,7 +1296,9 @@ msgstr "Ventana de acordes"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Hold the two keys: the commands are listed, a key each."
-msgstr "Mantenga pulsadas las dos teclas: se listan los comandos, cada uno con su tecla."
+msgstr ""
+"Mantenga pulsadas las dos teclas: se listan los comandos, cada uno con su "
+"tecla."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Off"
@@ -1699,6 +1693,10 @@ msgstr "mensaje…"
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "symbol…"
 msgstr "símbolo…"
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Nothing to rename here"
+msgstr "Aquí no hay nada que renombrar"
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing on offer"
@@ -2238,6 +2236,15 @@ msgstr "Abre un archivo desde el árbol, o con ⌘O."
 #: macos/Sources/Textchum/Workbench.swift
 msgid "No file here."
 msgstr "Aquí no hay archivo."
+
+#~ msgid "Rename Symbol…"
+#~ msgstr "Renombrar símbolo…"
+
+#~ msgid "New name"
+#~ msgstr "Nombre nuevo"
+
+#~ msgid "Rename"
+#~ msgstr "Renombrar"
 
 #~ msgid ""
 #~ "ruff's own findings do not show in the editor: a document has one server, "

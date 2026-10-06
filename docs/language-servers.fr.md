@@ -160,10 +160,14 @@ Language Servers ; voir [configuration](configuration.md#projets).
   sa modification lui est renvoyée pour qu'il la termine avant qu'elle
   soit appliquée, et une action qui porte une commande plutôt qu'une
   modification est exécutée par le serveur.
-- **Renommer le symbole…** (⌃⌘R) renomme dans tout l'espace de
-  travail : les fenêtres ouvertes sont éditées sur place (l'annulation
-  fonctionne par fenêtre) et les fichiers que personne n'a ouverts sont
-  réécrits sur disque.
+- **Renommer le symbole** (⌃⌘R) demande sur place : le nom sous le
+  curseur devient un champ là où il se trouve, prérempli et
+  sélectionné, ses autres usages dans le document étant marqués
+  pendant ce temps. Entrée renomme dans tout l'espace de travail — les
+  fenêtres ouvertes sont éditées sur place (l'annulation fonctionne
+  par fenêtre) et les fichiers que personne n'a ouverts sont réécrits
+  sur disque — et Échap, ou le clavier allant ailleurs, laisse tout
+  comme c'était.
 - **Formater le document** (⌥⇧⌘F) reformate via le serveur, en gardant
   les tabulations si le document indente avec des tabulations, des
   espaces sinon.
