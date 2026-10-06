@@ -458,6 +458,11 @@ final class DocumentController: NSResponder {
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
         textView.delegate = self
+        (textView as? EditorTextView)?.onMouseDown = { [weak self] in
+            self?.hoverTimer?.invalidate()
+            self?.closeBalloon()
+            self?.closeSignature()
+        }
 
         let gutter = LineNumberGutterView(textView: textView)
         gutter.setVisible(appliedSettings?.lineNumbers ?? true)
@@ -2431,13 +2436,23 @@ final class DocumentController: NSResponder {
         }
 
         let popover = NSPopover()
-        popover.behavior = .transient
+        // Closed by this controller, never by AppKit. A transient
+        // popover closes itself on a press outside it, and swallows
+        // that press: a double-click on a word with a finding closed
+        // the balloon and selected nothing.
+        popover.behavior = .applicationDefined
         // No growing and shrinking: a balloon that animates in and out
         // while the pointer moves along a line is hard to read.
         popover.animates = false
         popover.contentViewController = controller
         popover.contentSize = container.frame.size
         popover.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
+        // The balloon's text can be selected, which makes it a window
+        // that could take the keyboard; what is typed next is for the
+        // document.
+        if let window = textView.window, !window.isKeyWindow {
+            window.makeKey()
+        }
         return popover
     }
 
@@ -5999,6 +6014,8 @@ extension DocumentController: NSTextViewDelegate {
         // The lines moved; where the folds sit in characters has to be
         // worked out again before the next layout pass.
         foldSpansAreStale = true
+        // A balloon is about the text as it was.
+        closeBalloon()
         clearSymbolUses()
         refreshDiagnosticsFromCore()
         mirrorSnippetStops()
