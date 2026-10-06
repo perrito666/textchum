@@ -194,6 +194,9 @@ final class EditorTextView: NSTextView {
     /// noticing which end stood still (see `setSelectedRanges`), and
     /// every extending command consults it.
     private var selectionAnchor: Int?
+    /// Told of every press in the text, before it is acted on: a
+    /// balloon up over the text closes, so that the press can land.
+    var onMouseDown: (() -> Void)?
 
     /// True while a selection is being changed by something known to
     /// keep one end where it was — AppKit's own extending commands, a
@@ -410,6 +413,7 @@ final class EditorTextView: NSTextView {
     /// Both run inside `super.mouseDown`, which tracks the mouse until
     /// the button comes up, so the anchor is settled when it returns.
     override func mouseDown(with event: NSEvent) {
+        onMouseDown?()
         let before = selectedRange()
         let anchorBefore = selectionAnchor
         let pressed = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
