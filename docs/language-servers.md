@@ -62,16 +62,19 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   `projectSymbols`) finds a function, type or constant anywhere in the
   project by part of its name, as the server of the document in front
   knows them, and jumps to its declaration.
-- **Inferred types are shown.** The types a server works out — of a
-  `let` with no annotation, of a closure's argument — appear dimmed
-  after the line they belong to, each with its name: `let d = make();`
-  is followed by `d: Drinker`. They are not part of the text: they
-  cannot be selected or copied, and they stay with their line while you
-  type and are asked for again when the typing pauses. Settings ▸
-  General ▸ "Show the types the language server inferred" turns them
-  off (`editor.inlay_hints`). Not there yet: the hints are gathered at
-  the end of the line rather than placed inside it, and parameter-name
-  hints, which only mean something beside their argument, are left out.
+- **Inferred types and parameter names are shown.** The types a
+  server works out — of a `let` with no annotation, of a closure's
+  argument — and the names of the parameters an argument is passed to
+  appear dimmed inside the line, where the server puts them: `let d =
+  make();` reads `let d: Drinker = make();`, and `pair(d, 2)` reads
+  `pair(who: d, n: 2)`. They are not part of the text: the caret steps
+  over them, they cannot be selected or copied, and they stay with
+  their line while you type and are asked for again when the typing
+  pauses. Settings ▸ General ▸ "Show the types the language server
+  inferred" turns them off (`editor.inlay_hints`). Not there yet: on
+  Linux the hints are gathered at the end of the line, each type with
+  its name, and parameter names are left out there, since the GTK text
+  view cannot open a gap in a line.
  With nothing selected, a caret
   resting on a name marks where else that symbol is used, as the server
   knows it: a shadowing variable of the same name is left alone.

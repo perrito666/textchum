@@ -615,6 +615,8 @@ impl Document {
                     ),
                     label,
                     kind: item["kind"].as_u64().unwrap_or(0) as u8,
+                    pad_left: item["paddingLeft"].as_bool().unwrap_or(false),
+                    pad_right: item["paddingRight"].as_bool().unwrap_or(false),
                 }
             })
             .collect();
@@ -652,6 +654,32 @@ impl Document {
             .into_iter()
             .map(|(line, pieces)| (line, crate::inlay::joined(&pieces)))
             .collect()
+    }
+
+    /// The hints as they go inside the lines: (UTF-16 offset, text),
+    /// in offset order, two hints at one offset joined into one.
+    pub fn inlay_inline(&self) -> Vec<(usize, String)> {
+        let mut notes: Vec<(usize, String)> = Vec::new();
+        let length = self.buffer.len_utf16();
+        for hint in &self.inlay_hints {
+            let Some(text) = crate::inlay::inline_text(hint) else { continue };
+            let offset = hint.offset.min(length);
+            match notes.last_mut() {
+                Some((at, joined)) if *at == offset => joined.push_str(&text),
+                _ => notes.push((offset, text)),
+            }
+        }
+        notes
+    }
+
+    /// [`Self::inlay_inline`] as a JSON array of `{offset, text}`.
+    pub fn inlay_inline_json(&self) -> String {
+        let notes: Vec<serde_json::Value> = self
+            .inlay_inline()
+            .into_iter()
+            .map(|(offset, text)| serde_json::json!({"offset": offset, "text": text}))
+            .collect();
+        serde_json::Value::Array(notes).to_string()
     }
 
     /// [`Self::inlay_annotations`] as a JSON array of `{line, text}`.
@@ -1156,6 +1184,31 @@ use d;
         assert!(document.inlay_annotations_json().contains("\"text\":\"drinker: Drinker\""));
         document.set_inlay_hints("null");
         assert!(document.inlay_annotations().is_empty());
+    }
+
+    #[test]
+    fn inside_the_line_every_hint_sits_at_its_own_place_and_rides_the_text() {
+        let mut document = Document::new();
+        document
+            .replace_utf16(0, 0, "fn main() {\n    let d = make();\n    pair(d, 2);\n}\n")
+            .unwrap();
+        document.set_inlay_hints(
+            r#"[
+              {"position": {"line": 1, "character": 9}, "label": ": Drinker", "kind": 1},
+              {"position": {"line": 2, "character": 9}, "label": "who", "kind": 2, "paddingRight": true},
+              {"position": {"line": 2, "character": 12}, "label": "n", "kind": 2, "paddingRight": true},
+              {"position": {"line": 2, "character": 12}, "label": ": u8", "kind": 1}
+            ]"#,
+        );
+        assert_eq!(
+            document.inlay_inline(),
+            vec![(21, ": Drinker".to_owned()), (41, "who ".to_owned()), (44, "n : u8".to_owned())],
+            "parameters are in, with their space; two hints at one place are one note"
+        );
+        document.replace_utf16(0, 0, "// note\n").unwrap();
+        let offsets: Vec<usize> = document.inlay_inline().iter().map(|(at, _)| *at).collect();
+        assert_eq!(offsets, vec![29, 49, 52]);
+        assert!(document.inlay_inline_json().contains("\"offset\":29"));
     }
 
     #[test]

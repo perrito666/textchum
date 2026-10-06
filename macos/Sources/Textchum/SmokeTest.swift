@@ -4179,8 +4179,11 @@ func runSmokeTest() -> Int32 {
     }
     print("pointer character index ok (in range everywhere, including off the text)")
 
-    // The types a server inferred are drawn after their lines, each
-    // with its name, and ride with the text; the setting turns them off.
+    // A server's hints are drawn inside their lines — the type after
+    // its name, a parameter's name before its argument — in a gap
+    // opened by widening the character before, with the text itself
+    // untouched; they ride with the text, typing beside one does not
+    // take its gap along, and the setting turns them off.
     do {
         let hintedCore = CoreDocument()
         let hintedBench = Workbench(sidebar: nil)
@@ -4198,14 +4201,37 @@ func runSmokeTest() -> Int32 {
              {"position": {"line": 1, "character": 17}, "label": "who:", "kind": 2}]
             """)
         hinted.refreshInlayNotes()
-        // After "    let d = make();" — twelve for the first line, nineteen more.
-        guard hintedView.lineNotes == [EditorTextView.LineNote(offset: 31, text: "d: Drinker")] else {
-            print("FAIL: the inferred type is not after its line: \(hintedView.lineNotes)")
+        // "fn main() {\n" is twelve units; "    let d" puts d at 20.
+        let typeNote = EditorTextView.InlineNote(offset: 21, text: ": Drinker")
+        let parameterNote = EditorTextView.InlineNote(offset: 29, text: "who:")
+        guard hintedView.inlineNotes == [typeNote, parameterNote] else {
+            print("FAIL: the hints are not inside their line: \(hintedView.inlineNotes)")
             return 1
         }
+        let gapWidth = hintedView.textStorage?.attribute(.kern, at: 20, effectiveRange: nil) as? CGFloat
+        guard let gapWidth, gapWidth > 0,
+            hintedView.textStorage?.attribute(.kern, at: 28, effectiveRange: nil) != nil,
+            hintedView.textStorage?.attribute(.kern, at: 19, effectiveRange: nil) == nil,
+            hintedView.string == "fn main() {\n    let d = make();\n}\n"
+        else {
+            print("FAIL: the gaps are not where the notes are, or the text changed: \(String(describing: gapWidth))")
+            return 1
+        }
+        // Typing right after the name: the typed text has no kern of
+        // its own, so the gap does not stretch with the typing.
+        hintedView.setSelectedRange(NSRange(location: 21, length: 0))
+        hintedView.insertText("x", replacementRange: NSRange(location: 21, length: 0))
+        guard hintedView.textStorage?.attribute(.kern, at: 21, effectiveRange: nil) == nil else {
+            print("FAIL: text typed beside a note took its gap along")
+            return 1
+        }
+        hintedView.insertText("", replacementRange: NSRange(location: 21, length: 1))
         hintedView.insertText("// top\n", replacementRange: NSRange(location: 0, length: 0))
-        guard hintedView.lineNotes == [EditorTextView.LineNote(offset: 38, text: "d: Drinker")] else {
-            print("FAIL: the hint did not move with its line: \(hintedView.lineNotes)")
+        guard hintedView.inlineNotes.map(\.offset) == [28, 36],
+            hintedView.textStorage?.attribute(.kern, at: 27, effectiveRange: nil) != nil,
+            hintedView.textStorage?.attribute(.kern, at: 20, effectiveRange: nil) == nil
+        else {
+            print("FAIL: the hints did not move with their line: \(hintedView.inlineNotes)")
             return 1
         }
         let hintsOff = CoreConfig(path: NSTemporaryDirectory() + "textchum-smoke-inlay-\(getpid()).json")
@@ -4215,12 +4241,16 @@ func runSmokeTest() -> Int32 {
         }
         hintsOff.inlayHints = false
         hinted.apply(settings: EditorSettings(config: hintsOff))
-        guard hintedView.lineNotes.isEmpty else {
-            print("FAIL: turning the hints off left them drawn: \(hintedView.lineNotes)")
+        var gapsLeft = 0
+        hintedView.textStorage?.enumerateAttribute(
+            .kern, in: NSRange(location: 0, length: (hintedView.string as NSString).length)
+        ) { value, _, _ in if value != nil { gapsLeft += 1 } }
+        guard hintedView.inlineNotes.isEmpty, gapsLeft == 0 else {
+            print("FAIL: turning the hints off left them drawn: \(hintedView.inlineNotes) \(gapsLeft)")
             return 1
         }
     }
-    print("inlay hints ok (after their line with their name, riding the text, off when told)")
+    print("inlay hints ok (inside their line in a gap of their own, riding the text, off when told)")
 
     // A server's finding stays on the code it named while the text
     // above it is edited: the core moves the range in the choke point,

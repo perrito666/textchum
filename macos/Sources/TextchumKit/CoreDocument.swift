@@ -280,6 +280,21 @@ public final class CoreDocument {
         }
     }
 
+    /// The hints as they go inside the lines: UTF-16 offset and text,
+    /// in offset order, with the spaces the server asked for.
+    public var inlayInline: [(offset: Int, text: String)] {
+        guard let json = Self.takeString(tc_document_inlay_inline_json(handle)),
+            let parsed = (try? JSONSerialization.jsonObject(with: Data(json.utf8)))
+                as? [[String: Any]]
+        else { return [] }
+        return parsed.compactMap { item in
+            guard let offset = item["offset"] as? Int, let text = item["text"] as? String else {
+                return nil
+            }
+            return (offset, text)
+        }
+    }
+
     /// What to show after each line that has hints: zero-based line
     /// and text, in line order.
     public var inlayAnnotations: [(line: Int, text: String)] {

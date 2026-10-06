@@ -1298,6 +1298,24 @@ pub unsafe extern "C" fn tc_document_set_inlay_hints(
     .unwrap_or(false)
 }
 
+/// The inlay hints as they go inside the lines: a JSON array of
+/// `{offset, text}`, `offset` in UTF-16 units of the text as it is
+/// now, in offset order, with the spaces the server asked for around
+/// each label. For a view that can open a gap in a line; the one that
+/// cannot asks [`tc_document_inlay_annotations_json`]. Free with
+/// [`tc_string_free`]. Null on a bad pointer.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_inlay_inline_json(document: *const TcDocument) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(document.inner.inlay_inline_json())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
 /// What to show after each line that has inlay hints: a JSON array of
 /// `{line, text}`, `line` zero-based, in line order. A type hint is
 /// written with the name it belongs to; parameter hints are left out.
