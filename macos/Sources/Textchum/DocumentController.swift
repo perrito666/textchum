@@ -3905,9 +3905,19 @@ final class DocumentController: NSResponder {
         // Painted by the offsets the core keeps current, not by the
         // line the server named: the two part ways as soon as the text
         // above a finding is edited.
-        for diagnostic in diagnostics {
+        //
+        // The least severe first, so that where two findings share a
+        // stretch — an error and the hint that comes with it, mostly —
+        // the one painted last, on top, is the one that matters.
+        for diagnostic in diagnostics.sorted(by: { $0.severity > $1.severity }) {
             let from = min(diagnostic.start, text.length)
-            let to = min(max(diagnostic.end, from), text.length)
+            var to = min(max(diagnostic.end, from), text.length)
+            // A range that runs to the start of the next line takes
+            // the line break with it, and a mark over a line break is
+            // a box out to the window's edge.
+            while to > from + 1, Self.isLineBreak(text.character(at: to - 1)) {
+                to -= 1
+            }
             guard to >= from, from < text.length || text.length == 0 else { continue }
             let range = NSRange(
                 location: from, length: min(max(to - from, 1), max(text.length - from, 0)))
@@ -3940,6 +3950,10 @@ final class DocumentController: NSResponder {
         for view in views {
             (view.textView as? EditorTextView)?.backgroundMarks = marks
         }
+    }
+
+    private static func isLineBreak(_ unit: unichar) -> Bool {
+        unit == 0x0A || unit == 0x0D
     }
 
     /// Converts an LSP (line, UTF-16 column) range to an `NSRange`,
@@ -4908,12 +4922,18 @@ final class DocumentController: NSResponder {
         let caret = textView.selectedRange().location
         let (line, character) = Self.lspPosition(
             ofIndex: caret, in: textView.string as NSString)
+        // Where the word being completed starts. The answer is for
+        // that word: typing on into it keeps the answer, which the
+        // popup filters; a `(` or a space after it starts something
+        // else, and an answer arriving then listed the whole scope.
+        let wordStart = currentWordPrefix()?.range.location ?? caret
         flushLSPChange()
         lspApp.lspCompletion(path: path, line: line, character: character) {
             [weak self] json in
             guard let self, let textView = self.textView else { return }
-            // Stale if the caret moved lines since the request.
-            guard textView.selectedRange().location >= caret - 1 else { return }
+            let now = textView.selectedRange().location
+            guard now >= caret, (self.currentWordPrefix()?.range.location ?? now) == wordStart
+            else { return }
             let items = CompletionPopup.parse(resultJSON: json)
             guard !items.isEmpty else {
                 self.completionPopup.dismiss()
@@ -5058,7 +5078,13 @@ final class DocumentController: NSResponder {
         guard lspOpenPath != nil, lastTypedText.count == 1,
             let ch = lastTypedText.first,
             ch.isLetter || ch == "_" || ch == "."
-        else { return }
+        else {
+            // A `(` or a space ends the word a request was pending
+            // for; asked now, it would answer for the place after it,
+            // with everything in scope.
+            completionTimer?.invalidate()
+            return
+        }
         scheduleCompletionRequest()
     }
 

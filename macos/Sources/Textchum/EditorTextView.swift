@@ -107,7 +107,12 @@ final class EditorTextView: NSTextView {
                 let textRange = NSTextRange(location: start, end: end)
             else { continue }
             mark.color.setFill()
-            layoutManager.enumerateTextSegments(in: textRange, type: .highlight, options: [.rangeNotRequired]) {
+            // A box goes around the words themselves. The highlight
+            // segment runs out to the window's edge on a line whose
+            // break the range covers, which for a finding over several
+            // lines boxed the whole block in red.
+            let type: NSTextLayoutManager.SegmentType = mark.outline == nil ? .highlight : .standard
+            layoutManager.enumerateTextSegments(in: textRange, type: type, options: [.rangeNotRequired]) {
                 _, frame, _, _ in
                 let box = frame.offsetBy(dx: origin.x, dy: origin.y)
                 guard box.intersects(rect) else { return true }

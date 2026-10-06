@@ -1320,7 +1320,10 @@ pub fn recolor(buffer: &sourceview5::Buffer) {
 /// thin and easy to miss in dense code; a tag cannot draw the box the
 /// macOS shell puts around a finding, and the wash is what it can do.
 fn install_diagnostic_tags(buffer: &sourceview5::Buffer) {
-    for (name, color) in [("diag-error", "#E4585B"), ("diag-warning", "#E5A54B")] {
+    // A tag made later outranks one made earlier where both cover a
+    // stretch, and an error shares its stretch with the hint that
+    // comes with it: the error is made last, so it is the one seen.
+    for (name, color) in [("diag-warning", "#E5A54B"), ("diag-error", "#E4585B")] {
         let rgba: gtk::gdk::RGBA = color.parse().unwrap();
         let wash = gtk::gdk::RGBA::new(rgba.red(), rgba.green(), rgba.blue(), 0.26);
         let tag = gtk::TextTag::builder()
