@@ -1687,6 +1687,47 @@ func runSmokeTest() -> Int32 {
     }
     print("server format link ok (takes its turn in the chain, passes the text on when nobody formats)")
 
+    // A balloon never takes the keyboard: it is a child window that
+    // cannot become key, so the document's window stays key and the
+    // caret stays in the text while a finding is explained. It goes
+    // under the text it is about, or over it near the screen's bottom.
+    do {
+        let host = NSWindow(
+            contentRect: NSRect(x: 200, y: 300, width: 400, height: 300),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        host.makeKeyAndOrderFront(nil)
+        let typing = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        host.contentView?.addSubview(typing)
+        host.makeFirstResponder(typing)
+        let balloon = Balloon(
+            content: NSView(frame: NSRect(x: 0, y: 0, width: 120, height: 40)),
+            anchor: NSRect(x: 250, y: 400, width: 30, height: 16), parent: host)
+        guard balloon.isShown, !balloon.debugWindow.canBecomeKey, host.firstResponder === typing,
+            balloon.debugWindow.parent === host
+        else {
+            print("FAIL: the balloon took the keyboard, or is not a child of its window")
+            return 1
+        }
+        balloon.close()
+        guard !balloon.isShown, balloon.debugWindow.parent == nil else {
+            print("FAIL: the balloon did not go")
+            return 1
+        }
+        host.orderOut(nil)
+        let visible = NSRect(x: 0, y: 40, width: 1440, height: 860)
+        let under = Balloon.frame(
+            size: NSSize(width: 200, height: 80), anchor: NSRect(x: 300, y: 500, width: 40, height: 16),
+            visible: visible)
+        let over = Balloon.frame(
+            size: NSSize(width: 200, height: 80), anchor: NSRect(x: 1400, y: 60, width: 40, height: 16),
+            visible: visible)
+        guard under.maxY == 494, under.minX == 290, over.minY == 82, over.maxX == 1440 else {
+            print("FAIL: balloon placement: \(under) \(over)")
+            return 1
+        }
+    }
+    print("balloon window ok (never key, a child of the document's window, under the text or over it)")
+
     // A balloon's content can be selected, and one longer than a
     // balloon should be scrolls from its top instead of being cut.
     do {

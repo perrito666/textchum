@@ -310,7 +310,7 @@ final class DocumentController: NSResponder {
     /// Whether a hover bubble is up — the smoke test asks.
     var hasHoverBubble: Bool { hoverPopover != nil }
     /// The popover currently showing hover content, if any.
-    private var hoverPopover: NSPopover?
+    private var hoverPopover: Balloon?
     /// The window's split view controller (sidebar · editor · preview),
     /// which belongs to the window rather than to this document.
     private var splitController: NSSplitViewController? { workbench?.splitController }
@@ -2440,57 +2440,37 @@ final class DocumentController: NSResponder {
         return scroll
     }
 
-    /// A popover holding `attributed`, pointing at the text it is about
-    /// — `about`, or failing that the line under `point`. Nil when there
+    /// A balloon holding `attributed`, beside the text it is about —
+    /// `about`, or failing that the line under `point`. Nil when there
     /// is nothing to say.
     ///
-    /// Pointing at the text and not at the pointer keeps the balloon
-    /// out from under the pointer: one that lands there takes the
-    /// pointer away from the text view, which reads as the pointer
-    /// leaving, closes the balloon, and starts it over.
+    /// Beside the text and not under the pointer: a balloon that lands
+    /// under the pointer takes it away from the text view, which reads
+    /// as the pointer leaving, closes the balloon, and starts it over.
+    /// The balloon is closed by this controller alone — a press in the
+    /// text, typing, the pointer leaving — and never takes the
+    /// keyboard, so the caret stays where it was put.
     private func presentPopover(
         _ attributed: NSAttributedString, at point: NSPoint, about: NSRange? = nil,
         pointerEntered: (() -> Void)? = nil, pointerLeft: (() -> Void)? = nil
-    ) -> NSPopover? {
-        guard let textView else { return nil }
+    ) -> Balloon? {
+        guard let textView, let window = textView.window else { return nil }
         guard attributed.length > 0 else { return nil }
         let body = Self.balloonBody(attributed)
         let container = BalloonView(frame: body.frame)
         container.pointerEntered = pointerEntered
         container.pointerLeft = pointerLeft
         container.addSubview(body)
-        let controller = NSViewController()
-        controller.view = container
 
-        var anchor = NSRect(x: point.x - 1, y: point.y - 8, width: 2, height: 16)
-        if let about, about.length > 0, let window = textView.window,
-            NSMaxRange(about) <= (textView.string as NSString).length
-        {
+        var anchor = window.convertToScreen(
+            textView.convert(NSRect(x: point.x - 1, y: point.y - 8, width: 2, height: 16), to: nil))
+        if let about, about.length > 0, NSMaxRange(about) <= (textView.string as NSString).length {
             let onScreen = textView.firstRect(forCharacterRange: about, actualRange: nil)
             if onScreen.width > 0, onScreen.height > 0 {
-                anchor = textView.convert(window.convertFromScreen(onScreen), from: nil)
+                anchor = onScreen
             }
         }
-
-        let popover = NSPopover()
-        // Closed by this controller, never by AppKit. A transient
-        // popover closes itself on a press outside it, and swallows
-        // that press: a double-click on a word with a finding closed
-        // the balloon and selected nothing.
-        popover.behavior = .applicationDefined
-        // No growing and shrinking: a balloon that animates in and out
-        // while the pointer moves along a line is hard to read.
-        popover.animates = false
-        popover.contentViewController = controller
-        popover.contentSize = container.frame.size
-        popover.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
-        // The balloon's text can be selected, which makes it a window
-        // that could take the keyboard; what is typed next is for the
-        // document.
-        if let window = textView.window, !window.isKeyWindow {
-            window.makeKey()
-        }
-        return popover
+        return Balloon(content: container, anchor: anchor, parent: window)
     }
 
     // MARK: Signature help
@@ -2498,7 +2478,7 @@ final class DocumentController: NSResponder {
     /// The balloon naming what the call being typed takes. Its own
     /// popover, not the hover's: that one closes when the pointer
     /// moves, and this one belongs to the caret.
-    private var signaturePopover: NSPopover?
+    private var signaturePopover: Balloon?
     /// The line the signature was asked on; the caret leaving it puts
     /// the balloon away.
     private var signatureLine: Int?
