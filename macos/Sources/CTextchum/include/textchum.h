@@ -3072,6 +3072,17 @@ void tc_config_set_hide_globs(struct TcConfig *config,
                               uintptr_t globs_len);
 
 /**
+ * Whether a path is a file of a library rather than of a project — a
+ * crate in the cargo registry, the standard library's sources, a
+ * package in `site-packages` or `node_modules`: read there, not
+ * worked on, and belonging to the project it was reached from.
+ *
+ * # Safety
+ * `path` must point to `len` readable bytes.
+ */
+bool tc_workspace_is_library_path(const char *path, uintptr_t len);
+
+/**
  * Whether a name is hidden by any of the newline-joined globs.
  *
  * # Safety
