@@ -61,18 +61,20 @@ Language Servers ; voir [configuration](configuration.md#projets).
   n'importe où dans le projet par une partie de son nom, tels que les
   connaît le serveur du document au premier plan, et saute à sa
   déclaration.
-- **Les types inférés sont affichés.** Les types qu'un serveur déduit
-  — d'un `let` sans annotation, de l'argument d'une fermeture —
-  apparaissent estompés après la ligne à laquelle ils appartiennent,
-  chacun avec son nom : `let d = make();` est suivi de `d: Drinker`.
-  Ils ne font pas partie du texte : on ne peut ni les sélectionner ni
-  les copier, et ils restent avec leur ligne pendant la frappe puis
-  sont redemandés quand la frappe marque une pause. Settings ▸ General
-  ▸ « Show the types the language server inferred » les désactive
-  (`editor.inlay_hints`). Pas encore là : les indications sont
-  regroupées en fin de ligne au lieu d'être placées dans la ligne, et
-  celles de nom de paramètre, qui n'ont de sens qu'à côté de leur
-  argument, sont laissées de côté.
+- **Les types inférés et les noms des paramètres sont affichés.** Les
+  types qu'un serveur déduit — d'un `let` sans annotation, de
+  l'argument d'une fermeture — et les noms des paramètres auxquels
+  chaque argument est passé apparaissent estompés dans la ligne, là où
+  le serveur les place : `let d = make();` se lit `let d: Drinker =
+  make();`, et `pair(d, 2)` se lit `pair(who: d, n: 2)`. Ils ne font
+  pas partie du texte : le curseur les enjambe, on ne peut ni les
+  sélectionner ni les copier, et ils restent avec leur ligne pendant la
+  frappe puis sont redemandés quand la frappe marque une pause.
+  Settings ▸ General ▸ « Show the types the language server inferred »
+  les désactive (`editor.inlay_hints`). Pas encore là : sur Linux les
+  indications sont regroupées en fin de ligne, chaque type avec son
+  nom, et les noms de paramètre sont laissés de côté, la vue de texte
+  de GTK ne pouvant ouvrir un espace dans une ligne.
  Sans sélection, un
   curseur posé sur un nom marque les autres endroits où ce symbole est
   utilisé, tel que le serveur le connaît : une variable homonyme qui le

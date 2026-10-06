@@ -3425,26 +3425,18 @@ final class DocumentController: NSResponder {
     }
 
     /// Reads the hints back from the core, which moved them with every
-    /// edit since the server answered, and hands each view the text to
-    /// draw after its lines.
+    /// edit since the server answered, and hands each view the notes
+    /// to draw inside its lines. The gaps are laid out again even when
+    /// the notes are the same, since the font may not be.
     func refreshInlayNotes() {
-        let annotations = appliedInlayHints ? coreDocument.inlayAnnotations : []
+        let notes = appliedInlayHints ? coreDocument.inlayInline : []
         for view in views {
             guard let editor = view.textView as? EditorTextView else { continue }
-            let text = editor.string as NSString
-            editor.lineNotes = annotations.compactMap { annotation in
-                let start = view.gutter.lineStart(ofLine: annotation.line)
-                guard start <= text.length else { return nil }
-                let line = text.lineRange(for: NSRange(location: start, length: 0))
-                // The end of the line's own text, before its line break.
-                var end = NSMaxRange(line)
-                while end > line.location,
-                    text.character(at: end - 1) == 10 || text.character(at: end - 1) == 13
-                {
-                    end -= 1
-                }
-                return EditorTextView.LineNote(offset: end, text: annotation.text)
+            let length = (editor.string as NSString).length
+            editor.inlineNotes = notes.compactMap { note in
+                note.offset <= length ? EditorTextView.InlineNote(offset: note.offset, text: note.text) : nil
             }
+            editor.layOutInlineNotes()
         }
     }
 
@@ -5763,6 +5755,10 @@ extension DocumentController: NSTextViewDelegate {
     ) -> Bool {
         // A nil replacement is an attribute-only change; no text moves.
         guard let replacementString else { return true }
+        // Typing takes its attributes from the character before the
+        // caret, and the character before an inlay note carries the
+        // kern that opens the note's gap: typed text must not.
+        textView.typingAttributes.removeValue(forKey: .kern)
         if wrapSelection(in: textView, range: affectedCharRange, typed: replacementString) {
             // The wrap did the edit itself, with the selection kept on
             // what was wrapped so the next delimiter nests inside it.
@@ -6237,6 +6233,7 @@ extension DocumentController: NSTextViewDelegate {
         // caret moved there, so that pane has the keyboard now.
         if let textView = notification.object as? NSTextView {
             workbench?.noteFocus(on: textView)
+            textView.typingAttributes.removeValue(forKey: .kern)
             // The signature is about the call on its line; the caret
             // leaving that line leaves the call.
             if let asked = signatureLine,

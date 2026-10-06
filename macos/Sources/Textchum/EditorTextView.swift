@@ -30,14 +30,66 @@ final class EditorTextView: NSTextView {
     /// server inferred about it. It is not in the document, so it
     /// cannot be selected, copied or edited, and it sits in the empty
     /// space past the line's last character, where it moves nothing.
-    struct LineNote: Equatable {
-        /// The UTF-16 offset of the end of the line's own text.
+    /// A server's hint drawn inside a line: the inferred type after a
+    /// name, a parameter's name before its argument.
+    struct InlineNote: Equatable {
+        /// The UTF-16 offset the note is drawn at: before the character
+        /// there, after the one before it.
         let offset: Int
         let text: String
     }
 
-    var lineNotes: [LineNote] = [] {
-        didSet { if oldValue != lineNotes { needsDisplay = true } }
+    /// The notes inside the lines. Setting them lays the gaps out.
+    ///
+    /// The text system places only the text it is given, and a note is
+    /// not text: the document must stay byte for byte what the core
+    /// holds. What the text system does honour is a kern — an advance
+    /// made wider — on a character, and that opens a gap after it with
+    /// nothing moving through the editing path. Each note widens the
+    /// character before its offset by the note's width, and the note is
+    /// painted into the gap.
+    var inlineNotes: [InlineNote] = [] {
+        didSet { if oldValue != inlineNotes { layOutInlineNotes() } }
+    }
+
+    /// How a note is drawn: the view's own font, dimmed. The width of a
+    /// gap is measured with the same attributes it is painted with, so
+    /// the two cannot disagree.
+    private var inlineNoteAttributes: [NSAttributedString.Key: Any] {
+        [
+            .font: font ?? .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+            .foregroundColor: NSColor.textColor.withAlphaComponent(0.45),
+        ]
+    }
+
+    /// Opens the gaps for the notes as they are now, closing the old
+    /// ones first. Called again when the font changes, since the gaps
+    /// are measured in it.
+    func layOutInlineNotes() {
+        guard let storage = textStorage else { return }
+        let text = string as NSString
+        let length = text.length
+        storage.beginEditing()
+        // Every kern in the text is one of these; text typed or pasted
+        // next to a gap may have inherited its kern, so it is not
+        // enough to close the gaps that were opened.
+        storage.enumerateAttribute(.kern, in: NSRange(location: 0, length: length)) {
+            value, range, _ in
+            if value != nil { storage.removeAttribute(.kern, range: range) }
+        }
+        let attributes = inlineNoteAttributes
+        for note in inlineNotes {
+            // No gap at the start of a line: a line break stretched
+            // reads as nothing, and the note would hang in the margin.
+            guard note.offset >= 1, note.offset <= length else { continue }
+            let before = text.character(at: note.offset - 1)
+            guard before != 0x0A, before != 0x0D else { continue }
+            let width = ceil((note.text as NSString).size(withAttributes: attributes).width)
+            storage.addAttribute(
+                .kern, value: width, range: NSRange(location: note.offset - 1, length: 1))
+        }
+        storage.endEditing()
+        needsDisplay = true
     }
 
     override func drawBackground(in rect: NSRect) {
@@ -48,11 +100,18 @@ final class EditorTextView: NSTextView {
             tintedLine = line
         }
         drawBackgroundMarks(in: rect)
-        drawLineNotes(in: rect)
+        drawInlineNotes(in: rect)
     }
 
-    private func drawLineNotes(in rect: NSRect) {
-        guard !lineNotes.isEmpty, let layoutManager = textLayoutManager,
+    /// Paints each note into its gap. The text system reports the
+    /// insertion point at the note's offset in the middle of the gap —
+    /// it splits a kerned character's extra advance between the
+    /// rectangles of the two characters it lies between — so the gap
+    /// starts half a note's width before it. At the end of a line
+    /// there is no second character to split with, and the insertion
+    /// point is where the gap starts.
+    private func drawInlineNotes(in rect: NSRect) {
+        guard !inlineNotes.isEmpty, let layoutManager = textLayoutManager,
             let contentManager = layoutManager.textContentManager,
             // Only what is laid out for the viewport is asked about:
             // asking for a line's rectangle lays the line out, and
@@ -61,22 +120,17 @@ final class EditorTextView: NSTextView {
             let viewport = layoutManager.textViewportLayoutController.viewportRange
         else { return }
         let origin = textContainerOrigin
-        let length = (string as NSString).length
-        let font = self.font ?? .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.textColor.withAlphaComponent(0.4),
-        ]
-        // A gap of two characters, so the note reads as beside the line
-        // and not as part of it.
-        let gap = ("  " as NSString).size(withAttributes: attributes).width
-        for note in lineNotes {
-            guard note.offset <= length,
+        let text = string as NSString
+        let attributes = inlineNoteAttributes
+        for note in inlineNotes {
+            guard note.offset >= 1, note.offset <= text.length,
                 let location = contentManager.location(
                     layoutManager.documentRange.location, offsetBy: note.offset),
                 viewport.contains(location) || viewport.endLocation.compare(location) == .orderedSame,
                 let range = NSTextRange(location: location, end: location)
             else { continue }
+            let before = text.character(at: note.offset - 1)
+            guard before != 0x0A, before != 0x0D else { continue }
             var caret: NSRect?
             layoutManager.enumerateTextSegments(
                 in: range, type: .standard, options: [.upstreamAffinity]
@@ -85,9 +139,13 @@ final class EditorTextView: NSTextView {
                 return false
             }
             guard let caret else { continue }
-            let at = NSPoint(x: caret.maxX + origin.x + gap, y: caret.minY + origin.y)
-            let box = NSRect(x: at.x, y: at.y, width: max(0, bounds.maxX - at.x), height: caret.height)
-            if box.intersects(rect) {
+            let width = ceil((note.text as NSString).size(withAttributes: attributes).width)
+            let atLineEnd =
+                note.offset == text.length
+                || text.character(at: note.offset) == 0x0A || text.character(at: note.offset) == 0x0D
+            let at = NSPoint(
+                x: caret.minX + origin.x - (atLineEnd ? 0 : width / 2), y: caret.minY + origin.y)
+            if NSRect(x: at.x, y: at.y, width: width, height: caret.height).intersects(rect) {
                 (note.text as NSString).draw(at: at, withAttributes: attributes)
             }
         }

@@ -60,17 +60,20 @@ proyecto en Settings ▸ Language Servers; véase
   cualquier parte del proyecto por parte de su nombre, tal como los
   conoce el servidor del documento en primer plano, y salta a su
   declaración.
-- **Los tipos inferidos se muestran.** Los tipos que un servidor deduce
-  — de un `let` sin anotación, del argumento de una clausura — aparecen
-  atenuados tras la línea a la que pertenecen, cada uno con su nombre:
-  a `let d = make();` le sigue `d: Drinker`. No son parte del texto: no
-  se pueden seleccionar ni copiar, y se quedan con su línea mientras se
-  escribe y se vuelven a pedir cuando la escritura hace una pausa.
-  Settings ▸ General ▸ «Show the types the language server inferred»
-  los apaga (`editor.inlay_hints`). Todavía no: las pistas se reúnen al
-  final de la línea en vez de colocarse dentro de ella, y las de nombre
-  de parámetro, que solo significan algo junto a su argumento, se dejan
-  fuera.
+- **Se muestran los tipos inferidos y los nombres de los parámetros.**
+  Los tipos que un servidor deduce — de un `let` sin anotación, del
+  argumento de una clausura — y los nombres de los parámetros a los que
+  se pasa cada argumento aparecen atenuados dentro de la línea, donde
+  el servidor los coloca: `let d = make();` se lee `let d: Drinker =
+  make();`, y `pair(d, 2)` se lee `pair(who: d, n: 2)`. No son parte
+  del texto: el cursor pasa por encima, no se pueden seleccionar ni
+  copiar, y se quedan con su línea mientras se escribe y se vuelven a
+  pedir cuando la escritura hace una pausa. Settings ▸ General ▸ «Show
+  the types the language server inferred» los apaga
+  (`editor.inlay_hints`). Todavía no: en Linux las pistas se reúnen al
+  final de la línea, cada tipo con su nombre, y los nombres de
+  parámetro se dejan fuera, porque la vista de texto de GTK no puede
+  abrir un hueco dentro de una línea.
  Sin nada seleccionado, un
   cursor que descansa sobre un nombre marca dónde más se usa ese
   símbolo, tal como lo conoce el servidor: una variable que lo oculta

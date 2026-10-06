@@ -1,21 +1,23 @@
-//! Inlay hints, gathered at the end of the line they are about.
+//! Inlay hints: what a server would have drawn inside a line.
 //!
 //! A server's inlay hints are meant to be drawn inside a line: the
 //! inferred type after a `let`'s name, a parameter's name before its
-//! argument. Neither shell's text view can place text that is not in
-//! the document without laying the line out again around it. Text
-//! *after* a line needs no such thing — it sits in the empty space past
-//! the last character and moves nothing — so that is where the hints of
-//! a line go, each type hint written with the name it belongs to:
-//! `let d = Drinker::new()` is followed, dimmed, by `d: Drinker`.
+//! argument. The hints are held as positions in the document and moved
+//! with every edit, the way findings are, so they stay on their lines
+//! while the server is still to be asked again, and a shell asks for
+//! them in one of two shapes.
 //!
-//! Parameter-name hints are left out. Their whole value is sitting next
-//! to their argument, and a list of names at the end of a line says
-//! little about which argument is which.
+//! *Inside the line*, each hint at its own offset with the spaces the
+//! server asked for around it: for a text view that can open a gap in
+//! a line without the text moving through its editing path. The macOS
+//! view can, by widening the advance of the character before the gap.
 //!
-//! The hints are held as positions in the document and moved with every
-//! edit, the way findings are, so they stay on their lines while the
-//! server is still to be asked again.
+//! *After the line*, the line's hints gathered past its last character,
+//! each type hint written with the name it belongs to — `let d =
+//! Drinker::new()` is followed, dimmed, by `d: Drinker` — for a view
+//! that cannot. Parameter-name hints are left out of that shape: their
+//! whole value is sitting next to their argument, and a list of names
+//! at the end of a line says little about which argument is which.
 
 /// One hint the server gave, at a UTF-16 offset of the text.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +26,25 @@ pub struct Hint {
     pub label: String,
     /// 1 = type, 2 = parameter, 0 = the server did not say.
     pub kind: u8,
+    /// Whether the server wants a space before the label, and after
+    /// it: a parameter's name is followed by one, so that it does not
+    /// run into its argument.
+    pub pad_left: bool,
+    pub pad_right: bool,
+}
+
+/// What a hint shows inside the line: its label, with the spaces the
+/// server asked for on either side. Nothing for an empty label.
+pub fn inline_text(hint: &Hint) -> Option<String> {
+    let label = hint.label.trim();
+    if label.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{}{label}{}",
+        if hint.pad_left { " " } else { "" },
+        if hint.pad_right { " " } else { "" }
+    ))
 }
 
 /// The longest a line's hints are shown at; a type that is a screenful
@@ -85,7 +106,16 @@ mod tests {
     use super::*;
 
     fn hint(label: &str, kind: u8) -> Hint {
-        Hint { offset: 0, label: label.into(), kind }
+        Hint { offset: 0, label: label.into(), kind, pad_left: false, pad_right: false }
+    }
+
+    #[test]
+    fn inside_the_line_a_hint_keeps_the_spaces_the_server_asked_for() {
+        assert_eq!(inline_text(&hint(": Drinker", 1)).as_deref(), Some(": Drinker"));
+        let mut parameter = hint("who", 2);
+        parameter.pad_right = true;
+        assert_eq!(inline_text(&parameter).as_deref(), Some("who "));
+        assert_eq!(inline_text(&hint("  ", 1)), None);
     }
 
     #[test]

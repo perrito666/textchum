@@ -96,6 +96,14 @@ Ordered roughly by how much daily pain each gap causes.
     scope as a path that can be edited, with folder completion and a
     message naming the nearest real folder when it is wrong; the GTK
     panels search the current project and show it in the title.
+20. **Inlay hints inside the line.** The Mac draws a server's hints
+    where the server puts them — the type after its name, a parameter's
+    name before its argument — in a gap opened by kerning the character
+    before (`Document::inlay_inline`). GtkTextView has no such gap: the
+    GTK shell gathers a line's hints after it (`inlay_annotations`),
+    each type with its name, and leaves parameter names out. A widget
+    anchored in the buffer would be text; a Pango shape attribute on a
+    tag might do it, and is the thing to try.
 
 ## Behavioral differences that are choices, not gaps
 
