@@ -133,6 +133,27 @@ fn per_project_instances_and_diagnostics() {
                 && json.contains("fake_variable")))
     });
 
+    // A library file — a crate in the cargo registry, here — is served
+    // by the project's own server, the one last worked in, and starts
+    // none of its own even though the crate has a manifest.
+    let registry = root_b
+        .parent()
+        .unwrap()
+        .join(".cargo/registry/src/index.crates.io-0000/dep-1.0.0");
+    std::fs::create_dir_all(registry.join("src")).unwrap();
+    std::fs::write(registry.join("Cargo.toml"), "").unwrap();
+    let library = registry.join("src/lib.rs");
+    std::fs::write(&library, "pub fn dep() {}\n").unwrap();
+    pool.did_open(&library, "rust", "pub fn dep() {}\n");
+    let library_hover = pool.hover(&library, 0, 3);
+    assert!(library_hover > 0, "the library file has a server");
+    collect_until(&events, "hover answered through the lender", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. }
+            if *id == library_hover))
+    });
+    assert_eq!(pool.running().len(), 2, "no server was started over the registry");
+    pool.did_close(&library);
+
     // Document symbols: a hierarchical tree with children.
     let symbols_id = pool.document_symbols(&file_b);
     collect_until(&events, "documentSymbol response", &mut seen, |seen| {

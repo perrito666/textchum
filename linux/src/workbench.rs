@@ -1530,9 +1530,21 @@ impl Workbench {
         // record; the configuration is where it used to live, and is
         // still read for files recorded before there was a record.
         if let Some(path) = page.path().borrow().clone() {
-            *page.document.project_root.borrow_mut() =
+            // A library file belongs to the project it was reached
+            // from: a jump into a dependency keeps the tree of the
+            // project being worked in, instead of showing the crate as
+            // a project of its own. The page selected now is the one
+            // the jump came from.
+            let lent = if workspace::is_library_path(Path::new(&path)) {
+                self.selected()
+                    .and_then(|from| from.document.project_root.borrow().clone())
+            } else {
+                None
+            };
+            *page.document.project_root.borrow_mut() = lent.or_else(|| {
                 textchum_core::workspace::project_root_for(Path::new(&path))
-                    .map(|root| root.to_string_lossy().into_owned());
+                    .map(|root| root.to_string_lossy().into_owned())
+            });
             page.document.adopt_project_state();
             let recorded = page.document.language_override.borrow().clone();
             let stored = Shell::instance().config.borrow().file_override(&path);

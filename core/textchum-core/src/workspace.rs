@@ -138,6 +138,30 @@ pub fn project_root_with(path: &Path, settings: &WorkspaceSettings) -> Option<Pa
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_library_file_is_told_from_a_project_file() {
+        for library in [
+            "/Users/me/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde-1.0.1/src/lib.rs",
+            "/home/me/.cargo/git/checkouts/foo-abc/src/lib.rs",
+            "/home/me/.rustup/toolchains/stable-x86_64/lib/rustlib/src/rust/library/std/src/lib.rs",
+            "/opt/homebrew/Cellar/rust/1.98.1/lib/rustlib/src/rust/library/core/src/option.rs",
+            "/home/me/go/pkg/mod/github.com/x/y@v1.2.3/y.go",
+            "/home/me/project/.venv/lib/python3.12/site-packages/requests/api.py",
+            "/home/me/project/node_modules/left-pad/index.js",
+            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdio.h",
+        ] {
+            assert!(is_library_path(Path::new(library)), "{library}");
+        }
+        for own in [
+            "/home/me/project/src/main.rs",
+            "/home/me/registry/src/main.rs",
+            "/home/me/go/src/github.com/me/app/main.go",
+            "/home/me/node_modules_notes.md",
+        ] {
+            assert!(!is_library_path(Path::new(own)), "{own}");
+        }
+    }
+
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir()
             .join(format!("textchum-ws-{}", std::process::id()))
@@ -296,6 +320,42 @@ const SNIFF_BYTES: usize = 4096;
 /// not UTF-8, mean the file is not text and opening it would show
 /// mojibake and corrupt it on save.
 ///
+/// Directories that hold the sources of other people's code, as the
+/// toolchains lay them out: a file under one is read, not worked on.
+/// Each is matched as a run of path components.
+const LIBRARY_MARKERS: &[&[&str]] = &[
+    &[".cargo", "registry", "src"],
+    &[".cargo", "git", "checkouts"],
+    &[".rustup", "toolchains"],
+    &["lib", "rustlib", "src"],
+    &["go", "pkg", "mod"],
+    &["site-packages"],
+    &["dist-packages"],
+    &["node_modules"],
+    &["Cellar"],
+    &["CommandLineTools", "SDKs"],
+    &["Xcode.app", "Contents", "Developer"],
+];
+
+/// Whether `path` is a file of a library rather than of a project: a
+/// crate in the cargo registry, the standard library's own sources, a
+/// package in `site-packages` or `node_modules`, an SDK header. A jump
+/// to a definition lands there often, and such a file is served by the
+/// language server of the project it was reached from — the server
+/// already knows it as a dependency — rather than by a server started
+/// over the library's own directory, which would read the library as a
+/// project of its own, and the standard library's sources as a
+/// project called `homebrew`.
+pub fn is_library_path(path: &Path) -> bool {
+    let parts: Vec<&str> = path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect();
+    LIBRARY_MARKERS
+        .iter()
+        .any(|marker| parts.windows(marker.len()).any(|window| window == *marker))
+}
+
 /// A file that cannot be read is reported as not editable — offering to
 /// open something that will fail is worse than leaving it out.
 pub fn looks_editable(path: &Path) -> bool {

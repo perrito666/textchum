@@ -5590,6 +5590,19 @@ pub unsafe extern "C" fn tc_config_set_hide_globs(
     );
 }
 
+/// Whether a path is a file of a library rather than of a project — a
+/// crate in the cargo registry, the standard library's sources, a
+/// package in `site-packages` or `node_modules`: read there, not
+/// worked on, and belonging to the project it was reached from.
+///
+/// # Safety
+/// `path` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_workspace_is_library_path(path: *const c_char, len: usize) -> bool {
+    let Some(path) = (unsafe { str_from_raw(path, len) }) else { return false };
+    textchum_core::workspace::is_library_path(std::path::Path::new(path))
+}
+
 /// Whether a name is hidden by any of the newline-joined globs.
 ///
 /// # Safety

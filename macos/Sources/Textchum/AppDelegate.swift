@@ -2379,7 +2379,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         SidebarConfiguration(
             treeState: fileTreeState,
             resolveProjectRoot: { [weak self] path in
-                CoreWorkspace.projectRoot(
+                // A library file belongs to the project it was reached
+                // from: a jump into a dependency keeps the tree and the
+                // settings of the project being worked in, instead of
+                // showing the crate as a project of its own.
+                if CoreWorkspace.isLibraryPath(path), let lent = self?.lendingProjectRoot() {
+                    return lent
+                }
+                return CoreWorkspace.projectRoot(
                     forPath: path, settingsJSON: self?.config?.workspaceJSON ?? "{}")
             },
             workspaceSettingsJSON: { [weak self] in self?.config?.workspaceJSON ?? "{}" },
@@ -2465,6 +2472,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let key = NSApp.keyWindow?.windowController as? Workbench
         return Self.scope(
             focused: key?.focusedDocument, editors: editors, pinned: key?.pinnedProjectRoot)
+    }
+
+    /// The project a library file is taken to belong to: the focused
+    /// document's, else any open document's.
+    private func lendingProjectRoot() -> String? {
+        let focused = (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument
+        return ([focused].compactMap { $0 } + editors).compactMap(\.projectRoot).first
     }
 
     /// The project Open Quickly and Find in Project search: the focused

@@ -551,9 +551,58 @@ impl Pool {
             .unwrap_or_else(|| PathBuf::from("/"))
     }
 
+    /// The instances to lend a library file to: the ones serving this
+    /// language for the project most recently worked in. A jump into a
+    /// dependency lands in the cargo registry or the standard library's
+    /// sources, which the project's own server knows as dependencies; a
+    /// server started over the library's directory would read a crate
+    /// as a project of its own, and build it.
+    fn lenders_for(&self, language: &str) -> Vec<InstanceKey> {
+        let mut keys: Vec<&InstanceKey> = self
+            .instances
+            .keys()
+            .filter(|(_, root)| !workspace::is_library_path(root))
+            .collect();
+        keys.sort_by_key(|key| std::cmp::Reverse(self.last_activity.get(*key).copied()));
+        let Some((_, root)) = keys.into_iter().find(|(id, root)| {
+            self.configs_for(root, language).iter().any(|config| &config.id == id)
+        }) else {
+            return Vec::new();
+        };
+        let root = root.clone();
+        self.configs_for(&root, language)
+            .into_iter()
+            .map(|config| (config.id, root.clone()))
+            .filter(|key| self.instances.contains_key(key))
+            .collect()
+    }
+
     /// Announces an opened document, spawning the (server, root) instance
     /// on first use.
     pub fn did_open(&mut self, path: &Path, language: &str, text: &str) {
+        if workspace::is_library_path(path) {
+            let lenders = self.lenders_for(language);
+            if !lenders.is_empty() {
+                crate::log::log(&format!(
+                    "open {} language={language}: a library file, served by {}",
+                    path.display(),
+                    lenders[0].1.display()
+                ));
+                let version = 1;
+                self.versions.insert(path.to_owned(), version);
+                for key in &lenders {
+                    self.instances[key].send(Command::DidOpen {
+                        path: path.to_owned(),
+                        language: language.to_owned(),
+                        version,
+                        text: text.to_owned(),
+                    });
+                    self.touch(key);
+                }
+                self.documents.insert(path.to_owned(), lenders);
+                return;
+            }
+        }
         let project = self.root_for(path);
         let root = self.serving_root(&project, language);
         crate::log::log(&format!(

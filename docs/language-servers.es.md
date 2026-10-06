@@ -21,6 +21,16 @@ Los archivos fuera de todo proyecto reciben una instancia por directorio,
 así que los archivos sueltos tampoco se suman al espacio de trabajo de
 nadie.
 
+El archivo de una biblioteca es la excepción: un crate del registro de
+cargo, las fuentes de la biblioteca estándar, un paquete en
+`site-packages` o `node_modules`, una cabecera de un SDK. Saltar a la
+definición cae en uno a menudo, y lo sirve el servidor del proyecto del
+que se venía — que ya conoce el archivo como dependencia —, no un
+servidor arrancado sobre el directorio de la biblioteca, que leería el
+crate como un proyecto propio y se pondría a compilarlo. El archivo
+conserva además el árbol y los ajustes del proyecto desde el que se
+llegó a él.
+
 Los proyectos anidados en otro — los miembros de un workspace de uv o de
 Cargo, una vez que **manifest projects** los hizo proyectos — son el
 único caso con elección. Cuando el proyecto exterior tiene **recursive
