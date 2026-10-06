@@ -969,6 +969,64 @@ func runSmokeTest() -> Int32 {
     }
     print("list keys ok (Return chooses the first item with nothing typed, arrows move from the field)")
 
+    // Rename Symbol asks in place: a field over the name, prefilled,
+    // the caret put on the name so its uses get marked. Return hands
+    // the new name on, the same name or Escape hands nothing on, and
+    // the field is gone either way with the keyboard back in the text.
+    do {
+        let renameCore = CoreDocument()
+        let renameBench = Workbench(sidebar: nil)
+        let renaming = DocumentController(document: renameCore)
+        renameBench.add(renaming)
+        renameBench.window?.makeKeyAndOrderFront(nil)
+        guard let renameView = renaming.primaryView as? EditorTextView else {
+            print("FAIL: no view to rename in")
+            return 1
+        }
+        renameView.insertText(
+            "fn main() {\n    let d = make();\n}\n", replacementRange: NSRange(location: 0, length: 0))
+        // The caret inside `make`, which starts at 24.
+        renameView.setSelectedRange(NSRange(location: 26, length: 0))
+        var renamed: [String] = []
+        guard renaming.beginRename(onCommit: { renamed.append($0) }) == 24,
+            let field = renameView.subviews.compactMap({ $0 as? RenameField }).first,
+            field.stringValue == "make", renameView.selectedRange() == NSRange(location: 24, length: 0)
+        else {
+            print("FAIL: the rename field is not over the name")
+            return 1
+        }
+        let wordRect = renameView.firstRect(forCharacterRange: NSRange(location: 24, length: 4), actualRange: nil)
+        let fieldOnScreen = renameView.window.map { $0.convertToScreen(renameView.convert(field.frame, to: nil)) }
+        guard let fieldOnScreen, abs(fieldOnScreen.minX - wordRect.minX) <= 6, fieldOnScreen.width >= wordRect.width else {
+            print("FAIL: the rename field is not where the name is: \(String(describing: fieldOnScreen)) vs \(wordRect)")
+            return 1
+        }
+        field.stringValue = "build"
+        field.commit()
+        guard renamed == ["build"], renameView.subviews.compactMap({ $0 as? RenameField }).isEmpty,
+            renameView.string == "fn main() {\n    let d = make();\n}\n"
+        else {
+            print("FAIL: Return did not hand the new name on, or touched the text: \(renamed)")
+            return 1
+        }
+        renaming.beginRename(onCommit: { renamed.append($0) })
+        renameView.subviews.compactMap({ $0 as? RenameField }).first?.commit()
+        renaming.beginRename(onCommit: { renamed.append($0) })
+        renameView.subviews.compactMap({ $0 as? RenameField }).first?.cancel()
+        guard renamed == ["build"], renameView.subviews.compactMap({ $0 as? RenameField }).isEmpty,
+            renameView.window?.firstResponder === renameView
+        else {
+            print("FAIL: the same name or Escape handed something on, or kept the keyboard: \(renamed)")
+            return 1
+        }
+        renameView.setSelectedRange(NSRange(location: 11, length: 0))
+        guard renaming.beginRename(onCommit: { renamed.append($0) }) == nil else {
+            print("FAIL: a rename began with no name under the caret")
+            return 1
+        }
+    }
+    print("rename in place ok (a field over the name, Return hands it on, Escape and the same name do not)")
+
     // The completion list goes under the caret while the screen has
     // the room, over it when the caret is near the bottom, and is made
     // to fit where neither side has enough. It never leaves the screen

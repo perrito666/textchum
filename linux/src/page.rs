@@ -1713,6 +1713,27 @@ fn is_word_char(c: char) -> bool {
 }
 
 /// The word being typed: (start character offset, prefix text).
+/// The name under the caret — the run of word characters around it, a
+/// caret just past a name still meaning that name — as its two ends.
+/// None with no name there.
+pub fn symbol_at_caret(buffer: &sourceview5::Buffer) -> Option<(gtk::TextIter, gtk::TextIter)> {
+    let caret = buffer.iter_at_mark(&buffer.get_insert());
+    let mut start = caret;
+    while start.offset() > 0 {
+        let mut previous = start;
+        previous.backward_char();
+        if !is_word_char(previous.char()) {
+            break;
+        }
+        start = previous;
+    }
+    let mut end = caret;
+    while !end.is_end() && is_word_char(end.char()) {
+        end.forward_char();
+    }
+    (start.offset() < end.offset()).then_some((start, end))
+}
+
 fn word_before_caret(buffer: &sourceview5::Buffer) -> (i32, String) {
     let caret = buffer.iter_at_mark(&buffer.get_insert());
     let mut start = caret;

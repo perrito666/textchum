@@ -1621,33 +1621,70 @@ final class DocumentController: NSResponder {
     /// about — open windows edit in place, closed files are rewritten on
     /// disk.
     @objc func renameSymbol(_ sender: Any?) {
-        guard let lspApp, let path = lspOpenPath, let textView else { return }
-        let current = symbolUnderCaret() ?? ""
-        let alert = NSAlert()
-        alert.messageText = t("Rename Symbol")
-        alert.informativeText =
-            current.isEmpty ? "New name:" : "New name for “\(current)”:"
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        field.stringValue = current
-        alert.accessoryView = field
-        alert.addButton(withTitle: t("Rename"))
-        alert.addButton(withTitle: t("Cancel"))
-        alert.window.initialFirstResponder = field
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        let newName = field.stringValue.trimmingCharacters(in: .whitespaces)
-        guard !newName.isEmpty, newName != current else { return }
-        let text = textView.string as NSString
-        let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
-        flushLSPChange()
-        lspApp.lspRename(path: path, line: line, character: character, newName: newName) {
-            json in
-            let applied =
-                (NSApp.delegate as? AppDelegate)?.applyWorkspaceEdit(resultJSON: json)
-                ?? false
-            if !applied {
-                NSSound.beep()
+        guard lspApp != nil, let path = lspOpenPath else { return }
+        guard let index = beginRename(onCommit: { [weak self] newName in
+            guard let self, let lspApp = self.lspApp, let textView = self.textView else { return }
+            let (line, character) = Self.lspPosition(
+                ofIndex: self.renameIndex ?? 0, in: textView.string as NSString)
+            self.flushLSPChange()
+            lspApp.lspRename(path: path, line: line, character: character, newName: newName) {
+                json in
+                let applied =
+                    (NSApp.delegate as? AppDelegate)?.applyWorkspaceEdit(resultJSON: json)
+                    ?? false
+                if !applied {
+                    NSSound.beep()
+                }
             }
+        }) else {
+            presentInfo(
+                t("Nothing to rename here"),
+                details: t("Put the caret on a name first."))
+            return
         }
+        renameIndex = index
+    }
+
+    /// The field asking for a symbol's new name, while it is up.
+    private var renameField: RenameField?
+    /// Where the symbol being renamed starts: the place the server is
+    /// asked about once the name is in.
+    private var renameIndex: Int?
+
+    /// Lays the rename field over the name under the caret and marks
+    /// the name's other uses. Returns where the name starts, or nil
+    /// with no name under the caret. `onCommit` gets the new name only
+    /// when it differs from the old one.
+    @discardableResult
+    func beginRename(onCommit: @escaping (String) -> Void) -> Int? {
+        guard let textView, let window = textView.window else { return nil }
+        renameField?.cancel()
+        let text = textView.string as NSString
+        let range = symbolRange(at: anchorIndex, in: text)
+        guard range.length > 0 else { return nil }
+        // The pointer is resting on the name, more often than not: the
+        // documentation balloon it would bring up has no place over
+        // the field asking for the new name.
+        hoverTimer?.invalidate()
+        closeBalloon()
+        let current = text.substring(with: range)
+        // The caret on the name, with nothing selected, is what has the
+        // name's other uses marked — the preview of what will change.
+        selectionChangeIsFromEditing = false
+        textView.setSelectedRange(NSRange(location: range.location, length: 0))
+        let onScreen = textView.firstRect(forCharacterRange: range, actualRange: nil)
+        let rect = textView.convert(window.convertFromScreen(onScreen), from: nil)
+        let field = RenameField.begin(
+            over: rect, in: textView, name: current,
+            font: textView.font ?? .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular))
+        field.onCommit = { [weak self] newName in
+            self?.renameField = nil
+            guard newName != current else { return }
+            onCommit(newName)
+        }
+        field.onCancel = { [weak self] in self?.renameField = nil }
+        renameField = field
+        return range.location
     }
 
     /// Reformats the whole document: the language server's formatter,

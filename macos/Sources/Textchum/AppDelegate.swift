@@ -3226,7 +3226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenu.addItem(codeActionsItem)
 
         let rename = NSMenuItem(
-            title: t("Rename Symbol…"),
+            title: t("Rename Symbol"),
             action: #selector(DocumentController.renameSymbol(_:)),
             keyEquivalent: "r"
         )

@@ -345,7 +345,7 @@ impl Workbench {
         go_section.append(Some(&tr("Find References")), Some("win.references"));
         go_section.append(Some(&tr("Show Callers")), Some("win.callers"));
         go_section.append(Some(&tr("Code Actions…")), Some("win.code-actions"));
-        go_section.append(Some(&tr("Rename Symbol…")), Some("win.rename"));
+        go_section.append(Some(&tr("Rename Symbol")), Some("win.rename"));
         go_section.append(Some(&tr("Format Document")), Some("win.format"));
         go_section.append(Some(&tr("Document Outline…")), Some("win.outline"));
         go_section.append(Some(&tr("Show Documentation for Symbol")), Some("win.hover"));
@@ -3121,49 +3121,95 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.toast(&tr("Save the file first — untitled documents have no server."));
             return;
         };
+        // The name becomes a field where it stands: a dialog put it
+        // out of sight and showed nothing of what would change. The
+        // caret is put on the name, with nothing selected, so its other
+        // uses get marked meanwhile.
+        let Some((start, end)) = page::symbol_at_caret(&page.buffer) else {
+            workbench.toast(&tr("Put the caret on a name first."));
+            return;
+        };
+        let current = page.buffer.text(&start, &end, true).to_string();
+        page.buffer.place_cursor(&start);
         let (line, character) = page::lsp_anchor(&page);
-        let dialog = adw::AlertDialog::new(Some(&tr("Rename Symbol")), None);
+        let place = page.view.iter_location(&start);
+        let (x, y) = page.view.buffer_to_window_coords(
+            gtk::TextWindowType::Widget,
+            place.x(),
+            place.y(),
+        );
         let entry = gtk::Entry::new();
-        entry.set_placeholder_text(Some(&tr("New name")));
-        entry.set_activates_default(true);
-        dialog.set_extra_child(Some(&entry));
-        let entry_for_focus = entry.clone();
-        dialog.add_response("cancel", &tr("Cancel"));
-        dialog.add_response("rename", &tr("Rename"));
-        dialog.set_response_appearance("rename", adw::ResponseAppearance::Suggested);
-        dialog.set_default_response(Some("rename"));
-        let weak = Rc::downgrade(workbench);
-        dialog.connect_response(None, move |_, response| {
-            if response != "rename" {
-                return;
-            }
-            let new_name = entry.text().to_string();
-            if new_name.trim().is_empty() {
-                return;
-            }
-            let shell = Shell::instance();
-            let id = shell
-                .pool
-                .borrow_mut()
-                .rename(Path::new(&path), line, character, new_name.trim());
-            let weak = weak.clone();
-            if id == 0 {
-                if let Some(workbench) = weak.upgrade() {
-                    workbench.toast(&tr("No language server is running for this document."));
+        entry.set_text(&current);
+        if let Some(font) = page.view.pango_context().font_description() {
+            let attributes = gtk::pango::AttrList::new();
+            attributes.insert(gtk::pango::AttrFontDesc::new(&font));
+            entry.set_attributes(&attributes);
+        }
+        entry.set_width_chars(current.chars().count().max(4) as i32 + 2);
+        page.view.add_overlay(&entry, x - 6, y - 4);
+        let done = Rc::new(Cell::new(false));
+        let leave = {
+            let view = page.view.clone();
+            let entry = entry.clone();
+            let done = Rc::clone(&done);
+            Rc::new(move || {
+                if done.replace(true) {
+                    return;
                 }
-                return;
-            }
-            shell.expect_response(id, move |json| {
-                if let Some(workbench) = weak.upgrade() {
-                    apply_workspace_edit(&workbench, json);
+                view.remove(&entry);
+                view.grab_focus();
+            })
+        };
+        {
+            let weak = Rc::downgrade(workbench);
+            let leave = Rc::clone(&leave);
+            entry.connect_activate(move |entry| {
+                let new_name = entry.text().trim().to_string();
+                leave();
+                if new_name.is_empty() || new_name == current {
+                    return;
                 }
+                let shell = Shell::instance();
+                let id = shell
+                    .pool
+                    .borrow_mut()
+                    .rename(Path::new(&path), line, character, &new_name);
+                let weak = weak.clone();
+                if id == 0 {
+                    if let Some(workbench) = weak.upgrade() {
+                        workbench.toast(&tr("No language server is running for this document."));
+                    }
+                    return;
+                }
+                shell.expect_response(id, move |json| {
+                    if let Some(workbench) = weak.upgrade() {
+                        apply_workspace_edit(&workbench, json);
+                    }
+                });
             });
-        });
-        dialog.present(Some(&workbench.window));
-        // Same as Go to Line: the default button takes focus, so the
-        // new name has to be clicked into without this.
-        entry_for_focus.grab_focus();
-        let _ = page;
+        }
+        {
+            let keys = gtk::EventControllerKey::new();
+            let leave = Rc::clone(&leave);
+            keys.connect_key_pressed(move |_, key, _, _| {
+                if key == gtk::gdk::Key::Escape {
+                    leave();
+                    return glib::Propagation::Stop;
+                }
+                glib::Propagation::Proceed
+            });
+            entry.add_controller(keys);
+        }
+        {
+            // The keyboard going elsewhere is the user walking away
+            // from the question.
+            let focus = gtk::EventControllerFocus::new();
+            let leave = Rc::clone(&leave);
+            focus.connect_leave(move |_| leave());
+            entry.add_controller(focus);
+        }
+        entry.grab_focus();
+        entry.select_region(0, -1);
     });
     add("format", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
@@ -3529,7 +3575,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Go Forward", "win.forward"),
     ("Find References", "win.references"),
     ("Show Callers", "win.callers"),
-    ("Rename Symbol…", "win.rename"),
+    ("Rename Symbol", "win.rename"),
     ("Format Document", "win.format"),
     ("Document Outline…", "win.outline"),
     ("Show Documentation for Symbol", "win.hover"),
