@@ -17,6 +17,15 @@ built over your whole home directory — cannot happen by construction.
 Files outside any project get a per-directory instance, so loose files
 never join someone else's workspace either.
 
+A library's file is the exception: a crate in the cargo registry, the
+standard library's own sources, a package in `site-packages` or
+`node_modules`, an SDK header. Jump to Definition lands in one often,
+and it is served by the server of the project you came from — which
+knows the file as a dependency already — not by a server started over
+the library's directory, which would read the crate as a project of
+its own and set about building it. The file also keeps the tree and
+the settings of the project it was reached from.
+
 Projects nested in another — the members of a uv or Cargo workspace,
 once **manifest projects** has made them projects — are the one case
 with a choice. When the outer project has **recursive config** on, they

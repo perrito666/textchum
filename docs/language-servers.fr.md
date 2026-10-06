@@ -20,6 +20,16 @@ Les fichiers hors de tout projet reçoivent une instance par répertoire ;
 les fichiers isolés ne rejoignent donc jamais l'espace de travail de
 quelqu'un d'autre.
 
+Le fichier d'une bibliothèque est l'exception : une crate du registre
+de cargo, les sources de la bibliothèque standard, un paquet dans
+`site-packages` ou `node_modules`, un en-tête de SDK. Aller à la
+définition y mène souvent, et il est servi par le serveur du projet
+d'où l'on vient — qui connaît déjà le fichier comme dépendance —, et
+non par un serveur lancé sur le répertoire de la bibliothèque, qui
+lirait la crate comme un projet à part et se mettrait à la compiler. Le
+fichier garde aussi l'arbre et les réglages du projet depuis lequel on
+l'a atteint.
+
 Les projets imbriqués dans un autre — les membres d'un workspace uv ou
 Cargo, une fois que **manifest projects** en a fait des projets — sont
 le seul cas où l'on choisit. Quand le projet extérieur a **recursive

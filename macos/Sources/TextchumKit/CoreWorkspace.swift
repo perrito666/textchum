@@ -114,6 +114,19 @@ public enum CoreWorkspace {
     }
 
     /// Whether `name` is hidden by any of the navigator globs.
+    /// Whether a path is a file of a library rather than of a project —
+    /// a crate in the cargo registry, the standard library's sources, a
+    /// package in `site-packages` or `node_modules`. Such a file belongs
+    /// to the project it was reached from.
+    public static func isLibraryPath(_ path: String) -> Bool {
+        var path = path
+        return path.withUTF8 { bytes in
+            tc_workspace_is_library_path(
+                bytes.baseAddress.map { UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self) },
+                UInt(bytes.count))
+        }
+    }
+
     public static func isHidden(name: String, globs: [String]) -> Bool {
         var name = name
         var joined = globs.joined(separator: "\n")
