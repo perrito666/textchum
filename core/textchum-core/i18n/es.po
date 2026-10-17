@@ -47,8 +47,10 @@ msgstr ""
 "corrigiendo y formateando antes de cada guardado."
 
 #: core/textchum-core/src/presets.rs
-msgid "gopls with staticcheck on, and goimports before every save."
-msgstr "gopls con staticcheck activado, y goimports antes de cada guardado."
+msgid ""
+"gopls with staticcheck and its type and parameter hints on, and goimports "
+"before every save."
+msgstr "gopls con staticcheck y sus pistas de tipos y de parámetros activadas, y goimports antes de cada guardado."
 
 #: core/textchum-core/src/presets.rs
 msgid "TypeScript and JavaScript"
@@ -1699,7 +1701,9 @@ msgstr "símbolo…"
 msgid ""
 "Nothing formats this document: no server can, and no save preprocessor is "
 "set for it."
-msgstr "Nada formatea este documento: ningún servidor puede, y no tiene un preprocesador de guardado configurado."
+msgstr ""
+"Nada formatea este documento: ningún servidor puede, y no tiene un "
+"preprocesador de guardado configurado."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "action…"
@@ -1753,7 +1757,9 @@ msgstr ""
 msgid ""
 "Save the file first — an untitled document has no properties to keep; New "
 "with Format sets its language."
-msgstr "Guarde antes el archivo: un documento sin título no tiene propiedades que conservar; Nuevo con formato fija su lenguaje."
+msgstr ""
+"Guarde antes el archivo: un documento sin título no tiene propiedades que "
+"conservar; Nuevo con formato fija su lenguaje."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Your changes will be lost if you don’t save them."

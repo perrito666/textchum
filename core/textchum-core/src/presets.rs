@@ -96,10 +96,27 @@ pub fn language_presets() -> Vec<LanguagePreset> {
         LanguagePreset {
             id: "go",
             name: "Go".into(),
-            summary: tr("gopls with staticcheck on, and goimports before every save."),
+            summary: tr("gopls with staticcheck and its type and parameter hints on, and goimports before every save."),
             missing: String::new(),
             servers: vec![("go", "gopls")],
-            settings: vec![("gopls", json!({"gopls": {"staticcheck": true}}))],
+            // gopls draws no inlay hints until it is told which: the
+            // types an assignment or a range infers, a call's parameter
+            // names, a composite literal's field names and types.
+            settings: vec![(
+                "gopls",
+                json!({"gopls": {
+                    "staticcheck": true,
+                    "hints": {
+                        "assignVariableTypes": true,
+                        "compositeLiteralFields": true,
+                        "compositeLiteralTypes": true,
+                        "constantValues": true,
+                        "functionTypeParameters": true,
+                        "parameterNames": true,
+                        "rangeVariableTypes": true,
+                    },
+                }}),
+            )],
             preprocessors: vec![("go", vec![tools::command("goimports")])],
             tools: vec![
                 Tool { command: "gopls", install: "go install golang.org/x/tools/gopls@latest" },
