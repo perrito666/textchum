@@ -470,6 +470,7 @@ fn install_change_handler(
                 // labels follow once the view has laid the text out
                 // again, and an answer still on its way is for text
                 // that is gone.
+                document.semantic_asked.set(document.semantic_asked.get().wrapping_add(1));
                 for view in document.views() {
                     view.inlay_asked.set(view.inlay_asked.get().wrapping_add(1));
                     let weak = Rc::downgrade(&view);
@@ -517,6 +518,7 @@ fn install_change_handler(
                                 // afresh.
                                 request_inlay_hints(&view);
                             }
+                            request_semantic_tokens(&document);
                         },
                     );
                     lsp_timer.set(Some(source));
@@ -941,6 +943,38 @@ fn install_occurrence_tag(buffer: &sourceview5::Buffer) {
     let tag = gtk::TextTag::new(Some(OCCURRENCE_TAG));
     tag.set_background_rgba(Some(&gtk::gdk::RGBA::new(0.50, 0.50, 0.50, 0.30)));
     buffer.tag_table().add(&tag);
+}
+
+// MARK: The server's colouring
+
+/// Asks the server how it colours the whole file: what each name is.
+/// Called when the answer may have changed: the text settled, the
+/// server finished thinking. Scrolling does not ask; the answer covers
+/// every line, and every view of the file.
+pub fn request_semantic_tokens(document: &Rc<crate::shell::OpenDocument>) {
+    let Some(path) = document.path.borrow().clone() else { return };
+    let shell = Shell::instance();
+    let asked = document.semantic_asked.get().wrapping_add(1);
+    document.semantic_asked.set(asked);
+    let id = shell.pool.borrow_mut().semantic_tokens(Path::new(&path));
+    if id == 0 {
+        return;
+    }
+    let weak = Rc::downgrade(document);
+    shell.expect_response(id, move |json| {
+        let Some(document) = weak.upgrade() else { return };
+        // An answer about text that has since changed, or to a
+        // question since asked again, is dropped.
+        if document.semantic_asked.get() != asked {
+            return;
+        }
+        let Some(path) = document.path.borrow().clone() else { return };
+        let Some(legend) = Shell::instance().pool.borrow().semantic_legend(Path::new(&path)) else {
+            return;
+        };
+        document.state.borrow_mut().document.set_semantic_tokens(json, &legend.to_string());
+        apply_highlights(&document.buffer, &document.state.borrow().document);
+    });
 }
 
 // MARK: Inferred types, after the line
@@ -1372,6 +1406,10 @@ pub fn apply_highlights(buffer: &sourceview5::Buffer, document: &Document) {
     let Ok(spans) = document.highlights(0, document.len_utf16()) else {
         return;
     };
+    // A tag outranks another by when it was made, not by when it was
+    // applied, so overlapping spans are flattened first: the later one
+    // wins, as it does where colour is painted in order.
+    let spans = textchum_core::syntax::flatten(&spans);
     if spans.is_empty() {
         return;
     }
@@ -1521,10 +1559,11 @@ pub fn apply_diagnostics(handles: &PageHandles, json: &str) {
     *handles.document.diagnostics.borrow_mut() = kept;
     crate::workbench::refresh_subtitle(handles);
     // Findings arriving mean the server has analysed the text as it
-    // is, which is when its hints are worth asking for.
+    // is, which is when its hints and its colouring are worth asking for.
     for view in handles.document.views() {
         request_inlay_hints(&view);
     }
+    request_semantic_tokens(&handles.document);
 }
 
 /// The findings the core holds, as the shell keeps them.

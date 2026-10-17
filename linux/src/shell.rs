@@ -66,6 +66,9 @@ pub struct OpenDocument {
     /// writing one back never invents a record for a file nobody has
     /// said anything about.
     pub adopted_state: std::cell::Cell<bool>,
+    /// Counts the questions put to the server about this file's
+    /// colouring, so an answer for text since changed is dropped.
+    pub semantic_asked: std::cell::Cell<u64>,
     /// How this file is shown: how many views a column stacks of it,
     /// and where the dividers between them sit as fractions of the
     /// column's height. It belongs to the file, so a column switched to
@@ -506,6 +509,7 @@ impl Shell {
             project_root: RefCell::new(None),
             language_override: RefCell::new(None),
             adopted_state: std::cell::Cell::new(false),
+            semantic_asked: std::cell::Cell::new(0),
             layout: RefCell::new(DocumentLayout {
                 views: 1,
                 dividers: Vec::new(),
@@ -805,9 +809,16 @@ impl Shell {
                         // say about a file starts having something: its
                         // hints are asked for again.
                         if text.is_none() {
+                            let mut asked: Vec<DocumentId> = Vec::new();
                             crate::workbench::Workbench::for_each(|workbench| {
                                 for page in workbench.all_pages() {
                                     crate::page::request_inlay_hints(&page);
+                                    // Its colouring covers every view of
+                                    // the file at once.
+                                    if !asked.contains(&page.document.id) {
+                                        asked.push(page.document.id);
+                                        crate::page::request_semantic_tokens(&page.document);
+                                    }
                                 }
                             });
                         }

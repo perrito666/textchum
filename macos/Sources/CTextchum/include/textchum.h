@@ -318,6 +318,28 @@ uint64_t tc_lsp_inlay_hints(struct TcApp *app,
                             uint32_t last_character);
 
 /**
+ * Requests the semantic tokens of the whole document at `path`.
+ * Returns the request id whose response goes to
+ * [`tc_document_set_semantic_tokens`] with
+ * [`tc_lsp_semantic_legend`], or 0 when no server of the document
+ * colours whole documents.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_semantic_tokens(struct TcApp *app, const char *path, uintptr_t path_len);
+
+/**
+ * The legend of the server [`tc_lsp_semantic_tokens`] asks for the
+ * document at `path`, as JSON. Free with [`tc_string_free`]. Null
+ * when there is no such server.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+char *tc_lsp_semantic_legend(struct TcApp *app, const char *path, uintptr_t path_len);
+
+/**
  * The first step of asking who calls the function at an LSP position;
  * same contract as [`tc_lsp_hover`]. The response's `result` goes to
  * [`tc_lsp_incoming_calls`] as it is.
@@ -890,6 +912,23 @@ char *tc_document_inlay_annotations_json(const struct TcDocument *document);
  * `len` readable bytes.
  */
 bool tc_document_set_diagnostics(struct TcDocument *document, const char *json, uintptr_t len);
+
+/**
+ * Takes a server's semantic tokens for the document's current text:
+ * the `result` of the [`tc_lsp_semantic_tokens`] response and the
+ * legend [`tc_lsp_semantic_legend`] gave. They are painted over the
+ * grammar's spans by [`tc_document_highlights`] from then on. False
+ * on a bad pointer or invalid UTF-8.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `result` and `legend`
+ * must point to `result_len` and `legend_len` readable bytes.
+ */
+bool tc_document_set_semantic_tokens(struct TcDocument *document,
+                                     const char *result,
+                                     uintptr_t result_len,
+                                     const char *legend,
+                                     uintptr_t legend_len);
 
 /**
  * The findings as they stand on the current text: the JSON array

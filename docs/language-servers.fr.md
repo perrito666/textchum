@@ -171,6 +171,10 @@ Language Servers ; voir [configuration](configuration.md#projets).
 - **Formater le document** (⌥⇧⌘F) reformate via le serveur, en gardant
   les tabulations si le document indente avec des tabulations, des
   espaces sinon.
+- **La couleur du serveur** : les noms sont colorés selon ce que le
+  serveur dit qu'ils sont — un paramètre, une constante, un type de la
+  bibliothèque — par-dessus les couleurs de la grammaire ; voir
+  [Coloration syntaxique](highlighting.md).
 - **Plan du document** (⇧⌘O) liste les symboles du fichier —
   l'imbrication rendue par l'indentation, filtrable en flou — et ⏎
   saute vers la sélection.
@@ -179,8 +183,7 @@ Language Servers ; voir [configuration](configuration.md#projets).
   lui.
 
 Pas encore là : Show Callers liste qui appelle une fonction, pas ce
-qu'elle appelle. La coloration vient de la grammaire seule ; les
-*semantic tokens* d'un serveur ne sont pas utilisés.
+qu'elle appelle.
 
 ## Serveurs
 

@@ -153,6 +153,13 @@ impl Instance {
         Some(!matches!(said.get(provider), None | Some(Value::Null) | Some(Value::Bool(false))))
     }
 
+    /// What the server said about `provider`, as it said it. None while
+    /// it has not answered initialize, or when it said nothing.
+    pub fn capability(&self, provider: &str) -> Option<Value> {
+        let capabilities = self.capabilities.lock().ok()?;
+        capabilities.as_ref()?.get(provider).cloned()
+    }
+
     pub fn send(&self, command: Command) {
         let _ = self.commands.send(command);
     }
@@ -329,6 +336,28 @@ fn run_manager(
                     "documentHighlight": {},
                     "callHierarchy": {},
                     "inlayHint": {},
+                    // Whole documents only, in the standard kinds; the
+                    // grammar already colours the text, which servers
+                    // are told so they may leave out what it covers.
+                    "semanticTokens": {
+                        "requests": {"full": true},
+                        "tokenTypes": [
+                            "namespace", "type", "class", "enum", "interface", "struct",
+                            "typeParameter", "parameter", "variable", "property",
+                            "enumMember", "event", "function", "method", "macro",
+                            "keyword", "modifier", "comment", "string", "number",
+                            "regexp", "operator", "decorator", "label"
+                        ],
+                        "tokenModifiers": [
+                            "declaration", "definition", "readonly", "static",
+                            "deprecated", "abstract", "async", "modification",
+                            "documentation", "defaultLibrary"
+                        ],
+                        "formats": ["relative"],
+                        "overlappingTokenSupport": false,
+                        "multilineTokenSupport": false,
+                        "augmentsSyntaxTokens": true
+                    },
                     "codeAction": {
                         "codeActionLiteralSupport": {"codeActionKind": {"valueSet": [
                             "", "quickfix", "refactor", "refactor.extract",

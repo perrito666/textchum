@@ -128,6 +128,10 @@ pub struct Document {
     /// findings, so they keep to their lines between one answer from
     /// the server and the next.
     inlay_hints: Vec<crate::inlay::Hint>,
+    /// The server's colouring of names, in text order; see
+    /// [`crate::semantic`]. Moved by every edit, dropped where one
+    /// touched it.
+    semantic_tokens: Vec<crate::semantic::Token>,
 }
 
 impl Default for Document {
@@ -153,6 +157,7 @@ impl Document {
             brackets: std::cell::RefCell::new(None),
             diagnostics: Vec::new(),
             inlay_hints: Vec::new(),
+            semantic_tokens: Vec::new(),
         }
     }
 
@@ -174,6 +179,7 @@ impl Document {
             brackets: std::cell::RefCell::new(None),
             diagnostics: Vec::new(),
             inlay_hints: Vec::new(),
+            semantic_tokens: Vec::new(),
         };
         doc.history.mark_saved();
         doc.detect_language();
@@ -359,15 +365,15 @@ impl Document {
     }
 
     /// Styled spans over the UTF-16 code unit range `start..end`, in
-    /// application order (later spans win where they overlap). Empty for
-    /// plain-text documents.
+    /// application order (later spans win where they overlap). Only the
+    /// server's tokens, if any, for a document no grammar reads.
     pub fn highlights(
         &self,
         start: usize,
         end: usize,
     ) -> Result<Vec<HighlightSpan>, BufferError> {
         let Some(syntax) = &self.syntax else {
-            return Ok(Vec::new());
+            return Ok(self.semantic_spans(start, end));
         };
         let (start_byte, end_byte) = self.buffer.utf16_range_to_bytes(start, end)?;
         let mut spans = syntax.highlights(self.buffer.rope(), start_byte..end_byte);
@@ -406,7 +412,25 @@ impl Document {
                 });
             }
         }
+        // The server's word on what each name is comes last, so it wins
+        // over the grammar's guess.
+        spans.extend(self.semantic_spans(start, end));
         Ok(spans)
+    }
+
+    /// The server's tokens over `start..end`. They never overlap one
+    /// another, so the first that ends past `start` begins the stretch.
+    fn semantic_spans(&self, start: usize, end: usize) -> Vec<HighlightSpan> {
+        let first = self.semantic_tokens.partition_point(|token| token.end <= start);
+        self.semantic_tokens[first..]
+            .iter()
+            .take_while(|token| token.start < end)
+            .map(|token| HighlightSpan {
+                start_utf16: token.start,
+                end_utf16: token.end,
+                style: token.style,
+            })
+            .collect()
     }
 
     pub fn path(&self) -> Option<&Path> {
@@ -495,6 +519,15 @@ impl Document {
             (finding.start, finding.end) =
                 diagnostics::shifted((finding.start, finding.end), start, end, new_len);
         }
+        self.semantic_tokens.retain_mut(|token| {
+            match crate::semantic::shifted((token.start, token.end), start, end, new_len) {
+                Some((from, to)) => {
+                    (token.start, token.end) = (from, to);
+                    true
+                }
+                None => false,
+            }
+        });
         self.inlay_hints.retain_mut(|hint| {
             // Every hint but a parameter's name is about the text before
             // it: an inferred type, a chained call's type.
@@ -586,6 +619,22 @@ impl Document {
             })
             .collect();
         serde_json::Value::Array(items).to_string()
+    }
+
+    /// Takes a server's semantic tokens for this text: the `result` of
+    /// `textDocument/semanticTokens/full` and the legend the server gave
+    /// at initialize, positioned against the text as it is now.
+    /// Replaces whatever was held; anything unreadable clears it.
+    pub fn set_semantic_tokens(&mut self, result: &str, legend: &str) {
+        let parse = |json: &str| serde_json::from_str::<serde_json::Value>(json).unwrap_or_default();
+        self.semantic_tokens = crate::semantic::decode(&parse(result), &parse(legend), |line, character| {
+            self.buffer.utf16_offset_at(line, character)
+        });
+    }
+
+    /// The server's tokens as they stand on the current text.
+    pub fn semantic_tokens(&self) -> &[crate::semantic::Token] {
+        &self.semantic_tokens
     }
 
     /// Takes a server's inlay hints for this text: the `result` of a
@@ -1149,6 +1198,41 @@ use d;
         // Undo takes it back the same way.
         document.undo();
         assert_eq!(lines_of(&document), vec![(5, 7, 36, 43)]);
+    }
+
+    #[test]
+    fn the_servers_tokens_paint_over_the_grammar_and_ride_the_text() {
+        let mut document = Document::new();
+        document.set_language(Some("rust"));
+        document.replace_utf16(0, 0, "fn f(n: u8) {\n    let total = n;\n}\n").unwrap();
+        document.set_semantic_tokens(
+            r#"{"data": [0, 5, 1, 0, 0, 1, 8, 5, 1, 0, 0, 8, 1, 0, 0]}"#,
+            r#"{"tokenTypes": ["parameter", "variable"], "tokenModifiers": []}"#,
+        );
+        let parameter = crate::syntax::theme::resolve("variable.parameter").unwrap();
+        let variable = crate::syntax::theme::resolve("variable").unwrap();
+        let painted = |document: &Document, from: usize, to: usize| {
+            document.highlights(0, document.buffer.len_utf16()).unwrap().into_iter().rev().find(|span| {
+                span.start_utf16 == from && span.end_utf16 == to
+            }).map(|span| span.style)
+        };
+        // Later spans win, and the server's come last.
+        let last = document.highlights(0, 35).unwrap().last().cloned().unwrap();
+        assert_eq!((last.start_utf16, last.end_utf16, last.style), (30, 31, parameter));
+        assert_eq!(painted(&document, 5, 6), Some(parameter));
+        assert_eq!(painted(&document, 22, 27), Some(variable));
+        // Asked about a stretch, only its tokens come.
+        assert!(document.highlights(0, 10).unwrap().iter().all(|span| span.start_utf16 < 10));
+        // A line typed above moves them with their code; renaming one
+        // leaves it to the grammar until the server reads it again.
+        document.replace_utf16(0, 0, "// x\n").unwrap();
+        assert_eq!(painted(&document, 10, 11), Some(parameter));
+        document.replace_utf16(27, 32, "sum").unwrap();
+        let tokens: Vec<(usize, usize)> =
+            document.semantic_tokens().iter().map(|token| (token.start, token.end)).collect();
+        assert_eq!(tokens, vec![(10, 11), (33, 34)]);
+        document.set_semantic_tokens("null", "null");
+        assert!(document.semantic_tokens().is_empty());
     }
 
     #[test]

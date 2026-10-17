@@ -48,9 +48,9 @@ msgstr ""
 
 #: core/textchum-core/src/presets.rs
 msgid ""
-"gopls with staticcheck and its type and parameter hints on, and goimports "
-"before every save."
-msgstr "gopls avec staticcheck et ses indications de types et de paramètres activés, et goimports avant chaque enregistrement."
+"gopls with staticcheck, its colouring and its type and parameter hints on, "
+"and goimports before every save."
+msgstr "gopls avec staticcheck, sa coloration et ses indications de types et de paramètres activées, et goimports avant chaque enregistrement."
 
 #: core/textchum-core/src/presets.rs
 msgid "TypeScript and JavaScript"

@@ -64,6 +64,18 @@ without a partner keeps its syntax colour, which is what makes it
 stand out. Documents past a million characters keep neither: the scan
 is the whole text and its strings, again after every edit.
 
+## From the language server
+
+The grammar knows the shape of the text; a language server knows what
+each name is. When a file's server colours names — rust-analyzer does,
+and gopls does once told to, which the Go preset does — its word is
+painted over the grammar's, under the same names the theme styles. A
+parameter, a constant or a library type takes its own colour wherever
+it is used, not only where the grammar can tell it apart. The server is
+asked once the typing pauses; until it answers, a name just edited
+keeps the grammar's colour, and a kind of name no theme has a colour
+for is left to the grammar.
+
 ## How it works
 
 The division of labor follows the project's architecture rule:
@@ -107,6 +119,9 @@ their advance width across weights, so nothing reflows.
 
 - The rainbow's six colours are the editor's own, not the theme's; a
   theme cannot change them yet.
+- A server that colours only part of a file at a time is not asked;
+  the whole file is asked for after every pause in typing, and the
+  server's colouring cannot be switched off on its own.
 - Queries limited to the visible stretch for documents of several
   hundred kilobytes: today they are coloured whole, or past a ceiling
   not at all.

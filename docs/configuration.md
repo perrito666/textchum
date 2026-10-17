@@ -475,7 +475,7 @@ save-preprocessor chain.
 |---|---|---|---|
 | Rust | rust-analyzer | checks with clippy | `rustfmt --edition {edition}` |
 | Python | pyright, with ruff beside it | — | `ruff check --fix …`, then `ruff format` |
-| Go | gopls | staticcheck, and its inferred types and parameter names as hints | `goimports` |
+| Go | gopls | staticcheck, its colouring of names, and its inferred types and parameter names as hints | `goimports` |
 | TypeScript and JavaScript | typescript-language-server | — | `prettier --stdin-filepath {path}` |
 | C and C++ | clangd | — | `clang-format --assume-filename={path}` |
 
