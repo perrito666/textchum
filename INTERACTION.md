@@ -237,8 +237,12 @@ A change to the interface says which rules it touches, and its smoke
 coverage checks them: who has the keyboard after the thing closes,
 what Return and Escape do, whether a stale answer is dropped. Some of
 it can only be seen with real input — a click while a balloon is up, a
-double-click, a pointer that rests — and is looked at on the running
-app before the change is called done.
+double-click, a pointer that rests — and `make feel` checks that on
+the running app, on macOS: it drives `dist/Textchum.app` on a fixture
+with the scripted server and reports each rule it reads back as kept,
+broken, or known to be broken until its issue lands. What it does not
+check is looked at on the running app before the change is called
+done.
 
 ## Where the code stands
 
