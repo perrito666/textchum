@@ -505,7 +505,7 @@ lesquels il doit tourner, et la chaîne de préprocesseurs de sauvegarde.
 |---|---|---|---|
 | Rust | rust-analyzer | vérifie avec clippy | `rustfmt --edition {edition}` |
 | Python | pyright, avec ruff à côté | — | `ruff check --fix …`, puis `ruff format` |
-| Go | gopls | staticcheck activé | `goimports` |
+| Go | gopls | staticcheck, et ses types inférés et noms de paramètres en indications | `goimports` |
 | TypeScript et JavaScript | typescript-language-server | — | `prettier --stdin-filepath {path}` |
 | C et C++ | clangd | — | `clang-format --assume-filename={path}` |
 

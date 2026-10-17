@@ -50,7 +50,9 @@ msgid ""
 msgstr ""
 
 #: core/textchum-core/src/presets.rs
-msgid "gopls with staticcheck on, and goimports before every save."
+msgid ""
+"gopls with staticcheck and its type and parameter hints on, and goimports "
+"before every save."
 msgstr ""
 
 #: core/textchum-core/src/presets.rs

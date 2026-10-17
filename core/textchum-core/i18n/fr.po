@@ -47,9 +47,10 @@ msgstr ""
 "ruff qui corrige et formate avant chaque enregistrement."
 
 #: core/textchum-core/src/presets.rs
-msgid "gopls with staticcheck on, and goimports before every save."
-msgstr ""
-"gopls avec staticcheck activé, et goimports avant chaque enregistrement."
+msgid ""
+"gopls with staticcheck and its type and parameter hints on, and goimports "
+"before every save."
+msgstr "gopls avec staticcheck et ses indications de types et de paramètres activés, et goimports avant chaque enregistrement."
 
 #: core/textchum-core/src/presets.rs
 msgid "TypeScript and JavaScript"
@@ -1707,7 +1708,9 @@ msgstr "symbole…"
 msgid ""
 "Nothing formats this document: no server can, and no save preprocessor is "
 "set for it."
-msgstr "Rien ne formate ce document : aucun serveur ne le peut, et aucun préprocesseur d'enregistrement n'est configuré pour lui."
+msgstr ""
+"Rien ne formate ce document : aucun serveur ne le peut, et aucun "
+"préprocesseur d'enregistrement n'est configuré pour lui."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "action…"
@@ -1761,7 +1764,9 @@ msgstr ""
 msgid ""
 "Save the file first — an untitled document has no properties to keep; New "
 "with Format sets its language."
-msgstr "Enregistrez d'abord le fichier : un document sans titre n'a pas de propriétés à garder ; Nouveau avec format fixe son langage."
+msgstr ""
+"Enregistrez d'abord le fichier : un document sans titre n'a pas de "
+"propriétés à garder ; Nouveau avec format fixe son langage."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Your changes will be lost if you don’t save them."

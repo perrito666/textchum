@@ -497,7 +497,7 @@ guardado.
 |---|---|---|---|
 | Rust | rust-analyzer | comprueba con clippy | `rustfmt --edition {edition}` |
 | Python | pyright, con ruff al lado | — | `ruff check --fix …`, luego `ruff format` |
-| Go | gopls | staticcheck activado | `goimports` |
+| Go | gopls | staticcheck, y sus tipos inferidos y nombres de parámetro como pistas | `goimports` |
 | TypeScript y JavaScript | typescript-language-server | — | `prettier --stdin-filepath {path}` |
 | C y C++ | clangd | — | `clang-format --assume-filename={path}` |
 
