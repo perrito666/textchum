@@ -2378,6 +2378,17 @@ uintptr_t tc_document_offset_for_line(const struct TcDocument *document,
 uintptr_t tc_document_len_lines(const struct TcDocument *document);
 
 /**
+ * The lines a list of places shows beside itself for the place on
+ * `line` (zero-based) of `text`: `{first, lines}`, `first` the
+ * zero-based number of the first line shown. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `text` must point to `len` readable bytes.
+ */
+char *tc_place_preview_json(const char *text, uintptr_t len, uintptr_t line);
+
+/**
  * Whether a path looks like a test, by the naming conventions of the
  * languages this editor knows: a `tests`/`spec`/`__tests__` directory,
  * or a name like `parser_test.go`, `test_parser.py`, `Button.test.ts`,

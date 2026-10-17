@@ -27,6 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             workbench.statusBar.notice(text)
         }
     }
+    /// The text of the open document at `path`, as it is in the editor,
+    /// which may be ahead of the disk; nil when it is not open.
+    func openText(ofPath path: String) -> String? {
+        editors.first { $0.coreDocument.path == path }?.coreDocument.text
+    }
+
     /// The open documents, for the smoke test to look at.
     var editorsForTest: [DocumentController] { editors }
 
@@ -2285,7 +2291,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         jumpHistoryPanel.show(
             rows: rows, over: NSApp.keyWindow, title: t("Jump History"),
-            placeholder: t("file or line…"), monospaced: true
+            placeholder: t("file or line…"), monospaced: true,
+            place: { index in
+                places.indices.contains(index) ? (places[index].path, places[index].line) : nil
+            }
         ) { [weak self] index in
             guard let self, places.indices.contains(index) else { return }
             self.recordJumpOrigin()

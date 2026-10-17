@@ -2671,10 +2671,11 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let jumps: Vec<(i32, usize)> =
             found.iter().map(|d| (d.line, d.character)).collect();
         let path = path.clone();
+        let places = jumps.iter().map(|(line, _)| Some((path.clone(), *line))).collect();
         present_picker(
             workbench,
             &format!("Diagnostics ({})", jumps.len()),
-            picker_items(labels),
+            picker_places(labels, places),
             move |workbench, index| {
                 let (line, character) = jumps[index];
                 workbench.note_jump();
@@ -4737,19 +4738,27 @@ fn show_places(workbench: &Rc<Workbench>, title: &str, rows: Vec<(String, i32, u
         .cloned()
         .partition(|(path, _, _)| references::is_test_path(path));
     let (picker_rows, rows) = if code.is_empty() || tests.is_empty() {
-        (picker_items(rows.iter().map(describe).collect()), rows)
+        (
+            picker_places(
+                rows.iter().map(describe).collect(),
+                rows.iter().map(|(path, line, _)| Some((path.clone(), *line))).collect(),
+            ),
+            rows,
+        )
     } else {
         let mut labels: Vec<PickerRow> = Vec::with_capacity(rows.len());
         for (at, reference) in code.iter().enumerate() {
             labels.push(PickerRow {
                 label: describe(reference),
                 heading: (at == 0).then(|| format!("Code ({})", code.len())),
+                place: Some((reference.0.clone(), reference.1)),
             });
         }
         for (at, reference) in tests.iter().enumerate() {
             labels.push(PickerRow {
                 label: describe(reference),
                 heading: (at == 0).then(|| format!("Tests ({})", tests.len())),
+                place: Some((reference.0.clone(), reference.1)),
             });
         }
         // The order the labels are in is the order the rows must be in.
@@ -4789,7 +4798,8 @@ fn show_outline(workbench: &Rc<Workbench>, path: &str, json: &str) -> bool {
     }
     let path = path.to_owned();
     let labels: Vec<String> = rows.iter().map(|(label, _, _)| label.clone()).collect();
-    present_picker(workbench, "Document Outline", picker_items(labels), move |workbench, index| {
+    let places = rows.iter().map(|(_, line, _)| Some((path.clone(), *line))).collect();
+    present_picker(workbench, "Document Outline", picker_places(labels, places), move |workbench, index| {
         let (_, line, character) = rows[index];
         workbench.open(Some(PathBuf::from(&path)), Some((line, character)));
     });
@@ -4816,7 +4826,11 @@ fn show_markdown_outline(workbench: &Rc<Workbench>, page: &Rc<Page>) -> bool {
         .map(|heading| format!("{}{}", "  ".repeat(heading.level - 1), heading.text))
         .collect();
     let path = page.path().borrow().clone();
-    present_picker(workbench, "Document Outline", picker_items(labels), move |workbench, index| {
+    let places = rows
+        .iter()
+        .map(|(line, _)| path.as_ref().map(|path| (path.clone(), *line)))
+        .collect();
+    present_picker(workbench, "Document Outline", picker_places(labels, places), move |workbench, index| {
         let (line, character) = rows[index];
         match &path {
             Some(path) => {
@@ -4846,6 +4860,9 @@ fn show_markdown_outline(workbench: &Rc<Workbench>, page: &Rc<Page>) -> bool {
 struct PickerRow {
     label: String,
     heading: Option<String>,
+    /// Where the row goes, for a list of places: the file and the
+    /// zero-based line, shown beside the list while the row is selected.
+    place: Option<(String, i32)>,
 }
 
 /// Every label as a row, for pickers with nothing to divide.
@@ -4855,7 +4872,17 @@ fn picker_items(labels: Vec<String>) -> Vec<PickerRow> {
         .map(|label| PickerRow {
             label,
             heading: None,
+            place: None,
         })
+        .collect()
+}
+
+/// Every label as a row, each with the place it goes to.
+fn picker_places(labels: Vec<String>, places: Vec<Option<(String, i32)>>) -> Vec<PickerRow> {
+    labels
+        .into_iter()
+        .zip(places)
+        .map(|(label, place)| PickerRow { label, heading: None, place })
         .collect()
 }
 
@@ -4865,64 +4892,208 @@ fn present_picker(
     rows: Vec<PickerRow>,
     choose: impl Fn(&Rc<Workbench>, usize) + 'static,
 ) {
+    let rows = Rc::new(rows);
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Browse);
-    for row in &rows {
-        let row_label = gtk::Label::new(Some(&row.label));
-        row_label.set_xalign(0.0);
-        row_label.set_margin_start(10);
-        row_label.set_margin_end(10);
-        row_label.set_margin_top(4);
-        row_label.set_margin_bottom(4);
-        list.append(&row_label);
-    }
+    // The rows on show, as indices into `rows`: all of them, or the
+    // ones what is typed matches.
+    let visible: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
+    let filtering = Rc::new(Cell::new(false));
     // Headings go on as GtkListBox headers rather than as rows: a
-    // header is not a row, so ↑/↓ never land on one and the row index
-    // stays the item index.
-    let headings: Vec<Option<String>> = rows.iter().map(|row| row.heading.clone()).collect();
-    list.set_header_func(move |row, _| {
-        let Some(heading) = headings.get(row.index().max(0) as usize).cloned().flatten() else {
-            row.set_header(gtk::Widget::NONE);
-            return;
-        };
-        let label = gtk::Label::new(Some(&heading));
-        label.set_xalign(0.0);
-        label.set_margin_start(10);
-        label.set_margin_top(8);
-        label.set_margin_bottom(2);
-        label.add_css_class("dim-label");
-        label.add_css_class("heading");
-        row.set_header(Some(&label));
-    });
+    // header is not a row, so ↑/↓ never land on one. While filtering
+    // they go, since they describe sections that are no longer there.
+    {
+        let rows = Rc::clone(&rows);
+        let visible = Rc::clone(&visible);
+        let filtering = Rc::clone(&filtering);
+        list.set_header_func(move |row, _| {
+            let heading = (!filtering.get())
+                .then(|| visible.borrow().get(row.index().max(0) as usize).copied())
+                .flatten()
+                .and_then(|at| rows[at].heading.clone());
+            let Some(heading) = heading else {
+                row.set_header(gtk::Widget::NONE);
+                return;
+            };
+            let label = gtk::Label::new(Some(&heading));
+            label.set_xalign(0.0);
+            label.set_margin_start(10);
+            label.set_margin_top(8);
+            label.set_margin_bottom(2);
+            label.add_css_class("dim-label");
+            label.add_css_class("heading");
+            row.set_header(Some(&label));
+        });
+    }
+    let fill = {
+        let list = list.clone();
+        let rows = Rc::clone(&rows);
+        let visible = Rc::clone(&visible);
+        let filtering = Rc::clone(&filtering);
+        Rc::new(move |query: &str| {
+            while let Some(row) = list.row_at_index(0) {
+                list.remove(&row);
+            }
+            let query = query.to_lowercase();
+            filtering.set(!query.is_empty());
+            let mut shown = Vec::new();
+            for (at, row) in rows.iter().enumerate() {
+                // Every character typed, in order: the palette's match.
+                let mut wanted = query.chars().peekable();
+                for candidate in row.label.to_lowercase().chars() {
+                    if wanted.peek() == Some(&candidate) {
+                        wanted.next();
+                    }
+                }
+                if wanted.peek().is_some() {
+                    continue;
+                }
+                let row_label = gtk::Label::new(Some(&row.label));
+                row_label.set_xalign(0.0);
+                row_label.set_margin_start(10);
+                row_label.set_margin_end(10);
+                row_label.set_margin_top(4);
+                row_label.set_margin_bottom(4);
+                list.append(&row_label);
+                shown.push(at);
+            }
+            *visible.borrow_mut() = shown;
+            list.invalidate_headers();
+            if let Some(first) = list.row_at_index(0) {
+                list.select_row(Some(&first));
+            }
+        })
+    };
+    fill("");
+
+    // Typing at the list starts filtering it: the search bar comes in
+    // with what was typed (3.3).
+    let search = gtk::SearchEntry::new();
+    let search_bar = gtk::SearchBar::new();
+    search_bar.set_child(Some(&search));
+    search_bar.connect_entry(&search);
+    {
+        let fill = Rc::clone(&fill);
+        search.connect_search_changed(move |entry| fill(&entry.text()));
+    }
+
     let scrolled = gtk::ScrolledWindow::builder()
         .child(&list)
         .min_content_height(280)
         .min_content_width(420)
+        .vexpand(true)
         .build();
+    // A list of places shows the selected one beside it (3.5).
+    let has_places = rows.iter().any(|row| row.place.is_some());
+    let preview = gtk::TextView::new();
+    preview.set_editable(false);
+    preview.set_cursor_visible(false);
+    preview.set_monospace(true);
+    preview.set_left_margin(8);
+    preview.set_top_margin(8);
+    let mark = gtk::TextTag::builder().name("place").paragraph_background("rgba(53,132,228,0.25)").build();
+    preview.buffer().tag_table().add(&mark);
+    if has_places {
+        let rows = Rc::clone(&rows);
+        let visible = Rc::clone(&visible);
+        let preview = preview.clone();
+        list.connect_row_selected(move |_, row| {
+            let buffer = preview.buffer();
+            let place = row
+                .and_then(|row| visible.borrow().get(row.index().max(0) as usize).copied())
+                .and_then(|at| rows[at].place.clone());
+            let Some((path, line)) = place else {
+                buffer.set_text("");
+                return;
+            };
+            // The open document as it is in the editor, which may be
+            // ahead of the disk; else the file.
+            let open = Shell::instance()
+                .pages
+                .borrow()
+                .get(&path)
+                .map(|handles| handles.document.state.borrow().document.text());
+            let text = open.or_else(|| std::fs::read_to_string(&path).ok()).unwrap_or_default();
+            let (first, lines) = references::place_preview(&text, line.max(0) as usize);
+            let width = (first + lines.len()).to_string().len();
+            let shown: String = lines
+                .iter()
+                .enumerate()
+                .map(|(at, text)| format!("{:>width$}  {text}\n", first + at + 1))
+                .collect();
+            buffer.set_text(&shown);
+            let target = (line.max(0) as usize).saturating_sub(first) as i32;
+            if let (Some(start), Some(mut end)) = (buffer.iter_at_line(target), buffer.iter_at_line(target)) {
+                end.forward_to_line_end();
+                buffer.apply_tag_by_name("place", &start, &end);
+            }
+        });
+    }
     let dialog = adw::Window::builder()
         .transient_for(&workbench.window)
         .modal(true)
         .title(title)
-        .default_width(460)
-        .default_height(340)
+        .default_width(if has_places { 1000 } else { 460 })
+        .default_height(if has_places { 420 } else { 340 })
         .build();
+    search_bar.set_key_capture_widget(Some(&dialog));
     let header = adw::HeaderBar::new();
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     content.append(&header);
-    content.append(&scrolled);
+    content.append(&search_bar);
+    if has_places {
+        let preview_scroll = gtk::ScrolledWindow::builder().child(&preview).hexpand(true).build();
+        let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
+        paned.set_start_child(Some(&scrolled));
+        paned.set_end_child(Some(&preview_scroll));
+        paned.set_position(440);
+        paned.set_vexpand(true);
+        content.append(&paned);
+    } else {
+        content.append(&scrolled);
+    }
     dialog.set_content(Some(&content));
-    {
+    let choose = Rc::new(choose);
+    let pick = {
         let workbench = Rc::clone(workbench);
         let dialog = dialog.clone();
-        list.connect_row_activated(move |_, row| {
-            let index = row.index();
-            if index >= 0 {
-                choose(&workbench, index as usize);
-            }
+        let visible = Rc::clone(&visible);
+        let choose = Rc::clone(&choose);
+        Rc::new(move |row: i32| {
+            let Some(at) = visible.borrow().get(row.max(0) as usize).copied() else { return };
             dialog.close();
-        });
+            choose(&workbench, at);
+        })
+    };
+    {
+        let pick = Rc::clone(&pick);
+        list.connect_row_activated(move |_, row| pick(row.index()));
     }
-    // Escape closes, like every dialog should.
+    {
+        // Return in the search field takes the selected row, the first
+        // one with nothing moved; the arrows move from the field.
+        let pick = Rc::clone(&pick);
+        let list_for_activate = list.clone();
+        search.connect_activate(move |_| {
+            pick(list_for_activate.selected_row().map(|row| row.index()).unwrap_or(0));
+        });
+        let keys = gtk::EventControllerKey::new();
+        let list = list.clone();
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if key != gtk::gdk::Key::Down && key != gtk::gdk::Key::Up {
+                return glib::Propagation::Proceed;
+            }
+            let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
+            let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
+            if let Some(row) = list.row_at_index(next.max(0)) {
+                page::select_in_view(&list, &row);
+            }
+            glib::Propagation::Stop
+        });
+        search.add_controller(keys);
+    }
+    // Escape closes, like every dialog should; with a search going, the
+    // field takes the first Escape to end it.
     let keys = gtk::EventControllerKey::new();
     {
         let dialog = dialog.clone();

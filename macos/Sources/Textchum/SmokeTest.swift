@@ -969,6 +969,42 @@ func runSmokeTest() -> Int32 {
     }
     print("list keys ok (Return chooses the first item with nothing typed, arrows move from the field)")
 
+    // A list without a field filters as soon as a letter is typed at
+    // it (3.3), and a list of places shows the selected one's lines
+    // beside it, the place's own line among them (3.5).
+    do {
+        let placesDir = NSTemporaryDirectory() + "textchum-smoke-places-\(getpid())"
+        try? FileManager.default.createDirectory(atPath: placesDir, withIntermediateDirectories: true)
+        let placeFile = placesDir + "/a.rs"
+        try? (0..<30).map { "line number \($0)" }.joined(separator: "\n")
+            .write(toFile: placeFile, atomically: true, encoding: .utf8)
+        let places = ListPanel()
+        var went: [Int] = []
+        places.show(
+            rows: [.item("alpha"), .item("beta"), .item("gamma")], over: nil, title: "smoke places",
+            place: { index in (placeFile, [3, 12, 25][index]) }
+        ) { went.append($0) }
+        guard places.debugPreview.contains("line number 3"), !places.debugFiltering else {
+            print("FAIL: the first place is not previewed: \(places.debugPreview.prefix(80))")
+            return 1
+        }
+        places.debugPress(keyCode: 5, characters: "g")
+        guard places.debugFiltering, places.debugShownTexts == ["gamma"],
+            places.debugPreview.contains("line number 25")
+        else {
+            print("FAIL: typing at a list without a field did not filter it: \(places.debugShownTexts)")
+            return 1
+        }
+        places.debugPress(keyCode: 36, characters: "\r")
+        guard went == [2] else {
+            print("FAIL: Return after filtering did not take the match: \(went)")
+            return 1
+        }
+        places.close()
+        try? FileManager.default.removeItem(atPath: placesDir)
+    }
+    print("list typing and preview ok (a letter starts filtering, the selected place is shown beside the list)")
+
     // Rename Symbol asks in place: a field over the name, prefilled,
     // the caret put on the name so its uses get marked. Return hands
     // the new name on, the same name or Escape hands nothing on, and

@@ -70,9 +70,41 @@ pub fn is_test_path(path: &str) -> bool {
         || TEST_SUFFIXES.iter().any(|suffix| stem.ends_with(suffix))
 }
 
+/// The lines a list of places shows beside itself for the place on
+/// `line` (zero-based) of `text`: a few before it, the line, more
+/// after it, as (first line's number, the lines). Fewer before than
+/// after, since what a definition or a call opens onto is below it. A
+/// line past the end shows the end.
+pub fn place_preview(text: &str, line: usize) -> (usize, Vec<String>) {
+    const BEFORE: usize = 4;
+    const AFTER: usize = 10;
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.is_empty() {
+        return (0, Vec::new());
+    }
+    let line = line.min(lines.len() - 1);
+    let first = line.saturating_sub(BEFORE);
+    let last = (line + AFTER).min(lines.len() - 1);
+    (first, lines[first..=last].iter().map(|line| (*line).to_owned()).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_place_is_shown_with_a_little_before_and_more_after() {
+        let text: String = (0..40).map(|n| format!("line {n}\n")).collect();
+        let (first, lines) = place_preview(&text, 20);
+        assert_eq!(first, 16);
+        assert_eq!(lines.first().map(String::as_str), Some("line 16"));
+        assert_eq!(lines.last().map(String::as_str), Some("line 30"));
+        let (first, lines) = place_preview(&text, 1);
+        assert_eq!((first, lines.len()), (0, 12));
+        let (first, lines) = place_preview(&text, 500);
+        assert_eq!((first, lines.last().map(String::as_str)), (35, Some("line 39")));
+        assert_eq!(place_preview("", 3), (0, Vec::new()));
+    }
 
     #[test]
     fn a_directory_named_for_tests_makes_everything_under_it_one() {
