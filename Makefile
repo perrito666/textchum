@@ -13,7 +13,7 @@ DOCS_VENV     := .docs-venv
 
 # `linux` MUST stay in this list: a directory of that name exists, and
 # without .PHONY make declares it up to date and builds nothing.
-.PHONY: all build core run test smoke header-check i18n-check check app playground docs docs-serve clean install-cli linux install-linux deb rpm
+.PHONY: all build core run test smoke header-check i18n-check check app playground feel docs docs-serve clean install-cli linux install-linux deb rpm
 
 all: build
 
@@ -82,6 +82,11 @@ app: core
 ## the one already made.
 playground:
 	scripts/playground.sh
+
+## Drive the built app with real input and check it behaves as
+## INTERACTION.md says (macOS; takes over the screen for half a minute).
+feel: app
+	scripts/feel.sh
 
 ## The GTK shell (Linux only; needs gtk4/libadwaita/gtksourceview dev
 ## packages — see docs/getting-started.md).

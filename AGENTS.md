@@ -81,6 +81,12 @@ push.
   their smoke coverage checks those: who has the keyboard after the
   thing closes, what Return and Escape do, whether a late answer is
   dropped.
+- **`make feel` drives the built app with real input** on macOS — clicks,
+  double-clicks, pointer rests, keys — and checks the rules in
+  `INTERACTION.md` that only real events can show. It takes over the
+  screen for half a minute and is not part of `make check`; run it
+  after a change to how the editor answers input, and add a check to
+  `scripts/feel.js` when a new rule can be seen that way.
 - **UI changes get looked at.** The app has hidden `--debug-panel`
   hooks (files, grep, settings, palette, outline, hover, complete,
   status, about, …) and a `--config <path>` flag precisely so a screen
