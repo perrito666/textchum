@@ -4421,12 +4421,25 @@ func runSmokeTest() -> Int32 {
             print("FAIL: the gaps are not where the notes are, or the text changed: \(String(describing: gapWidth))")
             return 1
         }
-        // Typing right after the name: the typed text has no kern of
-        // its own, so the gap does not stretch with the typing.
+        // Typing on at the end of the name: the type is about the name,
+        // so it moves after what is typed — the gap goes from `d` to
+        // the new letter — instead of splitting the name in two. The
+        // parameter's name stays before its argument.
         hintedView.setSelectedRange(NSRange(location: 21, length: 0))
         hintedView.insertText("x", replacementRange: NSRange(location: 21, length: 0))
-        guard hintedView.textStorage?.attribute(.kern, at: 21, effectiveRange: nil) == nil else {
-            print("FAIL: text typed beside a note took its gap along")
+        guard hintedView.inlineNotes.first?.offset == 22,
+            hintedView.textStorage?.attribute(.kern, at: 21, effectiveRange: nil) != nil,
+            hintedView.textStorage?.attribute(.kern, at: 20, effectiveRange: nil) == nil,
+            // The caret stands at the note: drawn by the view at the gap's
+            // start, the system's own hidden there.
+            hintedView.drawsCaretAtNote, hintedView.insertionPointColor == .clear
+        else {
+            print("FAIL: the type did not move on with the name being typed: \(hintedView.inlineNotes)")
+            return 1
+        }
+        hintedView.setSelectedRange(NSRange(location: 4, length: 0))
+        guard !hintedView.drawsCaretAtNote, hintedView.insertionPointColor != .clear else {
+            print("FAIL: the caret was not given back away from a note")
             return 1
         }
         hintedView.insertText("", replacementRange: NSRange(location: 21, length: 1))
