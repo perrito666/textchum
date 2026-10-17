@@ -305,6 +305,16 @@ msgstr ""
 msgid "Show Diagnostic for Line"
 msgstr ""
 
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Next Finding"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Previous Finding"
+msgstr ""
+
 #: linux/src/keyboard.rs macos/Sources/Textchum/InfoPanel.swift
 msgid "Diagnostics"
 msgstr ""
@@ -674,10 +684,6 @@ msgid "Nothing reported on this line."
 msgstr ""
 
 #: linux/src/workbench.rs
-msgid "Close"
-msgstr ""
-
-#: linux/src/workbench.rs
 msgid "Nothing reported in this document."
 msgstr ""
 
@@ -899,6 +905,15 @@ msgstr ""
 
 #: linux/src/workbench.rs
 msgid "filter text…"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Nothing is reported in this document."
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Close"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/BlamePanel.swift
@@ -1654,10 +1669,6 @@ msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "No usages found."
-msgstr ""
-
-#: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing is reported in this document."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift

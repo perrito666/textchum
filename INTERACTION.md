@@ -260,9 +260,8 @@ What breaks these rules today, each to be fixed under its own issue:
 - **7.2, 7.3, 7.4** There is no last-edit command, no recent places
   list, and jumps land without animation, often at an edge.
 - **10.3** Selection does not grow or shrink by structure.
-- **12.1, 12.2, 12.3** No gutter mark for fixes, no next/previous
-  finding command, completion ranked by the server's order alone and
-  without documentation beside it.
+- **12.1, 12.3** No gutter mark for fixes, and completion ranked by
+  the server's order alone and without documentation beside it.
 - **13.2** Go to Symbol lists no recent symbols with nothing typed.
 - **2.1** On Linux, Escape in the text does not close the find bar,
   which belongs to the window rather than the document.

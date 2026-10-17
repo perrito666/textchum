@@ -484,6 +484,9 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.goto-line", "<Ctrl>l"),
     ("win.blame", "<Ctrl><Alt>b"),
     ("win.diagnostic", "<Ctrl><Alt>e"),
+    // F2 is Rename here; the finding keys take the next free pair.
+    ("win.next-finding", "F8"),
+    ("win.previous-finding", "<Shift>F8"),
     ("win.diagnostic-list", "<Ctrl><Shift>e"),
     ("win.block-start", "<Ctrl><Alt>Up"),
     ("win.block-end", "<Ctrl><Alt>Down"),

@@ -126,6 +126,10 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   names its severity, because an underline says only that something is
   wrong and a warning should not read like an error. No round trip:
   the finding is already in hand.
+- **Next Finding** (F2, F8 on Linux) and **Previous Finding** (⇧F2,
+  Shift+F8) take the caret to the start of the next or the previous
+  finding, round the end of the document, and show its message there.
+  Each is a jump, so Go Back returns to where the caret was.
 - **Diagnostics…** (⇧⌘E, Ctrl+Shift+E on Linux) lists every finding in
   the document, in the order they appear — which is the order they get
   fixed in and the order the gutter shows them, with the severity in

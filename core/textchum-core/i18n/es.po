@@ -304,6 +304,16 @@ msgstr "Autoría de la línea"
 msgid "Show Diagnostic for Line"
 msgstr "Ver el diagnóstico de la línea"
 
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Next Finding"
+msgstr "Siguiente hallazgo"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Previous Finding"
+msgstr "Hallazgo anterior"
+
 #: linux/src/keyboard.rs macos/Sources/Textchum/InfoPanel.swift
 msgid "Diagnostics"
 msgstr "Diagnósticos"
@@ -673,10 +683,6 @@ msgid "Nothing reported on this line."
 msgstr "No hay nada informado en esta línea."
 
 #: linux/src/workbench.rs
-msgid "Close"
-msgstr "Cerrar"
-
-#: linux/src/workbench.rs
 msgid "Nothing reported in this document."
 msgstr "No hay nada informado en este documento."
 
@@ -899,6 +905,15 @@ msgstr "texto a buscar…"
 #: linux/src/workbench.rs
 msgid "filter text…"
 msgstr "texto para filtrar…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Nothing is reported in this document."
+msgstr "No hay nada señalado en este documento."
+
+#: linux/src/workbench.rs
+msgid "Close"
+msgstr "Cerrar"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/BlamePanel.swift
 msgid "Copy Commit"
@@ -1684,10 +1699,6 @@ msgid "No usages found."
 msgstr "No se encontraron usos."
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing is reported in this document."
-msgstr "No hay nada señalado en este documento."
-
-#: macos/Sources/Textchum/DocumentController.swift
 msgid "message…"
 msgstr "mensaje…"
 
@@ -1699,7 +1710,9 @@ msgstr "símbolo…"
 msgid ""
 "Nothing formats this document: no server can, and no save preprocessor is "
 "set for it."
-msgstr "Nada formatea este documento: ningún servidor puede, y no tiene un preprocesador de guardado configurado."
+msgstr ""
+"Nada formatea este documento: ningún servidor puede, y no tiene un "
+"preprocesador de guardado configurado."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "action…"
@@ -1753,7 +1766,9 @@ msgstr ""
 msgid ""
 "Save the file first — an untitled document has no properties to keep; New "
 "with Format sets its language."
-msgstr "Guarde antes el archivo: un documento sin título no tiene propiedades que conservar; Nuevo con formato fija su lenguaje."
+msgstr ""
+"Guarde antes el archivo: un documento sin título no tiene propiedades que "
+"conservar; Nuevo con formato fija su lenguaje."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Your changes will be lost if you don’t save them."

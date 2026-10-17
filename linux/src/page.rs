@@ -3182,6 +3182,28 @@ fn diagnostic_under(page: &Rc<Page>, x: f64, y: f64) -> Option<crate::shell::Dia
     diagnostic_at(handles, line, character)
 }
 
+/// Shows the finding at the caret in the balloon, pointing at the
+/// caret: the same words a pointer resting on it brings up. False when
+/// there is none there.
+pub fn show_finding_at_caret(page: &Rc<Page>) -> bool {
+    let Some(path) = page.path().borrow().clone() else { return false };
+    let (line, character) = lsp_anchor(page);
+    let found = {
+        let shell = Shell::instance();
+        let pages = shell.pages.borrow();
+        pages
+            .get(&path)
+            .and_then(|handles| diagnostic_at(handles, line as i32, character as usize))
+    };
+    let Some(found) = found else { return false };
+    let caret = page.buffer.iter_at_mark(&page.buffer.get_insert());
+    let place = page.view.iter_location(&caret);
+    let (x, y) =
+        page.view.buffer_to_window_coords(gtk::TextWindowType::Widget, place.x(), place.y());
+    show_balloon(page, &format!("{}\n{}", found.kind(), found.message), x as f64, y as f64, None);
+    true
+}
+
 /// The balloon hover documentation and diagnostics both appear in;
 /// `about` is the text it explains, which the pointer may cross
 /// without closing it.

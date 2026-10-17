@@ -76,6 +76,8 @@ pub fn menu() -> Vec<Entry> {
                 action('p', "Run Save Preprocessors", "runPreprocessors"),
                 action('h', "Show Documentation for Symbol", "showHover"),
                 action('e', "Show Diagnostic for Line", "showDiagnostic"),
+                action(']', "Next Finding", "nextFinding"),
+                action('[', "Previous Finding", "previousFinding"),
                 action('l', "Diagnostics", "diagnosticList"),
             ],
         ),

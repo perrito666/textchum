@@ -47,9 +47,41 @@ pub fn shifted(range: (usize, usize), start: usize, end: usize, new_len: usize) 
     }
 }
 
+/// Where Next Finding goes from `offset`: the start of the first
+/// finding that starts after it, wrapping round to the first one; going
+/// back, the last that starts before it, wrapping round to the last.
+/// Strictly after and before, so pressing again moves on even from
+/// inside a finding. None when there are none.
+pub fn neighbour(findings: &[Finding], offset: usize, forward: bool) -> Option<usize> {
+    let mut starts: Vec<usize> = findings.iter().map(|finding| finding.start).collect();
+    starts.sort_unstable();
+    starts.dedup();
+    if forward {
+        starts.iter().copied().find(|start| *start > offset).or_else(|| starts.first().copied())
+    } else {
+        starts.iter().rev().copied().find(|start| *start < offset).or_else(|| starts.last().copied())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn finding(start: usize) -> Finding {
+        Finding { start, end: start + 2, severity: 1, message: String::new() }
+    }
+
+    #[test]
+    fn next_and_previous_move_on_and_wrap_round() {
+        let findings = vec![finding(40), finding(10), finding(25), finding(25)];
+        assert_eq!(neighbour(&findings, 0, true), Some(10));
+        assert_eq!(neighbour(&findings, 10, true), Some(25), "from a finding's start, on to the next");
+        assert_eq!(neighbour(&findings, 30, true), Some(40));
+        assert_eq!(neighbour(&findings, 40, true), Some(10), "past the last, round to the first");
+        assert_eq!(neighbour(&findings, 25, false), Some(10));
+        assert_eq!(neighbour(&findings, 5, false), Some(40), "before the first, round to the last");
+        assert_eq!(neighbour(&[], 5, true), None);
+    }
 
     #[test]
     fn a_finding_before_the_edit_stays_put() {

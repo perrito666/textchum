@@ -352,6 +352,8 @@ impl Workbench {
         go_section.append(Some(&tr("Go to Line…")), Some("win.goto-line"));
         go_section.append(Some(&tr("Blame Line…")), Some("win.blame"));
         go_section.append(Some(&tr("Show Diagnostic for Line")), Some("win.diagnostic"));
+        go_section.append(Some(&tr("Next Finding")), Some("win.next-finding"));
+        go_section.append(Some(&tr("Previous Finding")), Some("win.previous-finding"));
         go_section.append(Some(&tr("Diagnostics…")), Some("win.diagnostic-list"));
         go_section.append(Some(&tr("Go to Block Start")), Some("win.block-start"));
         go_section.append(Some(&tr("Go to Block End")), Some("win.block-end"));
@@ -2692,32 +2694,17 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         if page::enter_hover(&page) {
             return;
         }
-        let Some(path) = page.path().borrow().clone() else {
+        if page.path().borrow().is_none() {
             workbench.hint(&tr("No diagnostics for an unsaved document."));
             return;
-        };
-        let (line, character) = page::lsp_anchor(&page);
-        let shell = Shell::instance();
-        let found = {
-            let pages = shell.pages.borrow();
-            pages
-                .get(&path)
-                .and_then(|handles| {
-                    page::diagnostic_at(handles, line as i32, character as usize)
-                })
-        };
-        let Some(found) = found else {
+        }
+        // In the balloon, at the caret: a report is not a dialog (6.2).
+        if !page::show_finding_at_caret(&page) {
             workbench.hint(&tr("Nothing reported on this line."));
-            return;
-        };
-        // The same words the balloon uses, in a dialog: the caret is
-        // not a place a balloon can point at reliably.
-        let dialog = adw::AlertDialog::new(Some(found.kind()), Some(&found.message));
-        dialog.add_response("close", &tr("Close"));
-        dialog.set_default_response(Some("close"));
-        dialog.set_close_response("close");
-        dialog.present(Some(&workbench.window.clone()));
+        }
     });
+    add("next-finding", workbench, |workbench, _| go_to_finding(workbench, true));
+    add("previous-finding", workbench, |workbench, _| go_to_finding(workbench, false));
     add("diagnostic-list", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
@@ -3673,6 +3660,8 @@ const PALETTE: &[(&str, &str)] = &[
     ("Go to Line…", "win.goto-line"),
     ("Blame Line…", "win.blame"),
     ("Show Diagnostic for Line", "win.diagnostic"),
+    ("Next Finding", "win.next-finding"),
+    ("Previous Finding", "win.previous-finding"),
     ("Diagnostics…", "win.diagnostic-list"),
     ("Go to Block Start", "win.block-start"),
     ("Go to Block End", "win.block-end"),
@@ -6021,6 +6010,34 @@ fn add_filter_row(filters_box: &gtk::Box, rerun: &Rc<dyn Fn()>) {
     }
     filters_box.append(&row);
     pattern.grab_focus();
+}
+
+/// Next Finding and Previous Finding: the caret goes to the start of the
+/// next or the previous finding, round the end of the document, and its
+/// message is shown there (12.2). A jump of its own, so Go Back returns.
+fn go_to_finding(workbench: &Rc<Workbench>, forward: bool) {
+    let Some(page) = workbench.selected() else { return };
+    let caret = page.buffer.iter_at_mark(&page.buffer.get_insert());
+    let caret_utf16 = page
+        .buffer
+        .text(&page.buffer.start_iter(), &caret, true)
+        .encode_utf16()
+        .count();
+    let target = page.state.borrow().document.neighbouring_finding(caret_utf16, forward);
+    let Some(target) = target else {
+        workbench.hint(&tr("Nothing is reported in this document."));
+        return;
+    };
+    workbench.note_jump();
+    let text = page.buffer.text(&page.buffer.start_iter(), &page.buffer.end_iter(), true);
+    let mut at = page.buffer.iter_at_offset(page::char_offset(&text, target));
+    page.buffer.place_cursor(&at);
+    page.view.scroll_to_iter(&mut at, 0.1, false, 0.0, 0.0);
+    // Once the view has scrolled there, so the balloon points at it.
+    let page = Rc::clone(&page);
+    glib::idle_add_local_once(move || {
+        page::show_finding_at_caret(&page);
+    });
 }
 
 /// The project an untitled document in this window is being added to:
