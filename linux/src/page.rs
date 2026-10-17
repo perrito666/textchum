@@ -965,7 +965,20 @@ pub fn request_inlay_hints(page: &Rc<Page>) {
     let last = (bottom.line() + 100).min(last_line) as u32;
     let asked = page.inlay_asked.get().wrapping_add(1);
     page.inlay_asked.set(asked);
-    let id = shell.pool.borrow_mut().inlay_hints(Path::new(&path), first, last);
+    // Ending at the last line's own end: a column past it is an error to
+    // gopls, which then shows no hints at all.
+    let last_character = page
+        .buffer
+        .iter_at_line(last as i32)
+        .map(|start| {
+            let mut end = start;
+            if !end.ends_line() {
+                end.forward_to_line_end();
+            }
+            page.buffer.text(&start, &end, true).encode_utf16().count() as u32
+        })
+        .unwrap_or(0);
+    let id = shell.pool.borrow_mut().inlay_hints(Path::new(&path), first, last, last_character);
     let weak = Rc::downgrade(page);
     shell.expect_response(id, move |json| {
         let Some(page) = weak.upgrade() else { return };

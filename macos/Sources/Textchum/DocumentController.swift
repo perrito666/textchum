@@ -3541,9 +3541,19 @@ final class DocumentController: NSResponder {
         let last = min(
             gutter.lineIndex(forOffset: min(NSMaxRange(painted), length)) + 100,
             gutter.lineIndex(forOffset: length))
+        // Ending at the last line's own end: a column past it is an error
+        // to gopls, which then shows no hints at all.
+        let text = textView.string as NSString
+        let lastStart = min(gutter.lineStart(ofLine: last), text.length)
+        var lastEnd = NSMaxRange(text.lineRange(for: NSRange(location: lastStart, length: 0)))
+        while lastEnd > lastStart, text.character(at: lastEnd - 1) == 10 || text.character(at: lastEnd - 1) == 13 {
+            lastEnd -= 1
+        }
         let version = textVersion
         flushLSPChange()
-        lspApp.lspInlayHints(path: path, firstLine: first, lastLine: last) { [weak self] json in
+        lspApp.lspInlayHints(
+            path: path, firstLine: first, lastLine: last, lastCharacter: lastEnd - lastStart
+        ) { [weak self] json in
             // An answer about text that has since changed is dropped;
             // the edit that changed it asked again.
             guard let self, self.textVersion == version else { return }

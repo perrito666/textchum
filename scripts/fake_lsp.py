@@ -202,8 +202,10 @@ def main():
                       "label": "arg:", "kind": 2}]
             lines = texts.get(uri, "").split("\n")
             # A range ending past the last line is an error to a real
-            # server, which then says nothing; so it is here.
-            if asked["end"]["line"] >= len(lines):
+            # server, which then says nothing, and so is one ending past
+            # the end of its line; so both are here.
+            if asked["end"]["line"] >= len(lines) or \
+                    asked["end"]["character"] > len(lines[asked["end"]["line"]].encode("utf-16-le")) // 2:
                 send({"jsonrpc": "2.0", "id": message["id"],
                       "error": {"code": -32602, "message": "line out of range"}})
                 continue
