@@ -2637,6 +2637,10 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("diagnostic", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
+        // Asked again while it is up: the keyboard goes inside (1.3).
+        if page::enter_hover(&page) {
+            return;
+        }
         let Some(path) = page.path().borrow().clone() else {
             workbench.hint(&tr("No diagnostics for an unsaved document."));
             return;

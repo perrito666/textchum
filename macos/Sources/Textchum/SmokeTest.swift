@@ -1833,6 +1833,58 @@ func runSmokeTest() -> Int32 {
     }
     print("caret hints ok (by the caret, never the keyboard's, gone at a caret move and at Escape)")
 
+    // Escape closes one thing per press, the topmost first (2.1): the
+    // balloon before the find bar, the find bar before nothing. With
+    // nothing up it is still taken, so the text view's own completion
+    // list never comes, and the caret never moves (2.2). Asking again
+    // for what a balloon shows goes inside it (1.3).
+    do {
+        let escapeCore = CoreDocument()
+        let escapeBench = Workbench(sidebar: nil)
+        let escaping = DocumentController(document: escapeCore)
+        escapeBench.add(escaping)
+        escapeBench.window?.makeKeyAndOrderFront(nil)
+        guard let escapeView = escaping.primaryView as? EditorTextView else {
+            print("FAIL: no view to press Escape in")
+            return 1
+        }
+        escapeView.insertText("fn main() {}\n", replacementRange: NSRange(location: 0, length: 0))
+        escapeView.setSelectedRange(NSRange(location: 3, length: 0))
+        escaping.showFindReplace(nil)
+        escaping.debugShowHover()
+        let escape = { _ = escaping.textView(escapeView, doCommandBy: #selector(NSResponder.cancelOperation(_:))) }
+        guard escaping.hasHoverBubble else {
+            print("FAIL: the debug balloon did not come up")
+            return 1
+        }
+        guard escaping.enterBalloon() else {
+            print("FAIL: asking again did not go into the balloon")
+            return 1
+        }
+        escape()
+        guard !escaping.hasHoverBubble, escapeView.selectedRange() == NSRange(location: 3, length: 0) else {
+            print("FAIL: the first Escape did not close only the balloon")
+            return 1
+        }
+        guard escaping.findBarIsShown else {
+            print("FAIL: the first Escape closed the find bar as well")
+            return 1
+        }
+        escape()
+        guard !escaping.findBarIsShown else {
+            print("FAIL: the second Escape did not close the find bar")
+            return 1
+        }
+        guard escaping.backOutOneLevel(), escapeView.selectedRange() == NSRange(location: 3, length: 0),
+            !escaping.enterBalloon()
+        else {
+            print("FAIL: Escape with nothing up moved the caret, or there was a balloon to enter")
+            return 1
+        }
+        escapeBench.window?.orderOut(nil)
+    }
+    print("escape ok (one thing per press, balloon before find bar, nothing up is still taken; asking again goes inside)")
+
     // A balloon's content can be selected, and one longer than a
     // balloon should be scrolls from its top instead of being cut.
     do {
