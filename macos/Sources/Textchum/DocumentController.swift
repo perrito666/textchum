@@ -6347,6 +6347,7 @@ extension DocumentController: NSTextViewDelegate {
         if let textView = notification.object as? NSTextView {
             workbench?.noteFocus(on: textView)
             textView.typingAttributes.removeValue(forKey: .kern)
+            (textView as? EditorTextView)?.refreshCaretAtNote()
             // The signature is about the call on its line; the caret
             // leaving that line leaves the call.
             if let asked = signatureLine,

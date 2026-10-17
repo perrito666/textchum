@@ -496,7 +496,10 @@ impl Document {
                 diagnostics::shifted((finding.start, finding.end), start, end, new_len);
         }
         self.inlay_hints.retain_mut(|hint| {
-            match crate::inlay::shifted(hint.offset, start, end, new_len) {
+            // Every hint but a parameter's name is about the text before
+            // it: an inferred type, a chained call's type.
+            let about_text_before = hint.kind != 2;
+            match crate::inlay::shifted(hint.offset, start, end, new_len, about_text_before) {
                 Some(offset) => {
                     hint.offset = offset;
                     true

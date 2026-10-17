@@ -54,8 +54,23 @@ const WIDEST: usize = 96;
 /// Where a hint's position ends up after `start..end` was replaced by
 /// `new_len` units: before the edit it stays, after it moves, and
 /// inside it the hint is gone with what it was about.
-pub fn shifted(offset: usize, start: usize, end: usize, new_len: usize) -> Option<usize> {
-    if offset <= start {
+///
+/// Typing exactly at a hint depends on which side of it the hint
+/// belongs to. A type is about the name before it, and a name being
+/// typed on is still that name: the hint goes after what is typed —
+/// left where it was, it split the name in two, `d: Drinkerx`. A
+/// parameter's name is about the argument after it, and stays before
+/// what is typed into that argument.
+pub fn shifted(
+    offset: usize,
+    start: usize,
+    end: usize,
+    new_len: usize,
+    about_text_before: bool,
+) -> Option<usize> {
+    if about_text_before && start == offset && end == offset {
+        Some(offset + new_len)
+    } else if offset <= start {
         Some(offset)
     } else if offset >= end {
         // `offset >= end >= end - start`, so this cannot go below zero.
@@ -120,12 +135,16 @@ mod tests {
 
     #[test]
     fn a_position_rides_an_edit_before_it_and_goes_with_one_around_it() {
-        assert_eq!(shifted(10, 12, 14, 0), Some(10), "an edit after it");
-        assert_eq!(shifted(10, 10, 10, 3), Some(10), "typing at it leaves it before the typing");
-        assert_eq!(shifted(10, 2, 2, 5), Some(15), "an insertion before it");
-        assert_eq!(shifted(10, 2, 6, 0), Some(6), "a deletion before it");
-        assert_eq!(shifted(10, 6, 10, 1), Some(7), "a replacement ending at it");
-        assert_eq!(shifted(10, 8, 12, 0), None, "an edit that swallows it");
+        for about_before in [false, true] {
+            assert_eq!(shifted(10, 12, 14, 0, about_before), Some(10), "an edit after it");
+            assert_eq!(shifted(10, 2, 2, 5, about_before), Some(15), "an insertion before it");
+            assert_eq!(shifted(10, 2, 6, 0, about_before), Some(6), "a deletion before it");
+            assert_eq!(shifted(10, 6, 10, 1, about_before), Some(7), "a replacement ending at it");
+            assert_eq!(shifted(10, 8, 12, 0, about_before), None, "an edit that swallows it");
+            assert_eq!(shifted(10, 10, 12, 0, about_before), Some(10), "a deletion just after it");
+        }
+        assert_eq!(shifted(10, 10, 10, 3, false), Some(10), "typing into the argument after a parameter's name");
+        assert_eq!(shifted(10, 10, 10, 3, true), Some(13), "typing on at the end of the name a type is about");
     }
 
     #[test]

@@ -249,8 +249,6 @@ What breaks these rules today, each to be fixed under its own issue:
   installing a grammar and of importing a theme, and the note that
   Universal Ctags is missing. They wait for a notice that can carry
   details.
-- **5.2** Inlay hints are laid out the moment they arrive, so text on
-  the line being typed can shift sideways.
 - **1.3** Show Documentation pressed again does not move into the
   balloon.
 - **2.1** Escape's order is not enforced in one place; each popup

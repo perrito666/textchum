@@ -65,31 +65,124 @@ final class EditorTextView: NSTextView {
     /// Opens the gaps for the notes as they are now, closing the old
     /// ones first. Called again when the font changes, since the gaps
     /// are measured in it.
+    ///
+    /// Only the gaps that differ from what the text already carries are
+    /// touched. A kern rides its character through an edit, so after a
+    /// keystroke nearly every gap is already right; laying them all out
+    /// again re-laid every line with a hint, on every key, and made the
+    /// line being typed flicker.
     func layOutInlineNotes() {
         guard let storage = textStorage else { return }
         let text = string as NSString
         let length = text.length
-        storage.beginEditing()
-        // Every kern in the text is one of these; text typed or pasted
-        // next to a gap may have inherited its kern, so it is not
-        // enough to close the gaps that were opened.
-        storage.enumerateAttribute(.kern, in: NSRange(location: 0, length: length)) {
-            value, range, _ in
-            if value != nil { storage.removeAttribute(.kern, range: range) }
-        }
         let attributes = inlineNoteAttributes
+        var wanted: [Int: CGFloat] = [:]
         for note in inlineNotes {
             // No gap at the start of a line: a line break stretched
             // reads as nothing, and the note would hang in the margin.
             guard note.offset >= 1, note.offset <= length else { continue }
             let before = text.character(at: note.offset - 1)
             guard before != 0x0A, before != 0x0D else { continue }
-            let width = ceil((note.text as NSString).size(withAttributes: attributes).width)
-            storage.addAttribute(
-                .kern, value: width, range: NSRange(location: note.offset - 1, length: 1))
+            wanted[note.offset - 1] = noteWidth(note.text, attributes: attributes)
+        }
+        // Every kern in the text is one of these: what is there now,
+        // including a kern that text pasted next to a gap inherited.
+        var present: [Int: CGFloat] = [:]
+        storage.enumerateAttribute(.kern, in: NSRange(location: 0, length: length)) {
+            value, range, _ in
+            guard let width = (value as? NSNumber).map({ CGFloat($0.doubleValue) }) else { return }
+            for index in range.location..<NSMaxRange(range) { present[index] = width }
+        }
+        guard present != wanted else { return }
+        storage.beginEditing()
+        for (index, width) in present where wanted[index] != width {
+            storage.removeAttribute(.kern, range: NSRange(location: index, length: 1))
+        }
+        for (index, width) in wanted where present[index] != width {
+            storage.addAttribute(.kern, value: width, range: NSRange(location: index, length: 1))
         }
         storage.endEditing()
         needsDisplay = true
+        refreshCaretAtNote()
+    }
+
+    /// The colour the caret had before it was hidden at a note.
+    private var caretColorAtNote: NSColor?
+
+    /// Where the caret is drawn when it stands at a note: the gap's
+    /// start, right after the text the note is about. The text system
+    /// puts the insertion point after a kerned character in the middle
+    /// of its gap, which drew the caret over the note's letters; its
+    /// own caret is a private view that cannot be moved, so it is made
+    /// clear there and this one is drawn in its place.
+    private var caretAtNoteRect: NSRect?
+
+    /// Hides the system caret at a note and draws one at the gap's
+    /// start, or gives the system caret back. Called when the selection
+    /// or the notes change.
+    func refreshCaretAtNote() {
+        let selection = selectedRange()
+        let text = string as NSString
+        var rect: NSRect?
+        if selection.length == 0, selection.location >= 1, selection.location < text.length,
+            let note = inlineNotes.first(where: { $0.offset == selection.location }),
+            text.character(at: selection.location) != 0x0A, text.character(at: selection.location) != 0x0D,
+            let caret = insertionRect(at: selection.location)
+        {
+            let width = noteWidth(note.text, attributes: inlineNoteAttributes)
+            // A point to the left of the gap, so it touches the name's
+            // last letter rather than the note's first.
+            rect = NSRect(x: caret.minX - width / 2 - 1, y: caret.minY, width: 2, height: caret.height)
+        }
+        if let rect {
+            if caretColorAtNote == nil { caretColorAtNote = insertionPointColor }
+            insertionPointColor = .clear
+            if let old = caretAtNoteRect { setNeedsDisplay(old.insetBy(dx: -2, dy: 0)) }
+            caretAtNoteRect = rect
+            setNeedsDisplay(rect.insetBy(dx: -2, dy: 0))
+        } else if let color = caretColorAtNote {
+            insertionPointColor = color
+            caretColorAtNote = nil
+            if let old = caretAtNoteRect { setNeedsDisplay(old.insetBy(dx: -2, dy: 0)) }
+            caretAtNoteRect = nil
+        }
+    }
+
+    /// Whether the caret is being drawn by this view, at a note.
+    var drawsCaretAtNote: Bool { caretAtNoteRect != nil }
+
+    /// The insertion point's rectangle at `offset`, in view coordinates,
+    /// as the layout reports it.
+    private func insertionRect(at offset: Int) -> NSRect? {
+        guard let layoutManager = textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            let location = contentManager.location(layoutManager.documentRange.location, offsetBy: offset),
+            let range = NSTextRange(location: location, end: location)
+        else { return nil }
+        var found: NSRect?
+        layoutManager.enumerateTextSegments(in: range, type: .standard, options: [.upstreamAffinity]) {
+            _, frame, _, _ in
+            found = frame
+            return false
+        }
+        return found?.offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+    }
+
+    /// Widths of the notes drawn, by text, in the font they were
+    /// measured in: the same few labels come back on every keystroke.
+    private var noteWidths: [String: CGFloat] = [:]
+    private var noteWidthsFont: NSFont?
+
+    private func noteWidth(_ text: String, attributes: [NSAttributedString.Key: Any]) -> CGFloat {
+        let font = attributes[.font] as? NSFont
+        if font != noteWidthsFont {
+            noteWidths = [:]
+            noteWidthsFont = font
+        }
+        if let known = noteWidths[text] { return known }
+        let width = ceil((text as NSString).size(withAttributes: attributes).width)
+        noteWidths[text] = width
+        return width
     }
 
     override func drawBackground(in rect: NSRect) {
@@ -101,6 +194,14 @@ final class EditorTextView: NSTextView {
         }
         drawBackgroundMarks(in: rect)
         drawInlineNotes(in: rect)
+        // In the gap, where no text is drawn over it, so drawing it
+        // under the text is drawing it on top. It does not blink.
+        if let caret = caretAtNoteRect, caret.intersects(rect),
+            window?.isKeyWindow == true, window?.firstResponder === self
+        {
+            (caretColorAtNote ?? .textColor).setFill()
+            caret.fill()
+        }
     }
 
     /// Paints each note into its gap. The text system reports the
@@ -139,7 +240,7 @@ final class EditorTextView: NSTextView {
                 return false
             }
             guard let caret else { continue }
-            let width = ceil((note.text as NSString).size(withAttributes: attributes).width)
+            let width = noteWidth(note.text, attributes: attributes)
             let atLineEnd =
                 note.offset == text.length
                 || text.character(at: note.offset) == 0x0A || text.character(at: note.offset) == 0x0D
