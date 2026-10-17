@@ -4314,6 +4314,23 @@ pub unsafe extern "C" fn tc_document_len_lines(document: *const TcDocument) -> u
 }
 
 
+/// The lines a list of places shows beside itself for the place on
+/// `line` (zero-based) of `text`: `{first, lines}`, `first` the
+/// zero-based number of the first line shown. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `text` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_place_preview_json(text: *const c_char, len: usize, line: usize) -> *mut c_char {
+    let text = unsafe { str_from_raw(text, len) }.unwrap_or_default();
+    catch_unwind(AssertUnwindSafe(|| {
+        let (first, lines) = textchum_core::references::place_preview(text, line);
+        owned_c_string(serde_json::json!({"first": first, "lines": lines}).to_string())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Whether a path looks like a test, by the naming conventions of the
 /// languages this editor knows: a `tests`/`spec`/`__tests__` directory,
 /// or a name like `parser_test.go`, `test_parser.py`, `Button.test.ts`,

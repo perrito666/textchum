@@ -255,8 +255,8 @@ What breaks these rules today, each to be fixed under its own issue:
   balloon.
 - **2.1** Escape's order is not enforced in one place; each popup
   handles its own.
-- **3.3, 3.5** Not every list filters by typing, and no list previews
-  the place it would go to.
+- **3.5** Open Quickly, Find in Project and Go to Symbol show no
+  preview of the place a row goes to.
 - **7.1** Find Next and Go to Block Start/End move the caret without
   recording the jump.
 - **7.2, 7.3, 7.4** There is no last-edit command, no recent places

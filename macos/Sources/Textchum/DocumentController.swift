@@ -1511,9 +1511,14 @@ final class DocumentController: NSResponder {
                 .map(String.init) ?? diagnostic.message
             return .item("\(diagnostic.line + 1)  \(kind)  \(message)")
         }
+        let path = coreDocument.path
         listPanel.show(
             rows: rows, over: window,
-            title: "Diagnostics (\(ordered.count))", placeholder: t("message…")
+            title: "Diagnostics (\(ordered.count))", placeholder: t("message…"),
+            place: { index in
+                guard let path, ordered.indices.contains(index) else { return nil }
+                return (path, ordered[index].line)
+            }
         ) { [weak self] index in
             guard let self, ordered.indices.contains(index) else { return }
             let diagnostic = ordered[index]
@@ -1603,8 +1608,13 @@ final class DocumentController: NSResponder {
         let rows: [ListPanel.Row] = symbols.map { symbol in
             .item(String(repeating: "  ", count: symbol.depth) + symbol.name)
         }
+        let path = coreDocument.path
         listPanel.show(
-            rows: rows, over: window, title: t("Document Outline"), placeholder: t("symbol…")
+            rows: rows, over: window, title: t("Document Outline"), placeholder: t("symbol…"),
+            place: { index in
+                guard let path, symbols.indices.contains(index) else { return nil }
+                return (path, symbols[index].line)
+            }
         ) { [weak self] index in
             guard let self, let path = self.coreDocument.path,
                 symbols.indices.contains(index)
@@ -1643,7 +1653,10 @@ final class DocumentController: NSResponder {
         listPanel.show(
             rows: rows, over: window,
             title: title ?? "References (\(locations.count))",
-            monospaced: true
+            monospaced: true,
+            place: { index in
+                ordered.indices.contains(index) ? (ordered[index].path, ordered[index].line) : nil
+            }
         ) { [weak self] index in
             guard ordered.indices.contains(index) else { return }
             let location = ordered[index]

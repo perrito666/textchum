@@ -169,6 +169,23 @@ public enum CoreReferences {
             tc_path_is_test(pointer, UInt(strlen(pointer)))
         }
     }
+
+    /// The lines shown beside a list of places for the place on `line`
+    /// (zero-based) of `text`, and the number of the first of them.
+    public static func preview(of text: String, line: Int) -> (first: Int, lines: [String]) {
+        var text = text
+        let json = text.withUTF8 { bytes in
+            tc_place_preview_json(
+                bytes.baseAddress.map { UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self) },
+                UInt(bytes.count), UInt(max(line, 0)))
+        }
+        guard let json else { return (0, []) }
+        defer { tc_string_free(json) }
+        guard let parsed = (try? JSONSerialization.jsonObject(with: Data(String(cString: json).utf8)))
+            as? [String: Any]
+        else { return (0, []) }
+        return (parsed["first"] as? Int ?? 0, parsed["lines"] as? [String] ?? [])
+    }
 }
 
 /// Reading a `textDocument/codeAction` answer: what the server offers,
