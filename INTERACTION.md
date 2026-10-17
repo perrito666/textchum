@@ -197,6 +197,40 @@ documentation of the selected one beside the list, and the import an
 item will add. Items are ranked by how well they match what was typed,
 then by the server's order, then by what was chosen before.
 
+## 13. Asking again starts where it was left
+
+**13.1** A picker opens with what was typed into it last this session
+already in its field, selected: the first key typed replaces it, and
+Return runs it again. The command palette, Open Quickly, Find in
+Project, Go to Symbol, Go to Line — each remembers its own.
+
+**13.2** With nothing typed, what was chosen recently comes first,
+marked as recent: the last commands run in the palette, the last files
+opened in Open Quickly, the last symbols jumped to. What is offered
+for one place only — the code actions at the caret — has no recent
+list, since last time's place is not this one.
+
+**13.3** The options a dialog was left with are the options it opens
+with: match case, whole word and regular expression in the find bar
+and in Find in Project, the scope and the filters of a search, the
+format a new document was last given.
+
+**13.4** A file dialog starts where the work is. Open starts in the
+folder last opened from in this project, or the project's root, or
+the folder of the document in front; Save As starts in the document's
+own folder, or for a document never saved, in the folder last saved
+into from this project. Never the home folder while a project is open.
+
+**13.5** A query lasts the session. What describes how the user works
+rather than what they were looking for — recent commands and files,
+the options of 13.3, the folders of 13.4 — is kept in the project's
+record and survives a restart; with no project, in the editor's own.
+
+**13.6** A memory is a start, never a constraint. A remembered query is
+selected so it is replaced as typing begins; a remembered folder is
+where the dialog opens, not where it is kept; and nothing remembered
+is ever acted on without the user pressing something.
+
 ## Checking a change against these
 
 A change to the interface says which rules it touches, and its smoke
@@ -229,5 +263,13 @@ What breaks these rules today, each to be fixed under its own issue:
 - **12.1, 12.2, 12.3** No gutter mark for fixes, no next/previous
   finding command, completion ranked by the server's order alone and
   without documentation beside it.
+- **13.1, 13.2** The command palette, Open Quickly, Find in Project and
+  every list open with an empty field, and none of them lists what was
+  chosen recently.
+- **13.4** Open starts wherever the system last left its dialog, not in
+  the project; on Linux it starts with no folder at all. Save As
+  already remembers the folder an untitled document was last saved
+  into, but app-wide, not per project.
+- **13.5** Nothing a picker remembers survives a restart.
 - **Linux** Inlay hints are gathered after the line, not inside it
   (see `PLAN_linux.md`).
