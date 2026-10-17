@@ -53,6 +53,15 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   item replaces the stretch the server names (a postfix completion
   swallows the receiver and the dot) and brings its extra edits, an
   import for one, along with it.
+  The list is ordered by how well each item matches what was typed —
+  the whole name, then its start, then the starts of its words (`rd`
+  finds `read_dir`), then anywhere in it — then by what was chosen
+  before in the project, then by the server's own order. Each row
+  shows the item's parameters, its type and, for an item that brings
+  an import, where it comes from. The selected item's documentation
+  shows beside the list; a server that leaves it out of the list is
+  asked for it once the selection rests. Not there yet: the
+  documentation beside the list cannot be scrolled from the keyboard.
 - **Show Callers** (Edit menu and the context menu; action
   `showCallers`) lists every place the function under the caret is
   called, in the list Find References uses. References answers "where

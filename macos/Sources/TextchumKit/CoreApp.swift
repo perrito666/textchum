@@ -200,6 +200,20 @@ public final class CoreApp {
     /// ``lspHover(path:line:character:completion:)``. The JSON is an LSP
     /// `CompletionItem[]` or `CompletionList`.
     @MainActor
+    /// Asks for the rest of a completion item — its documentation — as
+    /// the server may send it only for the item asked about.
+    public func lspCompletionResolve(
+        path: String, itemJSON: String, completion: @escaping (String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            withUTF8(itemJSON) { item, itemLen in
+                tc_lsp_completion_resolve(handle, path, pathLen, item, itemLen)
+            }
+        }
+        guard id != 0 else { return }
+        router.register(id, completion)
+    }
+
     public func lspCompletion(
         path: String,
         line: Int,

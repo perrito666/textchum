@@ -1940,6 +1940,46 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         }
         println!("usages ok (listed by the caret, in a popover on the text)");
 
+        // The list is in the core's order (12.3): how well each matches,
+        // then what was chosen before, then the server's order; and the
+        // selected item's documentation shows beside the list.
+        {
+            let page = workbench.selected().expect("a selected page");
+            let buffer = page.buffer.clone();
+            let before = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+            let result = r#"[{"label": "into_iter", "sortText": "0"},
+                {"label": "iter_mut", "sortText": "1", "labelDetails": {"detail": "()"}},
+                {"label": "iter", "sortText": "2", "documentation": {"kind": "markdown", "value": "Iterates."}},
+                {"label": "len", "sortText": "3"}]"#;
+            buffer.insert(&mut buffer.end_iter(), "\nlet w = v.iter");
+            // Where it was typed: the checks before may have left the
+            // caret anywhere.
+            buffer.place_cursor(&buffer.end_iter());
+            page::show_completions(&page, result);
+            let labels: Vec<String> =
+                page::completion_items(&page).iter().map(|item| item.label.clone()).collect();
+            let documentation = page::completion_documentation(&page);
+            if labels != ["iter", "iter_mut", "into_iter"]
+                || documentation.as_deref().map(str::trim) != Some("Iterates.")
+            {
+                eprintln!("FAIL: completion order or documentation: {labels:?} {documentation:?}");
+                return 1;
+            }
+            let root = page.document.project_root.borrow().clone();
+            shell::note_recent("completions", "len", root.as_deref());
+            buffer.insert(&mut buffer.end_iter(), " ");
+            buffer.place_cursor(&buffer.end_iter());
+            page::show_completions(&page, result);
+            let first = page::completion_items(&page).first().map(|item| item.label.clone());
+            if first.as_deref() != Some("len") {
+                eprintln!("FAIL: a label chosen before did not lead with nothing typed: {first:?}");
+                return 1;
+            }
+            page::back_out_one_level(&page);
+            buffer.set_text(&before);
+        }
+        println!("completion ranking ok (match, then chosen before, then the server; documentation beside the list)");
+
         // The shell holds documents; the UI holds views of them. What
         // is checked here is that the table behaves like a registry: a
         // path opens once however many times it is asked for, and a

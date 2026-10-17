@@ -1,4 +1,5 @@
 import AppKit
+import TextchumKit
 
 /// The completion popup: a borderless child window by the caret with
 /// the server's suggestions, filtered live as the user keeps typing. It
@@ -14,6 +15,15 @@ final class CompletionPopup: NSObject {
     struct Item {
         let label: String
         let detail: String
+        /// What follows the name on its line — a function's parameters.
+        var labelDetail: String = ""
+        /// Where it comes from: for an item that brings an import, the
+        /// path it imports.
+        var description: String = ""
+        /// Markdown; empty when the server left it for resolve.
+        var documentation: String = ""
+        /// The item as the server sent it, to ask for the rest of it.
+        var raw: String = ""
         /// What the server asked to be inserted, verbatim: a snippet
         /// body when `isSnippet`, plain text otherwise. Expanding a body
         /// is the core's job, so both shells expand it the same way.
@@ -33,6 +43,17 @@ final class CompletionPopup: NSObject {
     private let table = NSTableView()
     private var allItems: [Item] = []
     private var filtered: [Item] = []
+    /// The result the items came from, for the core to rank against
+    /// what is typed.
+    private var resultJSON = ""
+    /// Labels chosen lately in this project, most recent first: they
+    /// rank above the server's order (12.3).
+    var recent: [String] = []
+    /// The item selected now, whenever that changes: the documentation
+    /// beside the list follows it.
+    var onSelect: ((Item) -> Void)?
+    private var docWindow: NSWindow?
+    private let docText = NSTextView()
     private(set) var isVisible = false
     /// The caret the list was shown for and the screen it has to stay
     /// on, kept so that a list which grows or shrinks as it is filtered
@@ -73,9 +94,16 @@ final class CompletionPopup: NSObject {
             {
                 edit = LSPEdits.edits(fromArray: [["range": range, "newText": newText]]).first
             }
+            let details = raw["labelDetails"] as? [String: Any]
+            let rawText = (try? JSONSerialization.data(withJSONObject: raw))
+                .map { String(decoding: $0, as: UTF8.self) } ?? "{}"
             return Item(
                 label: label,
                 detail: raw["detail"] as? String ?? "",
+                labelDetail: details?["detail"] as? String ?? "",
+                description: details?["description"] as? String ?? "",
+                documentation: CoreCompletion.documentation(ofItemJSON: rawText),
+                raw: rawText,
                 insertText: insert,
                 isSnippet: Self.isSnippet(raw, insert: insert),
                 sortText: raw["sortText"] as? String ?? label,
@@ -85,7 +113,7 @@ final class CompletionPopup: NSObject {
                     fromArray: raw["additionalTextEdits"] as? [[String: Any]] ?? [])
             )
         }
-        .sorted { $0.sortText < $1.sortText }
+        // In the order sent: the core ranks them, by index.
     }
 
     /// Whether `insert` is a snippet body. `insertTextFormat` 2 says so
@@ -134,8 +162,12 @@ final class CompletionPopup: NSObject {
 
     /// Shows the popup with `items`, pre-filtered by `prefix`, anchored
     /// to the caret's screen rectangle.
-    func show(items: [Item], prefix: String, below caretRect: NSRect, parent: NSWindow) {
+    func show(
+        items: [Item], resultJSON: String, prefix: String, below caretRect: NSRect,
+        parent: NSWindow
+    ) {
         allItems = items
+        self.resultJSON = resultJSON
         buildWindowIfNeeded(parent: parent)
         filter(prefix: prefix)
         guard !filtered.isEmpty, let window else {
@@ -157,22 +189,25 @@ final class CompletionPopup: NSObject {
         }
         window.orderFront(nil)
         isVisible = true
+        // Now that the list is up, its documentation can go beside it.
+        if let first = filtered.first { onSelect?(first) }
     }
+
+    /// The item selected now.
+    var selectedItem: Item? {
+        let row = table.selectedRow
+        return filtered.indices.contains(row) ? filtered[row] : nil
+    }
+
+    /// The labels on show, in order, for the smoke test.
+    var shownLabels: [String] { filtered.map(\.label) }
 
     /// Refilters against a new prefix; dismisses when nothing matches.
     func filter(prefix: String) {
-        let needle = prefix.lowercased()
-        filtered =
-            needle.isEmpty
-            ? allItems
-            : allItems.filter { $0.filterText.contains(needle) }
-                .sorted {
-                    // Prefix matches first, then server order.
-                    let a = $0.filterText.hasPrefix(needle)
-                    let b = $1.filterText.hasPrefix(needle)
-                    if a != b { return a }
-                    return $0.sortText < $1.sortText
-                }
+        // The core's order (12.3): how well each matches, then whether
+        // it was chosen before, then the server's own.
+        filtered = CoreCompletion.rank(resultJSON: resultJSON, typed: prefix, recent: recent)
+            .compactMap { allItems.indices.contains($0) ? allItems[$0] : nil }
         if filtered.isEmpty {
             dismiss()
             return
@@ -180,6 +215,7 @@ final class CompletionPopup: NSObject {
         table.reloadData()
         table.selectRowIndexes([0], byExtendingSelection: false)
         table.scrollRowToVisible(0)
+        onSelect?(filtered[0])
         if isVisible, let window, let anchor {
             window.setFrame(
                 Self.frame(height: listHeight, caret: anchor.caret, visible: anchor.visible)
@@ -200,7 +236,82 @@ final class CompletionPopup: NSObject {
         }
         window.parent?.removeChildWindow(window)
         window.orderOut(nil)
+        hideDocumentation()
         isVisible = false
+    }
+
+    // MARK: Documentation beside the list
+
+    /// Shows `text` beside the list — the selected item's documentation
+    /// — or takes it away with nil. On the right of the list, or on its
+    /// left where the screen ends too soon; never taking the keyboard.
+    func showDocumentation(_ text: NSAttributedString?) {
+        guard let text, text.length > 0, let window, isVisible, let parent = window.parent else {
+            hideDocumentation()
+            return
+        }
+        let doc = docWindow ?? makeDocWindow()
+        docWindow = doc
+        docText.textStorage?.setAttributedString(text)
+        let width: CGFloat = 380
+        docText.textContainer?.containerSize = NSSize(width: width - 20, height: .greatestFiniteMagnitude)
+        var used = NSSize(width: width, height: 60)
+        if let layout = docText.layoutManager, let container = docText.textContainer {
+            layout.ensureLayout(for: container)
+            used = layout.usedRect(for: container).size
+        }
+        let height = min(max(ceil(used.height) + 20, 40), 320)
+        let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? .infinite
+        var x = window.frame.maxX + 4
+        if x + width > visible.maxX { x = window.frame.minX - 4 - width }
+        let frame = NSRect(x: x, y: window.frame.maxY - height, width: width, height: height)
+        doc.setFrame(frame, display: true)
+        if doc.parent == nil { parent.addChildWindow(doc, ordered: .above) }
+        doc.orderFront(nil)
+    }
+
+    private func hideDocumentation() {
+        guard let doc = docWindow else { return }
+        doc.parent?.removeChildWindow(doc)
+        doc.orderOut(nil)
+    }
+
+    /// The text beside the list, for the smoke test.
+    var shownDocumentation: String? {
+        docWindow?.isVisible == true ? docText.string : nil
+    }
+
+    private func makeDocWindow() -> NSWindow {
+        let doc = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
+        doc.isOpaque = false
+        doc.backgroundColor = .clear
+        doc.hasShadow = true
+        doc.level = .floating
+        let container = NSVisualEffectView()
+        container.material = .menu
+        container.state = .active
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 8
+        container.layer?.masksToBounds = true
+        docText.isEditable = false
+        docText.isSelectable = false
+        docText.drawsBackground = false
+        docText.textContainerInset = NSSize(width: 10, height: 10)
+        let scroll = NSScrollView()
+        scroll.documentView = docText
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(scroll)
+        NSLayoutConstraint.activate([
+            scroll.topAnchor.constraint(equalTo: container.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            scroll.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+        ])
+        docText.autoresizingMask = [.width]
+        doc.contentView = container
+        return doc
     }
 
     func moveSelection(by delta: Int) {
@@ -208,6 +319,7 @@ final class CompletionPopup: NSObject {
         let next = min(max(table.selectedRow + delta, 0), filtered.count - 1)
         table.selectRowIndexes([next], byExtendingSelection: false)
         table.scrollRowToVisible(next)
+        onSelect?(filtered[next])
     }
 
     /// Accepts the current selection, if any.
@@ -287,6 +399,22 @@ extension CompletionPopup: NSTableViewDataSource, NSTableViewDelegate {
             }()
         let item = filtered[row]
         let text = NSMutableAttributedString(string: item.label)
+        if !item.labelDetail.isEmpty {
+            text.append(
+                NSAttributedString(
+                    string: item.labelDetail,
+                    attributes: [.foregroundColor: NSColor.secondaryLabelColor]))
+        }
+        if !item.description.isEmpty {
+            // Where it comes from: the import it will add, mostly.
+            text.append(
+                NSAttributedString(
+                    string: "  " + item.description,
+                    attributes: [
+                        .foregroundColor: NSColor.tertiaryLabelColor,
+                        .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+                    ]))
+        }
         if !item.detail.isEmpty {
             text.append(
                 NSAttributedString(

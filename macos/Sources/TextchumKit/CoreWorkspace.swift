@@ -708,3 +708,47 @@ public enum CoreTrail {
         }
     }
 }
+
+/// Completion, as the core reads and ranks it: both shells put a
+/// server's candidates in the same order against what was typed.
+public enum CoreCompletion {
+    /// Indices into the result's items that have a label, in the order
+    /// they came, best first for `typed`, non-matches left out.
+    /// `recent` are labels chosen lately, most recent first.
+    public static func rank(resultJSON: String, typed: String, recent: [String]) -> [Int] {
+        var result = resultJSON
+        var typed = typed
+        var recentJSON =
+            (try? JSONEncoder().encode(recent)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
+        let json = result.withUTF8 { resultBytes in
+            typed.withUTF8 { typedBytes in
+                recentJSON.withUTF8 { recentBytes in
+                    tc_completion_rank(
+                        resultBytes.baseAddress.map { UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self) },
+                        UInt(resultBytes.count),
+                        typedBytes.baseAddress.map { UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self) },
+                        UInt(typedBytes.count),
+                        recentBytes.baseAddress.map { UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self) },
+                        UInt(recentBytes.count))
+                }
+            }
+        }
+        guard let json else { return [] }
+        defer { tc_string_free(json) }
+        return (try? JSONDecoder().decode([Int].self, from: Data(String(cString: json).utf8))) ?? []
+    }
+
+    /// An item's documentation — from the list or from a resolve answer
+    /// — as text; empty when it has none.
+    public static func documentation(ofItemJSON itemJSON: String) -> String {
+        var item = itemJSON
+        let json = item.withUTF8 { bytes in
+            tc_completion_documentation(
+                bytes.baseAddress.map { UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self) },
+                UInt(bytes.count))
+        }
+        guard let json else { return "" }
+        defer { tc_string_free(json) }
+        return String(cString: json)
+    }
+}

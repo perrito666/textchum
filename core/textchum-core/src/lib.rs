@@ -19,6 +19,7 @@ mod buffer;
 pub mod changes;
 pub mod chords;
 pub mod code_action;
+pub mod completion;
 pub mod definition;
 pub mod edits;
 pub mod diagnostics;

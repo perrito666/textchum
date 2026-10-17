@@ -106,6 +106,12 @@ pub struct Page {
 struct CompletionState {
     popover: gtk::Popover,
     list: gtk::ListBox,
+    /// The selected item's documentation, beside the list (12.3).
+    doc_label: gtk::Label,
+    doc_scroll: gtk::ScrolledWindow,
+    /// Counts selections, so documentation that arrives for an item no
+    /// longer selected is dropped.
+    doc_asked: Cell<u64>,
     /// (label, insert text, whether the insert text is a snippet body)
     /// per row.
     items: RefCell<Vec<Completion>>,
@@ -337,7 +343,25 @@ impl Page {
         completion_popover.set_autohide(false);
         completion_popover.set_has_arrow(false);
         completion_popover.set_position(gtk::PositionType::Bottom);
-        completion_popover.set_child(Some(&completion_scroll));
+        let completion_doc = gtk::Label::new(None);
+        completion_doc.set_wrap(true);
+        completion_doc.set_max_width_chars(60);
+        completion_doc.set_xalign(0.0);
+        completion_doc.set_yalign(0.0);
+        completion_doc.set_margin_start(8);
+        completion_doc.set_margin_end(8);
+        completion_doc.set_margin_top(6);
+        let completion_doc_scroll = gtk::ScrolledWindow::builder()
+            .child(&completion_doc)
+            .max_content_height(220)
+            .propagate_natural_height(true)
+            .min_content_width(300)
+            .visible(false)
+            .build();
+        let completion_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        completion_box.append(&completion_scroll);
+        completion_box.append(&completion_doc_scroll);
+        completion_popover.set_child(Some(&completion_box));
 
         let hover_popover = gtk::Popover::new();
         hover_popover.set_parent(&view);
@@ -387,6 +411,9 @@ impl Page {
             completion: CompletionState {
                 popover: completion_popover,
                 list: completion_list,
+                doc_label: completion_doc,
+                doc_scroll: completion_doc_scroll,
+                doc_asked: Cell::new(0),
                 items: RefCell::new(Vec::new()),
                 word_start: Cell::new(0),
             },
@@ -1699,6 +1726,16 @@ pub struct Completion {
     pub edit: Option<crate::lsp_edits::TextEdit>,
     /// Edits that come with accepting the item — an import, mostly.
     pub additional_edits: Vec<crate::lsp_edits::TextEdit>,
+    /// The type or signature, as the server writes it.
+    pub detail: String,
+    /// What follows the name on its line — a function's parameters.
+    pub label_detail: String,
+    /// Where it comes from: for an item that brings an import, the path.
+    pub description: String,
+    /// Markdown; empty when the server left it for resolve.
+    pub documentation: String,
+    /// The item as the server sent it, to ask for the rest of it.
+    pub raw: String,
 }
 
 /// Parses a completion result — `CompletionItem[]` or a
@@ -1746,7 +1783,18 @@ pub fn parse_completion_items(json: &str) -> Vec<Completion> {
                 .as_array()
                 .map(|edits| edits.iter().filter_map(crate::lsp_edits::edit_from).collect())
                 .unwrap_or_default();
-            Some(Completion { label, insert, is_snippet, edit, additional_edits })
+            Some(Completion {
+                label,
+                insert,
+                is_snippet,
+                edit,
+                additional_edits,
+                detail: item["detail"].as_str().unwrap_or_default().to_owned(),
+                label_detail: item["labelDetails"]["detail"].as_str().unwrap_or_default().to_owned(),
+                description: item["labelDetails"]["description"].as_str().unwrap_or_default().to_owned(),
+                documentation: textchum_core::completion::documentation_of(item),
+                raw: item.to_string(),
+            })
         })
         .collect()
 }
@@ -1909,19 +1957,20 @@ fn request_completion(page: &Rc<Page>) {
         .completion(Path::new(&path), line, character);
     let page = Rc::clone(page);
     shell.expect_response(id, move |json| {
-        show_completions(&page, parse_completion_items(json));
+        show_completions(&page, json);
     });
 }
 
-fn show_completions(page: &Rc<Page>, all: Vec<Completion>) {
+pub(crate) fn show_completions(page: &Rc<Page>, json: &str) {
     let (word_start, prefix) = word_before_caret(&page.buffer);
-    let prefix_lower = prefix.to_lowercase();
-    let matching: Vec<Completion> = all
-        .into_iter()
-        .filter(|item| {
-            prefix_lower.is_empty() || item.label.to_lowercase().starts_with(&prefix_lower)
-        })
-        .collect();
+    // The core's order (12.3): how well each matches, then whether it
+    // was chosen before, then the server's own. Its items and these are
+    // read from the same answer, leaving out the same ones.
+    let all = parse_completion_items(json);
+    let root = page.document.project_root.borrow().clone();
+    let recent = crate::shell::recent("completions", root.as_deref());
+    let order = textchum_core::completion::rank(&textchum_core::completion::items(json), &prefix, &recent);
+    let matching: Vec<Completion> = order.into_iter().filter_map(|at| all.get(at).cloned()).collect();
     if matching.is_empty() {
         page.completion.popover.popdown();
         return;
@@ -1931,10 +1980,27 @@ fn show_completions(page: &Rc<Page>, all: Vec<Completion>) {
         page.completion.list.remove(&child);
     }
     for item in &matching {
-        let text = gtk::Label::new(Some(&item.label));
+        // The name with what follows it, then its type and where it
+        // comes from, dimmed.
+        let text = gtk::Label::new(None);
+        let mut markup = glib::markup_escape_text(&item.label).to_string();
+        for (extra, gap, alpha) in [
+            (&item.label_detail, "", "70%"),
+            (&item.detail, "  ", "55%"),
+            (&item.description, "  ", "45%"),
+        ] {
+            if !extra.is_empty() {
+                markup.push_str(&format!(
+                    "{gap}<span alpha=\"{alpha}\">{}</span>",
+                    glib::markup_escape_text(extra)
+                ));
+            }
+        }
+        text.set_markup(&markup);
         text.set_xalign(0.0);
         text.set_margin_start(6);
         text.set_margin_end(6);
+        text.set_ellipsize(gtk::pango::EllipsizeMode::End);
         page.completion.list.append(&text);
     }
     *page.completion.items.borrow_mut() = matching;
@@ -1979,9 +2045,72 @@ pub(crate) fn select_in_view(list: &gtk::ListBox, row: &gtk::ListBoxRow) {
     }
 }
 
+/// The selected completion's documentation, beside the list (12.3): its
+/// type, then what the server says. A server may leave documentation
+/// out of the list, to be asked for one item at a time; it is asked,
+/// and an answer for an item no longer selected is dropped.
+pub fn show_completion_documentation(page: &Rc<Page>) {
+    let asked = page.completion.doc_asked.get().wrapping_add(1);
+    page.completion.doc_asked.set(asked);
+    // Rows going away while the list is refilled select nothing.
+    let index = page.completion.list.selected_row().map(|row| row.index()).unwrap_or(-1);
+    let item = usize::try_from(index).ok().and_then(|at| page.completion.items.borrow().get(at).cloned());
+    let Some(item) = item else {
+        page.completion.doc_scroll.set_visible(false);
+        return;
+    };
+    let show = {
+        let page = Rc::clone(page);
+        let detail = item.detail.clone();
+        move |documentation: &str| {
+            if page.completion.doc_asked.get() != asked {
+                return;
+            }
+            let mut text = String::new();
+            if !detail.is_empty() {
+                text.push_str(&format!("```\n{detail}\n```\n\n"));
+            }
+            text.push_str(documentation);
+            let text = text.trim();
+            page.completion.doc_scroll.set_visible(!text.is_empty());
+            page.completion.doc_label.set_markup(&hover_markup(text));
+        }
+    };
+    if !item.documentation.is_empty() {
+        show(&item.documentation);
+        return;
+    }
+    show("");
+    let Some(path) = page.path().borrow().clone() else { return };
+    let Ok(raw) = serde_json::from_str::<serde_json::Value>(&item.raw) else { return };
+    // Asked once the selection rests, so running down the list with
+    // the arrows does not send a request per row passed.
+    let weak = Rc::downgrade(page);
+    glib::timeout_add_local_once(std::time::Duration::from_millis(150), move || {
+        let Some(page) = weak.upgrade() else { return };
+        if page.completion.doc_asked.get() != asked {
+            return;
+        }
+        let shell = Shell::instance();
+        let id = shell.pool.borrow_mut().completion_resolve(Path::new(&path), raw);
+        shell.expect_response(id, move |json| {
+            let resolved = serde_json::from_str::<serde_json::Value>(json).unwrap_or_default();
+            show(&textchum_core::completion::documentation_of(&resolved));
+        });
+    });
+}
+
 /// The candidates on offer, for the smoke test to look at.
 pub(crate) fn completion_items(page: &Rc<Page>) -> Vec<Completion> {
     page.completion.items.borrow().clone()
+}
+
+/// The documentation shown beside the list, for the smoke test.
+pub(crate) fn completion_documentation(page: &Rc<Page>) -> Option<String> {
+    page.completion
+        .doc_scroll
+        .is_visible()
+        .then(|| page.completion.doc_label.text().to_string())
 }
 
 pub(crate) fn accept_completion(page: &Rc<Page>) {
@@ -1994,6 +2123,9 @@ pub(crate) fn accept_completion(page: &Rc<Page>) {
     let chosen = page.completion.items.borrow().get(index as usize).cloned();
     page.completion.popover.popdown();
     let Some(item) = chosen else { return };
+    // What is chosen comes first next time it matches as well (12.3).
+    let root = page.document.project_root.borrow().clone();
+    crate::shell::note_recent("completions", &item.label, root.as_deref());
     let (insert, is_snippet) = (item.insert, item.is_snippet);
 
     let buffer = &page.buffer;
@@ -2926,6 +3058,12 @@ pub fn refresh_change_marks(page: &Rc<Page>) {
 /// return/tab accept, escape dismisses — everything else keeps flowing
 /// to the editor.
 fn install_completion_keys(page: &Rc<Page>) {
+    let weak = Rc::downgrade(page);
+    page.completion.list.connect_row_selected(move |_, _| {
+        if let Some(page) = weak.upgrade() {
+            show_completion_documentation(&page);
+        }
+    });
     let controller = gtk::EventControllerKey::new();
     controller.set_propagation_phase(gtk::PropagationPhase::Capture);
     let weak = Rc::downgrade(page);

@@ -60,6 +60,16 @@ proyecto en Settings ▸ Language Servers; véase
   el tramo que nombra el servidor (un autocompletado *postfix* se traga
   el receptor y el punto) y trae consigo sus ediciones adicionales, un
   *import* por ejemplo.
+  La lista se ordena por lo bien que cada elemento coincide con lo
+  escrito — el nombre entero, luego su comienzo, luego los comienzos
+  de sus palabras (`rd` encuentra `read_dir`), luego cualquier parte —,
+  después por lo elegido antes en el proyecto y después por el orden
+  del propio servidor. Cada fila muestra los parámetros del elemento,
+  su tipo y, para uno que trae un *import*, de dónde viene. La
+  documentación del elemento seleccionado aparece junto a la lista; a
+  un servidor que la deja fuera de la lista se le pide cuando la
+  selección se detiene. Todavía no: la documentación junto a la lista
+  no se desplaza con el teclado.
 - **Show Callers** (menú Edit y menú contextual; acción `showCallers`)
   lista cada lugar donde se llama a la función bajo el cursor, en la
   lista que usa Find References. Las referencias responden «dónde está

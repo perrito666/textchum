@@ -60,6 +60,16 @@ Language Servers ; voir [configuration](configuration.md#projets).
   la portion que nomme le serveur (une complétion *postfix* avale le
   receveur et le point) et apporte ses éditions supplémentaires, un
   *import* par exemple.
+  La liste est ordonnée selon la façon dont chaque élément correspond
+  à ce qui a été tapé — le nom entier, puis son début, puis les débuts
+  de ses mots (`rd` trouve `read_dir`), puis n'importe où —, ensuite
+  selon ce qui a déjà été choisi dans le projet, ensuite selon l'ordre
+  du serveur lui-même. Chaque ligne montre les paramètres de
+  l'élément, son type et, pour un élément qui apporte un *import*,
+  d'où il vient. La documentation de l'élément sélectionné s'affiche
+  à côté de la liste ; un serveur qui l'omet de la liste la fournit
+  sur demande une fois la sélection immobile. Pas encore : la
+  documentation à côté de la liste ne défile pas au clavier.
 - **Show Callers** (menu Edit et menu contextuel ; action
   `showCallers`) liste chaque endroit où la fonction sous le curseur
   est appelée, dans la liste qu'utilise Find References. Les références

@@ -384,7 +384,13 @@ final class DocumentController: NSResponder {
         super.init()
 
         completionPopup.onAccept = { [weak self] item in
-            self?.accept(completion: item)
+            guard let self else { return }
+            // Chosen, so ranked higher next time (12.3).
+            ProjectState.noteRecent("completions", item.label, projectRoot: self.projectRoot)
+            self.accept(completion: item)
+        }
+        completionPopup.onSelect = { [weak self] item in
+            self?.showCompletionDocumentation(for: item)
         }
         projectRoot = (coreDocument.path ?? intendedPath).flatMap { self.resolveProjectRoot($0) }
         // Before any view is made: how this file is shown is what the
@@ -5326,12 +5332,53 @@ final class DocumentController: NSResponder {
                 forCharacterRange: NSRange(location: textView.selectedRange().location, length: 0),
                 actualRange: nil
             )
+            self.completionPopup.recent = ProjectState.recent("completions", projectRoot: self.projectRoot)
             self.completionPopup.show(
                 items: items,
+                resultJSON: json,
                 prefix: self.currentWordPrefix()?.text ?? "",
                 below: caretRect,
                 parent: window
             )
+        }
+    }
+
+    private var completionDocTimer: Timer?
+
+    /// The selected completion's documentation, beside the list (12.3):
+    /// its type, then what the server says about it. A server may leave
+    /// the documentation out of the list, to be asked for one item at a
+    /// time; it is asked a beat after the selection settles, and an
+    /// answer for an item no longer selected is dropped.
+    private func showCompletionDocumentation(for item: CompletionPopup.Item) {
+        completionDocTimer?.invalidate()
+        let render = { [weak self] (documentation: String) in
+            guard let self, self.completionPopup.selectedItem?.raw == item.raw else { return }
+            var markdown = ""
+            if !item.detail.isEmpty {
+                markdown += "```\n" + item.detail + "\n```\n\n"
+            }
+            markdown += documentation
+            let trimmed = markdown.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.completionPopup.showDocumentation(
+                trimmed.isEmpty
+                    ? nil
+                    : Self.hoverAttributedText(fromMarkdown: trimmed, language: self.coreDocument.languageName))
+        }
+        if !item.documentation.isEmpty {
+            render(item.documentation)
+            return
+        }
+        render("")
+        guard let lspApp, let path = lspOpenPath else { return }
+        completionDocTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    lspApp.lspCompletionResolve(path: path, itemJSON: item.raw) { json in
+                        render(CoreCompletion.documentation(ofItemJSON: json))
+                    }
+                }
+            }
         }
     }
 

@@ -1140,6 +1140,44 @@ func runSmokeTest() -> Int32 {
     }
     print("completion placement ok (under the caret, over it near the bottom, fitted when cramped)")
 
+    // The completion list is in the core's order (12.3): how well each
+    // matches, then what was chosen before, then the server's order;
+    // and the selected item's documentation shows beside the list.
+    do {
+        let host = NSWindow(
+            contentRect: NSRect(x: 200, y: 400, width: 600, height: 300), styleMask: [.titled],
+            backing: .buffered, defer: false)
+        host.orderFront(nil)
+        let result = """
+            [{"label": "into_iter", "sortText": "0"},
+             {"label": "iter_mut", "sortText": "1", "labelDetails": {"detail": "()"}},
+             {"label": "iter", "sortText": "2", "documentation": {"kind": "markdown", "value": "Iterates."}},
+             {"label": "len", "sortText": "3"}]
+            """
+        let ranked = CompletionPopup()
+        ranked.onSelect = { item in
+            ranked.showDocumentation(item.documentation.isEmpty ? nil : NSAttributedString(string: item.documentation))
+        }
+        ranked.show(
+            items: CompletionPopup.parse(resultJSON: result), resultJSON: result, prefix: "iter",
+            below: NSRect(x: 300, y: 600, width: 1, height: 16), parent: host)
+        guard ranked.shownLabels == ["iter", "iter_mut", "into_iter"],
+            ranked.shownDocumentation == "Iterates."
+        else {
+            print("FAIL: completion order or documentation: \(ranked.shownLabels) \(String(describing: ranked.shownDocumentation))")
+            return 1
+        }
+        ranked.recent = ["len"]
+        ranked.filter(prefix: "")
+        guard ranked.shownLabels.first == "len", ranked.shownDocumentation == nil else {
+            print("FAIL: a label chosen before did not lead with nothing typed: \(ranked.shownLabels)")
+            return 1
+        }
+        ranked.dismiss()
+        host.orderOut(nil)
+    }
+    print("completion ranking ok (match, then chosen before, then the server; documentation beside the list)")
+
     // Find References splits its answer: what calls this, then what
     // checks it. Telling them apart is a convention, so the rules are
     // held here — including the ones that must not fire.

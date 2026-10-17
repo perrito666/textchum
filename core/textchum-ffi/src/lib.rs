@@ -915,6 +915,79 @@ pub unsafe extern "C" fn tc_lsp_completion(
     .unwrap_or(0)
 }
 
+/// Asks for the rest of a completion item — documentation, detail —
+/// which a server may send only for the item asked about. `item_json`
+/// is the item as the completion result had it; the response's
+/// `result` is the item filled in, for [`tc_completion_documentation`].
+/// Same contract as [`tc_lsp_completion`].
+///
+/// # Safety
+/// `app` must be a live app pointer; each pointer and length must
+/// describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_completion_resolve(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    item_json: *const c_char,
+    item_len: usize,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else { return 0 };
+    let (Some(path), Some(item)) =
+        (unsafe { (str_from_raw(path, path_len), str_from_raw(item_json, item_len)) })
+    else {
+        return 0;
+    };
+    let Ok(item) = serde_json::from_str::<serde_json::Value>(item) else { return 0 };
+    catch_unwind(AssertUnwindSafe(|| app.pool.completion_resolve(std::path::Path::new(path), item)))
+        .unwrap_or(0)
+}
+
+/// The order a completion list is shown in for what has been typed: a
+/// JSON array of indices into the result's items (those with a label,
+/// in the order sent), best first, the ones that do not match left out.
+/// `recent_json` is an array of labels chosen lately, most recent first.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// Each pointer and length must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_completion_rank(
+    result_json: *const c_char,
+    result_len: usize,
+    typed: *const c_char,
+    typed_len: usize,
+    recent_json: *const c_char,
+    recent_len: usize,
+) -> *mut c_char {
+    let (result, typed, recent) = unsafe {
+        (
+            str_from_raw(result_json, result_len).unwrap_or_default(),
+            str_from_raw(typed, typed_len).unwrap_or_default(),
+            str_from_raw(recent_json, recent_len).unwrap_or_default(),
+        )
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let items = textchum_core::completion::items(result);
+        let recent: Vec<String> = serde_json::from_str(recent).unwrap_or_default();
+        owned_c_string(serde_json::json!(textchum_core::completion::rank(&items, typed, &recent)).to_string())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// A completion item's documentation — string or markup — as text; empty
+/// when it has none. For an item from the list or from a resolve answer.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// `item_json` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_completion_documentation(item_json: *const c_char, len: usize) -> *mut c_char {
+    let item = unsafe { str_from_raw(item_json, len) }.unwrap_or_default();
+    let value = serde_json::from_str::<serde_json::Value>(item).unwrap_or_default();
+    owned_c_string(textchum_core::completion::documentation_of(&value))
+}
+
 /// Announces a closed document. The server instance stays warm.
 ///
 /// # Safety

@@ -195,7 +195,9 @@ as passive help.
 **12.3** The completion list shows each item's type, the
 documentation of the selected one beside the list, and the import an
 item will add. Items are ranked by how well they match what was typed,
-then by the server's order, then by what was chosen before.
+then by what was chosen before, then by the server's order — the
+server orders by its own idea of relevance, and what this user picks
+again and again is the better idea.
 
 ## 13. Asking again starts where it was left
 
@@ -255,7 +257,5 @@ What breaks these rules today, each to be fixed under its own issue:
   details.
 - **7.1** Go Back returns to the caret, not to the selection and the
   scroll that went with it.
-- **12.3** Completion ranked by the server's order alone and without
-  documentation beside it.
 - **Linux** Inlay hints are gathered after the line, not inside it
   (see `PLAN_linux.md`).

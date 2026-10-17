@@ -322,9 +322,16 @@ fn run_manager(
                 "textDocument": {
                     "publishDiagnostics": {},
                     "synchronization": {"didSave": true},
+                    // Documentation and detail may be left for resolve:
+                    // they are only needed for the item selected. The
+                    // edits an item brings are not, since accepting one
+                    // must not wait on a second answer.
                     "completion": {"completionItem": {
                         "snippetSupport": true,
-                        "insertReplaceSupport": true
+                        "insertReplaceSupport": true,
+                        "documentationFormat": ["markdown", "plaintext"],
+                        "labelDetailsSupport": true,
+                        "resolveSupport": {"properties": ["documentation", "detail"]}
                     }},
                     "hover": {"contentFormat": ["markdown", "plaintext"]},
                     "signatureHelp": {"signatureInformation": {

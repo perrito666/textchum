@@ -854,6 +854,14 @@ impl Pool {
         )
     }
 
+    /// Asks for the rest of a completion item — its documentation, its
+    /// detail — which a server may leave out of the list and send only
+    /// for the item asked about. `item` is the item as it came. The
+    /// response's `result` is the item, filled in.
+    pub fn completion_resolve(&mut self, path: &Path, item: serde_json::Value) -> u64 {
+        self.request(path, "completionProvider", "completionItem/resolve", item)
+    }
+
     /// Requests every reference to the symbol at an LSP position, the
     /// declaration included; same contract as [`Self::hover`]. The
     /// response's `result` is an LSP `Location[]`.

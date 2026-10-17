@@ -618,6 +618,50 @@ uint64_t tc_lsp_completion(struct TcApp *app,
                            uint32_t character);
 
 /**
+ * Asks for the rest of a completion item — documentation, detail —
+ * which a server may send only for the item asked about. `item_json`
+ * is the item as the completion result had it; the response's
+ * `result` is the item filled in, for [`tc_completion_documentation`].
+ * Same contract as [`tc_lsp_completion`].
+ *
+ * # Safety
+ * `app` must be a live app pointer; each pointer and length must
+ * describe readable bytes.
+ */
+uint64_t tc_lsp_completion_resolve(struct TcApp *app,
+                                   const char *path,
+                                   uintptr_t path_len,
+                                   const char *item_json,
+                                   uintptr_t item_len);
+
+/**
+ * The order a completion list is shown in for what has been typed: a
+ * JSON array of indices into the result's items (those with a label,
+ * in the order sent), best first, the ones that do not match left out.
+ * `recent_json` is an array of labels chosen lately, most recent first.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * Each pointer and length must describe readable bytes.
+ */
+char *tc_completion_rank(const char *result_json,
+                         uintptr_t result_len,
+                         const char *typed,
+                         uintptr_t typed_len,
+                         const char *recent_json,
+                         uintptr_t recent_len);
+
+/**
+ * A completion item's documentation — string or markup — as text; empty
+ * when it has none. For an item from the list or from a resolve answer.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * `item_json` must point to `len` readable bytes.
+ */
+char *tc_completion_documentation(const char *item_json, uintptr_t len);
+
+/**
  * Announces a closed document. The server instance stays warm.
  *
  * # Safety
