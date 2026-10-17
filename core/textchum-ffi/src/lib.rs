@@ -326,6 +326,7 @@ pub unsafe extern "C" fn tc_lsp_inlay_hints(
     path_len: usize,
     first_line: u32,
     last_line: u32,
+    last_character: u32,
 ) -> u64 {
     let Some(app) = (unsafe { app.as_mut() }) else {
         return 0;
@@ -334,7 +335,7 @@ pub unsafe extern "C" fn tc_lsp_inlay_hints(
         return 0;
     };
     catch_unwind(AssertUnwindSafe(|| {
-        app.pool.inlay_hints(std::path::Path::new(path), first_line, last_line)
+        app.pool.inlay_hints(std::path::Path::new(path), first_line, last_line, last_character)
     }))
     .unwrap_or(0)
 }

@@ -788,7 +788,7 @@ fn the_types_a_server_inferred_are_asked_for_by_lines() {
     let text = "fn main() {\n    let first = 1;\n    let second = 2;\n}\n";
     pool.did_open(&file, "rust", text);
     // Only the second line of the two that bind something.
-    let asked = pool.inlay_hints(&file, 2, 2);
+    let asked = pool.inlay_hints(&file, 2, 2, "    let second = 2;".len() as u32);
     let mut seen = Vec::new();
     collect_until(&events, "the hints", &mut seen, |seen| {
         seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == asked))
@@ -805,8 +805,9 @@ fn the_types_a_server_inferred_are_asked_for_by_lines() {
     document.set_inlay_hints(&answer);
     assert_eq!(document.inlay_annotations(), vec![(2, "second: Fake".to_owned())]);
 
-    // The whole document, ending on its last line and not after it.
-    let asked = pool.inlay_hints(&file, 0, 4);
+    // The whole document, ending on its last line and not after it: the
+    // empty line after the closing brace, at its only column.
+    let asked = pool.inlay_hints(&file, 0, 4, 0);
     collect_until(&events, "every hint", &mut seen, |seen| {
         seen.iter().any(|event| matches!(event, Event::LspResponse { id, .. } if *id == asked))
     });

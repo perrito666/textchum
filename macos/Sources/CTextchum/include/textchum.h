@@ -314,7 +314,8 @@ uint64_t tc_lsp_inlay_hints(struct TcApp *app,
                             const char *path,
                             uintptr_t path_len,
                             uint32_t first_line,
-                            uint32_t last_line);
+                            uint32_t last_line,
+                            uint32_t last_character);
 
 /**
  * The first step of asking who calls the function at an LSP position;

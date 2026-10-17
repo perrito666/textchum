@@ -308,12 +308,16 @@ public final class CoreApp {
     /// completion is never called when the document has no server that
     /// gives hints.
     @MainActor
+    /// The range ends at `lastCharacter` (UTF-16) of `lastLine`, a place
+    /// the document has.
     public func lspInlayHints(
-        path: String, firstLine: Int, lastLine: Int, completion: @escaping (String) -> Void
+        path: String, firstLine: Int, lastLine: Int, lastCharacter: Int,
+        completion: @escaping (String) -> Void
     ) {
         let id = withUTF8(path) { path, pathLen in
             tc_lsp_inlay_hints(
-                handle, path, pathLen, UInt32(max(0, firstLine)), UInt32(max(0, lastLine)))
+                handle, path, pathLen, UInt32(max(0, firstLine)), UInt32(max(0, lastLine)),
+                UInt32(max(0, lastCharacter)))
         }
         guard id != 0 else { return }
         router.register(id, completion)

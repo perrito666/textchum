@@ -1002,12 +1002,19 @@ impl Pool {
     /// the types the server inferred, and the parameter names of calls.
     /// The response's `result` is an LSP `InlayHint[]`.
     ///
-    /// `last_line` has to be a line the document has. A range that
-    /// ends on a line past the last is an error to rust-analyzer, which
-    /// answers it with nothing at all; a column past the end of a line
-    /// is not, the protocol says it means the end of the line, and that
-    /// is how the whole of the last line is asked for.
-    pub fn inlay_hints(&mut self, path: &Path, first_line: u32, last_line: u32) -> u64 {
+    /// The range ends at `last_character` of `last_line`, which has to
+    /// be a place the document has: its last line's length, to ask for
+    /// all of it. A line past the last is an error to rust-analyzer,
+    /// and a column past the end of a line is one to gopls — "column is
+    /// beyond end of line" — though the protocol says it means the
+    /// line's end. Either server then shows no hints at all.
+    pub fn inlay_hints(
+        &mut self,
+        path: &Path,
+        first_line: u32,
+        last_line: u32,
+        last_character: u32,
+    ) -> u64 {
         self.request(
             path,
             "inlayHintProvider",
@@ -1016,7 +1023,7 @@ impl Pool {
                 "textDocument": {"uri": crate::uri::path_to_uri(path)},
                 "range": {
                     "start": {"line": first_line, "character": 0},
-                    "end": {"line": last_line, "character": 1_000_000},
+                    "end": {"line": last_line, "character": last_character},
                 },
             }),
         )
