@@ -726,6 +726,18 @@ impl Workbench {
         self.toasts.add_toast(adw::Toast::new(text));
     }
 
+    /// A command's short answer when it has nothing to do: by the
+    /// caret of the page in front, or, with the caret out of sight or
+    /// no page at all, in the notification area.
+    pub fn hint(&self, text: &str) {
+        if let Some(page) = self.selected() {
+            if page::show_hint(&page, text) {
+                return;
+            }
+        }
+        Shell::instance().notify(text);
+    }
+
     /// Puts `text` in the notification area, where it stays until the
     /// next thing worth saying. [`Shell::notify`] calls this on every
     /// window after putting the text in the session's list.
@@ -1323,7 +1335,7 @@ impl Workbench {
             page.search_context.backward(&start.min(end))
         };
         let Some((mut from, to, _)) = found else {
-            self.toast(&tr("No more matches."));
+            self.hint(&tr("No more matches."));
             return;
         };
         buffer.select_range(&to, &from);
@@ -2241,7 +2253,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("reopen-tab", workbench, |workbench, _| {
         let Some((path, line, character)) = workbench.closed_tabs.borrow_mut().pop() else {
-            workbench.toast(&tr("No recently closed tab to reopen."));
+            workbench.hint(&tr("No recently closed tab to reopen."));
             return;
         };
         // A file closed a moment ago is still in the shell's cache,
@@ -2338,7 +2350,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 web.set_visible(!web.is_visible());
                 page.update_preview_now();
             }
-            None => workbench.toast(&tr("Not a Markdown document.")),
+            None => workbench.hint(&tr("Not a Markdown document.")),
         }
     });
     add("sidebar", workbench, |workbench, _| {
@@ -2349,19 +2361,19 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("fold", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if !crate::page::toggle_fold(&page) {
-            workbench.toast(&tr("No block opens on this line."));
+            workbench.hint(&tr("No block opens on this line."));
         }
     });
     add("fold-all", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if !crate::page::fold_all(&page) {
-            workbench.toast(&tr("Nothing here folds."));
+            workbench.hint(&tr("Nothing here folds."));
         }
     });
     add("unfold-all", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if !crate::page::unfold_all(&page) {
-            workbench.toast(&tr("Nothing is folded."));
+            workbench.hint(&tr("Nothing is folded."));
         }
     });
     add("new-column", workbench, |workbench, _| {
@@ -2369,7 +2381,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("close-column", workbench, |workbench, _| {
         if !workbench.is_split() {
-            workbench.toast(&tr("This window has one column."));
+            workbench.hint(&tr("This window has one column."));
             return;
         }
         workbench.close_column();
@@ -2382,7 +2394,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("focus-other-group", workbench, |workbench, _| {
         if !workbench.has_several_panes() {
-            workbench.toast(&tr("There is one pane in this window."));
+            workbench.hint(&tr("There is one pane in this window."));
             return;
         }
         workbench.focus_other_group();
@@ -2396,7 +2408,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("definition", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&tr("Save the file first — untitled documents have no server."));
+            workbench.hint(&tr("Save the file first — untitled documents have no server."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
@@ -2409,7 +2421,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             // No server: the ctags fallback gets its chance before the
             // explanation does.
             if !ctags_jump(workbench, &page, &path) {
-                workbench.toast(&tr("No language server is running for this document."));
+                workbench.hint(&tr("No language server is running for this document."));
             }
             return;
         }
@@ -2435,7 +2447,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                     // The server answered but had nothing; consult the
                     // index for projects that opted in.
                     if !ctags_jump(&workbench, &fallback_page, &path) {
-                        workbench.toast(&tr("No definition found."));
+                        workbench.hint(&tr("No definition found."));
                     }
                 }
             }
@@ -2456,7 +2468,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("reveal-in-tree", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&tr("Save the file first — an untitled document has no path."));
+            workbench.hint(&tr("Save the file first — an untitled document has no path."));
             return;
         };
         let _ = path;
@@ -2499,7 +2511,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let path = workbench.selected().and_then(|page| page.path().borrow().clone());
         match path {
             Some(path) => show_symbol_picker(workbench, path),
-            None => workbench.toast(&tr("No language server here searches symbols.")),
+            None => workbench.hint(&tr("No language server here searches symbols.")),
         }
     });
     add("quick-open", workbench, |workbench, _| {
@@ -2540,7 +2552,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             // same shapes: a bare number, `412:8` from a compiler, a
             // whole pasted `src/main.rs:412:8`.
             let Some(target) = goto::parse(&entry.text()) else {
-                workbench.toast(&tr("Nothing in that names a line."));
+                workbench.hint(&tr("Nothing in that names a line."));
                 return;
             };
             let Some(page) = workbench.selected() else { return };
@@ -2574,7 +2586,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("copy-path-line", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&tr("Save the file first — an untitled document has no path."));
+            workbench.hint(&tr("Save the file first — an untitled document has no path."));
             return;
         };
         let line = page.buffer.iter_at_mark(&page.buffer.get_insert()).line() + 1;
@@ -2583,19 +2595,19 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("copy-forge-line", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&tr("Save the file first — an untitled document has no path."));
+            workbench.hint(&tr("Save the file first — an untitled document has no path."));
             return;
         };
         let line = page.buffer.iter_at_mark(&page.buffer.get_insert()).line() + 1;
         match crate::path_actions::forge_url_for_line(&path, line as usize) {
             Some(url) => workbench.window.clipboard().set_text(&url),
-            None => workbench.toast(&tr("Not in a git repository with a remote.")),
+            None => workbench.hint(&tr("Not in a git repository with a remote.")),
         }
     });
     add("blame", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&tr("Save the file first — git has nothing to blame yet."));
+            workbench.hint(&tr("Save the file first — git has nothing to blame yet."));
             return;
         };
         // The buffer's text goes with the line number, so an unsaved
@@ -2615,7 +2627,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("diagnostic", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&tr("No diagnostics for an unsaved document."));
+            workbench.hint(&tr("No diagnostics for an unsaved document."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
@@ -2629,7 +2641,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 })
         };
         let Some(found) = found else {
-            workbench.toast(&tr("Nothing reported on this line."));
+            workbench.hint(&tr("Nothing reported on this line."));
             return;
         };
         // The same words the balloon uses, in a dialog: the caret is
@@ -2643,7 +2655,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("diagnostic-list", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         let Some(path) = page.path().borrow().clone() else {
-            workbench.toast(&tr("No diagnostics for an unsaved document."));
+            workbench.hint(&tr("No diagnostics for an unsaved document."));
             return;
         };
         let shell = Shell::instance();
@@ -2655,7 +2667,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             }
         };
         if found.is_empty() {
-            workbench.toast(&tr("Nothing reported in this document."));
+            workbench.hint(&tr("Nothing reported in this document."));
             return;
         }
         // In the order they appear, which is the order they are fixed
@@ -2831,7 +2843,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             // offsets would corrupt it. Only proceed if the span still
             // holds the word the menu was built for.
             if buffer.text(&from, &to, false) != word {
-                workbench.toast(&tr("The text moved — nothing was replaced."));
+                workbench.hint(&tr("The text moved — nothing was replaced."));
                 return;
             }
             buffer.delete(&mut from, &mut to);
@@ -2877,9 +2889,9 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                     // Only the forge's URL needs a remote; the path from
                     // the top needs the repository alone.
                     None if name == "copy-git-root" => {
-                        workbench.toast(&tr("Not in a git repository."))
+                        workbench.hint(&tr("Not in a git repository."))
                     }
-                    None => workbench.toast(&tr("Not in a git repository with a remote.")),
+                    None => workbench.hint(&tr("Not in a git repository with a remote.")),
                 }
             });
             workbench.window.add_action(&action);
@@ -2962,7 +2974,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("preprocess", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if preprocessor_chain(&page).is_none() {
-            workbench.toast(&tr("No save preprocessors configured for this language."));
+            workbench.hint(&tr("No save preprocessors configured for this language."));
             return;
         }
         match run_preprocessor_chain(&page) {
@@ -2978,7 +2990,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("revert", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if page.path().borrow().is_none() {
-            workbench.toast(&tr("Untitled documents have no file to revert to."));
+            workbench.hint(&tr("Untitled documents have no file to revert to."));
             return;
         }
         if !page.state.borrow().document.is_dirty() {
@@ -3009,7 +3021,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             Some((path, line, character)) => {
                 jump_without_trail(workbench, &path, line, character);
             }
-            None => workbench.toast(&tr("Nowhere to go back to.")),
+            None => workbench.hint(&tr("Nowhere to go back to.")),
         }
     });
     add("forward", workbench, |workbench, _| {
@@ -3018,7 +3030,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             Some((path, line, character)) => {
                 jump_without_trail(workbench, &path, line, character);
             }
-            None => workbench.toast(&tr("Nowhere to go forward to.")),
+            None => workbench.hint(&tr("Nowhere to go forward to.")),
         }
     });
     add("references", workbench, |workbench, _| {
@@ -3029,7 +3041,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 path.map(|path| (page, path))
             })
         else {
-            workbench.toast(&tr("Save the file first — untitled documents have no server."));
+            workbench.hint(&tr("Save the file first — untitled documents have no server."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
@@ -3039,7 +3051,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .borrow_mut()
             .references(Path::new(&path), line, character);
         if id == 0 {
-            workbench.toast(&tr("No language server is running for this document."));
+            workbench.hint(&tr("No language server is running for this document."));
             return;
         }
         let weak = Rc::downgrade(workbench);
@@ -3061,7 +3073,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 path.map(|path| (page, path))
             })
         else {
-            workbench.toast(&tr("Save the file first — untitled documents have no server."));
+            workbench.hint(&tr("Save the file first — untitled documents have no server."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
@@ -3071,14 +3083,14 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .borrow_mut()
             .prepare_call_hierarchy(Path::new(&path), line, character);
         if id == 0 {
-            workbench.toast(&tr("No language server here finds callers."));
+            workbench.hint(&tr("No language server here finds callers."));
             return;
         }
         let weak = Rc::downgrade(workbench);
         shell.expect_response(id, move |prepared| {
             let Some(workbench) = weak.upgrade() else { return };
             let Some(item) = textchum_core::calls::prepared_item(prepared) else {
-                workbench.toast(&tr("There is no function here to find the callers of."));
+                workbench.hint(&tr("There is no function here to find the callers of."));
                 return;
             };
             let shell = Shell::instance();
@@ -3088,7 +3100,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 let Some(workbench) = weak.upgrade() else { return };
                 let places = textchum_core::calls::callers_as_locations(json);
                 if places == "[]" {
-                    workbench.toast(&tr("Nothing calls this."));
+                    workbench.hint(&tr("Nothing calls this."));
                 } else {
                     show_locations(&workbench, &tr("Callers"), &places);
                 }
@@ -3103,7 +3115,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 path.map(|path| (page, path))
             })
         else {
-            workbench.toast(&tr("Save the file first — untitled documents have no server."));
+            workbench.hint(&tr("Save the file first — untitled documents have no server."));
             return;
         };
         let (line, character) = page::lsp_anchor(&page);
@@ -3113,7 +3125,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .borrow_mut()
             .code_action(Path::new(&path), line, character);
         if id == 0 {
-            workbench.toast(&tr("No language server is running for this document."));
+            workbench.hint(&tr("No language server is running for this document."));
             return;
         }
         let weak = Rc::downgrade(workbench);
@@ -3130,7 +3142,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 path.map(|path| (page, path))
             })
         else {
-            workbench.toast(&tr("Save the file first — untitled documents have no server."));
+            workbench.hint(&tr("Save the file first — untitled documents have no server."));
             return;
         };
         // The name becomes a field where it stands: a dialog put it
@@ -3138,7 +3150,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         // caret is put on the name, with nothing selected, so its other
         // uses get marked meanwhile.
         let Some((start, end)) = page::symbol_at_caret(&page.buffer) else {
-            workbench.toast(&tr("Put the caret on a name first."));
+            workbench.hint(&tr("Put the caret on a name first."));
             return;
         };
         let current = page.buffer.text(&start, &end, true).to_string();
@@ -3189,7 +3201,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 let weak = weak.clone();
                 if id == 0 {
                     if let Some(workbench) = weak.upgrade() {
-                        workbench.toast(&tr("No language server is running for this document."));
+                        workbench.hint(&tr("No language server is running for this document."));
                     }
                     return;
                 }
@@ -3272,7 +3284,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             // Markdown outlines itself; anything else needs a server,
             // and a server needs a file.
             if !show_markdown_outline(workbench, &page) {
-                workbench.toast(&tr("Save the file first — untitled documents have no server."));
+                workbench.hint(&tr("Save the file first — untitled documents have no server."));
             }
             return;
         };
@@ -3280,7 +3292,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         let id = shell.pool.borrow_mut().document_symbols(Path::new(&path));
         if id == 0 {
             if !show_markdown_outline(workbench, &page) {
-                workbench.toast(&tr("No language server is running for this document."));
+                workbench.hint(&tr("No language server is running for this document."));
             }
             return;
         }
@@ -3291,7 +3303,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 if !show_outline(&workbench, &path, json)
                     && !show_markdown_outline(&workbench, &fallback)
                 {
-                    workbench.toast(&tr("The server offered no outline."));
+                    workbench.hint(&tr("The server offered no outline."));
                 }
             }
         });
@@ -3351,7 +3363,7 @@ fn uses_of_definition(workbench: &Rc<Workbench>, path: &str, line: u32, characte
         let Some(workbench) = weak.upgrade() else { return };
         let uses = textchum_core::definition::elsewhere(json, &path, line, character);
         match uses.len() {
-            0 => workbench.toast(&tr("Nothing else refers to this symbol.")),
+            0 => workbench.hint(&tr("Nothing else refers to this symbol.")),
             1 => workbench.open(
                 Some(PathBuf::from(uses[0].path.clone())),
                 Some((uses[0].line as i32, uses[0].character as usize)),
@@ -3388,7 +3400,7 @@ fn ctags_jump(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &str) -> bool {
     let Some(symbol) = symbol_under_caret(page) else { return false };
     let Some((target, line)) = crate::ctags::definition(&symbol, &root) else {
         if !crate::ctags::available() {
-            workbench.toast(
+            workbench.hint(
                 "The ctags fallback needs Universal Ctags — install the \
                  universal-ctags package.",
             );
@@ -3553,7 +3565,7 @@ fn move_to_block_edge(workbench: &Rc<Workbench>, to_start: bool) {
     let insert = buffer.iter_at_mark(&buffer.get_insert());
     let position = page::utf16_offset(buffer, insert.offset());
     let Some((start, end)) = page.state.borrow().document.block_bounds(position) else {
-        workbench.toast(&tr("No enclosing block here."));
+        workbench.hint(&tr("No enclosing block here."));
         return;
     };
     let target_utf16 = if to_start { start } else { end };
@@ -3624,7 +3636,7 @@ fn show_file_properties(workbench: &Rc<Workbench>) {
     let Some(path) = page.path().borrow().clone() else {
         // Nothing to remember a choice against; New with Format is
         // where an untitled document's language is set.
-        workbench.toast(&tr("Save the file first — an untitled document has no path."));
+        workbench.hint(&tr("Save the file first — an untitled document has no path."));
         return;
     };
     let shell = Shell::instance();
@@ -4608,7 +4620,7 @@ fn jump_without_trail(workbench: &Rc<Workbench>, path: &str, line: i32, characte
 /// A floating list of locations (references); activating a row jumps.
 fn show_locations(workbench: &Rc<Workbench>, title: &str, json: &str) {
     let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json) else {
-        workbench.toast(&tr("No references found."));
+        workbench.hint(&tr("No references found."));
         return;
     };
     let mut rows: Vec<(String, i32, usize)> = Vec::new();
@@ -4620,7 +4632,7 @@ fn show_locations(workbench: &Rc<Workbench>, title: &str, json: &str) {
         rows.push((percent_decode(path), line, character));
     }
     if rows.is_empty() {
-        workbench.toast(&tr("No references found."));
+        workbench.hint(&tr("No references found."));
         return;
     }
     show_places(workbench, title, rows);
@@ -4632,7 +4644,7 @@ fn show_code_actions(workbench: &Rc<Workbench>, path: &str, json: &str) {
     use textchum_core::code_action;
     let actions = code_action::actions(json);
     if actions.is_empty() {
-        workbench.toast(&tr("The language server has no action for this place."));
+        workbench.hint(&tr("The language server has no action for this place."));
         return;
     }
     let labels: Vec<String> = actions
@@ -4681,7 +4693,7 @@ fn run_code_action(
                 .borrow_mut()
                 .execute_command(Path::new(path), &name, arguments);
             if id == 0 {
-                workbench.toast(&tr("The language server would not run that action."));
+                workbench.hint(&tr("The language server would not run that action."));
             }
         }
         Outcome::Resolve(action) => {
@@ -4690,7 +4702,7 @@ fn run_code_action(
                 .borrow_mut()
                 .resolve_code_action(Path::new(path), action);
             if id == 0 {
-                workbench.toast(&tr("The language server would not finish that action."));
+                workbench.hint(&tr("The language server would not finish that action."));
                 return;
             }
             let weak = Rc::downgrade(workbench);
@@ -4711,7 +4723,7 @@ fn run_code_action(
                             arguments,
                         );
                     }
-                    _ => workbench.toast(&tr("The language server had no edit for that action.")),
+                    _ => workbench.hint(&tr("The language server had no edit for that action.")),
                 }
             });
         }
@@ -4966,7 +4978,7 @@ pub(crate) fn apply_edits_to_page(page: &Rc<Page>, edits: Vec<crate::lsp_edits::
 fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str) {
     let by_file = crate::lsp_edits::workspace_edits(json);
     if by_file.is_empty() {
-        workbench.toast(&tr("The server had no rename to offer."));
+        workbench.hint(&tr("The server had no rename to offer."));
         return;
     }
     let mut touched = 0usize;
@@ -5028,12 +5040,12 @@ fn show_quick_open(workbench: &Rc<Workbench>, root: PathBuf) {
 fn show_changed_files(workbench: &Rc<Workbench>, root: PathBuf) {
     let branches = merge_base_branches_for(&root);
     let Some((top, files)) = textchum_core::changes::branch_files(&root, &branches) else {
-        workbench.toast(&tr("Not inside a git repository."));
+        workbench.hint(&tr("Not inside a git repository."));
         return;
     };
     let index: Vec<String> = files.into_iter().map(|(_, path)| path).collect();
     if index.is_empty() {
-        workbench.toast(&tr("The branch touches no files."));
+        workbench.hint(&tr("The branch touches no files."));
         return;
     }
     show_file_picker(workbench, PathBuf::from(top), index);

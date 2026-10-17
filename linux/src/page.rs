@@ -50,6 +50,8 @@ pub struct Page {
 
     /// The hover balloon and its content label.
     hover_popover: gtk::Popover,
+    /// The hint up by the caret, if one is: a command's short answer.
+    hint: RefCell<Option<gtk::Popover>>,
     hover_label: gtk::Label,
     /// The text the balloon up right now is about, as character
     /// offsets — the symbol, or the diagnostic. The pointer moving
@@ -366,6 +368,7 @@ impl Page {
             root,
             preview,
             hover_popover,
+            hint: RefCell::new(None),
             hover_label,
             hover_about: Cell::new(None),
             hover_inside: Cell::new(false),
@@ -415,6 +418,7 @@ impl Page {
             glib::idle_add_local_once(move || refresh_change_marks(&page));
         }
         install_hover(&page);
+        install_hint_closers(&page);
         if document.views().len() == 1 {
         install_file_monitor(&page);
     }
@@ -3308,6 +3312,117 @@ fn line_text(page: &Page, line: i32) -> String {
         end.forward_to_line_end();
     }
     page.buffer.text(&start, &end, true).to_string()
+}
+
+/// A command's short answer when it has nothing to do — "No usages
+/// found" — shown by the caret, where the eyes already are, and gone at
+/// the next key, press or scroll. A toast at the window's foot was read
+/// away from the work. Returns false, showing nothing, when the caret
+/// is out of sight: the caller says it elsewhere.
+pub fn show_hint(page: &Rc<Page>, text: &str) -> bool {
+    close_hint(page);
+    if !page.view.is_mapped() {
+        return false;
+    }
+    let caret = page.buffer.iter_at_mark(&page.buffer.get_insert());
+    let place = page.view.iter_location(&caret);
+    let visible = page.view.visible_rect();
+    if place.y() < visible.y() || place.y() + place.height() > visible.y() + visible.height() {
+        return false;
+    }
+    let (x, y) = page.view.buffer_to_window_coords(gtk::TextWindowType::Widget, place.x(), place.y());
+    let label = gtk::Label::new(Some(text));
+    label.set_margin_start(8);
+    label.set_margin_end(8);
+    label.set_margin_top(4);
+    label.set_margin_bottom(4);
+    let popover = gtk::Popover::new();
+    popover.set_parent(&page.view);
+    // Never the keyboard's: the caret stays where the command left it.
+    popover.set_autohide(false);
+    popover.set_can_focus(false);
+    popover.set_has_arrow(false);
+    popover.set_position(gtk::PositionType::Bottom);
+    popover.set_child(Some(&label));
+    popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x, y, 1, place.height())));
+    popover.popup();
+    *page.hint.borrow_mut() = Some(popover);
+    true
+}
+
+pub fn close_hint(page: &Page) {
+    if let Some(popover) = page.hint.borrow_mut().take() {
+        popover.popdown();
+        popover.unparent();
+    }
+}
+
+/// What is shown by the caret, for the smoke test.
+pub(crate) fn shown_hint(page: &Page) -> Option<String> {
+    page.hint
+        .borrow()
+        .as_ref()
+        .and_then(|popover| popover.child())
+        .and_downcast::<gtk::Label>()
+        .map(|label| label.text().to_string())
+}
+
+/// A hint answered the command just given: typing, moving the caret,
+/// pressing in the text, scrolling or Escape is moving on from it.
+fn install_hint_closers(page: &Rc<Page>) {
+    {
+        let weak = Rc::downgrade(page);
+        page.buffer.connect_changed(move |_| {
+            if let Some(page) = weak.upgrade() {
+                close_hint(&page);
+            }
+        });
+    }
+    {
+        let weak = Rc::downgrade(page);
+        page.buffer.connect_mark_set(move |_, _, mark| {
+            if mark.name().as_deref() != Some("insert") {
+                return;
+            }
+            if let Some(page) = weak.upgrade() {
+                close_hint(&page);
+            }
+        });
+    }
+    {
+        let weak = Rc::downgrade(page);
+        scrolled_window_of(page).vadjustment().connect_value_changed(move |_| {
+            if let Some(page) = weak.upgrade() {
+                close_hint(&page);
+            }
+        });
+    }
+    {
+        let click = gtk::GestureClick::new();
+        click.set_button(0);
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(page);
+        click.connect_pressed(move |_, _, _, _| {
+            if let Some(page) = weak.upgrade() {
+                close_hint(&page);
+            }
+        });
+        page.view.add_controller(click);
+    }
+    {
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(page);
+        keys.connect_key_pressed(move |_, key, _, _| {
+            let Some(page) = weak.upgrade() else { return glib::Propagation::Proceed };
+            if key == gtk::gdk::Key::Escape && page.hint.borrow().is_some() {
+                close_hint(&page);
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        page.view.add_controller(keys);
+    }
 }
 
 fn install_hover(page: &Rc<Page>) {

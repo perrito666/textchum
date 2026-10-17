@@ -244,9 +244,11 @@ app before the change is called done.
 
 What breaks these rules today, each to be fixed under its own issue:
 
-- **6.1, 6.2** On macOS, "nothing on offer", "no diagnostics", "on the
-  definition", "nothing came back" and "no other worktrees" are modal
-  alerts. Reports read in a dialog; they belong next to the caret.
+- **6.2** A few reports that run to several paragraphs are still
+  dialogs on macOS: the result of installing the `chum` command, of
+  installing a grammar and of importing a theme, and the note that
+  Universal Ctags is missing. They wait for a notice that can carry
+  details.
 - **5.2** Inlay hints are laid out the moment they arrive, so text on
   the line being typed can shift sideways.
 - **1.3** Show Documentation pressed again does not move into the

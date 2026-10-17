@@ -604,15 +604,16 @@ msgstr ""
 msgid "Not a Markdown document."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No block opens on this line."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing here folds."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
 msgid "Nothing is folded."
 msgstr ""
 
@@ -624,19 +625,19 @@ msgstr ""
 msgid "There is one pane in this window."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Save the file first — untitled documents have no server."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No language server is running for this document."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No definition found."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Save the file first — an untitled document has no path."
 msgstr ""
 
@@ -648,11 +649,11 @@ msgstr ""
 msgid "Go"
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing in that names a line."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Not in a git repository with a remote."
 msgstr ""
 
@@ -684,7 +685,7 @@ msgstr ""
 msgid "The text moved — nothing was replaced."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Not in a git repository."
 msgstr ""
 
@@ -692,7 +693,7 @@ msgstr ""
 msgid "No file browser answered."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No save preprocessors configured for this language."
 msgstr ""
 
@@ -740,7 +741,7 @@ msgstr ""
 msgid "Put the caret on a name first."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server offered no outline."
 msgstr ""
 
@@ -778,7 +779,7 @@ msgstr ""
 msgid "Move to New Window"
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No enclosing block here."
 msgstr ""
 
@@ -846,7 +847,7 @@ msgstr ""
 msgid "The language server had no edit for that action."
 msgstr ""
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server had no rename to offer."
 msgstr ""
 
@@ -1357,10 +1358,6 @@ msgid "The icon pack could not be used"
 msgstr ""
 
 #: macos/Sources/Textchum/AppDelegate.swift
-msgid "No other worktrees"
-msgstr ""
-
-#: macos/Sources/Textchum/AppDelegate.swift
 msgid "This repository has one working tree."
 msgstr ""
 
@@ -1640,11 +1637,11 @@ msgid ""
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "Move the pointer or the caret over a symbol."
+msgid "Nothing is reported on this line."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "On the definition"
+msgid "Move the pointer or the caret over a symbol."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
@@ -1652,11 +1649,11 @@ msgid "Nothing else in the workspace refers to this symbol."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing reported"
+msgid "No usages found."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "No diagnostics for this document."
+msgid "Nothing is reported in this document."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
@@ -1668,11 +1665,9 @@ msgid "symbol…"
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing to rename here"
-msgstr ""
-
-#: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing on offer"
+msgid ""
+"Nothing formats this document: no server can, and no save preprocessor is "
+"set for it."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
@@ -1680,11 +1675,19 @@ msgid "action…"
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing came back"
+msgid "That action had nothing to do."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Save it before asking git who wrote a line."
+msgstr ""
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "No matches."
+msgstr ""
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Nothing matched, so nothing was replaced."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
@@ -1709,6 +1712,12 @@ msgstr ""
 msgid ""
 "Your unsaved changes will be replaced by the file on disk (one Undo brings "
 "them back)."
+msgstr ""
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid ""
+"Save the file first — an untitled document has no properties to keep; New "
+"with Format sets its language."
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift

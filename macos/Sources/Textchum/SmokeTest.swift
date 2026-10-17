@@ -1728,6 +1728,45 @@ func runSmokeTest() -> Int32 {
     }
     print("balloon window ok (never key, a child of the document's window, under the text or over it)")
 
+    // A command with nothing to do says so by the caret, in a balloon
+    // that never takes the keyboard, and the hint goes at the next
+    // caret move, at Escape and at a press; a report is not a dialog.
+    do {
+        let hintCore = CoreDocument()
+        let hintBench = Workbench(sidebar: nil)
+        let hinting = DocumentController(document: hintCore)
+        hintBench.add(hinting)
+        hintBench.window?.makeKeyAndOrderFront(nil)
+        guard let hintView = hinting.primaryView as? EditorTextView else {
+            print("FAIL: no view to hint in")
+            return 1
+        }
+        hintView.insertText("fn main() {}\n", replacementRange: NSRange(location: 0, length: 0))
+        hintView.setSelectedRange(NSRange(location: 3, length: 0))
+        hinting.unfoldAll(nil)
+        // The smoke test is never the active app, so no window here is
+        // key; what can be checked is that the text kept first responder.
+        guard hinting.shownHint == t("Nothing is folded."),
+            hintBench.window?.firstResponder === hintView
+        else {
+            print("FAIL: Unfold All with nothing folded did not hint by the caret, or took the keyboard: \(String(describing: hinting.shownHint))")
+            return 1
+        }
+        hintView.setSelectedRange(NSRange(location: 5, length: 0))
+        guard hinting.shownHint == nil else {
+            print("FAIL: the hint stayed after the caret moved")
+            return 1
+        }
+        hinting.unfoldAll(nil)
+        _ = hinting.textView(hintView, doCommandBy: #selector(NSResponder.cancelOperation(_:)))
+        guard hinting.shownHint == nil else {
+            print("FAIL: Escape did not put the hint away")
+            return 1
+        }
+        hintBench.window?.orderOut(nil)
+    }
+    print("caret hints ok (by the caret, never the keyboard's, gone at a caret move and at Escape)")
+
     // A balloon's content can be selected, and one longer than a
     // balloon should be scrolls from its top instead of being cut.
     do {
