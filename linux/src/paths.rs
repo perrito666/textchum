@@ -21,10 +21,19 @@ use gtk::glib;
 ///
 /// Read once: the arguments do not change, and a path that moved
 /// mid-run would leave half the profile behind.
+///
+/// The smoke test always has one: without `--data-dir` it gets a fresh
+/// directory of its own, since it saves sessions, writes settings and
+/// remembers what pickers chose, and none of that may reach the real
+/// profile.
 pub fn data_dir() -> Option<&'static PathBuf> {
     static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     DIR.get_or_init(|| {
-        let path = data_dir_in(std::env::args())?;
+        let path = data_dir_in(std::env::args()).or_else(|| {
+            std::env::args().any(|argument| argument == "--smoke-test").then(|| {
+                std::env::temp_dir().join(format!("textchum-gtk-smoke-profile-{}", std::process::id()))
+            })
+        })?;
         let _ = std::fs::create_dir_all(&path);
         Some(path)
     })

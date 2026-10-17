@@ -28,6 +28,13 @@ func spin(untilTrue condition: () -> Bool, seconds: TimeInterval = 2) {
 @MainActor
 func runSmokeTest() -> Int32 {
     print("textchum core \(Core.version)")
+    // A profile of its own, from the first line: the session store and
+    // the project records it holds default to the real profile, and
+    // anything that remembers — a find bar's switches, a picker's
+    // recent choices — would write there.
+    SessionStore.directory = URL(
+        fileURLWithPath: NSTemporaryDirectory() + "textchum-smoke-profile-\(getpid())", isDirectory: true)
+    try? FileManager.default.createDirectory(at: SessionStore.directory, withIntermediateDirectories: true)
 
     // Buffer round trip.
     let buffer = CoreBuffer()
