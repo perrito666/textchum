@@ -25,6 +25,11 @@ The division is not decoration, and it decides where your change goes:
 
 ## Principles the code already follows
 
+How the interface behaves — who has the keyboard, what Return and
+Escape do, what happens to an answer that comes late, when a dialog is
+allowed — is written down in [`INTERACTION.md`](INTERACTION.md), rule
+by rule. Anything that adds or changes UI follows it, in both shells.
+
 **Every edit goes through one choke point.** The core owns the
 document; the shell routes each change through a single place and
 debug builds assert the two sides stay byte-identical afterwards. If
@@ -72,6 +77,10 @@ push.
 - **Anything crossing the FFI or the shells gets smoke coverage.**
   `make smoke` drives a real app end to end without a window server;
   the GTK shell has the same via `--smoke-test`.
+- **UI changes name the rules they touch** in `INTERACTION.md`, and
+  their smoke coverage checks those: who has the keyboard after the
+  thing closes, what Return and Escape do, whether a late answer is
+  dropped.
 - **UI changes get looked at.** The app has hidden `--debug-panel`
   hooks (files, grep, settings, palette, outline, hover, complete,
   status, about, …) and a `--config <path>` flag precisely so a screen
