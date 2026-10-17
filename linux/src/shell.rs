@@ -112,6 +112,27 @@ pub fn recent(kind: &str, project_root: Option<&str>) -> Vec<String> {
         .to_vec()
 }
 
+/// One of a project's options, as the JSON it was written as.
+pub fn memory_option(key: &str, project_root: Option<&str>) -> Option<serde_json::Value> {
+    let (root, in_project) = memory_record(project_root);
+    textchum_core::project_state::load(&root, &project_state_dir(), in_project)
+        .memory
+        .option(key)
+        .cloned()
+}
+
+/// Writes one of a project's options; `None` forgets it.
+pub fn set_memory_option(key: &str, value: Option<serde_json::Value>, project_root: Option<&str>) {
+    let (root, in_project) = memory_record(project_root);
+    let _ = textchum_core::project_state::remember_option(
+        &root,
+        &project_state_dir(),
+        in_project,
+        key,
+        value,
+    );
+}
+
 /// Puts `item` first among a project's recent choices of `kind`.
 pub fn note_recent(kind: &str, item: &str, project_root: Option<&str>) {
     let (root, in_project) = memory_record(project_root);

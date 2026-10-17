@@ -346,6 +346,11 @@ final class DocumentController: NSResponder {
     /// folder of the file that was frontmost when it was created — the
     /// user was probably adding a file to that project.
     var suggestedSaveDirectory: URL?
+    /// The project an untitled document is being added to: the one its
+    /// window suggests saving into.
+    private var saveProjectRoot: String? {
+        suggestedSaveDirectory.flatMap { CoreWorkspace.projectRoot(forPath: $0.path) }
+    }
     /// Where a new document is to be written: `chum notes/new.go` on a
     /// file that does not exist opens a document named after it, of its
     /// language, in its project, and Save writes it there — the path
@@ -3685,6 +3690,13 @@ final class DocumentController: NSResponder {
             bar.isHidden = false
             view.findBarHeight?.constant = FindReplaceBar.height
         }
+        // The switches as they were last left in this project (13.3).
+        if let saved = ProjectState.option("find.options", projectRoot: projectRoot) as? [String: Bool] {
+            bar.setOptions(
+                CoreFind.Options(
+                    regex: saved["regex"] ?? false, caseSensitive: saved["case"] ?? false,
+                    wholeWord: saved["word"] ?? false))
+        }
         let selected = view.textView.selectedRange()
         let initial =
             selected.length > 0 && selected.length < 200
@@ -3708,7 +3720,14 @@ final class DocumentController: NSResponder {
 
     private func handleFind(_ request: FindReplaceBar.Request) {
         switch request {
-        case .changed: scheduleFindRefresh(selectCurrent: true)
+        case .changed:
+            if let options = focusedView?.findBar.options {
+                ProjectState.setOption(
+                    "find.options",
+                    ["regex": options.regex, "case": options.caseSensitive, "word": options.wholeWord],
+                    projectRoot: projectRoot)
+            }
+            scheduleFindRefresh(selectCurrent: true)
         case .next: findStep(1)
         case .previous: findStep(-1)
         case .replace: replaceCurrentMatch()
@@ -5417,7 +5436,13 @@ final class DocumentController: NSResponder {
                 fileURLWithPath: (intendedPath as NSString).deletingLastPathComponent,
                 isDirectory: true)
         } else if coreDocument.path == nil {
-            if let remembered = SessionStore.lastUntitledSaveFolder {
+            // The folder last saved into from the project this window
+            // works in (13.4), then from anywhere, then the window's own.
+            if let folder = ProjectState.option("folder.save", projectRoot: saveProjectRoot) as? String,
+                FileManager.default.fileExists(atPath: folder)
+            {
+                panel.directoryURL = URL(fileURLWithPath: folder, isDirectory: true)
+            } else if let remembered = SessionStore.lastUntitledSaveFolder {
                 panel.directoryURL = URL(fileURLWithPath: remembered, isDirectory: true)
             } else if let suggestedSaveDirectory {
                 panel.directoryURL = suggestedSaveDirectory
@@ -5442,6 +5467,9 @@ final class DocumentController: NSResponder {
             if wasUntitled {
                 SessionStore.lastUntitledSaveFolder =
                     url.deletingLastPathComponent().path
+                ProjectState.setOption(
+                    "folder.save", url.deletingLastPathComponent().path,
+                    projectRoot: saveProjectRoot)
             }
             noteOwnSave()
             updateChrome()

@@ -683,9 +683,21 @@ impl Workbench {
             .cloned()
     }
 
-    /// Pushes the find toggles into the selected page's settings.
+    /// Pushes the find toggles into the selected page's settings, and
+    /// writes them down for the project, so the bar opens with them as
+    /// they were left (13.3).
     fn apply_search_options(&self) {
         let Some(page) = self.selected() else { return };
+        let root = page.document.project_root.borrow().clone();
+        crate::shell::set_memory_option(
+            "find.options",
+            Some(serde_json::json!({
+                "case": self.search_case.is_active(),
+                "regex": self.search_regex.is_active(),
+                "word": self.search_word.is_active(),
+            })),
+            root.as_deref(),
+        );
         page.search_settings
             .set_case_sensitive(self.search_case.is_active());
         page.search_settings
@@ -2239,6 +2251,23 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("open", workbench, |workbench, _| {
         let dialog = gtk::FileDialog::new();
+        // Where the work is (13.4): the folder last opened from in this
+        // project, else the project, else the document's folder.
+        let page = workbench.selected();
+        let root = page.as_ref().and_then(|page| page.document.project_root.borrow().clone());
+        let folder_of_page = page
+            .as_ref()
+            .and_then(|page| page.path().borrow().clone())
+            .and_then(|path| Path::new(&path).parent().map(|p| p.to_string_lossy().into_owned()));
+        let remembered = crate::shell::memory_option("folder.open", root.as_deref())
+            .and_then(|value| value.as_str().map(str::to_owned));
+        if let Some(start) = [remembered, root.clone(), folder_of_page]
+            .into_iter()
+            .flatten()
+            .find(|folder| Path::new(folder).is_dir())
+        {
+            dialog.set_initial_folder(Some(&gtk::gio::File::for_path(&start)));
+        }
         let workbench = Rc::clone(workbench);
         // Opening several at once, because the window has tabs: picking
         // files one dialog at a time is the only thing a single-select
@@ -2248,6 +2277,15 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             gtk::gio::Cancellable::NONE,
             move |result| {
                 let Ok(files) = result else { return };
+                if let Some(first) = files.iter::<gtk::gio::File>().flatten().next() {
+                    if let Some(parent) = first.path().and_then(|path| path.parent().map(Path::to_owned)) {
+                        crate::shell::set_memory_option(
+                            "folder.open",
+                            Some(serde_json::Value::String(parent.to_string_lossy().into_owned())),
+                            root.as_deref(),
+                        );
+                    }
+                }
                 for file in files.iter::<gtk::gio::File>().flatten() {
                     if let Some(path) = file.path() {
                         workbench.open(Some(path), None);
@@ -2313,11 +2351,15 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             .clone()
             .and_then(|path| Path::new(&path).parent().map(Path::to_owned))
             .or_else(|| {
-                if untitled {
-                    crate::session::last_untitled_folder().map(PathBuf::from)
-                } else {
-                    None
+                // The folder last saved into from the project this
+                // window works in (13.4), then from anywhere.
+                if !untitled {
+                    return None;
                 }
+                crate::shell::memory_option("folder.save", save_project_root(workbench).as_deref())
+                    .and_then(|value| value.as_str().map(PathBuf::from))
+                    .filter(|folder| folder.is_dir())
+                    .or_else(|| crate::session::last_untitled_folder().map(PathBuf::from))
             })
             .or_else(|| {
                 workbench
@@ -2345,6 +2387,15 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("undo", workbench, |workbench, _| replay(workbench, true));
     add("redo", workbench, |workbench, _| replay(workbench, false));
     add("find", workbench, |workbench, _| {
+        // The switches as they were last left in this project (13.3).
+        let root = workbench
+            .selected()
+            .and_then(|page| page.document.project_root.borrow().clone());
+        if let Some(saved) = crate::shell::memory_option("find.options", root.as_deref()) {
+            workbench.search_case.set_active(saved["case"].as_bool().unwrap_or(false));
+            workbench.search_regex.set_active(saved["regex"].as_bool().unwrap_or(false));
+            workbench.search_word.set_active(saved["word"].as_bool().unwrap_or(false));
+        }
         workbench.search_bar.set_search_mode(true);
         workbench.search_entry.grab_focus();
     });
@@ -3864,10 +3915,21 @@ pub fn apply_file_properties(
 }
 
 fn show_format_picker(workbench: &Rc<Workbench>) {
-    let names: Vec<&'static str> =
-        textchum_core::syntax::languages::selectable_names().to_vec();
+    let all: Vec<&'static str> = textchum_core::syntax::languages::selectable_names().to_vec();
+    // The formats given lately first (13.3): a new Go file after a new
+    // Go file is one Return.
+    let root = workbench
+        .selected()
+        .and_then(|page| page.document.project_root.borrow().clone());
+    let recent = crate::shell::recent("formats", root.as_deref());
+    let owned: Vec<String> = all.iter().map(|name| name.to_string()).collect();
+    let names: Vec<&'static str> = textchum_core::project_state::recent_first(&owned, &recent)
+        .into_iter()
+        .map(|at| all[at])
+        .collect();
     filterable_picker(workbench, "New with Format", names.clone(), move |workbench, index| {
         let name = names[index];
+        crate::shell::note_recent("formats", name, root.as_deref());
         let _ = gtk::prelude::WidgetExt::activate_action(
             &workbench.window,
             &format!("win.new-with-format('{name}')"),
@@ -4411,6 +4473,13 @@ pub fn save_page_as(workbench: &Rc<Workbench>, page: &Rc<Page>, path: &Path) -> 
     shell.note_own_save(&key);
     if was_untitled {
         crate::session::note_untitled_save(path);
+        if let Some(parent) = path.parent() {
+            crate::shell::set_memory_option(
+                "folder.save",
+                Some(serde_json::Value::String(parent.to_string_lossy().into_owned())),
+                save_project_root(workbench).as_deref(),
+            );
+        }
     }
     *page.path().borrow_mut() = Some(key.clone());
     if let Some(gone) = previous.clone().filter(|previous| *previous != key) {
@@ -5669,6 +5738,15 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
     // searches by regex does so every time.
     let regex_toggle = gtk::ToggleButton::with_label(".*");
     regex_toggle.set_tooltip_text(Some(&tr("Read the query as a regular expression")));
+    // The options as they were left in this project (13.3).
+    let memory_root = textchum_core::workspace::project_root_for(&root)
+        .unwrap_or_else(|| root.clone())
+        .to_string_lossy()
+        .into_owned();
+    let saved = crate::shell::memory_option("finder.grep", Some(memory_root.as_str()));
+    if let Some(regex) = saved.as_ref().and_then(|saved| saved["regex"].as_bool()) {
+        GREP_READS_REGEX.with(|reads| reads.set(regex));
+    }
     regex_toggle.set_active(GREP_READS_REGEX.with(|reads| reads.get()));
     let placeholder = |regex: bool| {
         if regex {
@@ -5826,6 +5904,48 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
         let rerun = Rc::clone(&rerun);
         add_button.connect_clicked(move |_| add_filter_row(&filters_box, &rerun));
     }
+    for filter in saved.as_ref().and_then(|saved| saved["filters"].as_array().cloned()).unwrap_or_default() {
+        let Some(pattern) = filter["pattern"].as_str() else { continue };
+        let line = filter["kind"].as_str() != Some("file");
+        let include = filter["include"].as_bool().unwrap_or(true);
+        add_filter_row(&filters_box, &rerun);
+        if let Some(row) = filters_box.last_child().and_downcast::<gtk::Box>() {
+            if let Some(kind) = row.first_child().and_downcast::<gtk::DropDown>() {
+                let base = if line { 0 } else { 2 };
+                let excludes = if include { 0 } else { 1 };
+                kind.set_selected(base + excludes);
+                if let Some(entry) = kind.next_sibling().and_downcast::<gtk::Entry>() {
+                    entry.set_text(pattern);
+                }
+            }
+        }
+    }
+    {
+        // Written down as they are when the panel closes, however it
+        // closes, for next time.
+        let filters_box = filters_box.clone();
+        let regex_toggle = regex_toggle.clone();
+        let memory_root = memory_root.clone();
+        dialog.connect_close_request(move |_| {
+            use textchum_core::search::FilterKind;
+            let filters: Vec<serde_json::Value> = grep_filters(&filters_box)
+                .into_iter()
+                .map(|filter| {
+                    serde_json::json!({
+                        "kind": if matches!(filter.kind, FilterKind::File) { "file" } else { "line" },
+                        "include": filter.include,
+                        "pattern": filter.pattern,
+                    })
+                })
+                .collect();
+            crate::shell::set_memory_option(
+                "finder.grep",
+                Some(serde_json::json!({"regex": regex_toggle.is_active(), "filters": filters})),
+                Some(memory_root.as_str()),
+            );
+            glib::Propagation::Proceed
+        });
+    }
 
     let open_row = {
         let workbench = Rc::clone(workbench);
@@ -5901,6 +6021,15 @@ fn add_filter_row(filters_box: &gtk::Box, rerun: &Rc<dyn Fn()>) {
     }
     filters_box.append(&row);
     pattern.grab_focus();
+}
+
+/// The project an untitled document in this window is being added to:
+/// the first open document's that has one.
+fn save_project_root(workbench: &Rc<Workbench>) -> Option<String> {
+    workbench
+        .all_pages()
+        .iter()
+        .find_map(|page| page.document.project_root.borrow().clone())
 }
 
 /// The current filter rows as core filters (empty patterns skipped).

@@ -2721,12 +2721,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 depth: 0
             )
         }
+        // The formats given lately first (13.3): a new Go file after a
+        // new Go file is one Return.
+        let project = CoreWorkspace.projectRoot(forPath: currentScope)
+        let recent = ProjectState.recent("formats", projectRoot: project)
+        let ordered = CoreMemory.recentFirst(languages.map(\.name), recent: recent).map { languages[$0] }
         formatPicker.show(
-            rows: languages.map { .item($0.name) }, over: NSApp.keyWindow,
+            rows: ordered.map { .item($0.name) }, over: NSApp.keyWindow,
             title: t("New with Format"), placeholder: t("language…")
         ) { [weak self] index in
-            guard languages.indices.contains(index) else { return }
-            self?.makeUntitled(language: languages[index].name)
+            guard ordered.indices.contains(index) else { return }
+            ProjectState.noteRecent("formats", ordered[index].name, projectRoot: project)
+            self?.makeUntitled(language: ordered[index].name)
         }
     }
 
@@ -2734,7 +2740,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = true
+        // Where the work is (13.4): the folder last opened from in this
+        // project, else the project itself, else the document's folder
+        // — never wherever the system last left its dialog.
+        let scope = currentScope
+        let project = CoreWorkspace.projectRoot(forPath: scope)
+        let remembered = ProjectState.option("folder.open", projectRoot: project) as? String
+        let start = [remembered, project, scope].compactMap { $0 }
+            .first { FileManager.default.fileExists(atPath: $0) }
+        if let start {
+            panel.directoryURL = URL(fileURLWithPath: start, isDirectory: true)
+        }
         guard panel.runModal() == .OK else { return }
+        if let first = panel.urls.first {
+            ProjectState.setOption(
+                "folder.open", first.deletingLastPathComponent().path, projectRoot: project)
+        }
         for url in panel.urls {
             open(pathOrFolder: url.path)
         }
