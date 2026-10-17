@@ -144,16 +144,9 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   answered without its edit is sent back to be finished before it is
   applied, and one that carries a command rather than an edit is run by
   the server.
-- **Code Actions…** (⌘., Ctrl+. on Linux) asks what the server can do
-  about the place the caret is — import this name, add the missing
-  match arm, remove the unused variable — and lists what comes back,
-  the server's own suggestion marked as such. The findings under the
-  caret go with the request exactly as the server published them,
-  `code` and `data` included: that is how a server recognizes its own
-  finding, and a reconstructed one gets a shrug. An action the server
-  answered without its edit is sent back to be finished before it is
-  applied, and one that carries a command rather than an edit is run by
-  the server.
+  When the caret rests on a line where the server has something to
+  offer, a bulb appears in the gutter beside it; a click on the bulb
+  lists the same actions. Moving to another line takes it away.
 - **Rename Symbol** (⌃⌘R) asks in place: the name under the caret
   becomes a field where it stands, prefilled and selected, with its
   other uses in the document marked meanwhile. Return renames across

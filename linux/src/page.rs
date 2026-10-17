@@ -70,6 +70,9 @@ pub struct Page {
     /// Counts caret moves, so an answer about a symbol's uses that
     /// arrives after the caret has gone elsewhere is dropped.
     symbol_uses_asked: Cell<u64>,
+    /// Counts caret moves, so an answer about what can be done at a
+    /// place the caret has left is dropped (5.1).
+    fix_asked: Cell<u64>,
     /// The inferred types shown after lines: labels laid over the view
     /// at the end of their lines, in buffer coordinates, so they
     /// scroll with the text and are not part of it.
@@ -378,6 +381,7 @@ impl Page {
             hover_kept: Cell::new(0),
             hover_entered: Cell::new(false),
             symbol_uses_asked: Cell::new(0),
+            fix_asked: Cell::new(0),
             inlay_labels: RefCell::new(Vec::new()),
             inlay_asked: Cell::new(0),
             completion: CompletionState {
@@ -424,6 +428,7 @@ impl Page {
         }
         install_hover(&page);
         install_hint_closers(&page);
+        install_fix_mark(&page);
         if document.views().len() == 1 {
         install_file_monitor(&page);
     }
@@ -3339,6 +3344,71 @@ fn line_text(page: &Page, line: i32) -> String {
         end.forward_to_line_end();
     }
     page.buffer.text(&start, &end, true).to_string()
+}
+
+/// The mark for what can be done (12.1): with the caret resting on a
+/// line, the server is asked what it offers there, and when it offers
+/// something the line gets a mark in the gutter; a click on the mark
+/// lists the actions, as Code Actions does. A caret that moves to
+/// another line takes the mark away at once.
+fn install_fix_mark(page: &Rc<Page>) {
+    page.view.set_show_line_marks(true);
+    let attributes = sourceview5::MarkAttributes::new();
+    attributes.set_icon_name("dialog-information-symbolic");
+    page.view.set_mark_attributes("fix", &attributes, 10);
+    page.view.connect_line_mark_activated(|view, _, _, _, _| {
+        let _ = gtk::prelude::WidgetExt::activate_action(view, "win.code-actions", None);
+    });
+    let weak = Rc::downgrade(page);
+    page.buffer.connect_mark_set(move |buffer, _, mark| {
+        if mark.name().as_deref() != Some("insert") {
+            return;
+        }
+        let Some(page) = weak.upgrade() else { return };
+        let caret = buffer.iter_at_mark(&buffer.get_insert());
+        let line = caret.line();
+        // The mark belongs to the line the caret was on.
+        let none_here = buffer.source_marks_at_line(line, Some("fix")).is_empty();
+        if none_here {
+            buffer.remove_source_marks(&buffer.start_iter(), &buffer.end_iter(), Some("fix"));
+        }
+        let asked = page.fix_asked.get().wrapping_add(1);
+        page.fix_asked.set(asked);
+        let weak = Rc::downgrade(&page);
+        glib::timeout_add_local_once(std::time::Duration::from_millis(400), move || {
+            if let Some(page) = weak.upgrade() {
+                request_fix_mark(&page, asked, line);
+            }
+        });
+    });
+}
+
+fn request_fix_mark(page: &Rc<Page>, asked: u64, line: i32) {
+    if page.fix_asked.get() != asked || page.buffer.has_selection() {
+        return;
+    }
+    let Some(path) = page.path().borrow().clone() else { return };
+    let (lsp_line, character) = lsp_caret(&page.buffer);
+    let shell = Shell::instance();
+    let id = shell.pool.borrow_mut().code_action(Path::new(&path), lsp_line, character);
+    if id == 0 {
+        return;
+    }
+    let weak = Rc::downgrade(page);
+    shell.expect_response(id, move |json| {
+        let Some(page) = weak.upgrade() else { return };
+        // An answer about a place the caret has left is dropped.
+        if page.fix_asked.get() != asked {
+            return;
+        }
+        let buffer = &page.buffer;
+        buffer.remove_source_marks(&buffer.start_iter(), &buffer.end_iter(), Some("fix"));
+        if !textchum_core::code_action::actions(json).is_empty() {
+            if let Some(start) = buffer.iter_at_line(line) {
+                buffer.create_source_mark(None, "fix", &start);
+            }
+        }
+    });
 }
 
 /// A command's short answer when it has nothing to do — "No usages

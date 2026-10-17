@@ -250,7 +250,7 @@ msgstr ""
 msgid "Show Callers"
 msgstr ""
 
-#: linux/src/keyboard.rs
+#: linux/src/keyboard.rs macos/Sources/Textchum/LineNumberRulerView.swift
 msgid "Code Actions"
 msgstr ""
 

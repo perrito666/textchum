@@ -472,6 +472,7 @@ final class DocumentController: NSResponder {
 
         let gutter = LineNumberGutterView(textView: textView)
         gutter.setVisible(appliedSettings?.lineNumbers ?? true)
+        gutter.onFixMark = { [weak self] in self?.showCodeActions(nil) }
         let view = DocumentView(scrollView: scrollView, textView: textView, gutter: gutter)
 
         // The gutter, the change bar and the preview all follow scrolling.
@@ -3625,6 +3626,47 @@ final class DocumentController: NSResponder {
     /// answer is about the symbol, not its letters: a shadowing
     /// variable of the same name is left alone, and a use spelled
     /// through an alias is found.
+    // MARK: The mark for what can be done
+
+    private var fixMarkTimer: Timer?
+
+    /// With the caret resting on a line, asks the server what can be
+    /// done there; when something can, the gutter shows a bulb on that
+    /// line, and a click on it lists the actions (12.1). A caret that
+    /// moves to another line takes the bulb away at once.
+    private func scheduleFixMark() {
+        fixMarkTimer?.invalidate()
+        guard let textView, let gutter = focusedView?.gutter else { return }
+        let caret = textView.selectedRange().location
+        let line = gutter.lineIndex(forOffset: caret)
+        if gutter.fixLine != line {
+            for view in views { view.gutter.setFixLine(nil) }
+        }
+        guard lspApp != nil, lspOpenPath != nil, textView.selectedRange().length == 0 else { return }
+        let version = textVersion
+        fixMarkTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: false) { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.requestFixMark(caret: caret, line: line, version: version) }
+            }
+        }
+    }
+
+    private func requestFixMark(caret: Int, line: Int, version: UInt64) {
+        guard let lspApp, let path = lspOpenPath, let textView,
+            textVersion == version, textView.selectedRange() == NSRange(location: caret, length: 0)
+        else { return }
+        let (lspLine, character) = Self.lspPosition(ofIndex: caret, in: textView.string as NSString)
+        flushLSPChange()
+        lspApp.lspCodeAction(path: path, line: lspLine, character: character) { [weak self] json in
+            // An answer about a caret that has moved on is dropped (5.1).
+            guard let self, let textView = self.textView, self.textVersion == version,
+                textView.selectedRange() == NSRange(location: caret, length: 0)
+            else { return }
+            let offered = !CoreCodeActions.actions(inResultJSON: json).isEmpty
+            self.focusedView?.gutter.setFixLine(offered ? line : nil)
+        }
+    }
+
     private func scheduleSymbolUses() {
         symbolUsesTimer?.invalidate()
         clearSymbolUses()
@@ -6498,6 +6540,7 @@ extension DocumentController: NSTextViewDelegate {
         refreshBracketMatch()
         refreshOccurrences()
         scheduleSymbolUses()
+        scheduleFixMark()
         scheduleCaretHover()
     }
 }
