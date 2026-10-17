@@ -12,8 +12,22 @@ import AppKit
 @MainActor
 final class Balloon {
     private final class Window: NSWindow {
-        override var canBecomeKey: Bool { false }
+        /// Only when asked for by name (1.3): a balloon that shows
+        /// itself never takes the keyboard (1.1).
+        var takesKeyboard = false
+        var onEscape: (() -> Void)?
+        override var canBecomeKey: Bool { takesKeyboard }
         override var canBecomeMain: Bool { false }
+
+        // Escape inside goes back to the text: heard here, before the
+        // text inside answers it with a completion list of its own.
+        override func sendEvent(_ event: NSEvent) {
+            if event.type == .keyDown, event.keyCode == 53, let onEscape {
+                onEscape()
+                return
+            }
+            super.sendEvent(event)
+        }
     }
 
     private let window: Window
@@ -62,6 +76,32 @@ final class Balloon {
         parent.addChildWindow(window, ordered: .above)
         window.orderFront(nil)
         isShown = true
+    }
+
+    /// Whether the keyboard has been moved inside, to scroll, select and
+    /// copy with it.
+    var hasKeyboard: Bool { window.isKeyWindow }
+
+    /// Moves the keyboard inside: the user asked again for what the
+    /// balloon shows (1.3). The text in it takes the keys, so the arrows
+    /// scroll and ⌘C copies; Escape calls `onEscape`, which brings the
+    /// keyboard back out.
+    func enter(onEscape: @escaping () -> Void) {
+        window.takesKeyboard = true
+        window.onEscape = onEscape
+        window.makeKey()
+        if let text = Self.firstTextView(in: window.contentView) {
+            window.makeFirstResponder(text)
+        }
+    }
+
+    private static func firstTextView(in view: NSView?) -> NSTextView? {
+        guard let view else { return nil }
+        if let text = view as? NSTextView { return text }
+        for sub in view.subviews {
+            if let found = firstTextView(in: sub) { return found }
+        }
+        return nil
     }
 
     func close() {

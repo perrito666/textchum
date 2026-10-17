@@ -64,6 +64,9 @@ pub struct Page {
     /// Counts the reasons to keep the balloon, so a close scheduled
     /// before one of them is dropped.
     hover_kept: Cell<u64>,
+    /// True while the keyboard is inside the balloon, asked there: the
+    /// pointer leaving does not close it then.
+    hover_entered: Cell<bool>,
     /// Counts caret moves, so an answer about a symbol's uses that
     /// arrives after the caret has gone elsewhere is dropped.
     symbol_uses_asked: Cell<u64>,
@@ -373,6 +376,7 @@ impl Page {
             hover_about: Cell::new(None),
             hover_inside: Cell::new(false),
             hover_kept: Cell::new(0),
+            hover_entered: Cell::new(false),
             symbol_uses_asked: Cell::new(0),
             inlay_labels: RefCell::new(Vec::new()),
             inlay_asked: Cell::new(0),
@@ -401,6 +405,7 @@ impl Page {
                 }
             });
         }
+        install_escape(&page);
         install_completion_keys(&page);
         install_snippet_keys(&page);
         install_change_bar(&page);
@@ -2000,13 +2005,6 @@ fn install_snippet_keys(page: &Rc<Page>) {
         }
         use gtk::gdk::Key;
         if !page.state.borrow().document.snippet_active() {
-            // Escape puts the occurrence marks away, and only those:
-            // the selection stays, so the word is still there to act
-            // on.
-            if key == Key::Escape && has_occurrences(&page) {
-                clear_occurrences(&page);
-                return glib::Propagation::Stop;
-            }
             return glib::Propagation::Proceed;
         }
         match key {
@@ -2021,12 +2019,6 @@ fn install_snippet_keys(page: &Rc<Page>) {
                     return glib::Propagation::Stop;
                 }
                 glib::Propagation::Proceed
-            }
-            Key::Escape => {
-                // Escape gives the keys back where the caret is, rather
-                // than jumping it to the end of the snippet.
-                page.state.borrow_mut().document.cancel_snippet();
-                glib::Propagation::Stop
             }
             _ => glib::Propagation::Proceed,
         }
@@ -3409,20 +3401,6 @@ fn install_hint_closers(page: &Rc<Page>) {
         });
         page.view.add_controller(click);
     }
-    {
-        let keys = gtk::EventControllerKey::new();
-        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-        let weak = Rc::downgrade(page);
-        keys.connect_key_pressed(move |_, key, _, _| {
-            let Some(page) = weak.upgrade() else { return glib::Propagation::Proceed };
-            if key == gtk::gdk::Key::Escape && page.hint.borrow().is_some() {
-                close_hint(&page);
-                return glib::Propagation::Stop;
-            }
-            glib::Propagation::Proceed
-        });
-        page.view.add_controller(keys);
-    }
 }
 
 fn install_hover(page: &Rc<Page>) {
@@ -3516,6 +3494,9 @@ fn keep_hover(page: &Rc<Page>) {
 /// first. Closing at once made it unreachable: leaving the word is the
 /// only way to get to the balloon.
 fn schedule_hover_close(page: &Rc<Page>) {
+    if page.hover_entered.get() {
+        return;
+    }
     if !page.hover_popover.is_visible() {
         page.hover_about.set(None);
         return;
@@ -3535,7 +3516,102 @@ fn schedule_hover_close(page: &Rc<Page>) {
 
 /// Shows hover documentation for the symbol under the caret — works
 /// even with mouse hover switched off; this is the deliberate ask.
+/// Escape, from the text: the topmost transient thing goes, one per
+/// press, in the order INTERACTION.md gives it (2.1) — the completion
+/// list, a hint, the balloon (which also holds the signature here), a
+/// snippet's stops, the marks of a name's uses. Never the caret, never
+/// the document (2.2). False when there was nothing to close.
+pub fn back_out_one_level(page: &Rc<Page>) -> bool {
+    if page.completion.popover.is_visible() {
+        page.completion.popover.popdown();
+    } else if page.hint.borrow().is_some() {
+        close_hint(page);
+    } else if page.hover_popover.is_visible() {
+        close_hover(page);
+    } else if page.state.borrow().document.snippet_active() {
+        // The keys are given back where the caret is, rather than the
+        // caret jumping to the end of the snippet.
+        page.state.borrow_mut().document.cancel_snippet();
+    } else if has_occurrences(page) {
+        // The marks go, and only the marks: the selection stays, so the
+        // word is still there to act on.
+        clear_occurrences(page);
+    } else {
+        return false;
+    }
+    true
+}
+
+/// Puts the balloon away and gives the keyboard back to the text, if
+/// the balloon had it.
+fn close_hover(page: &Rc<Page>) {
+    let had_keyboard = page.hover_entered.replace(false);
+    page.hover_popover.popdown();
+    page.hover_about.set(None);
+    if had_keyboard {
+        page.view.grab_focus();
+    }
+}
+
+/// Moves the keyboard into the balloon up now, if one is: asked again
+/// for what it shows (1.3). Its text can be scrolled and selected with
+/// the keys; Escape brings the keyboard back to the text.
+pub fn enter_hover(page: &Rc<Page>) -> bool {
+    if !page.hover_popover.is_visible() || page.hover_entered.get() {
+        return false;
+    }
+    page.hover_entered.set(true);
+    page.hover_label.set_can_focus(true);
+    page.hover_label.grab_focus();
+    true
+}
+
+/// One handler for Escape in the text, ahead of the others, so the
+/// order is the one written down and not the order handlers happen to
+/// run in; and Escape inside an entered balloon, which comes back out.
+fn install_escape(page: &Rc<Page>) {
+    {
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(page);
+        keys.connect_key_pressed(move |_, key, _, _| {
+            let Some(page) = weak.upgrade() else { return glib::Propagation::Proceed };
+            if key == gtk::gdk::Key::Escape && back_out_one_level(&page) {
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        page.view.add_controller(keys);
+    }
+    {
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(page);
+        keys.connect_key_pressed(move |_, key, _, _| {
+            let Some(page) = weak.upgrade() else { return glib::Propagation::Proceed };
+            if key == gtk::gdk::Key::Escape {
+                close_hover(&page);
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        page.hover_popover.add_controller(keys);
+    }
+    {
+        let weak = Rc::downgrade(page);
+        page.hover_popover.connect_closed(move |_| {
+            if let Some(page) = weak.upgrade() {
+                page.hover_entered.set(false);
+            }
+        });
+    }
+}
+
 pub fn hover_at_caret(page: &Rc<Page>) {
+    // Asked again while it is up: the keyboard goes inside (1.3).
+    if enter_hover(page) {
+        return;
+    }
     let caret = page.buffer.iter_at_mark(&page.buffer.get_insert());
     request_hover(page, caret, true);
 }

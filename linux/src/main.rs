@@ -1175,6 +1175,32 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             if by_caret.is_some() { "by the caret" } else { "in the notification area" }
         );
     }
+    // Escape closes one thing per press from one handler, and with
+    // nothing up has nothing to close and leaves the caret where it is.
+    {
+        let page = workbench.selected().expect("a selected page");
+        let caret = page.buffer.iter_at_mark(&page.buffer.get_insert()).offset();
+        fire("win.unfold-all");
+        let hinted = page::shown_hint(&page).is_some();
+        if hinted && (!page::back_out_one_level(&page) || page::shown_hint(&page).is_some()) {
+            eprintln!("FAIL: Escape did not put the hint away");
+            return 1;
+        }
+        // Whatever else is up — a mark of uses, say — goes one per press.
+        let mut presses = 0;
+        while page::back_out_one_level(&page) {
+            presses += 1;
+            if presses > 6 {
+                eprintln!("FAIL: Escape kept finding something to close");
+                return 1;
+            }
+        }
+        if page.buffer.iter_at_mark(&page.buffer.get_insert()).offset() != caret || page::enter_hover(&page) {
+            eprintln!("FAIL: Escape moved the caret, or left a balloon to enter");
+            return 1;
+        }
+        println!("escape ok (one thing per press from one handler, the caret never moved)");
+    }
     if !fire("win.undo") {
         eprintln!("FAIL: undo action");
         return 1;

@@ -249,10 +249,6 @@ What breaks these rules today, each to be fixed under its own issue:
   installing a grammar and of importing a theme, and the note that
   Universal Ctags is missing. They wait for a notice that can carry
   details.
-- **1.3** Show Documentation pressed again does not move into the
-  balloon.
-- **2.1** Escape's order is not enforced in one place; each popup
-  handles its own.
 - **3.5** Open Quickly, Find in Project and Go to Symbol show no
   preview of the place a row goes to.
 - **7.1** Find Next and Go to Block Start/End move the caret without
@@ -270,5 +266,7 @@ What breaks these rules today, each to be fixed under its own issue:
   into, but app-wide, not per project.
 - **13.3** The find bar's and Find in Project's toggles, the search
   filters and the last format of a new document are not remembered.
+- **2.1** On Linux, Escape in the text does not close the find bar,
+  which belongs to the window rather than the document.
 - **Linux** Inlay hints are gathered after the line, not inside it
   (see `PLAN_linux.md`).

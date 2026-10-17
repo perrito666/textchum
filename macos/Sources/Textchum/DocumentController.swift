@@ -919,7 +919,29 @@ final class DocumentController: NSResponder {
     /// pressed once it is there.
     private var lastPointerPoint: NSPoint?
 
+    /// Moves the keyboard into the balloon up now, if one is: its text
+    /// can be scrolled, selected and copied with the keys, and Escape
+    /// brings the keyboard back to the caret it left. While it has the
+    /// keyboard, the pointer leaving does not close it.
+    @discardableResult
+    func enterBalloon() -> Bool {
+        guard let balloon = hoverPopover, balloon.isShown, !balloon.hasKeyboard else { return false }
+        balloonEntered = true
+        balloonCloseTimer?.invalidate()
+        balloon.enter { [weak self] in
+            guard let self else { return }
+            self.closeBalloon()
+            self.textView?.window?.makeKey()
+            if let textView = self.textView { textView.window?.makeFirstResponder(textView) }
+        }
+        return true
+    }
+
+    /// True while the keyboard is inside the balloon, asked there.
+    private var balloonEntered = false
+
     private func closeBalloon() {
+        balloonEntered = false
         balloonCloseTimer?.invalidate()
         balloonCloseTimer = nil
         pointerInBalloon = false
@@ -938,7 +960,7 @@ final class DocumentController: NSResponder {
     /// at once made the balloon unreachable: leaving the word is the
     /// only way to get to it.
     private func scheduleBalloonClose() {
-        guard hoverPopover != nil else { return }
+        guard hoverPopover != nil, !balloonEntered else { return }
         balloonCloseTimer?.invalidate()
         balloonCloseTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) {
             [weak self] _ in
@@ -1148,6 +1170,8 @@ final class DocumentController: NSResponder {
     /// the pointer gives, for when your hands are on the keyboard.
     @objc func showDiagnosticAtCaret(_ sender: Any?) {
         guard let textView else { return }
+        // Asked again while it is up: the keyboard goes inside (1.3).
+        if enterBalloon() { return }
         let text = textView.string as NSString
         let caret = anchorIndex
         let found = diagnostic(atOffset: caret) ?? diagnosticOnLine(of: caret, in: text)
@@ -1180,6 +1204,8 @@ final class DocumentController: NSResponder {
     /// Shows hover documentation for the symbol under the caret. Works
     /// even when mouse hover is switched off — this is the deliberate ask.
     @objc func showHoverAtCaret(_ sender: Any?) {
+        // Asked again while it is up: the keyboard goes inside (1.3).
+        if enterBalloon() { return }
         guard let textView, lspApp != nil, lspOpenPath != nil else {
             showHint(noServerHint)
             return
@@ -3666,6 +3692,9 @@ final class DocumentController: NSResponder {
         bar.begin(with: initial)
         refreshFindMatches(selectCurrent: false)
     }
+
+    /// Whether the find bar is up in the focused view.
+    var findBarIsShown: Bool { focusedView.map { !$0.findBar.isHidden } ?? false }
 
     func hideFindReplace() {
         guard let view = focusedView, !view.findBar.isHidden else { return }
@@ -6158,31 +6187,50 @@ extension DocumentController: NSTextViewDelegate {
     /// navigate it, return/tab accept, escape dismisses — everything else
     /// keeps flowing to the editor. With the popup away, return picks up
     /// the auto-indent path.
-    func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        // Escape puts the signature away before it means anything else.
-        if signaturePopover != nil, !completionPopup.isVisible,
-            commandSelector == #selector(NSResponder.cancelOperation(_:))
-        {
+    /// Escape, from the text: the topmost transient thing goes, one per
+    /// press, in the order INTERACTION.md gives it (2.1) — the completion
+    /// list, a balloon or a hint, the signature, a snippet's stops, the
+    /// find bar with its marks, the marks of a name's uses. With none of
+    /// them up it does nothing: the text view's own answer to Escape is a
+    /// list of dictionary words to complete with, which nobody asked for.
+    /// It never moves the caret, and never closes a document (2.2).
+    func backOutOneLevel() -> Bool {
+        if completionPopup.isVisible {
+            completionPopup.dismiss()
+        } else if hoverPopover != nil || caretHint != nil {
+            hoverTimer?.invalidate()
+            closeBalloon()
+            closeHint()
+        } else if signaturePopover != nil {
             closeSignature()
-            return true
+        } else if coreDocument.isSnippetActive {
+            // The keys are given back where the caret is, rather than
+            // the caret jumping to the end of the snippet.
+            coreDocument.cancelSnippet()
+        } else if let view = focusedView, !view.findBar.isHidden {
+            hideFindReplace()
+        } else if !occurrenceRanges.isEmpty {
+            // The marks go, and only the marks: the selection stays, so
+            // the word is still there to act on.
+            clearOccurrences()
+        }
+        return true
+    }
+
+    func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            return backOutOneLevel()
         }
         guard completionPopup.isVisible else {
-            if caretHint != nil, commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-                closeHint()
-                return true
-            }
             if coreDocument.isSnippetActive {
                 switch Self.snippetKey(for: commandSelector) {
                 case .nextStop:
                     if moveThroughSnippet(forward: true) { return true }
                 case .previousStop:
                     if moveThroughSnippet(forward: false) { return true }
-                case .cancel:
-                    // Escape gives the keys back where the caret is,
-                    // rather than jumping it to the end of the snippet.
-                    coreDocument.cancelSnippet()
-                    return true
-                case nil:
+                case .cancel, nil:
+                    // Escape was answered above, with everything else
+                    // Escape closes.
                     break
                 }
             }
@@ -6195,14 +6243,6 @@ extension DocumentController: NSTextViewDelegate {
             if commandSelector == #selector(NSResponder.insertTab(_:)) {
                 return indentToBlockAbove(in: textView)
             }
-            if commandSelector == #selector(NSResponder.cancelOperation(_:)),
-                !occurrenceRanges.isEmpty
-            {
-                // Escape puts the marks away, and only the marks: the
-                // selection stays, so the word is still there to act on.
-                clearOccurrences()
-                return true
-            }
             return false
         }
         switch commandSelector {
@@ -6214,9 +6254,6 @@ extension DocumentController: NSTextViewDelegate {
             return true
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
             completionPopup.acceptSelection()
-            return true
-        case #selector(NSResponder.cancelOperation(_:)):
-            completionPopup.dismiss()
             return true
         default:
             return false
