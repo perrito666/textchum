@@ -55,6 +55,10 @@ final class QuickFinderPanel: NSObject {
     /// with its own selected, so the first key replaces it and Return
     /// runs the same search again.
     private static var lastQueries: [String: String] = [:]
+    /// The project whose record keeps this panel's options.
+    private var memoryProject: String?
+    /// The key a mode's options are kept under.
+    private var optionsKey: String { "finder." + String(describing: mode) }
     /// The files opened lately in the scope's project, most recent
     /// first, read when the panel opens; with nothing typed they lead.
     private var recentFiles: [String] = []
@@ -173,6 +177,12 @@ final class QuickFinderPanel: NSObject {
         scopeField.stringValue = scope
         Self.lastScope = scope
         regexSwitch.isHidden = mode != .grep
+        // The options as they were left in this project (13.3).
+        memoryProject = CoreWorkspace.projectRoot(forPath: scope) ?? scope
+        let saved = ProjectState.option(optionsKey, projectRoot: memoryProject) as? [String: Any]
+        if mode == .grep, let regex = saved?["regex"] as? Bool {
+            Self.readsRegex = regex
+        }
         regexSwitch.state = Self.readsRegex ? .on : .off
         queryField.placeholderString = mode.placeholder(regex: Self.readsRegex)
         queryField.stringValue = Self.lastQueries[mode.title] ?? ""
@@ -185,6 +195,12 @@ final class QuickFinderPanel: NSObject {
         rows = []
         table.reloadData()
         clearFilters()
+        for filter in (saved?["filters"] as? [[String: Any]]) ?? [] {
+            guard let pattern = filter["pattern"] as? String,
+                let kind = (filter["kind"] as? String).flatMap(CoreSearch.Filter.Kind.init(rawValue:))
+            else { continue }
+            addFilter(.init(kind: kind, include: filter["include"] as? Bool ?? true, pattern: pattern))
+        }
 
         if let window {
             var frame = panel.frame
@@ -350,6 +366,25 @@ final class QuickFinderPanel: NSObject {
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
         panel.contentView = stack
         return panel
+    }
+
+    /// Writes the options down as they are now, for next time.
+    private func rememberOptions() {
+        let filters = currentFilters().map {
+            ["kind": $0.kind.rawValue, "include": $0.include, "pattern": $0.pattern] as [String: Any]
+        }
+        var options: [String: Any] = ["filters": filters]
+        if mode == .grep { options["regex"] = readsRegex }
+        ProjectState.setOption(optionsKey, options, projectRoot: memoryProject)
+    }
+
+    /// A filter row set to `filter`.
+    private func addFilter(_ filter: CoreSearch.Filter) {
+        let row = makeFilterRow()
+        (row.arrangedSubviews[0] as? NSPopUpButton)?.selectItem(
+            at: (filter.kind == .line ? 0 : 2) + (filter.include ? 0 : 1))
+        (row.arrangedSubviews[1] as? NSTextField)?.stringValue = filter.pattern
+        filtersStack.addArrangedSubview(row)
     }
 
     @objc private func regexSwitched() {
@@ -696,6 +731,7 @@ final class QuickFinderPanel: NSObject {
         guard rows.indices.contains(index) else { return }
         let row = rows[index]
         Self.lastQueries[mode.title] = queryField.stringValue
+        rememberOptions()
         panel?.orderOut(nil)
         onOpen?(row.path, row.line)
     }
@@ -748,6 +784,7 @@ extension QuickFinderPanel: NSTextFieldDelegate {
             return true
         case #selector(NSResponder.cancelOperation(_:)):
             Self.lastQueries[mode.title] = queryField.stringValue
+            rememberOptions()
             panel?.orderOut(nil)
             return true
         default:

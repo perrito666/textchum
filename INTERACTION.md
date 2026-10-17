@@ -260,12 +260,6 @@ What breaks these rules today, each to be fixed under its own issue:
   finding command, completion ranked by the server's order alone and
   without documentation beside it.
 - **13.2** Go to Symbol lists no recent symbols with nothing typed.
-- **13.4** Open starts wherever the system last left its dialog, not in
-  the project; on Linux it starts with no folder at all. Save As
-  already remembers the folder an untitled document was last saved
-  into, but app-wide, not per project.
-- **13.3** The find bar's and Find in Project's toggles, the search
-  filters and the last format of a new document are not remembered.
 - **2.1** On Linux, Escape in the text does not close the find bar,
   which belongs to the window rather than the document.
 - **Linux** Inlay hints are gathered after the line, not inside it
