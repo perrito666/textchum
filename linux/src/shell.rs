@@ -90,6 +90,40 @@ pub fn project_state_in_project() -> bool {
     Shell::instance().config.borrow().project_state_in_project()
 }
 
+/// The record that remembers how a project is worked in, and whether it
+/// lives with the checkout; with no project, the profile's own, so a
+/// loose file's palette still remembers.
+fn memory_record(project_root: Option<&str>) -> (PathBuf, bool) {
+    match project_root {
+        Some(root) => (PathBuf::from(root), project_state_in_project()),
+        None => (
+            crate::paths::projects_dir().parent().map(Path::to_owned).unwrap_or_default(),
+            false,
+        ),
+    }
+}
+
+/// A project's recent choices of `kind`, most recent first.
+pub fn recent(kind: &str, project_root: Option<&str>) -> Vec<String> {
+    let (root, in_project) = memory_record(project_root);
+    textchum_core::project_state::load(&root, &project_state_dir(), in_project)
+        .memory
+        .recent(kind)
+        .to_vec()
+}
+
+/// Puts `item` first among a project's recent choices of `kind`.
+pub fn note_recent(kind: &str, item: &str, project_root: Option<&str>) {
+    let (root, in_project) = memory_record(project_root);
+    let _ = textchum_core::project_state::remember_recent(
+        &root,
+        &project_state_dir(),
+        in_project,
+        kind,
+        item,
+    );
+}
+
 /// `~` is what a configuration shared between machines can say.
 fn shellexpand_home(path: &str) -> String {
     match path.strip_prefix("~/") {

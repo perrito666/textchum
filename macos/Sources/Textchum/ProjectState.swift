@@ -46,6 +46,37 @@ enum ProjectState {
             state, root: root, directory: directory.path, inProject: inProject, path: path)
     }
 
+    /// The record that remembers how `projectRoot` is worked in; with no
+    /// project, the profile's own, so a loose file's palette still
+    /// remembers.
+    private static func memoryRoot(_ projectRoot: String?) -> String {
+        projectRoot ?? SessionStore.directory.path
+    }
+
+    static func recent(_ kind: String, projectRoot: String?) -> [String] {
+        CoreMemory.recent(
+            kind: kind, root: memoryRoot(projectRoot), directory: directory.path,
+            inProject: inProject && projectRoot != nil)
+    }
+
+    static func noteRecent(_ kind: String, _ item: String, projectRoot: String?) {
+        CoreMemory.noteRecent(
+            kind: kind, item: item, root: memoryRoot(projectRoot), directory: directory.path,
+            inProject: inProject && projectRoot != nil)
+    }
+
+    static func option(_ key: String, projectRoot: String?) -> Any? {
+        CoreMemory.option(
+            key: key, root: memoryRoot(projectRoot), directory: directory.path,
+            inProject: inProject && projectRoot != nil)
+    }
+
+    static func setOption(_ key: String, _ value: Any?, projectRoot: String?) {
+        CoreMemory.setOption(
+            key: key, value: value, root: memoryRoot(projectRoot), directory: directory.path,
+            inProject: inProject && projectRoot != nil)
+    }
+
     /// Forgets records for roots that are gone and those past their
     /// keep window, off the main thread: a machine that has seen a
     /// thousand checkouts should not keep a thousand records, and the

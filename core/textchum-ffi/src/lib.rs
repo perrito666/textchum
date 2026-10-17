@@ -2064,6 +2064,169 @@ pub unsafe extern "C" fn tc_project_file_state(
     owned_c_string(entry.to_string())
 }
 
+/// A project's recent choices of `kind` (`commands`, `files`), most
+/// recent first, as a JSON array of strings. Release with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// Each pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_memory_recent(
+    root: *const c_char,
+    root_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+    in_project: bool,
+    kind: *const c_char,
+    kind_len: usize,
+) -> *mut c_char {
+    let (Some(root), Some(dir), Some(kind)) = (unsafe {
+        (str_from_raw(root, root_len), str_from_raw(dir, dir_len), str_from_raw(kind, kind_len))
+    }) else {
+        return owned_c_string("[]".into());
+    };
+    let state = textchum_core::project_state::load(
+        std::path::Path::new(root),
+        std::path::Path::new(dir),
+        in_project,
+    );
+    owned_c_string(serde_json::json!(state.memory.recent(kind)).to_string())
+}
+
+/// Puts `item` first among a project's recent choices of `kind`.
+///
+/// # Safety
+/// Each pointer and length must describe valid UTF-8.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn tc_memory_note_recent(
+    root: *const c_char,
+    root_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+    in_project: bool,
+    kind: *const c_char,
+    kind_len: usize,
+    item: *const c_char,
+    item_len: usize,
+) -> bool {
+    let (Some(root), Some(dir), Some(kind), Some(item)) = (unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(dir, dir_len),
+            str_from_raw(kind, kind_len),
+            str_from_raw(item, item_len),
+        )
+    }) else {
+        return false;
+    };
+    textchum_core::project_state::remember_recent(
+        std::path::Path::new(root),
+        std::path::Path::new(dir),
+        in_project,
+        kind,
+        item,
+    )
+    .is_ok()
+}
+
+/// One of a project's options, as JSON; `null` when it has none.
+/// Release with [`tc_string_free`].
+///
+/// # Safety
+/// Each pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_memory_option(
+    root: *const c_char,
+    root_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+    in_project: bool,
+    key: *const c_char,
+    key_len: usize,
+) -> *mut c_char {
+    let (Some(root), Some(dir), Some(key)) = (unsafe {
+        (str_from_raw(root, root_len), str_from_raw(dir, dir_len), str_from_raw(key, key_len))
+    }) else {
+        return owned_c_string("null".into());
+    };
+    let state = textchum_core::project_state::load(
+        std::path::Path::new(root),
+        std::path::Path::new(dir),
+        in_project,
+    );
+    owned_c_string(
+        state.memory.option(key).cloned().unwrap_or(serde_json::Value::Null).to_string(),
+    )
+}
+
+/// Writes one of a project's options: `value_json` is any JSON, and
+/// `null` forgets it. False on a bad pointer or JSON that does not
+/// parse.
+///
+/// # Safety
+/// Each pointer and length must describe valid UTF-8.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn tc_memory_set_option(
+    root: *const c_char,
+    root_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+    in_project: bool,
+    key: *const c_char,
+    key_len: usize,
+    value_json: *const c_char,
+    value_len: usize,
+) -> bool {
+    let (Some(root), Some(dir), Some(key), Some(value)) = (unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(dir, dir_len),
+            str_from_raw(key, key_len),
+            str_from_raw(value_json, value_len),
+        )
+    }) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(value) else {
+        return false;
+    };
+    textchum_core::project_state::remember_option(
+        std::path::Path::new(root),
+        std::path::Path::new(dir),
+        in_project,
+        key,
+        Some(value),
+    )
+    .is_ok()
+}
+
+/// The order a list is shown in when nothing is typed: indices into
+/// `items_json` (an array of strings), the recent choices in
+/// `recent_json` first, most recent first, then the rest as given. A
+/// JSON array of numbers. Release with [`tc_string_free`].
+///
+/// # Safety
+/// Each pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_memory_recent_first(
+    items_json: *const c_char,
+    items_len: usize,
+    recent_json: *const c_char,
+    recent_len: usize,
+) -> *mut c_char {
+    let parse = |text: Option<&str>| -> Vec<String> {
+        text.and_then(|text| serde_json::from_str::<Vec<String>>(text).ok()).unwrap_or_default()
+    };
+    let (items, recent) = unsafe {
+        (parse(str_from_raw(items_json, items_len)), parse(str_from_raw(recent_json, recent_len)))
+    };
+    owned_c_string(
+        serde_json::json!(textchum_core::project_state::recent_first(&items, &recent)).to_string(),
+    )
+}
+
 /// Writes down what a file remembers. `state_json` is the shape
 /// [`tc_project_file_state`] answers with; an entry with nothing in it
 /// is removed instead of written.

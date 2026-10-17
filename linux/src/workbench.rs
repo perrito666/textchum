@@ -1493,6 +1493,8 @@ impl Workbench {
             let key = path.to_string_lossy().into_owned();
             let existing = Shell::instance().pages.borrow().get(&key).cloned();
             if let Some(handles) = existing {
+                let root = handles.document.project_root.borrow().clone();
+                crate::shell::note_recent("files", &key, root.as_deref());
                 handles.tab_view.set_selected_page(&handles.tab_page);
                 handles.window.present();
                 if let Some((line, character)) = at {
@@ -1557,6 +1559,9 @@ impl Workbench {
                 textchum_core::workspace::project_root_for(Path::new(&path))
                     .map(|root| root.to_string_lossy().into_owned())
             });
+            // Opened lately, so first in Open Quickly with nothing typed.
+            let root = page.document.project_root.borrow().clone();
+            crate::shell::note_recent("files", &path, root.as_deref());
             page.document.adopt_project_state();
             let recorded = page.document.language_override.borrow().clone();
             let stored = Shell::instance().config.borrow().file_override(&path);
@@ -2535,6 +2540,10 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         );
         let entry = gtk::Entry::new();
         entry.set_placeholder_text(Some("412 or 412:8"));
+        // What was typed here last this session, selected.
+        if let Some(last) = LAST_QUERIES.with(|queries| queries.borrow().get("goto-line").cloned()) {
+            entry.set_text(&last);
+        }
         entry.set_activates_default(true);
         dialog.set_extra_child(Some(&entry));
         let entry_for_focus = entry.clone();
@@ -2544,6 +2553,8 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         dialog.set_default_response(Some("go"));
         let weak = Rc::downgrade(workbench);
         dialog.connect_response(None, move |_, response| {
+            let typed = entry.text().to_string();
+            LAST_QUERIES.with(|queries| queries.borrow_mut().insert("goto-line", typed));
             if response != "go" {
                 return;
             }
@@ -4015,16 +4026,30 @@ fn show_palette(workbench: &Rc<Workbench>) {
 
     // Rows carry their action index; filtering rebuilds the list.
     let visible: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
+    let project_root = workbench
+        .selected()
+        .and_then(|page| page.document.project_root.borrow().clone());
+    // The commands run lately from here, most recent first: with
+    // nothing typed they lead, marked as recent.
+    let recent: Rc<Vec<String>> = Rc::new(crate::shell::recent("commands", project_root.as_deref()));
     let rebuild = {
         let list = list.clone();
         let visible = Rc::clone(&visible);
+        let recent = Rc::clone(&recent);
         move |query: &str| {
             while let Some(row) = list.row_at_index(0) {
                 list.remove(&row);
             }
             let query = query.to_lowercase();
             let mut shown = Vec::new();
-            for (index, (label, _)) in PALETTE.iter().enumerate() {
+            let labels: Vec<String> = PALETTE.iter().map(|(label, _)| label.to_string()).collect();
+            let order: Vec<usize> = if query.is_empty() {
+                textchum_core::project_state::recent_first(&labels, &recent)
+            } else {
+                (0..PALETTE.len()).collect()
+            };
+            for index in order {
+                let label = PALETTE[index].0;
                 // Subsequence match: every query character in order.
                 let mut characters = query.chars().peekable();
                 for candidate in label.to_lowercase().chars() {
@@ -4033,7 +4058,16 @@ fn show_palette(workbench: &Rc<Workbench>) {
                     }
                 }
                 if characters.peek().is_none() {
-                    let row_label = gtk::Label::new(Some(label));
+                    let row_label = gtk::Label::new(None);
+                    let escaped = glib::markup_escape_text(label);
+                    if query.is_empty() && recent.iter().any(|known| known == label) {
+                        row_label.set_markup(&format!(
+                            "{escaped}  <span alpha=\"55%\">{}</span>",
+                            glib::markup_escape_text(&tr("recent"))
+                        ));
+                    } else {
+                        row_label.set_markup(&escaped);
+                    }
                     row_label.set_xalign(0.0);
                     row_label.set_margin_start(10);
                     row_label.set_margin_end(10);
@@ -4049,7 +4083,8 @@ fn show_palette(workbench: &Rc<Workbench>) {
             }
         }
     };
-    rebuild("");
+    remember_query(&dialog, &entry, "palette");
+    rebuild(&entry.text());
     {
         let rebuild = rebuild.clone();
         entry.connect_search_changed(move |entry| rebuild(&entry.text()));
@@ -4058,11 +4093,13 @@ fn show_palette(workbench: &Rc<Workbench>) {
         let workbench = Rc::downgrade(workbench);
         let visible = Rc::clone(&visible);
         let dialog = dialog.clone();
+        let project_root = project_root.clone();
         Rc::new(move |row_index: i32| {
             let Some(workbench) = workbench.upgrade() else { return };
             let Some(&index) = visible.borrow().get(row_index.max(0) as usize) else {
                 return;
             };
+            crate::shell::note_recent("commands", PALETTE[index].0, project_root.as_deref());
             dialog.close();
             let _ = gtk::prelude::WidgetExt::activate_action(
                 &workbench.window,
@@ -5106,15 +5143,34 @@ fn show_file_picker(workbench: &Rc<Workbench>, root: PathBuf, index: Vec<String>
     // Walk once, match many: re-walking a real repository on every
     // keystroke is what makes a fuzzy finder feel broken.
     let index: Rc<Vec<String>> = Rc::new(index);
+    // The files opened lately in this project, relative to its root the
+    // way the rows are named: with nothing typed they lead.
+    let recent: Rc<Vec<String>> = Rc::new({
+        let root_text = root.to_string_lossy().into_owned();
+        let indexed: std::collections::HashSet<&String> = index.iter().collect();
+        crate::shell::recent("files", Some(root_text.as_str()))
+            .into_iter()
+            .filter_map(|path| {
+                Path::new(&path).strip_prefix(&root).ok().map(|p| p.to_string_lossy().into_owned())
+            })
+            .filter(|relative| indexed.contains(&relative))
+            .collect()
+    });
     let refill = {
         let list = list.clone();
         let index = Rc::clone(&index);
+        let recent = Rc::clone(&recent);
         let status = status.clone();
         move |query: &str| {
             while let Some(child) = list.first_child() {
                 list.remove(&child);
             }
-            let matches = textchum_core::search::match_files(&index, query, 50);
+            let mut matches = textchum_core::search::match_files(&index, query, 50);
+            if query.is_empty() && !recent.is_empty() {
+                let leading: std::collections::HashSet<&String> = recent.iter().collect();
+                matches.retain(|name| !leading.contains(&name));
+                matches = recent.iter().cloned().chain(matches).take(50).collect();
+            }
             for relative in &matches {
                 let label = gtk::Label::new(Some(relative));
                 label.set_xalign(0.0);
@@ -5188,8 +5244,10 @@ fn show_file_picker(workbench: &Rc<Workbench>, root: PathBuf, index: Vec<String>
         dialog.add_controller(keys);
     }
     wire_escape(&dialog, &entry);
+    remember_query(&dialog, &entry, "files");
     dialog.present();
     entry.grab_focus();
+    entry.select_region(0, -1);
 }
 
 /// The project's symbols by name, as the language server of the
@@ -5366,8 +5424,32 @@ fn show_symbol_picker(workbench: &Rc<Workbench>, path: String) {
         dialog.add_controller(keys);
     }
     wire_escape(&dialog, &entry);
+    remember_query(&dialog, &entry, "symbols");
     dialog.present();
     entry.grab_focus();
+    entry.select_region(0, -1);
+}
+
+thread_local! {
+    /// What was typed into each picker last, this session.
+    static LAST_QUERIES: RefCell<std::collections::HashMap<&'static str, String>> =
+        RefCell::new(std::collections::HashMap::new());
+}
+
+/// Opens a picker with what was typed into it last this session,
+/// selected, so the first key replaces it and Return runs it again;
+/// whatever is in it when it closes, however it closes, is kept for
+/// next time.
+fn remember_query(dialog: &adw::Window, entry: &gtk::SearchEntry, picker: &'static str) {
+    if let Some(last) = LAST_QUERIES.with(|queries| queries.borrow().get(picker).cloned()) {
+        entry.set_text(&last);
+    }
+    let entry = entry.clone();
+    dialog.connect_close_request(move |_| {
+        let text = entry.text().to_string();
+        LAST_QUERIES.with(|queries| queries.borrow_mut().insert(picker, text));
+        glib::Propagation::Proceed
+    });
 }
 
 /// ⎋ must close a search dialog from anywhere — including the entry,
@@ -5599,8 +5681,10 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
         });
     }
     wire_escape(&dialog, &entry);
+    remember_query(&dialog, &entry, "grep");
     dialog.present();
     entry.grab_focus();
+    entry.select_region(0, -1);
 }
 
 /// One stacked refinement: kind dropdown + pattern + remove — the

@@ -811,6 +811,10 @@ msgstr "Tapez pour filtrer…"
 msgid "Type a command…"
 msgstr "Tapez une commande…"
 
+#: linux/src/workbench.rs macos/Sources/Textchum/CommandPalettePanel.swift
+msgid "recent"
+msgstr "récent"
+
 #: linux/src/workbench.rs
 msgid "Could not save the document."
 msgstr "Le document n'a pas pu être enregistré."

@@ -1,4 +1,5 @@
 import AppKit
+import TextchumKit
 
 /// The command palette (⇧⌘P): every menu action, fuzzy-searchable from
 /// the keyboard. Commands are harvested from the main menu when the
@@ -21,12 +22,23 @@ final class CommandPalettePanel: NSObject {
     private let table = NSTableView()
     private var all: [Command] = []
     private var rows: [Command] = []
+    /// Titles of the commands run lately from here, most recent first.
+    private var recent: [String] = []
+    /// The project whose record remembers what was run.
+    private var projectRoot: String?
 
-    func show(over window: NSWindow?) {
+    /// What was typed here last, this session: the palette opens with
+    /// it selected, so the first key replaces it and Return runs the
+    /// same command again.
+    private(set) static var lastQuery = ""
+
+    func show(over window: NSWindow?, projectRoot: String? = nil) {
         all = Self.harvest()
+        self.projectRoot = projectRoot
+        recent = ProjectState.recent("commands", projectRoot: projectRoot)
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        queryField.stringValue = ""
+        queryField.stringValue = Self.lastQuery
         applyFilter()
 
         if let window {
@@ -39,6 +51,7 @@ final class CommandPalettePanel: NSObject {
         }
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(queryField)
+        queryField.currentEditor()?.selectAll(nil)
     }
 
     /// Every actionable item of the main menu, depth-first, titled with
@@ -65,12 +78,17 @@ final class CommandPalettePanel: NSObject {
         if let mainMenu = NSApp.mainMenu {
             // The root's items are the menu-bar titles; the submenu's own
             // title is the authoritative one (holder items are untitled).
-            for top in mainMenu.items {
-                if let submenu = top.submenu {
-                    walk(
-                        submenu,
-                        path: [submenu.title.isEmpty ? top.title : submenu.title])
-                }
+            for (position, top) in mainMenu.items.enumerated() {
+                guard let submenu = top.submenu else { continue }
+                // The application's own menu is the first, and AppKit
+                // names its holder after the class — "NSMenuItem" — so
+                // it goes by the application's name, as the menu bar
+                // shows it.
+                let name =
+                    position == 0
+                    ? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Textchum")
+                    : (submenu.title.isEmpty ? top.title : submenu.title)
+                walk(submenu, path: [name])
             }
         }
         return commands
@@ -103,13 +121,18 @@ final class CommandPalettePanel: NSObject {
 
     private func applyFilter() {
         let query = queryField.stringValue
-        rows =
-            all
-            .compactMap { command in
-                Fuzzy.score(command.title, query: query).map { (command, $0) }
-            }
-            .sorted { $0.1 > $1.1 }
-            .map(\.0)
+        if query.isEmpty {
+            // Nothing typed: the commands run lately first.
+            rows = CoreMemory.recentFirst(all.map(\.title), recent: recent).map { all[$0] }
+        } else {
+            rows =
+                all
+                .compactMap { command in
+                    Fuzzy.score(command.title, query: query).map { (command, $0) }
+                }
+                .sorted { $0.1 > $1.1 }
+                .map(\.0)
+        }
         table.reloadData()
         if !rows.isEmpty {
             table.selectRowIndexes([0], byExtendingSelection: false)
@@ -158,6 +181,8 @@ final class CommandPalettePanel: NSObject {
         let index = table.selectedRow >= 0 ? table.selectedRow : 0
         guard rows.indices.contains(index) else { return }
         let command = rows[index]
+        Self.lastQuery = queryField.stringValue
+        ProjectState.noteRecent("commands", command.title, projectRoot: projectRoot)
         panel?.orderOut(nil)
         // Through the responder chain when the item has no fixed target,
         // exactly as the menu itself would dispatch it.
@@ -197,6 +222,7 @@ extension CommandPalettePanel: NSTextFieldDelegate {
             runSelection()
             return true
         case #selector(NSResponder.cancelOperation(_:)):
+            Self.lastQuery = queryField.stringValue
             panel?.orderOut(nil)
             return true
         default:
@@ -239,7 +265,13 @@ extension CommandPalettePanel: NSTableViewDataSource, NSTableViewDelegate {
             cell.identifier = identifier
         }
         title.stringValue = rows[row].title
-        shortcut.stringValue = rows[row].shortcut
+        // Marked while nothing is typed, when recent choices lead the
+        // list: the mark says why they are first.
+        let isRecent = queryField.stringValue.isEmpty && recent.contains(rows[row].title)
+        shortcut.stringValue =
+            isRecent
+            ? (rows[row].shortcut.isEmpty ? t("recent") : t("recent") + "  " + rows[row].shortcut)
+            : rows[row].shortcut
         return cell
     }
 }

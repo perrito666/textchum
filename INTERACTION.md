@@ -265,13 +265,12 @@ What breaks these rules today, each to be fixed under its own issue:
 - **12.1, 12.2, 12.3** No gutter mark for fixes, no next/previous
   finding command, completion ranked by the server's order alone and
   without documentation beside it.
-- **13.1, 13.2** The command palette, Open Quickly, Find in Project and
-  every list open with an empty field, and none of them lists what was
-  chosen recently.
+- **13.2** Go to Symbol lists no recent symbols with nothing typed.
 - **13.4** Open starts wherever the system last left its dialog, not in
   the project; on Linux it starts with no folder at all. Save As
   already remembers the folder an untitled document was last saved
   into, but app-wide, not per project.
-- **13.5** Nothing a picker remembers survives a restart.
+- **13.3** The find bar's and Find in Project's toggles, the search
+  filters and the last format of a new document are not remembered.
 - **Linux** Inlay hints are gathered after the line, not inside it
   (see `PLAN_linux.md`).

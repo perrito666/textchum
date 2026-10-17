@@ -2214,6 +2214,10 @@ final class DocumentController: NSResponder {
         }
     }
 
+    /// What was typed into Go to Line last, this session, in any window:
+    /// it opens with it selected.
+    private static var lastGoToLine = ""
+
     /// Go to Line (⌘L): a prompt taking a number, and taking the shapes
     /// a number arrives in — `412:8` from a compiler, a whole
     /// `src/main.rs:412:8` pasted out of a build log, `line 412` from a
@@ -2226,11 +2230,14 @@ final class DocumentController: NSResponder {
         alert.informativeText = "Line number, or line:column — of \(coreDocument.lineCount)."
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
         field.placeholderString = "412 or 412:8"
+        field.stringValue = Self.lastGoToLine
         alert.accessoryView = field
         alert.addButton(withTitle: t("Go"))
         alert.addButton(withTitle: t("Cancel"))
         alert.window.initialFirstResponder = field
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let answered = alert.runModal() == .alertFirstButtonReturn
+        Self.lastGoToLine = field.stringValue
+        guard answered else { return }
         guard let target = CoreDocument.parseGoTo(field.stringValue) else {
             // Nothing in what was typed names a line. Saying so beats
             // jumping somewhere arbitrary.

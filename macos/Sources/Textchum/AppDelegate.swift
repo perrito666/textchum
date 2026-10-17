@@ -2445,7 +2445,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// ⇧⌘P: the fuzzy-searchable menu.
     @objc func showCommandPalette(_ sender: Any?) {
-        commandPalette.show(over: NSApp.keyWindow)
+        commandPalette.show(
+            over: NSApp.keyWindow,
+            projectRoot: (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument?.projectRoot)
     }
 
     /// ⌥⌘T: buffer rows show project-relative paths while on. Applied to
@@ -2828,6 +2830,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let path = URL(fileURLWithPath: path).standardizedFileURL.path
         if let existing = editors.first(where: { $0.coreDocument.path == path }) {
             existing.window?.makeKeyAndOrderFront(nil)
+            ProjectState.noteRecent("files", path, projectRoot: existing.projectRoot)
             if let revealLine {
                 existing.reveal(line: revealLine - 1, character: revealCharacter)
             }
@@ -2856,6 +2859,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if let model = settingsModel, editor.projectRoot != nil {
                 editor.apply(settings: model.currentSettings(forRoot: editor.projectRoot))
             }
+            // Opened lately, so first in Open Quickly with nothing typed.
+            ProjectState.noteRecent("files", path, projectRoot: editor.projectRoot)
             if let revealLine {
                 editor.reveal(line: revealLine - 1, character: revealCharacter)
             }
