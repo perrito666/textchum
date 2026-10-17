@@ -805,6 +805,10 @@ msgstr "Escribe para filtrar…"
 msgid "Type a command…"
 msgstr "Escribe un comando…"
 
+#: linux/src/workbench.rs macos/Sources/Textchum/CommandPalettePanel.swift
+msgid "recent"
+msgstr "reciente"
+
 #: linux/src/workbench.rs
 msgid "Could not save the document."
 msgstr "No se pudo guardar el documento."

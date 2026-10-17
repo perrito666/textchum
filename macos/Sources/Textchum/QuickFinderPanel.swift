@@ -51,6 +51,13 @@ final class QuickFinderPanel: NSObject {
     private static let keyHint = "↑↓ select · ⏎ open · ⌘⏎ open now · ⎋ close"
 
     private var mode: Mode = .files
+    /// What was typed into each mode last, this session: each opens
+    /// with its own selected, so the first key replaces it and Return
+    /// runs the same search again.
+    private static var lastQueries: [String: String] = [:]
+    /// The files opened lately in the scope's project, most recent
+    /// first, read when the panel opens; with nothing typed they lead.
+    private var recentFiles: [String] = []
     /// The scope's file list, walked once when the panel opens (or the
     /// scope changes) and matched in memory per keystroke — re-walking
     /// a real repository on every character is what made results
@@ -168,7 +175,13 @@ final class QuickFinderPanel: NSObject {
         regexSwitch.isHidden = mode != .grep
         regexSwitch.state = Self.readsRegex ? .on : .off
         queryField.placeholderString = mode.placeholder(regex: Self.readsRegex)
-        queryField.stringValue = ""
+        queryField.stringValue = Self.lastQueries[mode.title] ?? ""
+        recentFiles =
+            mode == .files
+            ? ProjectState.recent(
+                "files",
+                projectRoot: CoreWorkspace.projectRoot(forPath: scope) ?? scope)
+            : []
         rows = []
         table.reloadData()
         clearFilters()
@@ -183,6 +196,7 @@ final class QuickFinderPanel: NSObject {
         }
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(queryField)
+        queryField.currentEditor()?.selectAll(nil)
         // Files mode indexes the scope once; grep asks the core per
         // query (it streams from disk by design).
         switch mode {
@@ -464,6 +478,10 @@ final class QuickFinderPanel: NSObject {
         let mode = self.mode
         let filters = currentFilters()
         let index = fileIndex
+        // Relative to the scope, the way the rows are named.
+        let recent = recentFiles.compactMap { path -> String? in
+            path.hasPrefix(scope + "/") ? String(path.dropFirst(scope.count + 1)) : nil
+        }
         // The walk owns the status line until it finishes; matching an
         // empty index would blank the panel and look like "no results".
         if mode != .grep, isIndexing { return }
@@ -484,7 +502,16 @@ final class QuickFinderPanel: NSObject {
             case .files, .changed:
                 // Over-fetch so the stacked filters have something to
                 // prune; every filter kind applies to the path here.
-                let names = CoreSearch.matchFiles(paths: index, query: query, limit: 400)
+                var names = CoreSearch.matchFiles(paths: index, query: query, limit: 400)
+                if query.isEmpty, !recent.isEmpty {
+                    // Nothing typed: the files opened lately lead, most
+                    // recent first, even ones the plain listing would
+                    // not have reached.
+                    let indexed = Set(index)
+                    let lead = recent.filter { indexed.contains($0) }
+                    let leading = Set(lead)
+                    names = lead + names.filter { !leading.contains($0) }
+                }
                 let filtered = names.filter { name in
                     filters.allSatisfy { filter in
                         name.lowercased().contains(filter.pattern.lowercased())
@@ -668,6 +695,7 @@ final class QuickFinderPanel: NSObject {
         let index = table.selectedRow >= 0 ? table.selectedRow : 0
         guard rows.indices.contains(index) else { return }
         let row = rows[index]
+        Self.lastQueries[mode.title] = queryField.stringValue
         panel?.orderOut(nil)
         onOpen?(row.path, row.line)
     }
@@ -719,6 +747,7 @@ extension QuickFinderPanel: NSTextFieldDelegate {
             }
             return true
         case #selector(NSResponder.cancelOperation(_:)):
+            Self.lastQueries[mode.title] = queryField.stringValue
             panel?.orderOut(nil)
             return true
         default:

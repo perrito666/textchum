@@ -151,6 +151,145 @@ impl FileState {
     }
 }
 
+/// What a project remembers about how it is worked in: the choices
+/// made lately in each picker, and the options a dialog was left with.
+///
+/// Asking again starts where it was left. A palette lists the commands
+/// run lately first; a search opens with its toggles as they were; a
+/// file dialog opens in the folder last used from this project. A
+/// query typed into a picker is not here: that lasts the session, and
+/// the shells keep it. What is here describes the user, not the thing
+/// they were looking for, and so it survives a restart.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Memory {
+    /// By kind — `commands`, `files` — most recent first.
+    pub recent: BTreeMap<String, Vec<String>>,
+    /// By key — `find.regex`, `folder.open` — as the shell wrote them.
+    pub options: BTreeMap<String, Value>,
+}
+
+/// How many choices of one kind are kept: more than a list shows
+/// before it is filtered, few enough that the record stays small.
+pub const RECENT_CAP: usize = 30;
+
+impl Memory {
+    pub fn is_empty(&self) -> bool {
+        self.recent.values().all(Vec::is_empty) && self.options.is_empty()
+    }
+
+    /// Puts `item` first among the recent choices of `kind`, once.
+    pub fn note_recent(&mut self, kind: &str, item: &str) {
+        let list = self.recent.entry(kind.to_owned()).or_default();
+        list.retain(|known| known != item);
+        list.insert(0, item.to_owned());
+        list.truncate(RECENT_CAP);
+    }
+
+    /// The recent choices of `kind`, most recent first.
+    pub fn recent(&self, kind: &str) -> &[String] {
+        self.recent.get(kind).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// Writes an option; `None` or a JSON null forgets it.
+    pub fn set_option(&mut self, key: &str, value: Option<Value>) {
+        match value {
+            Some(value) if !value.is_null() => {
+                self.options.insert(key.to_owned(), value);
+            }
+            _ => {
+                self.options.remove(key);
+            }
+        }
+    }
+
+    pub fn option(&self, key: &str) -> Option<&Value> {
+        self.options.get(key)
+    }
+
+    fn to_json(&self) -> Value {
+        json!({
+            "recent": self.recent.iter()
+                .filter(|(_, list)| !list.is_empty())
+                .map(|(kind, list)| (kind.clone(), json!(list)))
+                .collect::<serde_json::Map<String, Value>>(),
+            "options": self.options.iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect::<serde_json::Map<String, Value>>(),
+        })
+    }
+
+    fn from_json(value: &Value) -> Memory {
+        let recent = value["recent"]
+            .as_object()
+            .map(|kinds| {
+                kinds
+                    .iter()
+                    .map(|(kind, list)| {
+                        let items = list
+                            .as_array()
+                            .map(|items| {
+                                items.iter().filter_map(Value::as_str).map(str::to_owned).collect()
+                            })
+                            .unwrap_or_default();
+                        (kind.clone(), items)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let options = value["options"]
+            .as_object()
+            .map(|options| options.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default();
+        Memory { recent, options }
+    }
+}
+
+/// The order a list is shown in when nothing is typed: the items chosen
+/// lately first, most recent first, then the rest as they were given.
+/// Returns indices into `items`; a recent choice no longer among them
+/// is passed over.
+pub fn recent_first(items: &[String], recent: &[String]) -> Vec<usize> {
+    let mut order: Vec<usize> = Vec::with_capacity(items.len());
+    let mut taken = vec![false; items.len()];
+    for wanted in recent {
+        if let Some(at) = items.iter().position(|item| item == wanted) {
+            if !taken[at] {
+                taken[at] = true;
+                order.push(at);
+            }
+        }
+    }
+    order.extend((0..items.len()).filter(|at| !taken[*at]));
+    order
+}
+
+/// Puts `item` first among a project's recent choices of `kind`, and
+/// writes the record.
+pub fn remember_recent(
+    root: &Path,
+    dir: &Path,
+    in_project: bool,
+    kind: &str,
+    item: &str,
+) -> std::io::Result<()> {
+    let mut state = load(root, dir, in_project);
+    state.memory.note_recent(kind, item);
+    save(&state, root, dir, in_project)
+}
+
+/// Writes one of a project's options; `None` forgets it.
+pub fn remember_option(
+    root: &Path,
+    dir: &Path,
+    in_project: bool,
+    key: &str,
+    value: Option<Value>,
+) -> std::io::Result<()> {
+    let mut state = load(root, dir, in_project);
+    state.memory.set_option(key, value);
+    save(&state, root, dir, in_project)
+}
+
 /// One project's record.
 #[derive(Clone, Debug)]
 pub struct ProjectState {
@@ -160,6 +299,7 @@ pub struct ProjectState {
     /// sweep goes by the file's own time; this is for reading.
     pub updated: u64,
     pub files: BTreeMap<String, FileState>,
+    pub memory: Memory,
 }
 
 impl Default for ProjectState {
@@ -169,6 +309,7 @@ impl Default for ProjectState {
             root: String::new(),
             updated: 0,
             files: BTreeMap::new(),
+            memory: Memory::default(),
         }
     }
 }
@@ -253,7 +394,7 @@ pub fn load(root: &Path, dir: &Path, in_project: bool) -> ProjectState {
 /// instead of written empty.
 pub fn save(state: &ProjectState, root: &Path, dir: &Path, in_project: bool) -> std::io::Result<()> {
     let path = record_path(root, dir, in_project);
-    if state.files.is_empty() {
+    if state.files.is_empty() && state.memory.is_empty() {
         if path.exists() {
             let _ = std::fs::remove_file(&path);
         }
@@ -266,12 +407,15 @@ pub fn save(state: &ProjectState, root: &Path, dir: &Path, in_project: bool) -> 
     for (name, entry) in &state.files {
         files.insert(name.clone(), entry.to_json());
     }
-    let document = json!({
+    let mut document = json!({
         "version": 1,
         "root": root.to_string_lossy(),
         "updated": now(),
         "files": Value::Object(files),
     });
+    if !state.memory.is_empty() {
+        document["memory"] = state.memory.to_json();
+    }
     let text = serde_json::to_string_pretty(&document).unwrap_or_default();
     // Atomic like every write here: temporary file, then rename.
     let temp = path.with_extension("tchum.tmp");
@@ -357,6 +501,7 @@ pub fn from_json(text: &str) -> ProjectState {
         root: value["root"].as_str().unwrap_or_default().to_owned(),
         updated: value["updated"].as_u64().unwrap_or(0),
         files,
+        memory: Memory::from_json(&value["memory"]),
     }
 }
 
@@ -412,6 +557,47 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn recent_choices_come_first_once_each_and_are_kept_with_the_files() {
+        let dir = scratch("memory");
+        let root = dir.join("project");
+        std::fs::create_dir_all(&root).unwrap();
+        for command in ["Save", "Format", "Save", "Rename"] {
+            remember_recent(&root, &dir, false, "commands", command).unwrap();
+        }
+        remember_option(&root, &dir, false, "find.regex", Some(json!(true))).unwrap();
+        let state = load(&root, &dir, false);
+        assert_eq!(state.memory.recent("commands"), ["Rename", "Save", "Format"]);
+        assert_eq!(state.memory.option("find.regex"), Some(&json!(true)));
+        assert!(state.files.is_empty(), "a record can hold memory alone");
+
+        // A file's state written after keeps the memory, and the other
+        // way round: the two are one record.
+        let mut state = load(&root, &dir, false);
+        state.set_file(&root, &root.join("a.rs"), FileState { views: 2, ..FileState::default() });
+        save(&state, &root, &dir, false).unwrap();
+        remember_option(&root, &dir, false, "find.regex", None).unwrap();
+        let state = load(&root, &dir, false);
+        assert_eq!(state.memory.recent("commands")[0], "Rename");
+        assert_eq!(state.memory.option("find.regex"), None);
+        assert_eq!(state.file(&root, &root.join("a.rs")).map(|f| f.views), Some(2));
+
+        let mut memory = Memory::default();
+        for at in 0..(RECENT_CAP + 5) {
+            memory.note_recent("files", &format!("f{at}"));
+        }
+        assert_eq!(memory.recent("files").len(), RECENT_CAP);
+        assert_eq!(memory.recent("files")[0], format!("f{}", RECENT_CAP + 4));
+    }
+
+    #[test]
+    fn a_list_with_nothing_typed_shows_recent_choices_first() {
+        let items: Vec<String> = ["Open", "Save", "Format", "Rename"].map(String::from).to_vec();
+        let recent: Vec<String> = ["Rename", "Gone", "Save"].map(String::from).to_vec();
+        assert_eq!(recent_first(&items, &recent), vec![3, 1, 0, 2]);
+        assert_eq!(recent_first(&items, &[]), vec![0, 1, 2, 3]);
     }
 
     #[test]

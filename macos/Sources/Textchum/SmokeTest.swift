@@ -928,6 +928,36 @@ func runSmokeTest() -> Int32 {
     }
     print("go to line ok (compiler shapes, drive letters, clamping)")
 
+    // A project remembers how it is worked in, across the C boundary:
+    // recent choices most recent first and once each, options written
+    // and forgotten, and a list with nothing typed led by what was
+    // chosen lately. Kept in a scratch directory, never the profile.
+    do {
+        let memoryDir = NSTemporaryDirectory() + "textchum-smoke-memory-\(getpid())"
+        let memoryRoot = memoryDir + "/project"
+        try? FileManager.default.createDirectory(atPath: memoryRoot, withIntermediateDirectories: true)
+        for command in ["File › Save", "Edit › Format", "File › Save"] {
+            CoreMemory.noteRecent(
+                kind: "commands", item: command, root: memoryRoot, directory: memoryDir, inProject: false)
+        }
+        CoreMemory.setOption(
+            key: "folder.open", value: "/tmp/somewhere", root: memoryRoot, directory: memoryDir,
+            inProject: false)
+        let recent = CoreMemory.recent(kind: "commands", root: memoryRoot, directory: memoryDir, inProject: false)
+        let folder = CoreMemory.option(key: "folder.open", root: memoryRoot, directory: memoryDir, inProject: false)
+        let order = CoreMemory.recentFirst(["File › Open", "File › Save", "Edit › Format"], recent: recent)
+        CoreMemory.setOption(key: "folder.open", value: nil, root: memoryRoot, directory: memoryDir, inProject: false)
+        guard recent == ["File › Save", "Edit › Format"], folder as? String == "/tmp/somewhere",
+            order == [1, 2, 0],
+            CoreMemory.option(key: "folder.open", root: memoryRoot, directory: memoryDir, inProject: false) == nil
+        else {
+            print("FAIL: project memory: \(recent) \(String(describing: folder)) \(order)")
+            return 1
+        }
+        try? FileManager.default.removeItem(atPath: memoryDir)
+    }
+    print("project memory ok (recent choices first and once, options kept and forgotten)")
+
     // A list with a filter field opens with the caret in the field and
     // its first item selected. Return there chooses that item, and the
     // arrows move the selection, with nothing typed: the keys go to

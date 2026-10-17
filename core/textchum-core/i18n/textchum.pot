@@ -806,6 +806,10 @@ msgstr ""
 msgid "Type a command…"
 msgstr ""
 
+#: linux/src/workbench.rs macos/Sources/Textchum/CommandPalettePanel.swift
+msgid "recent"
+msgstr ""
+
 #: linux/src/workbench.rs
 msgid "Could not save the document."
 msgstr ""

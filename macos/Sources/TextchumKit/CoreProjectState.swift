@@ -7,6 +7,107 @@ import Foundation
 /// how many views it is shown in, the dividers between them, what is
 /// folded, what language it was told it is, and where each view was
 /// looking. The format, the atomic write and the sweep are the core's.
+/// What a project remembers about how it is worked in: recent choices
+/// by kind, and the options a dialog was left with. The core keeps them
+/// in the project's record, beside what its files remember.
+public enum CoreMemory {
+    public static func recent(kind: String, root: String, directory: String, inProject: Bool) -> [String] {
+        let json = root.withCString { rootPointer in
+            directory.withCString { dirPointer in
+                kind.withCString { kindPointer in
+                    tc_memory_recent(
+                        rootPointer, UInt(strlen(rootPointer)), dirPointer, UInt(strlen(dirPointer)),
+                        inProject, kindPointer, UInt(strlen(kindPointer)))
+                }
+            }
+        }
+        guard let json else { return [] }
+        defer { tc_string_free(json) }
+        return (try? JSONDecoder().decode([String].self, from: Data(String(cString: json).utf8))) ?? []
+    }
+
+    @discardableResult
+    public static func noteRecent(
+        kind: String, item: String, root: String, directory: String, inProject: Bool
+    ) -> Bool {
+        root.withCString { rootPointer in
+            directory.withCString { dirPointer in
+                kind.withCString { kindPointer in
+                    item.withCString { itemPointer in
+                        tc_memory_note_recent(
+                            rootPointer, UInt(strlen(rootPointer)), dirPointer,
+                            UInt(strlen(dirPointer)), inProject, kindPointer,
+                            UInt(strlen(kindPointer)), itemPointer, UInt(strlen(itemPointer)))
+                    }
+                }
+            }
+        }
+    }
+
+    /// An option as the JSON it was written as; nil when there is none.
+    public static func option(key: String, root: String, directory: String, inProject: Bool) -> Any? {
+        let json = root.withCString { rootPointer in
+            directory.withCString { dirPointer in
+                key.withCString { keyPointer in
+                    tc_memory_option(
+                        rootPointer, UInt(strlen(rootPointer)), dirPointer, UInt(strlen(dirPointer)),
+                        inProject, keyPointer, UInt(strlen(keyPointer)))
+                }
+            }
+        }
+        guard let json else { return nil }
+        defer { tc_string_free(json) }
+        let value = try? JSONSerialization.jsonObject(
+            with: Data(String(cString: json).utf8), options: [.fragmentsAllowed])
+        return value is NSNull ? nil : value
+    }
+
+    /// Writes an option; nil forgets it.
+    @discardableResult
+    public static func setOption(
+        key: String, value: Any?, root: String, directory: String, inProject: Bool
+    ) -> Bool {
+        let json: String
+        if let value, let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]) {
+            json = String(decoding: data, as: UTF8.self)
+        } else {
+            json = "null"
+        }
+        return root.withCString { rootPointer in
+            directory.withCString { dirPointer in
+                key.withCString { keyPointer in
+                    json.withCString { valuePointer in
+                        tc_memory_set_option(
+                            rootPointer, UInt(strlen(rootPointer)), dirPointer,
+                            UInt(strlen(dirPointer)), inProject, keyPointer,
+                            UInt(strlen(keyPointer)), valuePointer, UInt(strlen(valuePointer)))
+                    }
+                }
+            }
+        }
+    }
+
+    /// The order to show `items` in with nothing typed: recent choices
+    /// first, most recent first, then the rest as given.
+    public static func recentFirst(_ items: [String], recent: [String]) -> [Int] {
+        guard let itemsData = try? JSONEncoder().encode(items),
+            let recentData = try? JSONEncoder().encode(recent)
+        else { return Array(items.indices) }
+        let itemsJSON = String(decoding: itemsData, as: UTF8.self)
+        let recentJSON = String(decoding: recentData, as: UTF8.self)
+        let json = itemsJSON.withCString { itemsPointer in
+            recentJSON.withCString { recentPointer in
+                tc_memory_recent_first(
+                    itemsPointer, UInt(strlen(itemsPointer)), recentPointer, UInt(strlen(recentPointer)))
+            }
+        }
+        guard let json else { return Array(items.indices) }
+        defer { tc_string_free(json) }
+        return (try? JSONDecoder().decode([Int].self, from: Data(String(cString: json).utf8)))
+            ?? Array(items.indices)
+    }
+}
+
 public enum CoreProjectState {
     /// What one file remembers.
     public struct FileState: Equatable {

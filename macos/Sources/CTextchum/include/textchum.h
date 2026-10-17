@@ -1306,6 +1306,85 @@ char *tc_project_file_state(const char *root,
                             uintptr_t path_len);
 
 /**
+ * A project's recent choices of `kind` (`commands`, `files`), most
+ * recent first, as a JSON array of strings. Release with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * Each pointer and length must describe valid UTF-8.
+ */
+char *tc_memory_recent(const char *root,
+                       uintptr_t root_len,
+                       const char *dir,
+                       uintptr_t dir_len,
+                       bool in_project,
+                       const char *kind,
+                       uintptr_t kind_len);
+
+/**
+ * Puts `item` first among a project's recent choices of `kind`.
+ *
+ * # Safety
+ * Each pointer and length must describe valid UTF-8.
+ */
+bool tc_memory_note_recent(const char *root,
+                           uintptr_t root_len,
+                           const char *dir,
+                           uintptr_t dir_len,
+                           bool in_project,
+                           const char *kind,
+                           uintptr_t kind_len,
+                           const char *item,
+                           uintptr_t item_len);
+
+/**
+ * One of a project's options, as JSON; `null` when it has none.
+ * Release with [`tc_string_free`].
+ *
+ * # Safety
+ * Each pointer and length must describe valid UTF-8.
+ */
+char *tc_memory_option(const char *root,
+                       uintptr_t root_len,
+                       const char *dir,
+                       uintptr_t dir_len,
+                       bool in_project,
+                       const char *key,
+                       uintptr_t key_len);
+
+/**
+ * Writes one of a project's options: `value_json` is any JSON, and
+ * `null` forgets it. False on a bad pointer or JSON that does not
+ * parse.
+ *
+ * # Safety
+ * Each pointer and length must describe valid UTF-8.
+ */
+bool tc_memory_set_option(const char *root,
+                          uintptr_t root_len,
+                          const char *dir,
+                          uintptr_t dir_len,
+                          bool in_project,
+                          const char *key,
+                          uintptr_t key_len,
+                          const char *value_json,
+                          uintptr_t value_len);
+
+/**
+ * The order a list is shown in when nothing is typed: indices into
+ * `items_json` (an array of strings), the recent choices in
+ * `recent_json` first, most recent first, then the rest as given. A
+ * JSON array of numbers. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * Each pointer and length must describe valid UTF-8.
+ */
+char *tc_memory_recent_first(const char *items_json,
+                             uintptr_t items_len,
+                             const char *recent_json,
+                             uintptr_t recent_len);
+
+/**
  * Writes down what a file remembers. `state_json` is the shape
  * [`tc_project_file_state`] answers with; an entry with nothing in it
  * is removed instead of written.
