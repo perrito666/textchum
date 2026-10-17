@@ -694,15 +694,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
-        // A config file that exists but could not be used deserves exactly
-        // one loud notice — the app is running on defaults meanwhile, and
-        // the broken file is preserved for hand fixing.
+        // A config file that exists but could not be used is said once,
+        // in the notification area: the app is running on defaults
+        // meanwhile, and the broken file is preserved for hand fixing.
+        // A report, not a decision, so not a dialog; a beat later, so
+        // the windows the session restores are there to show it.
         if let warning = config.loadWarning {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = t("Settings file could not be read")
-            alert.informativeText = warning
-            alert.runModal()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.notify(t("Settings file could not be read") + ": " + warning)
+                }
+            }
         }
     }
 
@@ -1946,12 +1948,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             CoreIcons.clear()
             if !warnedBrokenIconPack {
                 warnedBrokenIconPack = true
-                let alert = NSAlert()
-                alert.alertStyle = .warning
-                alert.messageText = t("The icon pack could not be used")
-                alert.informativeText =
-                    "\(error) — the file tree keeps the system's icons."
-                alert.runModal()
+                notify(t("The icon pack could not be used") + ": \(error) — the file tree keeps the system's icons.")
             }
         }
         refreshFileIcons()
@@ -1989,11 +1986,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             CoreTheme.setBuiltin(named: "Textchum")
             if !warnedBrokenTheme {
                 warnedBrokenTheme = true
-                let alert = NSAlert()
-                alert.alertStyle = .warning
-                alert.messageText = "Theme “\(name)” could not be used"
-                alert.informativeText = "\(problem) — using the default theme instead."
-                alert.runModal()
+                notify("Theme “\(name)” could not be used: \(problem) — using the default theme instead.")
             }
         }
         appliedTheme = name
@@ -2151,10 +2144,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let trees = CoreChanges.worktrees(near: info.root)
         guard trees.count > 1 else {
-            let alert = NSAlert()
-            alert.messageText = t("No other worktrees")
-            alert.informativeText = t("This repository has one working tree.")
-            alert.runModal()
+            let message = t("This repository has one working tree.")
+            if let editor = (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument {
+                editor.showHint(message)
+            } else {
+                notify(message)
+            }
             return
         }
         let current = info.root
@@ -2865,11 +2860,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 editor.reveal(line: revealLine - 1, character: revealCharacter)
             }
         } catch {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = "Could not open “\((path as NSString).lastPathComponent)”."
-            alert.informativeText = "\(error)"
-            alert.runModal()
+            notify("Could not open “\((path as NSString).lastPathComponent)”: \(error)")
         }
     }
 

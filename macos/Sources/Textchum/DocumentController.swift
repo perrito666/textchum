@@ -462,6 +462,7 @@ final class DocumentController: NSResponder {
             self?.hoverTimer?.invalidate()
             self?.closeBalloon()
             self?.closeSignature()
+            self?.closeHint()
         }
 
         let gutter = LineNumberGutterView(textView: textView)
@@ -1151,7 +1152,7 @@ final class DocumentController: NSResponder {
         let caret = anchorIndex
         let found = diagnostic(atOffset: caret) ?? diagnosticOnLine(of: caret, in: text)
         guard let found else {
-            NSSound.beep()
+            showHint(t("Nothing is reported on this line."))
             return
         }
         let screenRect = textView.firstRect(
@@ -1180,7 +1181,7 @@ final class DocumentController: NSResponder {
     /// even when mouse hover is switched off — this is the deliberate ask.
     @objc func showHoverAtCaret(_ sender: Any?) {
         guard let textView, lspApp != nil, lspOpenPath != nil else {
-            NSSound.beep()
+            showHint(noServerHint)
             return
         }
         let caret = min(textView.selectedRange().location, (textView.string as NSString).length)
@@ -1380,7 +1381,7 @@ final class DocumentController: NSResponder {
     @objc func jumpToDefinition(_ sender: Any?) {
         guard let textView else { return }
         guard let lspApp, let path = lspOpenPath else {
-            if !ctagsJump() { NSSound.beep() }
+            if !ctagsJump() { showHint(noServerHint) }
             return
         }
         let text = textView.string as NSString
@@ -1402,7 +1403,7 @@ final class DocumentController: NSResponder {
                     },
                     title: "Definitions (\(targets.count))")
             case .nothing:
-                if !self.ctagsJump() { NSSound.beep() }
+                if !self.ctagsJump() { self.showHint(t("No definition found.")) }
             }
         }
     }
@@ -1421,9 +1422,7 @@ final class DocumentController: NSResponder {
                 result: json, path: path, line: line, character: character)
             switch uses.count {
             case 0:
-                self.presentInfo(
-                    t("On the definition"),
-                    details: t("Nothing else in the workspace refers to this symbol."))
+                self.showHint(t("Nothing else in the workspace refers to this symbol."))
             case 1:
                 self.openLocation?(uses[0].path, uses[0].line, uses[0].character)
             default:
@@ -1448,7 +1447,7 @@ final class DocumentController: NSResponder {
             guard let self else { return }
             let locations = Self.referenceLocations(fromResultJSON: json)
             guard !locations.isEmpty else {
-                NSSound.beep()
+                self.showHint(t("No usages found."))
                 return
             }
             self.showReferences(locations)
@@ -1461,7 +1460,7 @@ final class DocumentController: NSResponder {
     /// which leaves out the declaration, the imports and the mentions.
     @objc func showCallers(_ sender: Any?) {
         guard let lspApp, let path = lspOpenPath, let textView else {
-            NSSound.beep()
+            showHint(noServerHint)
             return
         }
         let text = textView.string as NSString
@@ -1476,17 +1475,17 @@ final class DocumentController: NSResponder {
                 let places = Self.referenceLocations(
                     fromResultJSON: CoreCalls.callersAsLocations(fromResultJSON: json))
                 guard !places.isEmpty else {
-                    self.workbench?.showNotice(t("Nothing calls this."))
+                    self.showHint(t("Nothing calls this."))
                     return
                 }
                 self.showReferences(places, title: t("Callers"))
             }
             if !calls {
-                self.workbench?.showNotice(t("There is no function here to find the callers of."))
+                self.showHint(t("There is no function here to find the callers of."))
             }
         }
         if !asked {
-            workbench?.showNotice(t("No language server here finds callers."))
+            showHint(t("No language server here finds callers."))
         }
     }
 
@@ -1497,7 +1496,7 @@ final class DocumentController: NSResponder {
     @objc func showDiagnosticList(_ sender: Any?) {
         guard let textView else { return }
         guard !diagnostics.isEmpty else {
-            presentInfo(t("Nothing reported"), details: t("No diagnostics for this document."))
+            showHint(t("Nothing is reported in this document."))
             return
         }
         let text = textView.string as NSString
@@ -1538,13 +1537,63 @@ final class DocumentController: NSResponder {
         }
     }
 
-    /// A plain statement, for when the answer is "there is nothing".
-    private func presentInfo(_ message: String, details: String) {
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = message
-        alert.informativeText = details
-        alert.runModal()
+    // MARK: Hints
+
+    /// The hint up by the caret, and what it says.
+    private var caretHint: Balloon?
+    private(set) var shownHint: String?
+
+    /// A command's short answer when it has nothing to do — "No usages
+    /// found" — shown by the caret, where the eyes already are, and gone
+    /// at the next key, press or scroll. An alert to dismiss was a
+    /// report standing in the way of the work; a beep said that
+    /// something was wrong and not what.
+    ///
+    /// With the caret out of sight, the hint would be too: it goes to
+    /// the status bar instead.
+    func showHint(_ text: String) {
+        closeHint()
+        guard let textView, let window = textView.window, window.isVisible else {
+            workbench?.showNotice(text)
+            return
+        }
+        let length = (textView.string as NSString).length
+        let caret = min(textView.selectedRange().location, length)
+        let onScreen = textView.firstRect(
+            forCharacterRange: NSRange(location: caret, length: 0), actualRange: nil)
+        let local = textView.convert(window.convertFromScreen(onScreen), from: nil)
+        guard textView.visibleRect.insetBy(dx: -2, dy: -2).contains(NSPoint(x: local.minX, y: local.midY))
+        else {
+            workbench?.showNotice(text)
+            return
+        }
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        label.textColor = .labelColor
+        label.sizeToFit()
+        let content = NSView(
+            frame: NSRect(x: 0, y: 0, width: ceil(label.frame.width) + 20, height: ceil(label.frame.height) + 10))
+        label.setFrameOrigin(NSPoint(x: 10, y: 5))
+        content.addSubview(label)
+        // A zero-width rectangle at the caret, a line tall: the hint
+        // goes under the caret's line, never over it.
+        let anchor = NSRect(x: onScreen.minX, y: onScreen.minY, width: 1, height: max(onScreen.height, 14))
+        caretHint = Balloon(content: content, anchor: anchor, parent: window)
+        shownHint = text
+    }
+
+    func closeHint() {
+        caretHint?.close()
+        caretHint = nil
+        shownHint = nil
+    }
+
+    /// The message a command gives when it needs a language server and
+    /// the document has none: what would make one attach.
+    private var noServerHint: String {
+        coreDocument.path == nil
+            ? t("Save the file first — untitled documents have no server.")
+            : t("No language server is running for this document.")
     }
 
     /// The document outline: the file's symbols, nesting shown by
@@ -1633,18 +1682,16 @@ final class DocumentController: NSResponder {
                 ofIndex: self.renameIndex ?? 0, in: textView.string as NSString)
             self.flushLSPChange()
             lspApp.lspRename(path: path, line: line, character: character, newName: newName) {
-                json in
+                [weak self] json in
                 let applied =
                     (NSApp.delegate as? AppDelegate)?.applyWorkspaceEdit(resultJSON: json)
                     ?? false
                 if !applied {
-                    NSSound.beep()
+                    self?.showHint(t("The server had no rename to offer."))
                 }
             }
         }) else {
-            presentInfo(
-                t("Nothing to rename here"),
-                details: t("Put the caret on a name first."))
+            showHint(t("Put the caret on a name first."))
             return
         }
         renameIndex = index
@@ -1722,7 +1769,7 @@ final class DocumentController: NSResponder {
         guard let language = coreDocument.languageName,
             !preprocessorCommands(projectRoot, language).isEmpty
         else {
-            NSSound.beep()
+            showHint(t("Nothing formats this document: no server can, and no save preprocessor is set for it."))
             return
         }
         if case .failed(let failure) = preprocessBuffer() {
@@ -1789,7 +1836,7 @@ final class DocumentController: NSResponder {
             return
         }
         guard let range = coreDocument.foldRanges.first(where: { $0.start == line }) else {
-            NSSound.beep()
+            showHint(t("No block opens on this line."))
             return
         }
         openDocument.folds.append(range)
@@ -1807,7 +1854,7 @@ final class DocumentController: NSResponder {
             folds.append(range)
         }
         if folds.isEmpty {
-            NSSound.beep()
+            showHint(t("Nothing here folds."))
             return
         }
         openDocument.folds = folds
@@ -1816,7 +1863,7 @@ final class DocumentController: NSResponder {
 
     @objc func unfoldAll(_ sender: Any?) {
         guard !openDocument.folds.isEmpty else {
-            NSSound.beep()
+            showHint(t("Nothing is folded."))
             return
         }
         openDocument.folds = []
@@ -1972,9 +2019,7 @@ final class DocumentController: NSResponder {
             guard let self else { return }
             let actions = CoreCodeActions.actions(inResultJSON: json)
             guard !actions.isEmpty else {
-                self.presentInfo(
-                    t("Nothing on offer"),
-                    details: t("The language server has no action for this place."))
+                self.showHint(t("The language server has no action for this place."))
                 return
             }
             let rows: [ListPanel.Row] = actions.map { action in
@@ -2018,13 +2063,11 @@ final class DocumentController: NSResponder {
                     self.lspApp?.lspExecuteCommand(
                         path: path, command: name, argumentsJSON: argumentsJSON) { _ in }
                 default:
-                    self.presentInfo(
-                        t("Nothing came back"),
-                        details: t("The language server had no edit for that action."))
+                    self.showHint(t("The language server had no edit for that action."))
                 }
             }
         case .nothing:
-            NSSound.beep()
+            showHint(t("That action had nothing to do."))
         }
     }
 
@@ -2063,14 +2106,14 @@ final class DocumentController: NSResponder {
     @objc func showDocumentOutline(_ sender: Any?) {
         guard let lspApp, let path = lspOpenPath else {
             // Markdown has an outline without any server: its headings.
-            if !showMarkdownOutline() { NSSound.beep() }
+            if !showMarkdownOutline() { showHint(noServerHint) }
             return
         }
         lspApp.lspDocumentSymbols(path: path) { [weak self] json in
             guard let self else { return }
             let symbols = OutlineSymbol.parse(resultJSON: json)
             guard !symbols.isEmpty else {
-                if !self.showMarkdownOutline() { NSSound.beep() }
+                if !self.showMarkdownOutline() { self.showHint(t("The server offered no outline.")) }
                 return
             }
             self.showOutline(symbols)
@@ -2191,7 +2234,7 @@ final class DocumentController: NSResponder {
         guard let target = CoreDocument.parseGoTo(field.stringValue) else {
             // Nothing in what was typed names a line. Saying so beats
             // jumping somewhere arbitrary.
-            NSSound.beep()
+            showHint(t("Nothing in that names a line."))
             return
         }
         // The jump is one Go Back should return from: reading was
@@ -3026,6 +3069,8 @@ final class DocumentController: NSResponder {
     var isLiveScrolling: Bool { views.contains { $0.isLiveScrolling } }
 
     @objc private func editorDidScroll(_ notification: Notification) {
+        // A hint stays by the caret it answered, which scrolling moves.
+        closeHint()
         if Self.debugTimers { NSLog("TIMER scroll-tick") }
         if let clipView = notification.object as? NSClipView,
             let view = views.first(where: { $0.scrollView.contentView === clipView })
@@ -3746,7 +3791,7 @@ final class DocumentController: NSResponder {
         guard let view = focusedView else { return }
         if findMatches.isEmpty || findPending { refreshFindMatchesNow(selectCurrent: false) }
         guard !findMatches.isEmpty else {
-            NSSound.beep()
+            showHint(t("No matches."))
             return
         }
         let caret = view.textView.selectedRange()
@@ -3806,7 +3851,7 @@ final class DocumentController: NSResponder {
                 options: bar.options),
             result.count > 0
         else {
-            NSSound.beep()
+            showHint(t("Nothing matched, so nothing was replaced."))
             return
         }
         let whole = NSRange(location: 0, length: (textView.string as NSString).length)
@@ -5111,7 +5156,7 @@ final class DocumentController: NSResponder {
         guard let textView,
             let block = coreDocument.blockBounds(at: textView.selectedRange().location)
         else {
-            NSSound.beep()
+            showHint(t("No enclosing block here."))
             return
         }
         moveCaret(to: block.location)
@@ -5121,7 +5166,7 @@ final class DocumentController: NSResponder {
         guard let textView,
             let block = coreDocument.blockBounds(at: textView.selectedRange().location)
         else {
-            NSSound.beep()
+            showHint(t("No enclosing block here."))
             return
         }
         moveCaret(to: NSMaxRange(block))
@@ -5229,7 +5274,7 @@ final class DocumentController: NSResponder {
         guard let language = coreDocument.languageName,
             !preprocessorCommands(projectRoot, language).isEmpty
         else {
-            NSSound.beep()
+            showHint(t("No save preprocessors configured for this language."))
             return
         }
         if case .failed(let failure) = preprocessBuffer() {
@@ -5421,12 +5466,12 @@ final class DocumentController: NSResponder {
         saveAsInteractively()
     }
 
+    /// Something that went wrong without a decision to make: said in
+    /// the notification area, where it stays listed, not in a dialog to
+    /// dismiss. The document's dirty mark still says when work is not
+    /// on disk.
     private func presentError(_ message: String, details: String) {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = message
-        alert.informativeText = details
-        alert.runModal()
+        workbench?.showNotice(message + " " + details)
     }
 }
 
@@ -5541,7 +5586,7 @@ extension DocumentController {
         guard let path = coreDocument.path else {
             // An untitled document has no path to remember a choice
             // against; New with Format is where its language is set.
-            NSSound.beep()
+            showHint(t("Save the file first — an untitled document has no properties to keep; New with Format sets its language."))
             return
         }
         let delegate = NSApp.delegate as? AppDelegate
@@ -5611,7 +5656,7 @@ extension DocumentController {
 
     @objc func revealInTree(_ sender: Any?) {
         guard let path = coreDocument.path else {
-            NSSound.beep()
+            showHint(t("Save the file first — an untitled document has no path."))
             return
         }
         splitController?.splitViewItems.first?.isCollapsed = false
@@ -6055,6 +6100,7 @@ extension DocumentController: NSTextViewDelegate {
         foldSpansAreStale = true
         // A balloon is about the text as it was.
         closeBalloon()
+        closeHint()
         clearSymbolUses()
         refreshDiagnosticsFromCore()
         mirrorSnippetStops()
@@ -6101,6 +6147,10 @@ extension DocumentController: NSTextViewDelegate {
             return true
         }
         guard completionPopup.isVisible else {
+            if caretHint != nil, commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+                closeHint()
+                return true
+            }
             if coreDocument.isSnippetActive {
                 switch Self.snippetKey(for: commandSelector) {
                 case .nextStop:
@@ -6289,6 +6339,9 @@ extension DocumentController: NSTextViewDelegate {
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
+        // A hint answered the command just given; moving on is done
+        // with it.
+        closeHint()
         // Clicking in a pane is how you say which one you mean: the
         // caret moved there, so that pane has the keyboard now.
         if let textView = notification.object as? NSTextView {
@@ -6392,7 +6445,7 @@ extension DocumentController {
         guard let path = coreDocument.path,
             let fromRoot = CoreChanges.pathFromRepositoryRoot(path)
         else {
-            NSSound.beep()
+            showHint(t("Not in a git repository."))
             return
         }
         PathActions.copy(fromRoot)
@@ -6402,7 +6455,7 @@ extension DocumentController {
         guard let path = coreDocument.path,
             let url = PathActions.forgeURL(forPath: path, isDirectory: false)
         else {
-            NSSound.beep()
+            showHint(t("Not in a git repository with a remote."))
             return
         }
         PathActions.copy(url)
@@ -6419,7 +6472,7 @@ extension DocumentController {
             let url = PathActions.forgeURL(
                 forPath: path, isDirectory: false, line: caretLineNumber)
         else {
-            NSSound.beep()
+            showHint(t("Not in a git repository with a remote."))
             return
         }
         PathActions.copy(url)
@@ -6429,7 +6482,7 @@ extension DocumentController {
     /// most editors open straight to.
     @objc func copyPathAndLine(_ sender: Any?) {
         guard let path = coreDocument.path else {
-            NSSound.beep()
+            showHint(t("Save the file first — an untitled document has no path."))
             return
         }
         PathActions.copy("\(path):\(caretLineNumber)")

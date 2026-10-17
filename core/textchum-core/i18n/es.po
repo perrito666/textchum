@@ -603,15 +603,16 @@ msgstr "{} ya no está ahí."
 msgid "Not a Markdown document."
 msgstr "No es un documento Markdown."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No block opens on this line."
 msgstr "Ningún bloque abre en esta línea."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing here folds."
 msgstr "Aquí no hay nada que plegar."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
 msgid "Nothing is folded."
 msgstr "No hay nada plegado."
 
@@ -623,19 +624,19 @@ msgstr "Esta ventana tiene una sola columna."
 msgid "There is one pane in this window."
 msgstr "Hay un solo panel en esta ventana."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Save the file first — untitled documents have no server."
 msgstr "Guarda el archivo primero: un documento sin título no tiene servidor."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No language server is running for this document."
 msgstr "No hay un servidor de lenguaje en marcha para este documento."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No definition found."
 msgstr "No se encontró la definición."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Save the file first — an untitled document has no path."
 msgstr "Guarda el archivo primero: un documento sin título no tiene ruta."
 
@@ -647,11 +648,11 @@ msgstr "Ningún servidor de lenguaje busca símbolos aquí."
 msgid "Go"
 msgstr "Ir"
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing in that names a line."
 msgstr "Ahí no hay nada que nombre una línea."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Not in a git repository with a remote."
 msgstr "No estás en un repositorio git con remoto."
 
@@ -683,7 +684,7 @@ msgstr "No hay nada informado en este documento."
 msgid "The text moved — nothing was replaced."
 msgstr "El texto se movió: no se reemplazó nada."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Not in a git repository."
 msgstr "No está en un repositorio git."
 
@@ -691,7 +692,7 @@ msgstr "No está en un repositorio git."
 msgid "No file browser answered."
 msgstr "Ningún explorador de archivos respondió."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No save preprocessors configured for this language."
 msgstr "No hay preprocesadores de guardado configurados para este lenguaje."
 
@@ -739,7 +740,7 @@ msgstr "Quién llama"
 msgid "Put the caret on a name first."
 msgstr "Ponga antes el cursor sobre un nombre."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server offered no outline."
 msgstr "El servidor no ofreció ningún esquema."
 
@@ -777,7 +778,7 @@ msgstr "Copiar la URL de la forja"
 msgid "Move to New Window"
 msgstr "Mover a una ventana nueva"
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No enclosing block here."
 msgstr "Aquí no hay ningún bloque que lo contenga."
 
@@ -845,7 +846,7 @@ msgstr "El servidor de lenguaje no terminó esa acción."
 msgid "The language server had no edit for that action."
 msgstr "El servidor de lenguaje no tenía ninguna edición para esa acción."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server had no rename to offer."
 msgstr "El servidor no ofreció ningún renombrado."
 
@@ -1378,10 +1379,6 @@ msgid "The icon pack could not be used"
 msgstr "No se pudo usar el paquete de iconos"
 
 #: macos/Sources/Textchum/AppDelegate.swift
-msgid "No other worktrees"
-msgstr "No hay otros árboles de trabajo"
-
-#: macos/Sources/Textchum/AppDelegate.swift
 msgid "This repository has one working tree."
 msgstr "Este repositorio tiene un solo árbol de trabajo."
 
@@ -1667,24 +1664,24 @@ msgstr ""
 "universal-ctags)."
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "Move the pointer or the caret over a symbol."
-msgstr "Mueve el puntero o el cursor sobre un símbolo."
+msgid "Nothing is reported on this line."
+msgstr "No hay nada señalado en esta línea."
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "On the definition"
-msgstr "Sobre la definición"
+msgid "Move the pointer or the caret over a symbol."
+msgstr "Mueve el puntero o el cursor sobre un símbolo."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing else in the workspace refers to this symbol."
 msgstr "Nada más en el espacio de trabajo se refiere a este símbolo."
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing reported"
-msgstr "Nada informado"
+msgid "No usages found."
+msgstr "No se encontraron usos."
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "No diagnostics for this document."
-msgstr "No hay diagnósticos para este documento."
+msgid "Nothing is reported in this document."
+msgstr "No hay nada señalado en este documento."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "message…"
@@ -1695,24 +1692,30 @@ msgid "symbol…"
 msgstr "símbolo…"
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing to rename here"
-msgstr "Aquí no hay nada que renombrar"
-
-#: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing on offer"
-msgstr "Nada que ofrecer"
+msgid ""
+"Nothing formats this document: no server can, and no save preprocessor is "
+"set for it."
+msgstr "Nada formatea este documento: ningún servidor puede, y no tiene un preprocesador de guardado configurado."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "action…"
 msgstr "acción…"
 
 #: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing came back"
-msgstr "No volvió nada"
+msgid "That action had nothing to do."
+msgstr "Esa acción no tenía nada que hacer."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Save it before asking git who wrote a line."
 msgstr "Guárdalo antes de preguntarle a git quién escribió una línea."
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "No matches."
+msgstr "Sin coincidencias."
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Nothing matched, so nothing was replaced."
+msgstr "Nada coincidió, así que no se reemplazó nada."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid ""
@@ -1741,6 +1744,12 @@ msgid ""
 msgstr ""
 "Los cambios sin guardar se reemplazarán por el archivo en disco (un Deshacer "
 "los devuelve)."
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid ""
+"Save the file first — an untitled document has no properties to keep; New "
+"with Format sets its language."
+msgstr "Guarde antes el archivo: un documento sin título no tiene propiedades que conservar; Nuevo con formato fija su lenguaje."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Your changes will be lost if you don’t save them."
@@ -2236,6 +2245,27 @@ msgstr "Abre un archivo desde el árbol, o con ⌘O."
 #: macos/Sources/Textchum/Workbench.swift
 msgid "No file here."
 msgstr "Aquí no hay archivo."
+
+#~ msgid "No other worktrees"
+#~ msgstr "No hay otros árboles de trabajo"
+
+#~ msgid "On the definition"
+#~ msgstr "Sobre la definición"
+
+#~ msgid "Nothing reported"
+#~ msgstr "Nada informado"
+
+#~ msgid "No diagnostics for this document."
+#~ msgstr "No hay diagnósticos para este documento."
+
+#~ msgid "Nothing to rename here"
+#~ msgstr "Aquí no hay nada que renombrar"
+
+#~ msgid "Nothing on offer"
+#~ msgstr "Nada que ofrecer"
+
+#~ msgid "Nothing came back"
+#~ msgstr "No volvió nada"
 
 #~ msgid "Rename Symbol…"
 #~ msgstr "Renombrar símbolo…"

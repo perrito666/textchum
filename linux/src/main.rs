@@ -1145,6 +1145,36 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
     let fire = |name: &str| {
         gtk::prelude::WidgetExt::activate_action(&workbench.window, name, None).is_ok()
     };
+    // A command with nothing to do says so by the caret, or, with the
+    // caret out of sight, in the notification area — never a toast at
+    // the window's foot — and the hint goes with the next caret move.
+    {
+        let page = workbench.selected().expect("a selected page");
+        fire("win.unfold-all");
+        let said = "Nothing is folded.";
+        let by_caret = page::shown_hint(&page);
+        let noticed = shell::Shell::instance()
+            .notices
+            .borrow()
+            .latest()
+            .map(|notice| notice.text.clone());
+        if by_caret.as_deref() != Some(said) && noticed.as_deref() != Some(said) {
+            eprintln!("FAIL: Unfold All with nothing folded said {by_caret:?} / {noticed:?}");
+            return 1;
+        }
+        if by_caret.is_some() {
+            let end = page.buffer.end_iter();
+            page.buffer.place_cursor(&end);
+            if page::shown_hint(&page).is_some() {
+                eprintln!("FAIL: the hint stayed after the caret moved");
+                return 1;
+            }
+        }
+        println!(
+            "caret hints ok (a command with nothing to do says so {}, and the hint goes with the caret)",
+            if by_caret.is_some() { "by the caret" } else { "in the notification area" }
+        );
+    }
     if !fire("win.undo") {
         eprintln!("FAIL: undo action");
         return 1;
