@@ -1892,6 +1892,42 @@ func runSmokeTest() -> Int32 {
     }
     print("escape ok (one thing per press, balloon before find bar, nothing up is still taken; asking again goes inside)")
 
+    // Next and Previous Finding go round the document's findings by
+    // the offsets the core keeps, and say so when there are none.
+    do {
+        let findingsCore = CoreDocument()
+        let findingsBench = Workbench(sidebar: nil)
+        let finding = DocumentController(document: findingsCore)
+        findingsBench.add(finding)
+        findingsBench.window?.makeKeyAndOrderFront(nil)
+        guard let findingsView = finding.primaryView as? EditorTextView else {
+            print("FAIL: no view for findings")
+            return 1
+        }
+        findingsView.insertText(
+            "let a = 1;\nlet b = 2;\nlet c = 3;\n", replacementRange: NSRange(location: 0, length: 0))
+        findingsView.setSelectedRange(NSRange(location: 0, length: 0))
+        finding.goToNextFinding(nil)
+        guard finding.shownHint == t("Nothing is reported in this document.") else {
+            print("FAIL: Next Finding with nothing reported did not say so")
+            return 1
+        }
+        findingsCore.setDiagnostics([
+            CoreDiagnostic(line: 1, character: 4, endLine: 1, endCharacter: 5, severity: 2, message: "b"),
+            CoreDiagnostic(line: 2, character: 4, endLine: 2, endCharacter: 5, severity: 1, message: "c"),
+        ])
+        guard findingsCore.neighbouringFinding(from: 0, forward: true) == 15,
+            findingsCore.neighbouringFinding(from: 15, forward: true) == 26,
+            findingsCore.neighbouringFinding(from: 26, forward: true) == 15,
+            findingsCore.neighbouringFinding(from: 15, forward: false) == 26
+        else {
+            print("FAIL: next and previous finding do not go round: \(String(describing: findingsCore.neighbouringFinding(from: 0, forward: true)))")
+            return 1
+        }
+        findingsBench.window?.orderOut(nil)
+    }
+    print("next finding ok (round the document both ways, says so when there is nothing)")
+
     // A balloon's content can be selected, and one longer than a
     // balloon should be scrolls from its top instead of being cut.
     do {

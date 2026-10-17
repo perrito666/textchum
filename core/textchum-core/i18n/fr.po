@@ -306,6 +306,16 @@ msgstr "Blâme de la ligne"
 msgid "Show Diagnostic for Line"
 msgstr "Voir le diagnostic de la ligne"
 
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Next Finding"
+msgstr "Diagnostic suivant"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Previous Finding"
+msgstr "Diagnostic précédent"
+
 #: linux/src/keyboard.rs macos/Sources/Textchum/InfoPanel.swift
 msgid "Diagnostics"
 msgstr "Diagnostics"
@@ -678,10 +688,6 @@ msgid "Nothing reported on this line."
 msgstr "Rien de signalé sur cette ligne."
 
 #: linux/src/workbench.rs
-msgid "Close"
-msgstr "Fermer"
-
-#: linux/src/workbench.rs
 msgid "Nothing reported in this document."
 msgstr "Rien de signalé dans ce document."
 
@@ -905,6 +911,15 @@ msgstr "texte à chercher…"
 #: linux/src/workbench.rs
 msgid "filter text…"
 msgstr "texte à filtrer…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Nothing is reported in this document."
+msgstr "Rien n'est signalé dans ce document."
+
+#: linux/src/workbench.rs
+msgid "Close"
+msgstr "Fermer"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/BlamePanel.swift
 msgid "Copy Commit"
@@ -1691,10 +1706,6 @@ msgstr "Rien d'autre dans l'espace de travail ne fait référence à ce symbole.
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "No usages found."
 msgstr "Aucun usage trouvé."
-
-#: macos/Sources/Textchum/DocumentController.swift
-msgid "Nothing is reported in this document."
-msgstr "Rien n'est signalé dans ce document."
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "message…"

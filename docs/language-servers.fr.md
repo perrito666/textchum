@@ -145,6 +145,11 @@ Language Servers ; voir [configuration](configuration.md#projets).
   gravité : un soulignement dit seulement que quelque chose ne va pas,
   et un avertissement ne doit pas se lire comme une erreur. Sans
   aller-retour : le diagnostic est déjà là.
+- **Diagnostic suivant** (F2, F8 sous Linux) et **Diagnostic
+  précédent** (⇧F2, Maj+F8) mènent le curseur au début du diagnostic
+  suivant ou précédent, en faisant le tour de la fin du document, et y
+  affichent son message. Chacun est un saut : Revenir ramène là où
+  était le curseur.
 - **Diagnostics…** (⇧⌘E, Ctrl+Shift+E sous Linux) liste tous les
   diagnostics du document dans l'ordre où ils apparaissent — celui dans
   lequel on les corrige et celui de la gouttière — avec la gravité sur

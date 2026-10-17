@@ -1381,6 +1381,22 @@ pub unsafe extern "C" fn tc_document_diagnostics_json(document: *const TcDocumen
         .unwrap_or(std::ptr::null_mut())
 }
 
+/// Where Next Finding (or, with `forward` false, Previous Finding) goes
+/// from the UTF-16 `offset`: the start of a finding, wrapping round the
+/// document; -1 with nothing reported or a bad pointer.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_neighbouring_finding(
+    document: *const TcDocument,
+    offset: usize,
+    forward: bool,
+) -> i64 {
+    let Some(document) = (unsafe { document.as_ref() }) else { return -1 };
+    document.inner.neighbouring_finding(offset, forward).map_or(-1, |start| start as i64)
+}
+
 /// Starts a tabstop session over the text
 /// [`tc_document_snippet_expand`] returned, now sitting at `origin`.
 /// Writes the range to select into `region_out`: the first placeholder,

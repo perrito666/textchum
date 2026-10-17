@@ -1742,6 +1742,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.runPreprocessors(_:)): "runPreprocessors",
             #selector(DocumentController.blameLine(_:)): "blameLine",
             #selector(DocumentController.showDiagnosticAtCaret(_:)): "showDiagnostic",
+            #selector(DocumentController.goToNextFinding(_:)): "nextFinding",
+            #selector(DocumentController.goToPreviousFinding(_:)): "previousFinding",
             #selector(DocumentController.showDiagnosticList(_:)): "diagnosticList",
             #selector(DocumentController.goToLine(_:)): "goToLine",
             #selector(DocumentController.goToBlockStart(_:)): "goToBlockStart",
@@ -3498,6 +3500,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         diagnosticItem.keyEquivalentModifierMask = [.command, .control]
         viewMenu.addItem(diagnosticItem)
+        let nextFinding = NSMenuItem(
+            title: t("Next Finding"),
+            action: #selector(DocumentController.goToNextFinding(_:)),
+            keyEquivalent: String(UnicodeScalar(NSF2FunctionKey)!)
+        )
+        nextFinding.keyEquivalentModifierMask = []
+        viewMenu.addItem(nextFinding)
+        let previousFinding = NSMenuItem(
+            title: t("Previous Finding"),
+            action: #selector(DocumentController.goToPreviousFinding(_:)),
+            keyEquivalent: String(UnicodeScalar(NSF2FunctionKey)!)
+        )
+        previousFinding.keyEquivalentModifierMask = [.shift]
+        viewMenu.addItem(previousFinding)
         let blameItem = NSMenuItem(
             title: t("Blame Line…"),
             action: #selector(DocumentController.blameLine(_:)),

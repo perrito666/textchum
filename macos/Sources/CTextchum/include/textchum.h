@@ -903,6 +903,18 @@ bool tc_document_set_diagnostics(struct TcDocument *document, const char *json, 
 char *tc_document_diagnostics_json(const struct TcDocument *document);
 
 /**
+ * Where Next Finding (or, with `forward` false, Previous Finding) goes
+ * from the UTF-16 `offset`: the start of a finding, wrapping round the
+ * document; -1 with nothing reported or a bad pointer.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+int64_t tc_document_neighbouring_finding(const struct TcDocument *document,
+                                         uintptr_t offset,
+                                         bool forward);
+
+/**
  * Starts a tabstop session over the text
  * [`tc_document_snippet_expand`] returned, now sitting at `origin`.
  * Writes the range to select into `region_out`: the first placeholder,

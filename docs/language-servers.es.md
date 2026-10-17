@@ -143,6 +143,11 @@ proyecto en Settings ▸ Language Servers; véase
   nombra su gravedad, porque un subrayado solo dice que algo va mal y
   un aviso no debería leerse como un error. Sin ida y vuelta: el
   hallazgo ya está a mano.
+- **Siguiente hallazgo** (F2, F8 en Linux) y **Hallazgo anterior**
+  (⇧F2, Mayús+F8) llevan el cursor al principio del hallazgo siguiente
+  o del anterior, dando la vuelta al final del documento, y muestran
+  ahí su mensaje. Cada uno es un salto, así que Volver regresa adonde
+  estaba el cursor.
 - **Diagnósticos…** (⇧⌘E, Ctrl+Shift+E en Linux) lista todos los
   hallazgos del documento en el orden en que aparecen —el orden en que
   se arreglan y el que muestra el margen—, con la gravedad en cada

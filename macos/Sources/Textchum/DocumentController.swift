@@ -1173,6 +1173,32 @@ final class DocumentController: NSResponder {
 
     /// Reads out the diagnostic on the caret's line — the same answer
     /// the pointer gives, for when your hands are on the keyboard.
+    /// Next Finding (F2) and Previous Finding (⇧F2): the caret goes to
+    /// the start of the next or the previous finding, round the end of
+    /// the document, and its message is shown there (12.2). A jump of
+    /// its own, so Go Back returns.
+    @objc func goToNextFinding(_ sender: Any?) { goToFinding(forward: true) }
+    @objc func goToPreviousFinding(_ sender: Any?) { goToFinding(forward: false) }
+
+    private func goToFinding(forward: Bool) {
+        guard let textView else { return }
+        guard let start = coreDocument.neighbouringFinding(
+            from: textView.selectedRange().location, forward: forward)
+        else {
+            showHint(t("Nothing is reported in this document."))
+            return
+        }
+        (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
+        // The balloon up now is about the finding being left.
+        hoverTimer?.invalidate()
+        closeBalloon()
+        selectionChangeIsFromEditing = false
+        let caret = NSRange(location: min(start, (textView.string as NSString).length), length: 0)
+        textView.setSelectedRange(caret)
+        textView.scrollRangeToVisible(caret)
+        showDiagnosticAtCaret(nil)
+    }
+
     @objc func showDiagnosticAtCaret(_ sender: Any?) {
         guard let textView else { return }
         // Asked again while it is up: the keyboard goes inside (1.3).

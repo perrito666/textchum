@@ -563,6 +563,13 @@ impl Document {
         &self.diagnostics
     }
 
+    /// Where Next Finding (or, with `forward` false, Previous Finding)
+    /// goes from the UTF-16 `offset`: a finding's start, wrapping round
+    /// the document. None with nothing reported.
+    pub fn neighbouring_finding(&self, offset: usize, forward: bool) -> Option<usize> {
+        crate::diagnostics::neighbour(&self.diagnostics, offset, forward)
+    }
+
     /// The findings as JSON, in the shape [`Document::set_diagnostics`]
     /// takes plus each one's `start` and `end` in UTF-16 units, so a
     /// shell can paint by offset and list by line from one answer.

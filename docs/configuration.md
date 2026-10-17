@@ -596,7 +596,7 @@ Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `goBack`, `goForward`,
 `blameLine`, `goToLine`,
 `goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
-`toggleLineNumbers`, `toggleHover`, `showHover`, `togglePathDisplay`,
+`toggleLineNumbers`, `toggleHover`, `showHover`, `nextFinding`, `previousFinding`, `togglePathDisplay`,
 `redraw`, `commandPalette`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `settings` — an unknown name is
 logged with the full list. And when a shortcut escapes memory entirely,

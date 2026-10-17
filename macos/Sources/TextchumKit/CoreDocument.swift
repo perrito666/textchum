@@ -322,6 +322,14 @@ public final class CoreDocument {
         }
     }
 
+    /// Where Next Finding (or, with `forward` false, Previous Finding)
+    /// goes from the UTF-16 `offset`: the start of a finding, wrapping
+    /// round the document; nil with nothing reported.
+    public func neighbouringFinding(from offset: Int, forward: Bool) -> Int? {
+        let start = tc_document_neighbouring_finding(handle, UInt(max(offset, 0)), forward)
+        return start < 0 ? nil : Int(start)
+    }
+
     /// The findings as they stand: lines and columns of the current
     /// text, and `start`/`end` in UTF-16 units of it.
     public var diagnostics: [CoreDiagnostic] {
