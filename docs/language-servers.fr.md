@@ -165,6 +165,9 @@ Language Servers ; voir [configuration](configuration.md#projets).
   sa modification lui est renvoyée pour qu'il la termine avant qu'elle
   soit appliquée, et une action qui porte une commande plutôt qu'une
   modification est exécutée par le serveur.
+  Quand le curseur s'arrête sur une ligne où le serveur a quelque chose
+  à proposer, une ampoule apparaît dans la marge à côté ; un clic sur
+  l'ampoule liste ces mêmes actions. Passer à une autre ligne la retire.
 - **Renommer le symbole** (⌃⌘R) demande sur place : le nom sous le
   curseur devient un champ là où il se trouve, prérempli et
   sélectionné, ses autres usages dans le document étant marqués

@@ -25,6 +25,13 @@ final class LineNumberGutterView: NSView {
     /// The worst diagnostic on each line, by line number from one:
     /// 1 error, 2 warning, 3 information, 4 hint.
     private var diagnosticSeverities: [Int: Int] = [:]
+    /// The line where the server offers something to do at the caret: a
+    /// fix, a refactoring. A bulb is drawn there in place of the
+    /// finding's dot, and a click on it lists what is offered (12.1).
+    private(set) var fixLine: Int?
+    private var fixMarkRect: NSRect?
+    /// A click on the bulb.
+    var onFixMark: (() -> Void)?
 
     override var isFlipped: Bool { true }
 
@@ -71,6 +78,22 @@ final class LineNumberGutterView: NSView {
     }
 
     func diagnosticSeverity(ofLine line: Int) -> Int? { diagnosticSeverities[line] }
+
+    func setFixLine(_ line: Int?) {
+        guard line != fixLine else { return }
+        fixLine = line
+        if line == nil { fixMarkRect = nil }
+        needsDisplay = true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if let rect = fixMarkRect, rect.insetBy(dx: -3, dy: -3).contains(point), let onFixMark {
+            onFixMark()
+            return
+        }
+        super.mouseDown(with: event)
+    }
 
     private static func diagnosticColor(_ severity: Int) -> NSColor {
         switch severity {
@@ -237,7 +260,20 @@ final class LineNumberGutterView: NSView {
                 lastLine = line
                 self.drawChangeMark(forLine: line, top: top, height: frame.height)
                 var labelAttributes = attributes
-                if let severity = self.diagnosticSeverities[line] {
+                let numberHeight = NSAttributedString(string: "0", attributes: attributes).size().height
+                if line == self.fixLine,
+                    let bulb = NSImage(systemSymbolName: "lightbulb.fill", accessibilityDescription: t("Code Actions"))
+                {
+                    let size: CGFloat = 11
+                    let rect = NSRect(x: 3, y: top + 1 + (numberHeight - size) / 2, width: size, height: size)
+                    let tinted = bulb.withSymbolConfiguration(
+                        .init(paletteColors: [.systemYellow])) ?? bulb
+                    tinted.draw(in: rect)
+                    self.fixMarkRect = rect
+                    if let severity = self.diagnosticSeverities[line] {
+                        labelAttributes[.foregroundColor] = Self.diagnosticColor(severity)
+                    }
+                } else if let severity = self.diagnosticSeverities[line] {
                     // The number in the severity's colour, and a mark
                     // for the level: a disc for an error or warning, a
                     // ring for information and hints. Centred on the
@@ -246,7 +282,6 @@ final class LineNumberGutterView: NSView {
                     let color = Self.diagnosticColor(severity)
                     labelAttributes[.foregroundColor] = color
                     let size: CGFloat = 6
-                    let numberHeight = NSAttributedString(string: "0", attributes: attributes).size().height
                     let dot = NSRect(
                         x: 6, y: top + 1 + (numberHeight - size) / 2, width: size, height: size)
                     let path = NSBezierPath(ovalIn: dot)
