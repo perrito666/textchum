@@ -145,6 +145,11 @@ def main():
                         "workspaceSymbolProvider": True,
                         "callHierarchyProvider": True,
                         "inlayHintProvider": True,
+                        "semanticTokensProvider": {
+                            "legend": {"tokenTypes": ["parameter", "variable"],
+                                       "tokenModifiers": ["declaration", "readonly"]},
+                            "full": True,
+                        },
                     }.items() if name not in without
                 }},
             })
@@ -220,6 +225,25 @@ def main():
                     "kind": 1,
                 })
             send({"jsonrpc": "2.0", "id": message["id"], "result": hints})
+        elif method == "textDocument/semanticTokens/full":
+            # The NAME of every `let NAME =` is a variable, one in
+            # capitals a readonly one, and one ending in _arg a
+            # parameter, which no grammar would call it; packed the
+            # protocol's way, each position relative to the token before.
+            uri = message["params"]["textDocument"]["uri"]
+            data, last_line, last_start = [], 0, 0
+            for number, line in enumerate(texts.get(uri, "").split("\n")):
+                at = line.find("let ")
+                if at < 0 or "=" not in line[at:]:
+                    continue
+                name = line[at + 4:].split("=")[0].strip()
+                start = at + 4
+                modifiers = 0b11 if name.isupper() else 0b01
+                delta_start = start - last_start if number == last_line else start
+                kind = 0 if name.endswith("_arg") else 1
+                data += [number - last_line, delta_start, len(name), kind, modifiers]
+                last_line, last_start = number, start
+            send({"jsonrpc": "2.0", "id": message["id"], "result": {"data": data}})
         elif method == "textDocument/prepareCallHierarchy":
             uri = message["params"]["textDocument"]["uri"]
             name_range = {"start": {"line": 0, "character": 3},

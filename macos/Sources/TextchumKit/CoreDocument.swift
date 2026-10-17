@@ -274,6 +274,16 @@ public final class CoreDocument {
     /// Hands the document a server's inlay hints — the result of an
     /// inlay-hint request, as it came — positioned against the text as
     /// it is now. The core moves them with every edit from here on.
+    /// Takes a server's semantic tokens for the text as it is now; the
+    /// highlights read from then on carry them over the grammar's.
+    public func setSemanticTokens(_ resultJSON: String, legend: String) {
+        _ = Self.withUTF8Pointer(resultJSON) { result, resultLength in
+            Self.withUTF8Pointer(legend) { legend, legendLength in
+                tc_document_set_semantic_tokens(handle, result, resultLength, legend, legendLength)
+            }
+        }
+    }
+
     public func setInlayHints(_ resultJSON: String) {
         _ = Self.withUTF8Pointer(resultJSON) { pointer, length in
             tc_document_set_inlay_hints(handle, pointer, length)

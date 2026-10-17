@@ -780,6 +780,7 @@ final class DocumentController: NSResponder {
         // A server just started has nothing to say yet; it is asked
         // again when it reports its work done and when findings arrive.
         scheduleInlayHints(after: 1.0)
+        scheduleSemanticTokens(after: 1.0)
     }
 
     /// Debounced full-text didChange, so servers see keystrokes in
@@ -882,6 +883,7 @@ final class DocumentController: NSResponder {
         // Findings arriving mean the server has analysed the text as it
         // is, which is when its hints are worth asking for.
         scheduleInlayHints()
+        scheduleSemanticTokens()
         coreDocument.setDiagnostics(diagnostics)
         self.diagnostics = coreDocument.diagnostics
         renderMarks()
@@ -3589,6 +3591,40 @@ final class DocumentController: NSResponder {
         }
     }
 
+    // MARK: The server's colouring
+
+    private var semanticTimer: Timer?
+
+    /// Asks the server, after a pause, how it colours the whole
+    /// document. Called when its answer may have changed: the text
+    /// settled, the server finished thinking. Scrolling does not ask;
+    /// the answer covers every line.
+    func scheduleSemanticTokens(after delay: TimeInterval = 0.4) {
+        semanticTimer?.invalidate()
+        guard lspApp != nil, lspOpenPath != nil else { return }
+        semanticTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) {
+            [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.requestSemanticTokens() }
+            }
+        }
+    }
+
+    private func requestSemanticTokens() {
+        guard let lspApp, let path = lspOpenPath else { return }
+        let version = textVersion
+        flushLSPChange()
+        lspApp.lspSemanticTokens(path: path) { [weak self] result, legend in
+            // An answer about text that has since changed is dropped;
+            // the edit that changed it asked again.
+            guard let self, self.textVersion == version else { return }
+            self.coreDocument.setSemanticTokens(result, legend: legend)
+            // The marks are painted over the colour and go with it.
+            self.applyHighlights(force: true)
+            self.renderMarks()
+        }
+    }
+
     /// Reads the hints back from the core, which moved them with every
     /// edit since the server answered, and hands each view the notes
     /// to draw inside its lines. The gaps are laid out again even when
@@ -5078,6 +5114,7 @@ final class DocumentController: NSResponder {
         lineRuler?.invalidateLineStarts()
         refreshInlayNotes()
         scheduleInlayHints(after: 0.6)
+        scheduleSemanticTokens(after: 0.6)
         assertInSync()
     }
 
@@ -6283,6 +6320,7 @@ extension DocumentController: NSTextViewDelegate {
         // typing pauses.
         refreshInlayNotes()
         scheduleInlayHints(after: 0.6)
+        scheduleSemanticTokens(after: 0.6)
         for view in views {
             updateContextStrip(for: view)
         }

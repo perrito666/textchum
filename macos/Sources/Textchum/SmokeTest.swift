@@ -4564,6 +4564,54 @@ func runSmokeTest() -> Int32 {
     }
     print("inlay hints ok (inside their line in a gap of their own, riding the text, off when told)")
 
+    // A server's semantic tokens are painted over the grammar's colours,
+    // in the colour of the capture each kind maps to.
+    do {
+        let tokenCore = CoreDocument()
+        _ = tokenCore.setLanguage("rust")
+        let tokenBench = Workbench(sidebar: nil)
+        let tokened = DocumentController(document: tokenCore)
+        tokenBench.add(tokened)
+        tokenBench.window?.makeKeyAndOrderFront(nil)
+        guard let tokenView = tokened.primaryView, let layoutManager = tokenView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager
+        else {
+            print("FAIL: no view to paint tokens in")
+            return 1
+        }
+        tokenView.insertText(
+            "fn f(n: u8) {\n    let total = n;\n}\n", replacementRange: NSRange(location: 0, length: 0))
+        tokenCore.setSemanticTokens(
+            #"{"data": [0, 5, 1, 0, 0, 1, 8, 5, 1, 0, 0, 8, 1, 0, 0]}"#,
+            legend: #"{"tokenTypes": ["parameter", "variable"], "tokenModifiers": []}"#)
+        tokened.refreshDecorations()
+        let dark = (tokenView.window?.effectiveAppearance ?? NSApp.effectiveAppearance)
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        func colour(at offset: Int) -> NSColor? {
+            guard let location = contentManager.location(layoutManager.documentRange.location, offsetBy: offset)
+            else { return nil }
+            var found: NSColor?
+            layoutManager.enumerateRenderingAttributes(from: location, reverse: false) { _, attributes, _ in
+                found = attributes[.foregroundColor] as? NSColor
+                return false
+            }
+            return found
+        }
+        let parameter = CoreTheme.styleID(for: "variable.parameter").flatMap {
+            HighlightPalette.color(forStyle: Int($0), darkAppearance: dark)
+        }
+        let variable = CoreTheme.styleID(for: "variable").flatMap {
+            HighlightPalette.color(forStyle: Int($0), darkAppearance: dark)
+        }
+        // "fn f(n: u8) {\n" is fourteen units: the use of n is at 30.
+        guard parameter != nil, colour(at: 30) == parameter, colour(at: 22) == variable else {
+            print("FAIL: semantic tokens not painted: \(String(describing: colour(at: 30))) \(String(describing: parameter))")
+            return 1
+        }
+        tokenBench.window?.close()
+    }
+    print("semantic tokens ok (painted over the grammar in their capture's colour)")
+
     // A server's finding stays on the code it named while the text
     // above it is edited: the core moves the range in the choke point,
     // and the shell paints and lists what the core says.

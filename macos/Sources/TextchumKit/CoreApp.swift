@@ -303,6 +303,31 @@ public final class CoreApp {
         router.register(id, completion)
     }
 
+    /// Requests the semantic tokens of the whole document. The answer
+    /// and the legend of the server that gave it go to
+    /// ``CoreDocument/setSemanticTokens(_:legend:)`` as they are; the
+    /// completion is never called when no server of the document
+    /// colours whole documents.
+    @MainActor
+    public func lspSemanticTokens(
+        path: String, completion: @escaping (_ result: String, _ legend: String) -> Void
+    ) {
+        let id = withUTF8(path) { path, pathLen in
+            tc_lsp_semantic_tokens(handle, path, pathLen)
+        }
+        guard id != 0 else { return }
+        router.register(id) { [weak self] result in
+            guard let self else { return }
+            let legend: String? = withUTF8(path) { path, pathLen in
+                guard let cString = tc_lsp_semantic_legend(self.handle, path, pathLen) else { return nil }
+                defer { tc_string_free(cString) }
+                return String(cString: cString)
+            }
+            guard let legend else { return }
+            completion(result, legend)
+        }
+    }
+
     /// Requests the inlay hints of the lines `firstLine...lastLine`. The
     /// answer goes to ``CoreDocument/setInlayHints(_:)`` as it is; the
     /// completion is never called when the document has no server that

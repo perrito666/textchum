@@ -340,6 +340,57 @@ pub unsafe extern "C" fn tc_lsp_inlay_hints(
     .unwrap_or(0)
 }
 
+/// Requests the semantic tokens of the whole document at `path`.
+/// Returns the request id whose response goes to
+/// [`tc_document_set_semantic_tokens`] with
+/// [`tc_lsp_semantic_legend`], or 0 when no server of the document
+/// colours whole documents.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_semantic_tokens(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return 0;
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return 0;
+    };
+    catch_unwind(AssertUnwindSafe(|| app.pool.semantic_tokens(std::path::Path::new(path))))
+        .unwrap_or(0)
+}
+
+/// The legend of the server [`tc_lsp_semantic_tokens`] asks for the
+/// document at `path`, as JSON. Free with [`tc_string_free`]. Null
+/// when there is no such server.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_semantic_legend(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+) -> *mut c_char {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        match app.pool.semantic_legend(std::path::Path::new(path)) {
+            Some(legend) => owned_c_string(legend.to_string()),
+            None => std::ptr::null_mut(),
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// The first step of asking who calls the function at an LSP position;
 /// same contract as [`tc_lsp_hover`]. The response's `result` goes to
 /// [`tc_lsp_incoming_calls`] as it is.
@@ -1360,6 +1411,38 @@ pub unsafe extern "C" fn tc_document_set_diagnostics(
     };
     catch_unwind(AssertUnwindSafe(|| {
         document.inner.set_diagnostics(json);
+        true
+    }))
+    .unwrap_or(false)
+}
+
+/// Takes a server's semantic tokens for the document's current text:
+/// the `result` of the [`tc_lsp_semantic_tokens`] response and the
+/// legend [`tc_lsp_semantic_legend`] gave. They are painted over the
+/// grammar's spans by [`tc_document_highlights`] from then on. False
+/// on a bad pointer or invalid UTF-8.
+///
+/// # Safety
+/// `document` must be a live document pointer; `result` and `legend`
+/// must point to `result_len` and `legend_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_set_semantic_tokens(
+    document: *mut TcDocument,
+    result: *const c_char,
+    result_len: usize,
+    legend: *const c_char,
+    legend_len: usize,
+) -> bool {
+    let Some(document) = (unsafe { document.as_mut() }) else {
+        return false;
+    };
+    let (Some(result), Some(legend)) =
+        (unsafe { str_from_raw(result, result_len) }, unsafe { str_from_raw(legend, legend_len) })
+    else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        document.inner.set_semantic_tokens(result, legend);
         true
     }))
     .unwrap_or(false)

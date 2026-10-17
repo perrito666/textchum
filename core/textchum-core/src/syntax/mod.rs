@@ -395,3 +395,64 @@ pub fn snippet_highlights(language: &str, code: &str) -> Vec<HighlightSpan> {
     };
     syntax.highlights(&rope, 0..code.len())
 }
+
+/// The same colouring as `spans` painted in order, as stretches that do
+/// not overlap: where two spans cover the same text, the later one's
+/// style is the one left. A shell whose styles rank by a fixed priority
+/// rather than by when they were applied paints these instead, so a
+/// server's token over the grammar's span, or an escape inside a
+/// string, shows the colour the other shell shows.
+pub fn flatten(spans: &[HighlightSpan]) -> Vec<HighlightSpan> {
+    let mut boundaries: Vec<usize> =
+        spans.iter().flat_map(|span| [span.start_utf16, span.end_utf16]).collect();
+    boundaries.sort_unstable();
+    boundaries.dedup();
+    // The style of each stretch between two boundaries, by the last
+    // span that covers it.
+    let mut winners: Vec<Option<u32>> = vec![None; boundaries.len().saturating_sub(1)];
+    for span in spans {
+        let first = boundaries.partition_point(|at| *at < span.start_utf16);
+        for (index, slot) in winners.iter_mut().enumerate().skip(first) {
+            if boundaries[index] >= span.end_utf16 {
+                break;
+            }
+            *slot = Some(span.style);
+        }
+    }
+    let mut flat: Vec<HighlightSpan> = Vec::new();
+    for (index, winner) in winners.into_iter().enumerate() {
+        let Some(style) = winner else { continue };
+        let (start, end) = (boundaries[index], boundaries[index + 1]);
+        match flat.last_mut() {
+            Some(last) if last.end_utf16 == start && last.style == style => last.end_utf16 = end,
+            _ => flat.push(HighlightSpan { start_utf16: start, end_utf16: end, style }),
+        }
+    }
+    flat
+}
+
+#[cfg(test)]
+mod flatten_tests {
+    use super::*;
+
+    fn span(start_utf16: usize, end_utf16: usize, style: u32) -> HighlightSpan {
+        HighlightSpan { start_utf16, end_utf16, style }
+    }
+
+    #[test]
+    fn the_later_span_wins_where_two_overlap() {
+        // A string with an escape inside, then a token over a name.
+        let spans = [span(0, 10, 7), span(3, 5, 2), span(12, 15, 1), span(12, 15, 9)];
+        assert_eq!(
+            flatten(&spans),
+            vec![span(0, 3, 7), span(3, 5, 2), span(5, 10, 7), span(12, 15, 9)]
+        );
+    }
+
+    #[test]
+    fn stretches_of_one_style_are_joined_and_gaps_kept() {
+        let spans = [span(0, 4, 1), span(4, 8, 1), span(10, 12, 1)];
+        assert_eq!(flatten(&spans), vec![span(0, 8, 1), span(10, 12, 1)]);
+        assert!(flatten(&[]).is_empty());
+    }
+}

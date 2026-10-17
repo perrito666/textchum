@@ -159,14 +159,16 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   configured.
 - **Format Document** (⌥⇧⌘F) reformats through the server, keeping tabs
   if the document indents with tabs and spaces otherwise.
+- **Colour from the server**: names are coloured by what the server
+  says they are — a parameter, a constant, a library type — over the
+  grammar's colours; see [Syntax highlighting](highlighting.md).
 - **Document Outline** (⇧⌘O) lists the file's symbols — nesting shown
   by indentation, fuzzy-filterable — and ⏎ jumps to the selection.
 - A missing server is reported once, with the command that installs it;
   everything else about the editor keeps working without it.
 
 Not there yet: Show Callers lists who calls a function, not what it
-calls. Colouring comes from the grammar alone; a server's semantic
-tokens are not used.
+calls.
 
 ## Servers
 

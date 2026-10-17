@@ -1160,7 +1160,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // about a file starts having something: its hints are
                 // asked for again.
                 if message.isEmpty {
-                    for editor in editors { editor.scheduleInlayHints() }
+                    for editor in editors {
+                        editor.scheduleInlayHints()
+                        editor.scheduleSemanticTokens()
+                    }
                 }
                 break
             }

@@ -176,6 +176,10 @@ proyecto en Settings ▸ Language Servers; véase
 - **Formatear documento** (⌥⇧⌘F) reformatea a través del servidor,
   conservando tabuladores si el documento sangra con tabuladores y
   espacios en caso contrario.
+- **Color desde el servidor**: los nombres se colorean según lo que el
+  servidor dice que son — un parámetro, una constante, un tipo de la
+  biblioteca — encima de los colores de la gramática; ver
+  [Coloreado de sintaxis](highlighting.md).
 - **Esquema del documento** (⇧⌘O) lista los símbolos del archivo — el
   anidamiento se muestra con sangría, filtrable de forma difusa — y ⏎
   salta a la selección.
@@ -183,8 +187,7 @@ proyecto en Settings ▸ Language Servers; véase
   instala; todo lo demás del editor sigue funcionando sin él.
 
 Todavía no: Show Callers lista quién llama a una función, no a qué
-llama ella. El coloreado viene solo de la gramática; los *semantic
-tokens* de un servidor no se usan.
+llama ella.
 
 ## Servidores
 

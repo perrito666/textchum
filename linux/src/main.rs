@@ -1347,7 +1347,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             let appended_at = page.buffer.end_iter().offset();
             // The edit sends the text once the typing rests and asks for
             // the hints then; nothing has to be asked by hand.
-            page.buffer.insert(&mut page.buffer.end_iter(), "\nlet hinted = 1;");
+            page.buffer.insert(&mut page.buffer.end_iter(), "\nlet hinted = 1;\nlet count_arg = 2;");
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
             let shown = |page: &Rc<page::Page>| {
                 page.state
@@ -1364,6 +1364,28 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                     return 1;
                 }
             }
+            // The server's colouring comes the same way, and paints over
+            // the grammar's: it calls count_arg a parameter, which the
+            // grammar never would.
+            let name_at = appended_at + "\nlet hinted = 1;\nlet ".chars().count() as i32;
+            let parameter = textchum_core::theme::resolve("variable.parameter").expect("a parameter style");
+            let painted = |page: &Rc<page::Page>| {
+                let at = page.buffer.iter_at_offset(name_at);
+                at.tags()
+                    .iter()
+                    .filter_map(|tag| tag.name())
+                    .filter(|name| name.starts_with('s') && name[1..].parse::<u32>().is_ok())
+                    .map(|name| name.to_string())
+                    .collect::<Vec<_>>()
+            };
+            while painted(&page) != [format!("s{parameter}")] {
+                context.iteration(true);
+                if std::time::Instant::now() > deadline {
+                    eprintln!("FAIL: the server's colouring was not painted: {:?}", painted(&page));
+                    return 1;
+                }
+            }
+            println!("semantic tokens ok (asked once the typing rests, painted over the grammar)");
             page::refresh_inlay_labels(&page);
             if !page::inlay_label_texts(&page).iter().any(|text| text == "hinted: Fake") {
                 eprintln!("FAIL: the hint is not laid after its line: {:?}", page::inlay_label_texts(&page));

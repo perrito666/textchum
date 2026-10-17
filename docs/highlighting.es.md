@@ -69,6 +69,20 @@ lo que lo hace destacar. Los documentos de más de un millón de
 caracteres no tienen ninguna de las dos cosas: el rastreo es del texto
 entero y sus cadenas, otra vez tras cada edición.
 
+## Desde el servidor de lenguaje
+
+La gramática conoce la forma del texto; un servidor de lenguaje sabe
+qué es cada nombre. Cuando el servidor de un archivo colorea nombres
+— rust-analyzer lo hace, y gopls cuando se le pide, cosa que hace el
+preset de Go — su palabra se pinta encima de la de la gramática, con
+los mismos nombres que el tema ya colorea. Un parámetro, una constante
+o un tipo de la biblioteca toma su propio color dondequiera que se
+use, no solo donde la gramática sabe distinguirlo. Al servidor se le
+pregunta cuando la escritura se detiene; hasta que responde, un nombre
+recién editado conserva el color de la gramática, y una clase de
+nombre para la que ningún tema tiene color queda en manos de la
+gramática.
+
 ## Cómo funciona
 
 El reparto de responsabilidades sigue la regla arquitectónica del
@@ -120,5 +134,8 @@ nada se recoloca.
 
 - Los seis colores del arcoíris son del editor, no del tema; un tema
   todavía no puede cambiarlos.
+- A un servidor que solo colorea partes de un archivo no se le
+  pregunta; se pide el archivo entero tras cada pausa en la escritura,
+  y el coloreado del servidor no se puede desactivar por separado.
 - Consultas limitadas a la zona visible para documentos de cientos de
   kilobytes: hoy se colorean enteros o, pasado un tope, no se colorean.

@@ -96,16 +96,18 @@ pub fn language_presets() -> Vec<LanguagePreset> {
         LanguagePreset {
             id: "go",
             name: "Go".into(),
-            summary: tr("gopls with staticcheck and its type and parameter hints on, and goimports before every save."),
+            summary: tr("gopls with staticcheck, its colouring and its type and parameter hints on, and goimports before every save."),
             missing: String::new(),
             servers: vec![("go", "gopls")],
             // gopls draws no inlay hints until it is told which: the
             // types an assignment or a range infers, a call's parameter
-            // names, a composite literal's field names and types.
+            // names, a composite literal's field names and types. Nor
+            // does it colour names until it is told to.
             settings: vec![(
                 "gopls",
                 json!({"gopls": {
                     "staticcheck": true,
+                    "semanticTokens": true,
                     "hints": {
                         "assignVariableTypes": true,
                         "compositeLiteralFields": true,

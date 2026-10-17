@@ -70,6 +70,20 @@ couleur syntaxique, ce qui le fait ressortir. Les documents de plus
 d'un million de caractères n'ont ni l'un ni l'autre : le balayage
 couvre tout le texte et ses chaînes, à chaque modification.
 
+## Depuis le serveur de langage
+
+La grammaire connaît la forme du texte ; un serveur de langage sait ce
+qu'est chaque nom. Quand le serveur d'un fichier colore les noms —
+rust-analyzer le fait, et gopls quand on le lui demande, ce que fait
+le preset Go — sa parole est peinte par-dessus celle de la grammaire,
+sous les mêmes noms que le thème colore déjà. Un paramètre, une
+constante ou un type de la bibliothèque prend sa propre couleur partout
+où il est utilisé, pas seulement là où la grammaire sait le
+distinguer. Le serveur est interrogé quand la frappe s'arrête ; tant
+qu'il n'a pas répondu, un nom tout juste modifié garde la couleur de
+la grammaire, et un genre de nom pour lequel aucun thème n'a de
+couleur reste à la grammaire.
+
 ## Comment ça marche
 
 Le partage des rôles suit la règle architecturale du projet :
@@ -120,6 +134,10 @@ l'autre, donc rien ne se replace.
 
 - Les six couleurs de l'arc-en-ciel sont celles de l'éditeur, pas du
   thème ; un thème ne peut pas encore les changer.
+- Un serveur qui ne colore qu'une partie d'un fichier à la fois n'est
+  pas interrogé ; le fichier entier est demandé après chaque pause dans
+  la frappe, et la coloration du serveur ne peut pas être désactivée
+  à part.
 - Les requêtes limitées à la portion visible pour les documents de
   plusieurs centaines de kilooctets : aujourd'hui ils sont colorés en
   entier ou, au-delà d'un plafond, pas du tout.

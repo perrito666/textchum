@@ -1029,6 +1029,36 @@ impl Pool {
         )
     }
 
+    /// Asks for the semantic tokens of the whole document: what the
+    /// server knows each name to be. The response's `result` goes to
+    /// the core document with [`Self::semantic_legend`]. 0 when no
+    /// server of the document colours whole documents; one that only
+    /// colours ranges is not asked.
+    pub fn semantic_tokens(&mut self, path: &Path) -> u64 {
+        let Some(key) = self.serving_semantic_tokens(path) else { return 0 };
+        self.request_to(
+            &key,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({"textDocument": {"uri": crate::uri::path_to_uri(path)}}),
+        )
+    }
+
+    /// The legend of the server [`Self::semantic_tokens`] asks: the
+    /// names its token kinds and modifiers are numbered by.
+    pub fn semantic_legend(&self, path: &Path) -> Option<serde_json::Value> {
+        let key = self.serving_semantic_tokens(path)?;
+        let provider = self.instances.get(&key)?.capability("semanticTokensProvider")?;
+        Some(provider["legend"].clone())
+    }
+
+    fn serving_semantic_tokens(&self, path: &Path) -> Option<InstanceKey> {
+        self.documents.get(path)?.iter().find(|key| {
+            self.instances.get(*key).and_then(|instance| instance.capability("semanticTokensProvider")).is_some_and(
+                |provider| !matches!(provider["full"], serde_json::Value::Null | serde_json::Value::Bool(false)),
+            )
+        }).cloned()
+    }
+
     /// The first step of asking who calls something: turns a position
     /// into the item it names. The response's `result` is an LSP
     /// `CallHierarchyItem[]`, whose first entry goes to
