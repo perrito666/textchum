@@ -237,6 +237,38 @@ public final class CoreApp {
         return try? JSONDecoder().decode(RunUpdate.self, from: Data(String(cString: answer).utf8))
     }
 
+    /// The tests a run's output reported, grouped by suite.
+    public struct RunTests: Decodable, Sendable, Equatable {
+        public struct Test: Decodable, Sendable, Equatable {
+            public let name: String
+            /// passed, failed, skipped, running or unfinished.
+            public let outcome: String
+            /// The output line that reported it; nil once no longer kept.
+            public let line: Int?
+            public let duration: String?
+        }
+        public struct Suite: Decodable, Sendable, Equatable {
+            public let name: String
+            public let tests: [Test]
+        }
+        public let suites: [Suite]
+        public let passed: Int
+        public let failed: Int
+        public let skipped: Int
+        public let running: Int
+        /// Runs only the failed ones again; nil when there are none or
+        /// the command cannot be narrowed.
+        public let rerun: String?
+        /// The counts in words, failures first.
+        public let summary: String
+    }
+
+    public func runTests(id: UInt64) -> RunTests? {
+        guard let answer = tc_run_tests(handle, id) else { return nil }
+        defer { tc_string_free(answer) }
+        return try? JSONDecoder().decode(RunTests.self, from: Data(String(cString: answer).utf8))
+    }
+
     @discardableResult
     public func runWrite(id: UInt64, line: String) -> Bool {
         withUTF8(line) { line, lineLen in tc_run_write(handle, id, line, lineLen) }

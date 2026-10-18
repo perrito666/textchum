@@ -89,6 +89,8 @@ pub struct Transcript {
     reset: bool,
     /// Whether a path is a file, asked once per path.
     known: HashMap<PathBuf, bool>,
+    /// How many lines were dropped from the front, ever.
+    dropped: usize,
 }
 
 /// What changed since the last time it was asked.
@@ -113,6 +115,7 @@ impl Transcript {
             dirty_from: None,
             reset: false,
             known: HashMap::new(),
+            dropped: 0,
         }
     }
 
@@ -138,6 +141,7 @@ impl Transcript {
         if self.lines.len() > MAX_LINES {
             let drop = self.lines.len() / 2;
             self.lines.drain(..drop);
+            self.dropped += drop;
             self.reset = true;
         }
     }
@@ -313,6 +317,13 @@ impl Transcript {
         let reset = std::mem::take(&mut self.reset);
         let first = if reset { 0 } else { first.min(self.lines.len()) };
         Some(Changes { first, lines: &self.lines[first..], reset })
+    }
+
+    /// How many lines were dropped from the front to keep the transcript
+    /// in bounds: line `i` of [`Self::lines`] is line `dropped + i` of
+    /// everything read.
+    pub fn dropped(&self) -> usize {
+        self.dropped
     }
 
     pub fn lines(&self) -> &[Line] {

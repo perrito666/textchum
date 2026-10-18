@@ -260,6 +260,17 @@ char *tc_run_start(struct TcApp *app,
 char *tc_run_read(struct TcApp *app, uint64_t id);
 
 /**
+ * The tests a run's output reported: `{suites: [{name, tests: [{name,
+ * outcome, line, duration}]}], passed, failed, skipped, running,
+ * rerun, summary}` — see [`textchum_core::run::Runs::tests`]. Null for an id
+ * there is no run for. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`].
+ */
+char *tc_run_tests(struct TcApp *app, uint64_t id);
+
+/**
  * Sends a line to a run's input. False when it is over.
  *
  * # Safety

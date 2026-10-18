@@ -1777,6 +1777,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(runCommand(_:)): "runCommand",
             #selector(DocumentController.runAtCaret(_:)): "runAtCaret",
             #selector(runAgain(_:)): "runAgain",
+            #selector(rerunFailedTests(_:)): "rerunFailedTests",
             #selector(stopRun(_:)): "stopRun",
             #selector(nextOutputPlace(_:)): "nextOutputPlace",
             #selector(previousOutputPlace(_:)): "previousOutputPlace",
@@ -2612,17 +2613,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         run(command, in: workbench)
     }
 
-    /// Run → Run Again (⌘R): the command the panel shows, once more.
+    /// Run → Run Again (⌘R): the command the panel shows, once more,
+    /// where it ran — a test run from its mark ran in its package.
     @objc func runAgain(_ sender: Any?) {
         guard let workbench = frontWorkbench else { return }
-        let command = workbench.runPanel.command.isEmpty
+        let panel = workbench.runPanel
+        let command = panel.command.isEmpty
             ? ProjectState.option("run.command", projectRoot: workbench.focusedDocument?.projectRoot) as? String ?? ""
-            : workbench.runPanel.command
+            : panel.command
         guard !command.isEmpty else {
             runCommand(sender)
             return
         }
-        run(command, in: workbench)
+        run(command, in: workbench, cwd: panel.command.isEmpty ? nil : panel.cwd)
+    }
+
+    /// Run → Rerun Failed Tests: only the tests the last run failed.
+    @objc func rerunFailedTests(_ sender: Any?) {
+        guard let workbench = frontWorkbench else { return }
+        if workbench.runPanel.onRun == nil || !workbench.runPanel.rerunFailed() {
+            workbench.focusedDocument?.showHint(
+                t("No failed tests to run again: the last run reported none, or its command cannot be narrowed to them."))
+        }
     }
 
     /// Starts `command` in the project in front and shows it in the
@@ -2635,9 +2647,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.recordJumpOrigin()
             self?.open(path: path, revealLine: line + 1, revealCharacter: column)
         }
-        switch coreApp.runStart(command: command, cwd: cwd ?? currentScope) {
+        panel.onRun = { [weak self, weak workbench] command, cwd in
+            guard let self, let workbench else { return }
+            self.run(command, in: workbench, cwd: cwd.isEmpty ? nil : cwd)
+        }
+        let directory = cwd ?? currentScope
+        switch coreApp.runStart(command: command, cwd: directory) {
         case .success(let id):
-            panel.begin(id: id, command: command)
+            panel.begin(id: id, command: command, cwd: directory)
         case .failure(let error):
             workbench.focusedDocument?.showHint(error.message)
         }
@@ -3850,6 +3867,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let rerunItem = NSMenuItem(title: t("Run Again"), action: #selector(runAgain(_:)), keyEquivalent: "r")
         rerunItem.keyEquivalentModifierMask = [.command]
         runMenu.addItem(rerunItem)
+        runMenu.addItem(withTitle: t("Rerun Failed Tests"), action: #selector(rerunFailedTests(_:)), keyEquivalent: "")
         let stopItem = NSMenuItem(
             title: t("Stop"), action: #selector(stopRun(_:)), keyEquivalent: String(UnicodeScalar(NSF2FunctionKey)!))
         stopItem.keyEquivalentModifierMask = [.command]

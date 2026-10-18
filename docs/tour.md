@@ -405,18 +405,32 @@ triangle: in Rust, a `#[test]`, a `#[bench]` and the `main` of a binary
 or an example; in Go, a `TestX`, a `BenchmarkX` and the `main` of a
 `main` package; in Python, a pytest test function or method and a
 module's `if __name__ == "__main__":`. A click on the mark runs just
-that one — `cargo test -- tests::adds --exact`, `go test -run
-'^TestAdds$' .`, `python3 -m pytest tests/test_app.py::test_adds` — in
+that one — `cargo test -- tests::adds --exact`, `go test -v -run
+'^TestAdds$' .`, `python3 -m pytest -v tests/test_app.py::test_adds` — in
 the panel, from the package's folder. **Run → Run at Caret** (⌃⇧R,
 Ctrl+Shift+F10 on Linux) runs the innermost one around the caret.
 Where the light bulb of a fix stands on the same line, the bulb is
 drawn and the click offers the fix.
 
+When the output reports tests — cargo's `test x ... ok`, `go test -v`,
+pytest — the panel lists them beside it by suite, each marked passed,
+failed, skipped or still running, with the counts in its header. A test
+chosen in the list shows the output line that reported it, where its
+failure follows. **Rerun Failed** in the panel, or **Run → Rerun Failed
+Tests**, runs only the ones that failed again, from the same folder:
+the command is the one that ran them, its own filters replaced by the
+failed names. **Run Again** also runs in the folder the run started
+in, so a test run from its mark runs again in its package.
+
 Not there yet: the panel is not a terminal. A program that draws the
 whole screen — an editor, `top`, a REPL that edits its own line — does
-not belong in it. Marks are found for Rust, Go and Python only, a test
-written under another runner's conventions is not marked, and a tree of
-test results comes later.
+not belong in it. Marks are found for Rust, Go and Python only, and a
+test written under another runner's conventions is not marked. Tests
+are read from cargo, `go test` and pytest output only; without `-v`,
+`go test` and pytest name only what failed, so only that is listed. A
+command line with a pipe or `&&` is not narrowed for Rerun Failed, and
+a test in the list does not open its source yet — the failure's own
+place in the output does.
 
 ## Markdown and prose
 

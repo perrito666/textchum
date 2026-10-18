@@ -2081,6 +2081,59 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         }
         println!("run panel ok (output as it comes, its place walked, the end said)");
 
+        // The tests a run reports are listed beside its output: counted,
+        // a test chosen shows the line that reported it, and Rerun Failed
+        // runs only the failed one again, where the run was started.
+        {
+            let dir = std::env::temp_dir().join(format!("textchum-gtk-tests-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            // Stands in for the harness: prints what it prints, whatever
+            // filters it is given.
+            let _ = std::fs::write(
+                dir.join("harness.sh"),
+                "printf '     Running unittests src/lib.rs\\ntest a::one ... ok\\ntest a::two ... FAILED\\n'\nexit 101\n",
+            );
+            let command = "sh harness.sh cargo test";
+            let id = shell::Shell::instance().runs.borrow_mut().start(command, &dir).expect("the test run starts");
+            let rerun: Rc<std::cell::RefCell<Option<(String, std::path::PathBuf)>>> =
+                Rc::new(std::cell::RefCell::new(None));
+            {
+                let rerun = Rc::clone(&rerun);
+                workbench.run_panel.set_on_run(Rc::new(move |command: &str, cwd: &std::path::Path| {
+                    *rerun.borrow_mut() = Some((command.to_owned(), cwd.to_path_buf()));
+                }));
+            }
+            workbench.run_panel.begin(id, command, &dir);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+            while workbench.run_panel.status_text() != tr("finished") {
+                context.iteration(true);
+                if std::time::Instant::now() > deadline {
+                    eprintln!("FAIL: the test run never finished: {:?}", workbench.run_panel.shown_text());
+                    return 1;
+                }
+            }
+            let listed = (workbench.run_panel.shows_tests(), workbench.run_panel.summary_text());
+            workbench.run_panel.choose_test("a::two");
+            let selected = workbench.run_panel.selected_output_text();
+            let ran = workbench.run_panel.rerun_failed();
+            let again = rerun.borrow().clone();
+            workbench.run_panel.hide();
+            let _ = std::fs::remove_dir_all(&dir);
+            if listed != (true, "1 failed, 1 passed".to_owned()) {
+                eprintln!("FAIL: the tests listed: {listed:?}");
+                return 1;
+            }
+            if selected != "test a::two ... FAILED" {
+                eprintln!("FAIL: choosing a test selected {selected:?}");
+                return 1;
+            }
+            if !ran || again != Some(("sh harness.sh cargo test -- a::two --exact".to_owned(), dir.clone())) {
+                eprintln!("FAIL: Rerun Failed ran {again:?}");
+                return 1;
+            }
+        }
+        println!("test results ok (listed by suite, counted, a test shows its line, the failed run again)");
+
         // What can be run is marked in the gutter: a main and a test in
         // a Cargo package, each with the command that runs just it.
         {

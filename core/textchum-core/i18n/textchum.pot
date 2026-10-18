@@ -148,6 +148,36 @@ msgstr ""
 msgid "stopped"
 msgstr ""
 
+#: core/textchum-core/src/run.rs
+msgid "{} failed"
+msgid_plural "{} failed"
+msgstr[0] ""
+msgstr[1] ""
+
+#: core/textchum-core/src/run.rs
+msgid "{} passed"
+msgid_plural "{} passed"
+msgstr[0] ""
+msgstr[1] ""
+
+#: core/textchum-core/src/run.rs
+msgid "{} skipped"
+msgid_plural "{} skipped"
+msgstr[0] ""
+msgstr[1] ""
+
+#: core/textchum-core/src/run.rs
+msgid "{} unfinished"
+msgid_plural "{} unfinished"
+msgstr[0] ""
+msgstr[1] ""
+
+#: core/textchum-core/src/run.rs
+msgid "{} running"
+msgid_plural "{} running"
+msgstr[0] ""
+msgstr[1] ""
+
 #: core/textchum-core/src/tools.rs
 msgid "Formats the document"
 msgstr ""
@@ -216,6 +246,11 @@ msgstr ""
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Run Again"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Rerun Failed Tests"
 msgstr ""
 
 #: linux/src/keyboard.rs linux/src/run_panel.rs linux/src/workbench.rs
@@ -571,9 +606,17 @@ msgstr ""
 msgid "Copy Forge URL for Line"
 msgstr ""
 
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "Rerun Failed"
+msgstr ""
+
 #: linux/src/run_panel.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/RunPanel.swift
 msgid "Close"
+msgstr ""
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "Tests"
 msgstr ""
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
@@ -586,6 +629,10 @@ msgstr ""
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "no output for a while — it may be waiting for input"
+msgstr ""
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "package not reported yet"
 msgstr ""
 
 #: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
@@ -1092,6 +1139,12 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Run through the shell in {}."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid ""
+"No failed tests to run again: the last run reported none, or its command "
+"cannot be narrowed to them."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift

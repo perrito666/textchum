@@ -25,6 +25,7 @@ use std::time::{Duration, Instant};
 
 use crate::app::{Event, EventSender};
 use crate::output::{changes_json, Place, Transcript};
+use crate::test_results::{rerun_failed, Outcome, TestLog};
 
 /// How long a running command may say nothing before it is said that it
 /// may be waiting for input.
@@ -56,6 +57,10 @@ struct State {
     quiet_said: bool,
     /// An `output` event was sent and not yet answered by a read.
     owed: bool,
+    /// The tests the output reported, and the first line, counted from
+    /// the first ever read, not read for them yet.
+    tests: TestLog,
+    tests_read: usize,
 }
 
 /// Every run, by id.
@@ -86,6 +91,8 @@ impl Runs {
             last_output: Instant::now(),
             quiet_said: false,
             owed: false,
+            tests: TestLog::default(),
+            tests_read: 0,
         }));
         let readers: Vec<_> = [
             child.stdout.take().map(|out| Box::new(out) as Box<dyn Read + Send>),
@@ -203,6 +210,90 @@ impl Runs {
     pub fn neighbouring_place(&self, id: u64, from: Option<(usize, usize)>, forward: bool) -> Option<(usize, Place)> {
         let state = self.runs.get(&id)?.lock().ok()?;
         state.transcript.neighbouring_place(from, forward).map(|(line, place)| (line, place.clone()))
+    }
+
+    /// The tests the run's output reported so far, as JSON: `{suites:
+    /// [{name, tests: [{name, outcome, line, duration}]}], passed, failed,
+    /// skipped, running, rerun, summary}`, `summary` the counts in words. `line` is the output line that reported
+    /// the test, null once it is no longer kept; `outcome` is passed,
+    /// failed, skipped, running, or unfinished for one still running
+    /// when the run ended; `rerun` runs only the failed ones again, null
+    /// when there are none or the command cannot be narrowed. None for
+    /// an id there is no run for.
+    pub fn tests(&self, id: u64) -> Option<String> {
+        let state = self.runs.get(&id)?;
+        let mut state = state.lock().ok()?;
+        let state = &mut *state;
+        let dropped = state.transcript.dropped();
+        let lines = state.transcript.lines();
+        // The last line may still be written to, until the run is over.
+        let finished = state.finished.is_some();
+        let end = dropped + if finished { lines.len() } else { lines.len().saturating_sub(1) };
+        for index in state.tests_read.max(dropped)..end {
+            state.tests.read(index, &lines[index - dropped].text);
+        }
+        state.tests_read = state.tests_read.max(end);
+        let mut counts = [0usize; 4];
+        let suites: Vec<serde_json::Value> = state
+            .tests
+            .suites()
+            .into_iter()
+            .map(|suite| {
+                let tests: Vec<serde_json::Value> = suite
+                    .tests
+                    .iter()
+                    .map(|test| {
+                        counts[test.outcome as usize] += 1;
+                        let outcome = if finished && test.outcome == Outcome::Running {
+                            "unfinished"
+                        } else {
+                            test.outcome.name()
+                        };
+                        serde_json::json!({
+                            "name": test.name,
+                            "outcome": outcome,
+                            "line": test.line.checked_sub(dropped),
+                            "duration": test.duration,
+                        })
+                    })
+                    .collect();
+                serde_json::json!({"name": suite.name, "tests": tests})
+            })
+            .collect();
+        let rerun = rerun_failed(&state.command, state.tests.runner, &state.tests.failed());
+        // Failures first: they are what the line is read for.
+        let counted = |text: String, count: usize| crate::i18n::fill(&text, &[&count.to_string()]);
+        let [passed, failed, skipped, running] = counts;
+        let summary = [
+            (failed, counted(crate::i18n::tr_n("{} failed", "{} failed", failed), failed)),
+            (passed, counted(crate::i18n::tr_n("{} passed", "{} passed", passed), passed)),
+            (skipped, counted(crate::i18n::tr_n("{} skipped", "{} skipped", skipped), skipped)),
+            (
+                running,
+                if finished {
+                    counted(crate::i18n::tr_n("{} unfinished", "{} unfinished", running), running)
+                } else {
+                    counted(crate::i18n::tr_n("{} running", "{} running", running), running)
+                },
+            ),
+        ]
+        .into_iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(_, text)| text)
+        .collect::<Vec<_>>()
+        .join(", ");
+        Some(
+            serde_json::json!({
+                "suites": suites,
+                "passed": counts[Outcome::Passed as usize],
+                "failed": counts[Outcome::Failed as usize],
+                "skipped": counts[Outcome::Skipped as usize],
+                "running": counts[Outcome::Running as usize],
+                "rerun": rerun,
+                "summary": summary,
+            })
+            .to_string(),
+        )
     }
 
     /// Lets go of a run that is over; a running one is stopped first.
@@ -331,6 +422,26 @@ mod tests {
         assert!(texts.iter().any(|text| text.contains('3')), "the exit is noted: {texts:?}");
         assert_eq!(read["running"], false);
         assert!(!runs.running(id));
+    }
+
+    #[test]
+    fn the_tests_a_run_reports_are_counted_and_the_failed_run_again() {
+        let (sender, receiver) = mpsc::channel();
+        let mut runs = Runs::new(sender);
+        let id = runs
+            .start("printf 'test a::one ... ok\\ntest a::two ... FAILED\\n'; exit 101 # cargo test", Path::new("/"))
+            .unwrap();
+        assert!(wait_for(&receiver, "exited"));
+        let tests: serde_json::Value = serde_json::from_str(&runs.tests(id).unwrap()).unwrap();
+        assert_eq!((tests["passed"].as_u64(), tests["failed"].as_u64()), (Some(1), Some(1)));
+        assert_eq!(tests["suites"][0]["tests"][1]["name"], "a::two");
+        assert_eq!(tests["suites"][0]["tests"][1]["line"], 1);
+        assert_eq!(tests["summary"], "1 failed, 1 passed");
+        // Not a `cargo test` command line, so not narrowed.
+        assert_eq!(tests["rerun"], serde_json::Value::Null);
+        // Asked again, nothing is read twice.
+        let again: serde_json::Value = serde_json::from_str(&runs.tests(id).unwrap()).unwrap();
+        assert_eq!(again["passed"].as_u64(), Some(1));
     }
 
     #[test]

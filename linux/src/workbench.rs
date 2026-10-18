@@ -411,6 +411,7 @@ impl Workbench {
         run_section.append(Some(&tr("Run Command…")), Some("win.run-command"));
         run_section.append(Some(&tr("Run at Caret")), Some("win.run-at-caret"));
         run_section.append(Some(&tr("Run Again")), Some("win.run-again"));
+        run_section.append(Some(&tr("Rerun Failed Tests")), Some("win.rerun-failed-tests"));
         run_section.append(Some(&tr("Stop")), Some("win.stop-run"));
         run_section.append(Some(&tr("Next Output Place")), Some("win.next-output-place"));
         run_section.append(Some(&tr("Previous Output Place")), Some("win.previous-output-place"));
@@ -2651,14 +2652,20 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("run-command", workbench, |workbench, _| ask_for_command(workbench));
     add("run-at-caret", workbench, |workbench, _| run_runnable(workbench, None));
     add("run-again", workbench, |workbench, _| {
-        let command = workbench.run_panel.command();
-        let command = if command.is_empty() { last_command(workbench) } else { command };
+        // Where it ran: a test run from its mark ran in its package.
+        let shown = workbench.run_panel.command();
+        if !shown.is_empty() {
+            run_in_directory(workbench, &shown, &workbench.run_panel.cwd());
+            return;
+        }
+        let command = last_command(workbench);
         if command.is_empty() {
             ask_for_command(workbench);
         } else {
             run_in(workbench, &command);
         }
     });
+    add("rerun-failed-tests", workbench, |workbench, _| rerun_failed_tests(workbench));
     add("stop-run", workbench, |workbench, _| workbench.run_panel.stop());
     add("next-output-place", workbench, |workbench, _| step_output_place(workbench, true));
     add("previous-output-place", workbench, |workbench, _| step_output_place(workbench, false));
@@ -3889,6 +3896,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Run Command…", "win.run-command"),
     ("Run at Caret", "win.run-at-caret"),
     ("Run Again", "win.run-again"),
+    ("Rerun Failed Tests", "win.rerun-failed-tests"),
     ("Stop", "win.stop-run"),
     ("Next Output Place", "win.next-output-place"),
     ("Previous Output Place", "win.previous-output-place"),
@@ -6012,6 +6020,15 @@ pub(crate) fn run_in(workbench: &Rc<Workbench>, command: &str) {
     run_in_directory(workbench, command, &run_directory(workbench));
 }
 
+/// Run → Rerun Failed Tests: only the tests the last run failed.
+fn rerun_failed_tests(workbench: &Rc<Workbench>) {
+    if !workbench.run_panel.rerun_failed() {
+        workbench.hint(&tr(
+            "No failed tests to run again: the last run reported none, or its command cannot be narrowed to them.",
+        ));
+    }
+}
+
 /// Starts `command` in `directory` and shows it in the run panel.
 fn run_in_directory(workbench: &Rc<Workbench>, command: &str, directory: &Path) {
     let started = Shell::instance().runs.borrow_mut().start(command, directory);
@@ -6023,7 +6040,13 @@ fn run_in_directory(workbench: &Rc<Workbench>, command: &str, directory: &Path) 
                     workbench.open(Some(PathBuf::from(path)), Some((line, column)));
                 }
             }));
-            workbench.run_panel.begin(id, command);
+            let weak = Rc::downgrade(workbench);
+            workbench.run_panel.set_on_run(Rc::new(move |command: &str, directory: &Path| {
+                if let Some(workbench) = weak.upgrade() {
+                    run_in_directory(&workbench, command, directory);
+                }
+            }));
+            workbench.run_panel.begin(id, command, directory);
         }
         Err(error) => workbench.hint(&error),
     }

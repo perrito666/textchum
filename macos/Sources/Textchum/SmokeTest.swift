@@ -3093,7 +3093,7 @@ func runSmokeTest() -> Int32 {
             print("FAIL: the run did not start")
             return 1
         }
-        panel.begin(id: id, command: "the test command")
+        panel.begin(id: id, command: "the test command", cwd: runRoot)
         spin(untilTrue: { panel.statusText == t("finished") }, seconds: 10)
         guard panel.shownText.contains("error: here"), panel.shownText.contains("src/main.rs:1:4"),
             panel.statusText == t("finished")
@@ -3109,6 +3109,50 @@ func runSmokeTest() -> Int32 {
         }
     }
     print("run panel ok (output as it comes, its place walked and opened, the end said)")
+
+    // The tests a run reports are listed beside its output: counted,
+    // a test chosen shows the line that reported it, and Rerun Failed
+    // runs only the failed one again, where the run was started.
+    do {
+        let testRoot = NSTemporaryDirectory() + "textchum-tests-\(getpid())"
+        try? FileManager.default.createDirectory(atPath: testRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: testRoot) }
+        // Stands in for the harness: prints what it prints, whatever
+        // filters it is given.
+        try? "printf '     Running unittests src/lib.rs\\ntest a::one ... ok\\ntest a::two ... FAILED\\n'\nexit 101\n"
+            .write(toFile: testRoot + "/harness.sh", atomically: true, encoding: .utf8)
+        let panel = RunPanel()
+        let testCore = CoreApp { event in
+            if case let .run(_, status) = event { panel.handle(status: status) }
+        }
+        panel.core = testCore
+        var rerun: (String, String)?
+        panel.onRun = { command, cwd in rerun = (command, cwd) }
+        let command = "sh harness.sh cargo test"
+        guard case .success(let id) = testCore.runStart(command: command, cwd: testRoot) else {
+            print("FAIL: the test run did not start")
+            return 1
+        }
+        panel.begin(id: id, command: command, cwd: testRoot)
+        spin(untilTrue: { panel.statusText == t("finished") }, seconds: 10)
+        guard panel.showsTests, panel.summaryText == "1 failed, 1 passed" else {
+            print("FAIL: the tests listed: \(panel.showsTests) \(panel.summaryText) / \(panel.shownText)")
+            return 1
+        }
+        panel.chooseTest(named: "a::two")
+        guard panel.selectedOutputText == "test a::two ... FAILED" else {
+            print("FAIL: choosing a test selected \(panel.selectedOutputText)")
+            return 1
+        }
+        guard panel.rerunFailed(), let again = rerun,
+            again == ("sh harness.sh cargo test -- a::two --exact", testRoot)
+        else {
+            print("FAIL: Rerun Failed ran \(String(describing: rerun))")
+            return 1
+        }
+        testCore.runForget(id: id)
+    }
+    print("test results ok (listed by suite, counted, a test shows its line, the failed run again)")
 
     // What can be run is marked in the gutter: the main and the test of
     // a file in a cargo package, and Run at Caret finds the test the

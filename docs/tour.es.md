@@ -420,17 +420,33 @@ binario o de un ejemplo; en Go, un `TestX`, un `BenchmarkX` y el `main`
 de un paquete `main`; en Python, una función o método de prueba de
 pytest y el `if __name__ == "__main__":` de un módulo. Un clic en la
 marca ejecuta solo eso — `cargo test -- tests::adds --exact`, `go test
--run '^TestAdds$' .`, `python3 -m pytest tests/test_app.py::test_adds`
+-v -run '^TestAdds$' .`, `python3 -m pytest -v tests/test_app.py::test_adds`
 — en el panel, desde la carpeta del paquete. **Run → Ejecutar en
 el cursor** (⌃⇧R, Ctrl+Mayús+F10 en Linux) ejecuta el más interior
 alrededor del cursor. Donde la bombilla de un arreglo está en la misma
 línea, se dibuja la bombilla y el clic ofrece el arreglo.
 
+Cuando la salida informa de pruebas — el `test x ... ok` de cargo, `go
+test -v`, pytest — el panel las lista a su lado por suite, cada una
+marcada como aprobada, fallida, omitida o aún en marcha, con los
+recuentos en su cabecera. Una prueba elegida en la lista muestra la
+línea de la salida que informó de ella, tras la que viene su fallo.
+**Repetir fallidas** en el panel, o **Run → Repetir pruebas fallidas**,
+vuelve a ejecutar solo las que fallaron, desde la misma carpeta: la
+orden es la que las ejecutó, con sus propios filtros sustituidos por
+los nombres fallidos. **Ejecutar de nuevo** también ejecuta en la
+carpeta donde empezó la ejecución, así que una prueba lanzada desde su
+marca vuelve a ejecutarse en su paquete.
+
 Todavía no: el panel no es una terminal. Un programa que dibuja la
 pantalla entera — un editor, `top`, un REPL que edita su propia línea —
-no cabe en él. Las marcas solo se encuentran para Rust, Go y Python,
-una prueba escrita según las convenciones de otro ejecutor no se marca,
-y un árbol de resultados de pruebas vendrá después.
+no cabe en él. Las marcas solo se encuentran para Rust, Go y Python, y
+una prueba escrita según las convenciones de otro ejecutor no se marca.
+Las pruebas solo se leen de la salida de cargo, `go test` y pytest; sin
+`-v`, `go test` y pytest solo nombran lo que falló, así que solo eso se
+lista. Una línea de órdenes con una tubería o `&&` no se acota para
+Repetir fallidas, y una prueba de la lista todavía no abre su código —
+el sitio de su fallo en la salida sí.
 
 ## Markdown y prosa
 

@@ -189,7 +189,7 @@ fn go(path: &Path, root: Node<'_>, text: &dyn Fn(Node<'_>) -> String) -> Vec<Run
             cwd: dir.to_path_buf(),
         };
         if is_test_file && named(&name, "Test") {
-            found.push(runnable("test", format!("go test -run {} .", quote(&format!("^{name}$")))));
+            found.push(runnable("test", format!("go test -v -run {} .", quote(&format!("^{name}$")))));
         } else if is_test_file && named(&name, "Benchmark") {
             found.push(runnable("bench", format!("go test -run '^$' -bench {} .", quote(&format!("^{name}$")))));
         } else if !is_test_file && is_main_package && name == "main" {
@@ -220,7 +220,7 @@ fn python(path: &Path, root: Node<'_>, text: &dyn Fn(Node<'_>) -> String) -> Vec
     let test = |outer: Node<'_>, id: String, found: &mut Vec<Runnable>| {
         let (line, end_line) = span(outer);
         let id = format!("{relative}::{id}");
-        let command = format!("python3 -m pytest {}", quote(&id));
+        let command = format!("python3 -m pytest -v {}", quote(&id));
         found.push(Runnable { line, end_line, kind: "test", name: id, command, cwd: cwd.clone() });
     };
     for node in children(root) {
@@ -310,7 +310,7 @@ mod tests {
         let source = "package shop\n\nfunc TestSell(t *testing.T) {}\nfunc Testable() {}\nfunc BenchmarkSell(b *testing.B) {}\n";
         let found = runnables("go", &module.join("shop_test.go"), source);
         let commands: Vec<&str> = found.iter().map(|runnable| runnable.command.as_str()).collect();
-        assert_eq!(commands, ["go test -run '^TestSell$' .", "go test -run '^$' -bench '^BenchmarkSell$' ."]);
+        assert_eq!(commands, ["go test -v -run '^TestSell$' .", "go test -run '^$' -bench '^BenchmarkSell$' ."]);
         let main = runnables("go", &module.join("main.go"), "package main\n\nfunc main() {}\n");
         assert_eq!((main[0].kind, main[0].command.as_str()), ("main", "go run ."));
         let _ = std::fs::remove_dir_all(&module);
@@ -326,9 +326,9 @@ mod tests {
         assert_eq!(
             commands,
             [
-                "python3 -m pytest tests/test_shop.py::test_adds",
-                "python3 -m pytest tests/test_shop.py::test_waits",
-                "python3 -m pytest tests/test_shop.py::TestShop::test_sells",
+                "python3 -m pytest -v tests/test_shop.py::test_adds",
+                "python3 -m pytest -v tests/test_shop.py::test_waits",
+                "python3 -m pytest -v tests/test_shop.py::TestShop::test_sells",
             ]
         );
         assert_eq!(found[1].line, 5, "the mark goes on the decorator, where the definition starts");

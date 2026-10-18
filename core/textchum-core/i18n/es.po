@@ -149,6 +149,36 @@ msgstr "terminó con {}"
 msgid "stopped"
 msgstr "detenido"
 
+#: core/textchum-core/src/run.rs
+msgid "{} failed"
+msgid_plural "{} failed"
+msgstr[0] "{} fallida"
+msgstr[1] "{} fallidas"
+
+#: core/textchum-core/src/run.rs
+msgid "{} passed"
+msgid_plural "{} passed"
+msgstr[0] "{} aprobada"
+msgstr[1] "{} aprobadas"
+
+#: core/textchum-core/src/run.rs
+msgid "{} skipped"
+msgid_plural "{} skipped"
+msgstr[0] "{} omitida"
+msgstr[1] "{} omitidas"
+
+#: core/textchum-core/src/run.rs
+msgid "{} unfinished"
+msgid_plural "{} unfinished"
+msgstr[0] "{} sin terminar"
+msgstr[1] "{} sin terminar"
+
+#: core/textchum-core/src/run.rs
+msgid "{} running"
+msgid_plural "{} running"
+msgstr[0] "{} en marcha"
+msgstr[1] "{} en marcha"
+
 #: core/textchum-core/src/tools.rs
 msgid "Formats the document"
 msgstr "Formatea el documento"
@@ -218,6 +248,11 @@ msgstr "Ejecutar en el cursor"
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Run Again"
 msgstr "Ejecutar de nuevo"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Rerun Failed Tests"
+msgstr "Repetir pruebas fallidas"
 
 #: linux/src/keyboard.rs linux/src/run_panel.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
@@ -572,10 +607,18 @@ msgstr "Copiar la ruta y la línea"
 msgid "Copy Forge URL for Line"
 msgstr "Copiar la URL de la forja para la línea"
 
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "Rerun Failed"
+msgstr "Repetir fallidas"
+
 #: linux/src/run_panel.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/RunPanel.swift
 msgid "Close"
 msgstr "Cerrar"
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "Tests"
+msgstr "Pruebas"
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "A line for its input — ⏎ sends it"
@@ -588,6 +631,10 @@ msgstr "en marcha"
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "no output for a while — it may be waiting for input"
 msgstr "sin salida desde hace un rato — puede que espere una entrada"
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "package not reported yet"
+msgstr "paquete aún sin indicar"
 
 #: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "A configured grammar could not be loaded"
@@ -1095,9 +1142,17 @@ msgstr "Símbolos visitados hace poco."
 msgid "Run through the shell in {}."
 msgstr "Se ejecuta con el shell en {}."
 
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid ""
+"No failed tests to run again: the last run reported none, or its command "
+"cannot be narrowed to them."
+msgstr "No hay pruebas fallidas que repetir: la última ejecución no informó de ninguna, o su orden no se puede acotar a ellas."
+
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing here runs: put the caret in a test, a benchmark or a main."
-msgstr "Aquí no hay nada que ejecutar: pon el cursor en una prueba, un benchmark o un main."
+msgstr ""
+"Aquí no hay nada que ejecutar: pon el cursor en una prueba, un benchmark o "
+"un main."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "The run's output names no place in a file."

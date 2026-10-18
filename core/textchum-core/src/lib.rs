@@ -48,6 +48,7 @@ pub mod project_state;
 pub mod references;
 pub mod run;
 pub mod runnables;
+pub mod test_results;
 pub mod search;
 pub mod semantic;
 pub mod signature;

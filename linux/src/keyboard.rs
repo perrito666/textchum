@@ -25,6 +25,7 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("runCommand", n_("Run Command"), "win.run-command"),
     ("runAtCaret", n_("Run at Caret"), "win.run-at-caret"),
     ("runAgain", n_("Run Again"), "win.run-again"),
+    ("rerunFailedTests", n_("Rerun Failed Tests"), "win.rerun-failed-tests"),
     ("stopRun", n_("Stop"), "win.stop-run"),
     ("nextOutputPlace", n_("Next Output Place"), "win.next-output-place"),
     ("previousOutputPlace", n_("Previous Output Place"), "win.previous-output-place"),

@@ -7,22 +7,40 @@ import TextchumKit
 /// command runs, a line can be sent to its input — which is what a
 /// command that has gone quiet is often waiting for, and the panel says
 /// so. The output is the core's (`textchum_core::output`); this draws it.
+///
+/// When the output reports tests, they are listed beside it by suite,
+/// each with how it went; choosing one shows the line that reported it,
+/// and Rerun Failed runs again only the ones that failed.
 @MainActor
-final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate {
+final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutlineViewDataSource,
+    NSOutlineViewDelegate
+{
     /// The run on show, and the core that runs it.
     private(set) var runID: UInt64?
     weak var core: CoreApp?
     /// Opens a place the output names: path, zero-based line and column.
     var onOpenPlace: ((String, Int, Int) -> Void)?
+    /// Runs a command line in a folder: Rerun Failed.
+    var onRun: ((String, String) -> Void)?
     /// The panel's height when shown; zero when not.
     var heightConstraint: NSLayoutConstraint?
     static let shownHeight: CGFloat = 220
 
     private(set) var command = ""
+    /// Where the run on show was started, which is where it runs again.
+    private(set) var cwd: String?
     private let title = NSTextField(labelWithString: "")
     private let status = NSTextField(labelWithString: "")
     private let stopButton = NSButton(title: t("Stop"), target: nil, action: nil)
     private let closeButton = NSButton(title: t("Close"), target: nil, action: nil)
+    private let rerunButton = NSButton(title: t("Rerun Failed"), target: nil, action: nil)
+    private let summary = NSTextField(labelWithString: "")
+    private let split = NSSplitView()
+    private let testsScroll = NSScrollView()
+    private let testsOutline = NSOutlineView()
+    /// The tests as last listed, and the rows standing for them.
+    private(set) var tests: CoreApp.RunTests?
+    private var suiteRows: [TestRow] = []
     private let scroll = NSScrollView()
     private let text = NSTextView()
     private let input = NSTextField()
@@ -35,6 +53,11 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     private var stepped: (line: Int, character: Int)?
 
     var isShown: Bool { (heightConstraint?.constant ?? 0) > 0 }
+    /// Whether the tests are listed beside the output, for the smoke test.
+    var showsTests: Bool { !testsScroll.isHidden }
+    var summaryText: String { summary.stringValue }
+    /// The command Rerun Failed would run, when there is one.
+    var rerunCommand: String? { tests?.rerun }
     /// What the panel shows, for the smoke test.
     var shownText: String { text.string }
     var statusText: String { status.stringValue }
@@ -50,14 +73,19 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         status.textColor = .secondaryLabelColor
         status.lineBreakMode = .byTruncatingTail
         status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        for button in [stopButton, closeButton] {
+        summary.font = small
+        summary.lineBreakMode = .byTruncatingTail
+        summary.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        for button in [rerunButton, stopButton, closeButton] {
             button.bezelStyle = .inline
             button.font = small
             button.target = self
         }
         stopButton.action = #selector(stop(_:))
         closeButton.action = #selector(close(_:))
-        let header = NSStackView(views: [title, status, NSView(), stopButton, closeButton])
+        rerunButton.action = #selector(rerunFailed(_:))
+        rerunButton.isHidden = true
+        let header = NSStackView(views: [title, status, summary, NSView(), rerunButton, stopButton, closeButton])
         header.orientation = .horizontal
         header.spacing = 8
         header.edgeInsets = NSEdgeInsets(top: 4, left: 10, bottom: 4, right: 10)
@@ -74,13 +102,33 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         scroll.hasVerticalScroller = true
         scroll.borderType = .noBorder
 
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("test"))
+        testsOutline.addTableColumn(column)
+        testsOutline.outlineTableColumn = column
+        testsOutline.headerView = nil
+        testsOutline.rowSizeStyle = .small
+        testsOutline.style = .sourceList
+        testsOutline.dataSource = self
+        testsOutline.delegate = self
+        testsOutline.setAccessibilityLabel(t("Tests"))
+        testsScroll.documentView = testsOutline
+        testsScroll.hasVerticalScroller = true
+        testsScroll.borderType = .noBorder
+        testsScroll.isHidden = true
+        split.isVertical = true
+        split.dividerStyle = .thin
+        split.addArrangedSubview(testsScroll)
+        split.addArrangedSubview(scroll)
+        split.setHoldingPriority(.defaultHigh, forSubviewAt: 0)
+        testsScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
+
         input.placeholderString = t("A line for its input — ⏎ sends it")
         input.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         input.delegate = self
         input.target = self
         input.action = #selector(send(_:))
 
-        let stack = NSStackView(views: [header, scroll, input])
+        let stack = NSStackView(views: [header, split, input])
         stack.orientation = .vertical
         stack.spacing = 0
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -108,15 +156,22 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("RunPanel is built in code") }
 
-    /// Shows a run that just started, in place of the one before, which
-    /// is let go of.
-    func begin(id: UInt64, command: String) {
+    /// Shows a run that just started in `cwd`, in place of the one
+    /// before, which is let go of.
+    func begin(id: UInt64, command: String, cwd: String?) {
         if let previous = runID, previous != id {
             core?.runForget(id: previous)
         }
         runID = id
         self.command = command
+        self.cwd = cwd
         title.stringValue = command
+        tests = nil
+        suiteRows = []
+        testsOutline.reloadData()
+        testsScroll.isHidden = true
+        summary.stringValue = ""
+        rerunButton.isHidden = true
         status.stringValue = t("running")
         text.string = ""
         lineLengths = []
@@ -137,6 +192,7 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         default:
             if let update = core.runRead(id: id) {
                 apply(update)
+                refreshTests()
                 if !update.running {
                     status.stringValue = t("finished")
                     stopButton.isEnabled = false
@@ -247,6 +303,146 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         }
         onOpenPlace?(place.path, place.line, place.column)
         return true
+    }
+
+    // MARK: Tests
+
+    /// A suite or a test in the list.
+    final class TestRow {
+        let name: String
+        let test: CoreApp.RunTests.Test?
+        let children: [TestRow]
+        init(name: String, test: CoreApp.RunTests.Test?, children: [TestRow] = []) {
+            self.name = name
+            self.test = test
+            self.children = children
+        }
+    }
+
+    /// Lists the tests the output reported, when they changed.
+    private func refreshTests() {
+        guard let id = runID, let core, let found = core.runTests(id: id), found != tests else { return }
+        let first = tests == nil || tests?.suites.isEmpty == true
+        tests = found
+        suiteRows = found.suites.map { suite in
+            TestRow(
+                name: suite.name.isEmpty ? t("package not reported yet") : suite.name, test: nil,
+                children: suite.tests.map { TestRow(name: $0.name, test: $0) })
+        }
+        let hasTests = !found.suites.isEmpty
+        if hasTests && first {
+            testsScroll.isHidden = false
+            split.adjustSubviews()
+            split.setPosition(min(320, max(200, bounds.width * 0.3)), ofDividerAt: 0)
+        }
+        testsOutline.reloadData()
+        testsOutline.expandItem(nil, expandChildren: true)
+        summary.stringValue = found.summary
+        rerunButton.isHidden = found.rerun == nil
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+        (item as? TestRow)?.children.count ?? suiteRows.count
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+        (item as? TestRow)?.children[index] ?? suiteRows[index]
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+        !((item as? TestRow)?.children.isEmpty ?? true)
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        guard let row = item as? TestRow else { return nil }
+        let identifier = NSUserInterfaceItemIdentifier("testCell")
+        let cell = outlineView.makeView(withIdentifier: identifier, owner: nil) as? NSTableCellView ?? {
+            let cell = NSTableCellView()
+            cell.identifier = identifier
+            let image = NSImageView()
+            let label = NSTextField(labelWithString: "")
+            label.lineBreakMode = .byTruncatingMiddle
+            label.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+            for view in [image, label] as [NSView] {
+                view.translatesAutoresizingMaskIntoConstraints = false
+                cell.addSubview(view)
+            }
+            NSLayoutConstraint.activate([
+                image.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
+                image.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                image.widthAnchor.constraint(equalToConstant: 14),
+                label.leadingAnchor.constraint(equalTo: image.trailingAnchor, constant: 4),
+                label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
+                label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+            cell.imageView = image
+            cell.textField = label
+            return cell
+        }()
+        let (symbol, colour) = Self.look(of: row)
+        cell.imageView?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: row.test?.outcome)
+        cell.imageView?.contentTintColor = colour
+        var text = row.name
+        if let duration = row.test?.duration { text += "  \(duration)" }
+        cell.textField?.stringValue = text
+        cell.textField?.toolTip = row.name
+        return cell
+    }
+
+    /// A test's symbol and colour by how it went; a suite's by its worst.
+    private static func look(of row: TestRow) -> (String, NSColor) {
+        let outcomes = row.test.map { [$0.outcome] } ?? row.children.compactMap { $0.test?.outcome }
+        if outcomes.contains("failed") { return ("xmark.circle.fill", .systemRed) }
+        if outcomes.contains("unfinished") { return ("exclamationmark.circle", .systemOrange) }
+        if outcomes.contains("running") { return ("clock", .secondaryLabelColor) }
+        if !outcomes.isEmpty && outcomes.allSatisfy({ $0 == "skipped" }) {
+            return ("minus.circle", .secondaryLabelColor)
+        }
+        return ("checkmark.circle.fill", .systemGreen)
+    }
+
+    /// A test chosen: the output line that reported it, shown and selected.
+    func outlineViewSelectionDidChange(_ notification: Notification) {
+        guard let row = testsOutline.item(atRow: testsOutline.selectedRow) as? TestRow,
+            let line = row.test?.line
+        else { return }
+        showOutputLine(line)
+    }
+
+    /// Selects output line `line` and scrolls it into view.
+    func showOutputLine(_ line: Int) {
+        guard lineLengths.indices.contains(line) else { return }
+        let offset = lineLengths.prefix(line).reduce(0, +)
+        let length = lineLengths[line] - (line < lineLengths.count - 1 ? 1 : 0)
+        let range = NSRange(location: offset, length: max(0, min(length, text.string.utf16.count - offset)))
+        text.setSelectedRange(range)
+        text.scrollRangeToVisible(range)
+    }
+
+    /// The output line selected, for the smoke test.
+    var selectedOutputText: String { (text.string as NSString).substring(with: text.selectedRange()) }
+
+    /// Chooses the test called `name` in the list, as a click would.
+    func chooseTest(named name: String) {
+        for row in 0..<testsOutline.numberOfRows {
+            if (testsOutline.item(atRow: row) as? TestRow)?.test?.name == name {
+                testsOutline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+                return
+            }
+        }
+    }
+
+    /// Rerun Failed: only the tests that failed, from where the run was
+    /// started. False when there is nothing to run again.
+    @discardableResult
+    func rerunFailed() -> Bool {
+        guard let rerun = tests?.rerun, let onRun else { return false }
+        onRun(rerun, cwd ?? "")
+        return true
+    }
+
+    @objc private func rerunFailed(_ sender: Any?) {
+        rerunFailed()
     }
 
     @objc private func send(_ sender: Any?) {

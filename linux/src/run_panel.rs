@@ -4,8 +4,13 @@
 //! command runs, a line can be sent to its input — which is what a
 //! command that has gone quiet is often waiting for, and the panel says
 //! so. The output is the core's (`textchum_core::output`); this draws it.
+//!
+//! When the output reports tests, they are listed beside it by suite,
+//! each with how it went; choosing one shows the line that reported it,
+//! and Rerun Failed runs again only the ones that failed.
 
 use std::cell::{Cell, RefCell};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use adw::prelude::*;
@@ -32,6 +37,21 @@ pub struct RunPanel {
     stepped: Cell<Option<(usize, usize)>>,
     /// Opens a place: path, zero-based line and column.
     on_open: RefCell<Option<Rc<dyn Fn(&str, i32, usize)>>>,
+    /// Runs a command line in a folder: Rerun Failed.
+    on_run: RefCell<Option<Rc<dyn Fn(&str, &Path)>>>,
+    /// Where the run on show was started, which is where it runs again.
+    cwd: RefCell<PathBuf>,
+    summary: gtk::Label,
+    rerun: gtk::Button,
+    paned: gtk::Paned,
+    tests_scroll: gtk::ScrolledWindow,
+    tests_list: gtk::ListBox,
+    /// The tests as last read, to leave the list alone when unchanged.
+    tests_json: RefCell<String>,
+    rerun_command: RefCell<Option<String>>,
+    /// Each list row's test name and the output line that reported it;
+    /// None for a suite's row.
+    test_rows: RefCell<Vec<Option<(String, Option<usize>)>>>,
 }
 
 impl RunPanel {
@@ -44,9 +64,14 @@ impl RunPanel {
         status.set_ellipsize(gtk::pango::EllipsizeMode::End);
         status.set_hexpand(true);
         status.set_xalign(0.0);
+        let summary = gtk::Label::new(None);
+        summary.add_css_class("dim-label");
+        summary.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        let rerun = gtk::Button::with_label(&tr("Rerun Failed"));
+        rerun.set_visible(false);
         let stop = gtk::Button::with_label(&tr("Stop"));
         let close = gtk::Button::with_label(&tr("Close"));
-        for button in [&stop, &close] {
+        for button in [&rerun, &stop, &close] {
             button.add_css_class("flat");
         }
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -55,6 +80,8 @@ impl RunPanel {
         header.set_margin_top(2);
         header.append(&title);
         header.append(&status);
+        header.append(&summary);
+        header.append(&rerun);
         header.append(&stop);
         header.append(&close);
 
@@ -67,7 +94,22 @@ impl RunPanel {
         table.add(&gtk::TextTag::builder().name("bold").weight(700).build());
         table.add(&gtk::TextTag::builder().name("place").underline(gtk::pango::Underline::Single).build());
         table.add(&gtk::TextTag::builder().name("note").foreground("#8a8a8a").build());
-        let scroll = gtk::ScrolledWindow::builder().child(&view).vexpand(true).build();
+        let scroll = gtk::ScrolledWindow::builder().child(&view).vexpand(true).hexpand(true).build();
+        let tests_list = gtk::ListBox::new();
+        tests_list.add_css_class("navigation-sidebar");
+        tests_list.update_property(&[gtk::accessible::Property::Label(&tr("Tests"))]);
+        let tests_scroll = gtk::ScrolledWindow::builder()
+            .child(&tests_list)
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .width_request(160)
+            .visible(false)
+            .build();
+        let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
+        paned.set_start_child(Some(&tests_scroll));
+        paned.set_end_child(Some(&scroll));
+        paned.set_shrink_start_child(false);
+        paned.set_resize_start_child(false);
+        paned.set_vexpand(true);
         let input = gtk::Entry::new();
         input.set_placeholder_text(Some(&tr("A line for its input — ⏎ sends it")));
         input.set_margin_start(8);
@@ -77,7 +119,7 @@ impl RunPanel {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 2);
         root.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         root.append(&header);
-        root.append(&scroll);
+        root.append(&paned);
         root.append(&input);
         root.set_size_request(-1, 220);
         root.set_visible(false);
@@ -94,7 +136,41 @@ impl RunPanel {
             places: RefCell::new(Vec::new()),
             stepped: Cell::new(None),
             on_open: RefCell::new(None),
+            on_run: RefCell::new(None),
+            cwd: RefCell::new(PathBuf::new()),
+            summary,
+            rerun: rerun.clone(),
+            paned,
+            tests_scroll,
+            tests_list: tests_list.clone(),
+            tests_json: RefCell::new(String::new()),
+            rerun_command: RefCell::new(None),
+            test_rows: RefCell::new(Vec::new()),
         });
+        {
+            let weak = Rc::downgrade(&panel);
+            rerun.connect_clicked(move |_| {
+                if let Some(panel) = weak.upgrade() {
+                    panel.rerun_failed();
+                }
+            });
+        }
+        {
+            // A test chosen: the output line that reported it.
+            let weak = Rc::downgrade(&panel);
+            tests_list.connect_row_selected(move |_, row| {
+                let Some(panel) = weak.upgrade() else { return };
+                let Some(row) = row else { return };
+                let line = panel
+                    .test_rows
+                    .borrow()
+                    .get(row.index() as usize)
+                    .and_then(|test| test.as_ref().and_then(|(_, line)| *line));
+                if let Some(line) = line {
+                    panel.show_output_line(line);
+                }
+            });
+        }
         {
             let weak = Rc::downgrade(&panel);
             stop.connect_clicked(move |_| {
@@ -151,6 +227,15 @@ impl RunPanel {
         *self.on_open.borrow_mut() = Some(open);
     }
 
+    pub fn set_on_run(&self, run: Rc<dyn Fn(&str, &Path)>) {
+        *self.on_run.borrow_mut() = Some(run);
+    }
+
+    /// Where the run on show was started.
+    pub fn cwd(&self) -> PathBuf {
+        self.cwd.borrow().clone()
+    }
+
     pub fn run_id(&self) -> Option<u64> {
         self.run_id.get()
     }
@@ -163,15 +248,23 @@ impl RunPanel {
         self.root.is_visible()
     }
 
-    /// Shows a run that just started, in place of the one before, which
-    /// is let go of.
-    pub fn begin(&self, id: u64, command: &str) {
+    /// Shows a run that just started in `cwd`, in place of the one
+    /// before, which is let go of.
+    pub fn begin(&self, id: u64, command: &str, cwd: &Path) {
         if let Some(previous) = self.run_id.get().filter(|previous| *previous != id) {
             Shell::instance().runs.borrow_mut().forget(previous);
         }
         self.run_id.set(Some(id));
         *self.command.borrow_mut() = command.to_owned();
+        *self.cwd.borrow_mut() = cwd.to_path_buf();
         self.title.set_text(command);
+        self.tests_json.borrow_mut().clear();
+        *self.rerun_command.borrow_mut() = None;
+        self.test_rows.borrow_mut().clear();
+        self.tests_list.remove_all();
+        self.tests_scroll.set_visible(false);
+        self.summary.set_text("");
+        self.rerun.set_visible(false);
         self.status.set_text(&tr("running"));
         self.view.buffer().set_text("");
         self.places.borrow_mut().clear();
@@ -193,6 +286,7 @@ impl RunPanel {
         let Some(read) = read else { return };
         let Ok(update) = serde_json::from_str::<serde_json::Value>(&read) else { return };
         self.apply(&update);
+        self.refresh_tests(id);
         if update["running"] == false {
             self.status.set_text(&tr("finished"));
             self.stop.set_sensitive(false);
@@ -274,6 +368,71 @@ impl RunPanel {
         }
     }
 
+    /// Lists the tests the output reported, when they changed.
+    fn refresh_tests(&self, id: u64) {
+        let Some(json) = Shell::instance().runs.borrow().tests(id) else { return };
+        if *self.tests_json.borrow() == json {
+            return;
+        }
+        let Ok(tests) = serde_json::from_str::<serde_json::Value>(&json) else { return };
+        *self.tests_json.borrow_mut() = json;
+        let suites = tests["suites"].as_array().cloned().unwrap_or_default();
+        let first = !self.tests_scroll.is_visible();
+        self.tests_list.remove_all();
+        let mut rows = Vec::new();
+        for suite in &suites {
+            let tests = suite["tests"].as_array().cloned().unwrap_or_default();
+            let outcomes: Vec<&str> = tests.iter().filter_map(|test| test["outcome"].as_str()).collect();
+            let name = suite["name"].as_str().filter(|name| !name.is_empty());
+            let label = name.map(str::to_owned).unwrap_or_else(|| tr("package not reported yet"));
+            self.tests_list.append(&test_row(&label, None, &outcomes, true));
+            rows.push(None);
+            for test in &tests {
+                let name = test["name"].as_str().unwrap_or_default();
+                let outcome = test["outcome"].as_str().unwrap_or_default();
+                self.tests_list.append(&test_row(name, test["duration"].as_str(), &[outcome], false));
+                rows.push(Some((name.to_owned(), test["line"].as_u64().map(|line| line as usize))));
+            }
+        }
+        *self.test_rows.borrow_mut() = rows;
+        if !suites.is_empty() && first {
+            self.tests_scroll.set_visible(true);
+            let width = self.root.width();
+            self.paned.set_position(if width > 0 { (width * 3 / 10).clamp(200, 320) } else { 240 });
+        }
+        self.summary.set_text(tests["summary"].as_str().unwrap_or_default());
+        let rerun = tests["rerun"].as_str().map(str::to_owned);
+        self.rerun.set_visible(rerun.is_some());
+        *self.rerun_command.borrow_mut() = rerun;
+    }
+
+    /// Selects output line `line` and scrolls it into view.
+    pub fn show_output_line(&self, line: usize) {
+        let buffer = self.view.buffer();
+        let Some(start) = buffer.iter_at_line(line as i32) else { return };
+        let mut end = start;
+        if !end.ends_line() {
+            end.forward_to_line_end();
+        }
+        buffer.select_range(&start, &end);
+        self.view.scroll_to_iter(&mut start.clone(), 0.1, false, 0.0, 0.0);
+    }
+
+    /// Rerun Failed: only the tests that failed, from where the run was
+    /// started. False when there is nothing to run again.
+    pub fn rerun_failed(&self) -> bool {
+        let command = self.rerun_command.borrow().clone();
+        let run = self.on_run.borrow().clone();
+        match (command, run) {
+            (Some(command), Some(run)) => {
+                let cwd = self.cwd();
+                run(&command, &cwd);
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn open(&self, place: &Named) {
         let open = self.on_open.borrow().clone();
         if let Some(open) = open {
@@ -328,4 +487,74 @@ impl RunPanel {
     pub(crate) fn status_text(&self) -> String {
         self.status.text().to_string()
     }
+
+    pub(crate) fn shows_tests(&self) -> bool {
+        self.tests_scroll.is_visible()
+    }
+
+    pub(crate) fn summary_text(&self) -> String {
+        self.summary.text().to_string()
+    }
+
+    /// Chooses the test called `name` in the list, as a click would.
+    pub(crate) fn choose_test(&self, name: &str) {
+        let index = self
+            .test_rows
+            .borrow()
+            .iter()
+            .position(|row| row.as_ref().is_some_and(|(test, _)| test == name));
+        if let Some(row) = index.and_then(|index| self.tests_list.row_at_index(index as i32)) {
+            self.tests_list.select_row(Some(&row));
+        }
+    }
+
+    pub(crate) fn selected_output_text(&self) -> String {
+        let buffer = self.view.buffer();
+        buffer.selection_bounds().map(|(from, to)| buffer.text(&from, &to, false).to_string()).unwrap_or_default()
+    }
+}
+
+/// A row of the test list: a suite's, in bold with its worst outcome, or
+/// a test's, indented under it.
+fn test_row(name: &str, duration: Option<&str>, outcomes: &[&str], suite: bool) -> gtk::ListBoxRow {
+    let (icon, class) = if outcomes.contains(&"failed") {
+        ("process-stop-symbolic", Some("error"))
+    } else if outcomes.contains(&"unfinished") {
+        ("dialog-warning-symbolic", Some("warning"))
+    } else if outcomes.contains(&"running") {
+        ("content-loading-symbolic", None)
+    } else if !outcomes.is_empty() && outcomes.iter().all(|outcome| *outcome == "skipped") {
+        ("list-remove-symbolic", None)
+    } else {
+        ("object-select-symbolic", Some("success"))
+    };
+    let image = gtk::Image::from_icon_name(icon);
+    if let Some(class) = class {
+        image.add_css_class(class);
+    }
+    if let Some(outcome) = outcomes.first().filter(|_| !suite) {
+        image.update_property(&[gtk::accessible::Property::Label(outcome)]);
+    }
+    let label = gtk::Label::new(Some(name));
+    label.set_xalign(0.0);
+    label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+    label.set_hexpand(true);
+    label.set_tooltip_text(Some(name));
+    if suite {
+        label.add_css_class("heading");
+    }
+    let line = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    line.set_margin_start(if suite { 4 } else { 20 });
+    line.append(&image);
+    line.append(&label);
+    if let Some(duration) = duration {
+        let time = gtk::Label::new(Some(duration));
+        time.add_css_class("dim-label");
+        line.append(&time);
+    }
+    let row = gtk::ListBoxRow::new();
+    row.set_child(Some(&line));
+    row.set_selectable(!suite);
+    row.set_activatable(!suite);
+    row
 }
