@@ -182,8 +182,8 @@ solo paso de deshacer.
 
 **Ir a la línea** (⌘L, Ctrl+L en Linux) acepta un número, o el
 `src/main.rs:412:8` entero pegado desde un registro de compilación —
-el nombre del archivo y el ruido sobrante se ignoran, la línea queda
-centrada, y Atrás vuelve a donde se interrumpió la lectura.
+el nombre del archivo y el ruido sobrante se ignoran, la línea queda a
+un tercio de la altura de la vista, y Atrás vuelve a donde se interrumpió la lectura.
 
 Una **barra de cambios** baja por la izquierda del margen y dice qué
 líneas difieren del archivo tal como está en git: una franja verde para

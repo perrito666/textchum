@@ -165,7 +165,7 @@ pub struct Workbench {
     pages: RefCell<Vec<Rc<Page>>>,
     /// The root the sidebar currently shows.
     sidebar_root: RefCell<Option<PathBuf>>,
-    /// Where jumps came from, vim-jumplist style: Go Back retraces,
+    /// Where jumps came from: Go Back retraces,
     /// Go Forward returns, and a new jump clears the forward trail.
     jumps: RefCell<JumpStack>,
     /// True while Go Back/Forward navigates, so retracing a jump does
@@ -612,9 +612,12 @@ impl Workbench {
                 let buffer = &page.buffer;
                 let insert = buffer.iter_at_mark(&buffer.get_insert());
                 if let Some((start, end, _)) = page.search_context.forward(&insert) {
+                    // A match out of sight is a jump Go Back returns from.
+                    if !page::is_on_screen(&page.view, &start) {
+                        workbench.note_jump();
+                    }
                     buffer.select_range(&end, &start);
-                    page.view
-                        .scroll_to_iter(&mut start.clone(), 0.1, false, 0.0, 0.0);
+                    page::land(&page.view);
                 }
             });
         }
@@ -1348,12 +1351,16 @@ impl Workbench {
         } else {
             page.search_context.backward(&start.min(end))
         };
-        let Some((mut from, to, _)) = found else {
+        let Some((from, to, _)) = found else {
             self.hint(&tr("No more matches."));
             return;
         };
+        // A match out of sight is a jump Go Back returns from (7.1).
+        if !page::is_on_screen(&page.view, &from) {
+            self.note_jump();
+        }
         buffer.select_range(&to, &from);
-        page.view.scroll_to_iter(&mut from, 0.1, false, 0.0, 0.0);
+        page::land(&page.view);
     }
 
     /// The page a tab holds, if this window holds it.
@@ -2631,12 +2638,9 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             let text = page
                 .buffer
                 .text(&page.buffer.start_iter(), &page.buffer.end_iter(), true);
-            let mut at = page.buffer.iter_at_offset(page::char_offset(&text, offset));
+            let at = page.buffer.iter_at_offset(page::char_offset(&text, offset));
             page.buffer.place_cursor(&at);
-            // Centred rather than merely visible: a line scrolled to
-            // the last row of the window is one you have to scroll to
-            // read.
-            page.view.scroll_to_iter(&mut at, 0.0, true, 0.0, 0.5);
+            page::land(&page.view);
             page.view.grab_focus();
         });
         dialog.present(Some(&workbench.window.clone()));
@@ -3625,9 +3629,13 @@ fn move_to_block_edge(workbench: &Rc<Workbench>, to_start: bool) {
     let target_utf16 = if to_start { start } else { end };
     let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
     let target = buffer.iter_at_offset(page::char_offset(&text, target_utf16));
+    // A block's far end out of sight is a jump Go Back returns from
+    // (7.1).
+    if !page::is_on_screen(&page.view, &target) {
+        workbench.note_jump();
+    }
     buffer.place_cursor(&target);
-    page.view
-        .scroll_to_iter(&mut target.clone(), 0.1, false, 0.0, 0.0);
+    page::land(&page.view);
 }
 
 /// Every palette entry: what the menus can do, searchable by name.
@@ -4954,8 +4962,7 @@ fn show_markdown_outline(workbench: &Rc<Workbench>, page: &Rc<Page>) -> bool {
                         crate::page::iter_at_lsp(&page.buffer, line, character)
                     {
                         page.buffer.place_cursor(&iter);
-                        page.view
-                            .scroll_to_iter(&mut iter.clone(), 0.1, false, 0.0, 0.0);
+                        page::land(&page.view);
                         page.view.grab_focus();
                     }
                 }
@@ -6030,9 +6037,9 @@ fn go_to_finding(workbench: &Rc<Workbench>, forward: bool) {
     };
     workbench.note_jump();
     let text = page.buffer.text(&page.buffer.start_iter(), &page.buffer.end_iter(), true);
-    let mut at = page.buffer.iter_at_offset(page::char_offset(&text, target));
+    let at = page.buffer.iter_at_offset(page::char_offset(&text, target));
     page.buffer.place_cursor(&at);
-    page.view.scroll_to_iter(&mut at, 0.1, false, 0.0, 0.0);
+    page::land(&page.view);
     // Once the view has scrolled there, so the balloon points at it.
     let page = Rc::clone(&page);
     glib::idle_add_local_once(move || {

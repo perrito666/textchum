@@ -1856,6 +1856,33 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 }
                 println!("context ok (pins stack the enclosing constructs, the bar knows the caret)");
 
+                // A jump to a line on screen leaves the view where it is;
+                // one out of sight brings its line into view (7.3).
+                let adjustment = scrolled.vadjustment();
+                let resting = adjustment.value();
+                buffer.place_cursor(&buffer.iter_at_line(102).expect("line 102"));
+                crate::page::land(&page.view);
+                if adjustment.value() != resting {
+                    eprintln!("FAIL: a jump to a line on screen moved the view");
+                    return 1;
+                }
+                buffer.place_cursor(&buffer.start_iter());
+                crate::page::land(&page.view);
+                let mut landed = false;
+                for _ in 0..1500 {
+                    context.iteration(false);
+                    if crate::page::is_on_screen(&page.view, &buffer.start_iter()) {
+                        landed = true;
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(2));
+                }
+                if !landed {
+                    eprintln!("FAIL: a jump out of sight did not bring its line into view");
+                    return 1;
+                }
+                println!("jumps land ok (the view left alone when the target is in sight, brought there when not)");
+
             // A link clicked in the Markdown preview goes to the
             // browser and leaves the pane where it was. Which links
             // count as a place in the page is the core's rule, tested

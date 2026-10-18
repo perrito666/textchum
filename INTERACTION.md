@@ -255,10 +255,10 @@ What breaks these rules today, each to be fixed under its own issue:
   details.
 - **3.5** Open Quickly, Find in Project and Go to Symbol show no
   preview of the place a row goes to.
-- **7.1** Find Next and Go to Block Start/End move the caret without
-  recording the jump.
-- **7.2, 7.3, 7.4** There is no last-edit command, no recent places
-  list, and jumps land without animation, often at an edge.
+- **7.1** Go Back returns to the caret, not to the selection and the
+  scroll that went with it.
+- **7.2, 7.4** There is no last-edit command and no recent places
+  list.
 - **10.3** Selection does not grow or shrink by structure.
 - **12.1, 12.3** No gutter mark for fixes, and completion ranked by
   the server's order alone and without documentation beside it.

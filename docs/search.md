@@ -94,11 +94,21 @@ word was selected as a word.
 ## The jump stack
 
 Every jump — a search result, Jump to Definition, a reference, an
-outline entry, a `chum` open — records where it left from. **Go Back**
-(⌃⌘←) walks those origins; **Go Forward** (⌃⌘→) retraces. The history
-is rewritten from the current point: jumping somewhere new discards the
-forward trail, exactly as vim's jumplist does. Positions survive edits
-as line/column, so going back after a change lands close, not lost.
+outline entry, a `chum` open, Go to Line, the next finding — records
+where it left from. So do Find Next and Go to Block Start/End when
+where they go is out of sight; a step to a match already on screen is
+not a jump. **Go Back** (⌃⌘←) walks those origins; **Go Forward**
+(⌃⌘→) retraces. The history is rewritten from the current point:
+jumping somewhere new discards the forward trail. Positions survive
+edits as line/column, so going back after a change lands close, not
+lost.
+
+A jump to a line already on screen leaves the view where it is. One
+out of sight moves the view, in a short animation, so the line sits a
+third of the way down, with what comes before it in view; a far jump
+starts the motion a screen short of the target, so it shows which way
+it went without sweeping through the whole file. With reduced motion
+asked for in the system settings, the view moves at once.
 
 ## Not there yet
 

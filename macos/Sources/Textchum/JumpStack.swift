@@ -7,7 +7,7 @@ struct JumpLocation: Equatable {
     let character: Int
 }
 
-/// The jump stack — vim's jumplist by another name. Every jump (go to
+/// The jump stack. Every jump (go to
 /// definition, a search or reference result, an outline entry, a chum
 /// open) records where it left from; Go Back walks those origins, Go
 /// Forward retraces. A fresh jump rewrites the future: the forward

@@ -100,13 +100,23 @@ seleccionó como palabra.
 ## La pila de saltos
 
 Cada salto — un resultado de búsqueda, Ir a la Definición, una
-referencia, una entrada del esquema, un `chum` — recuerda de dónde
-partió. **Go Back** (⌃⌘←) recorre esos orígenes; **Go Forward** (⌃⌘→)
-los desanda. La historia se reescribe desde el punto actual: saltar a
-un sitio nuevo descarta el rastro hacia adelante, exactamente como la
-jumplist de vim. Las posiciones sobreviven a las ediciones como
-línea/columna, así que volver tras un cambio aterriza cerca, no
-perdido.
+referencia, una entrada del esquema, un `chum`, Ir a la línea, el
+siguiente hallazgo — recuerda de dónde partió. También Find Next e Ir
+al inicio/fin de bloque cuando adonde van está fuera de la vista; un
+paso a una coincidencia que ya está en pantalla no es un salto. **Go
+Back** (⌃⌘←) recorre esos orígenes; **Go Forward** (⌃⌘→) los desanda.
+La historia se reescribe desde el punto actual: saltar a un sitio
+nuevo descarta el rastro hacia adelante. Las posiciones sobreviven a
+las ediciones como línea/columna, así que volver tras un cambio
+aterriza cerca, no perdido.
+
+Un salto a una línea que ya está en pantalla deja la vista donde está.
+Uno fuera de la vista la mueve, en una animación breve, para que la
+línea quede a un tercio de la altura, con lo que la precede a la
+vista; un salto lejano empieza el movimiento una pantalla antes del
+destino, para mostrar hacia dónde fue sin recorrer todo el archivo.
+Con el movimiento reducido pedido en los ajustes del sistema, la vista
+se mueve de una vez.
 
 ## Aún no está
 
