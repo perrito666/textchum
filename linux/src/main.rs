@@ -544,6 +544,8 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.changed-files", "<Ctrl><Alt>g"),
     ("win.project-symbols", "<Ctrl><Alt>o"),
     ("win.definition", "F12"),
+    ("win.implementation", "<Ctrl>F12"),
+    ("win.type-definition", "<Ctrl><Shift>F12"),
     ("win.sidebar", "F9"),
     ("win.preview", "<Ctrl><Alt>p"),
     ("win.open", "<Ctrl>o"),
@@ -1848,6 +1850,33 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
         }
         println!("recent symbols ok (listed with nothing typed, found where they moved, once each)");
+
+        // Go to Implementation jumps to the one the server names; Go to
+        // Type Definition, which this server does not offer, says so by
+        // the caret rather than doing nothing.
+        {
+            let page = workbench.selected().expect("a selected page");
+            let buffer = page.buffer.clone();
+            buffer.place_cursor(&buffer.start_iter());
+            fire("win.implementation");
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+            while buffer.iter_at_mark(&buffer.get_insert()).line() != 1 {
+                context.iteration(true);
+                if std::time::Instant::now() > deadline {
+                    eprintln!("FAIL: Go to Implementation did not land on the line the server named");
+                    return 1;
+                }
+            }
+            fire("win.type-definition");
+            let said = page::shown_hint(&page).or_else(|| {
+                shell::Shell::instance().notices.borrow().latest().map(|notice| notice.text.clone())
+            });
+            if said.as_deref() != Some("The language server here does not find type definitions.") {
+                eprintln!("FAIL: Go to Type Definition with no server for it said {said:?}");
+                return 1;
+            }
+        }
+        println!("implementation ok (one answer is a jump; a request no server answers says so)");
 
         // The shell holds documents; the UI holds views of them. What
         // is checked here is that the table behaves like a registry: a

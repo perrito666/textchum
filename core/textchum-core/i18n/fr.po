@@ -243,6 +243,16 @@ msgstr "Aller à la définition"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Go to Implementation"
+msgstr "Aller à l'implémentation"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Go to Type Definition"
+msgstr "Aller à la définition du type"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Find References"
 msgstr "Rechercher les références"
 
@@ -975,6 +985,30 @@ msgstr "Rien n'a encore été modifié."
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "No earlier edit."
 msgstr "Pas de modification antérieure."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "The language server here does not find type definitions."
+msgstr "Le serveur de langage d'ici ne cherche pas les définitions de type."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "The language server here does not find implementations."
+msgstr "Le serveur de langage d'ici ne cherche pas les implémentations."
+
+#: linux/src/workbench.rs
+msgid "Type Definitions"
+msgstr "Définitions de type"
+
+#: linux/src/workbench.rs
+msgid "Implementations"
+msgstr "Implémentations"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "No type definition found."
+msgstr "Aucune définition de type trouvée."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "No implementation found."
+msgstr "Aucune implémentation trouvée."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 #: macos/Sources/Textchum/SmokeTest.swift
@@ -1766,6 +1800,14 @@ msgstr "Rien n'est signalé sur cette ligne."
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Move the pointer or the caret over a symbol."
 msgstr "Placez le pointeur ou le curseur sur un symbole."
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Type Definitions ({})"
+msgstr "Définitions de type ({})"
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Implementations ({})"
+msgstr "Implémentations ({})"
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing else in the workspace refers to this symbol."

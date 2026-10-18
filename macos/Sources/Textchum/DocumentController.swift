@@ -1484,6 +1484,46 @@ final class DocumentController: NSResponder {
         }
     }
 
+    /// Go to Implementation (⌥⌘B): the concrete types behind an
+    /// interface or a trait, the bodies of an abstract method. Go to Type
+    /// Definition (⇧⌘B): from a variable to the type it holds. One answer
+    /// is a jump; several are listed with a preview.
+    @objc func goToImplementation(_ sender: Any?) { locate(type: false) }
+    @objc func goToTypeDefinition(_ sender: Any?) { locate(type: true) }
+
+    private func locate(type: Bool) {
+        guard let textView else { return }
+        guard let lspApp, let path = lspOpenPath else {
+            showHint(noServerHint)
+            return
+        }
+        let text = textView.string as NSString
+        let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
+        flushLSPChange()
+        let asked = lspApp.lspImplementation(path: path, line: line, character: character, type: type) {
+            [weak self] json in
+            guard let self else { return }
+            switch CoreDefinition.decide(result: json, path: path, line: line, character: character) {
+            case .jump(let target):
+                self.openLocation?(target.path, target.line, target.character)
+            case .choose(let targets):
+                self.showReferences(
+                    targets.map { ReferenceLocation(path: $0.path, line: $0.line, character: $0.character) },
+                    title: type
+                        ? t("Type Definitions ({})", String(targets.count))
+                        : t("Implementations ({})", String(targets.count)))
+            case .references, .nothing:
+                self.showHint(type ? t("No type definition found.") : t("No implementation found."))
+            }
+        }
+        if !asked {
+            showHint(
+                type
+                    ? t("The language server here does not find type definitions.")
+                    : t("The language server here does not find implementations."))
+        }
+    }
+
     /// The caret is on the definition, so the jump key asks who uses
     /// the symbol. One use is a jump — opening a panel to offer a
     /// single row asks for a keystroke that decides nothing. Several

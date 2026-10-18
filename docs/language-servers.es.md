@@ -124,6 +124,13 @@ proyecto en Settings ▸ Language Servers; véase
   Un servidor que contesta con varias definiciones —una declaración y
   su implementación— las ofrece igual. El atajo de buscar referencias
   sigue como estaba.
+- **Ir a la implementación** (⌥⌘B, Ctrl+F12 en Linux) va de una
+  interfaz, un *trait* o un método abstracto a lo que lo implementa, e
+  **Ir a la definición del tipo** (⇧⌘B, Ctrl+Mayús+F12 en Linux) de una
+  variable al tipo que contiene. Una respuesta es un salto; varias se
+  listan con el código de alrededor de cada una. No todos los
+  servidores responden ambas: el que no lo hace lo dice junto al
+  cursor.
 - **Buscar referencias** (⇧⌘R) lista cada uso del símbolo bajo el
   cursor en un panel flotante — ↑/↓ para moverse, ⏎ para saltar.
   Primero el código y después las pruebas, cada parte bajo un

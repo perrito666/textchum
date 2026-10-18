@@ -636,6 +636,46 @@ pub unsafe extern "C" fn tc_lsp_definition(
     .unwrap_or(0)
 }
 
+/// Requests where the symbol at an LSP position is implemented; same
+/// contract and answer as [`tc_lsp_definition`]. 0 when no server of the
+/// document finds implementations.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_implementation(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else { return 0 };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else { return 0 };
+    catch_unwind(AssertUnwindSafe(|| app.pool.implementation(std::path::Path::new(path), line, character)))
+        .unwrap_or(0)
+}
+
+/// Requests where the type of the symbol at an LSP position is
+/// declared; same contract and answer as [`tc_lsp_definition`]. 0 when
+/// no server of the document finds type definitions.
+///
+/// # Safety
+/// Same contract as [`tc_lsp_did_open`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_type_definition(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    line: u32,
+    character: u32,
+) -> u64 {
+    let Some(app) = (unsafe { app.as_mut() }) else { return 0 };
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else { return 0 };
+    catch_unwind(AssertUnwindSafe(|| app.pool.type_definition(std::path::Path::new(path), line, character)))
+        .unwrap_or(0)
+}
+
 /// Requests the document's symbol tree; same contract as
 /// [`tc_lsp_hover`]. The response's `result` is an LSP
 /// `DocumentSymbol[]` (hierarchical) or `SymbolInformation[]` (flat).

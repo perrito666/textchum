@@ -113,6 +113,12 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   with several definitions — a declaration and an implementation —
   offers them the same way. The explicit Find References shortcut is
   unchanged.
+- **Go to Implementation** (⌥⌘B, Ctrl+F12 on Linux) goes from an
+  interface, a trait or an abstract method to what implements it, and
+  **Go to Type Definition** (⇧⌘B, Ctrl+Shift+F12 on Linux) from a
+  variable to the type it holds. One answer is a jump; several are
+  listed with the code around each. Not every server answers both: one
+  that does not says so by the caret.
 - **Find References** (⇧⌘R) lists every use of the symbol under the
   caret in a floating panel — ↑/↓ to move, ⏎ to jump. Code comes
   first, tests after, each under a heading with a count: what calls

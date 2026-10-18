@@ -333,6 +333,8 @@ fn run_manager(
                         "activeParameterSupport": true
                     }},
                     "definition": {"linkSupport": true},
+                    "implementation": {"linkSupport": true},
+                    "typeDefinition": {"linkSupport": true},
                     "documentHighlight": {},
                     "callHierarchy": {},
                     "inlayHint": {},

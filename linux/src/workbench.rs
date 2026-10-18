@@ -342,6 +342,8 @@ impl Workbench {
         }
         let go_section = gtk::gio::Menu::new();
         go_section.append(Some(&tr("Jump to Definition")), Some("win.definition"));
+        go_section.append(Some(&tr("Go to Implementation")), Some("win.implementation"));
+        go_section.append(Some(&tr("Go to Type Definition")), Some("win.type-definition"));
         go_section.append(Some(&tr("Go Back")), Some("win.back"));
         go_section.append(Some(&tr("Go Forward")), Some("win.forward"));
         go_section.append(Some(&tr("Go to Last Edit")), Some("win.last-edit"));
@@ -2567,6 +2569,8 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             }
         });
     });
+    add("implementation", workbench, |workbench, _| locate(workbench, false));
+    add("type-definition", workbench, |workbench, _| locate(workbench, true));
     add("find-next", workbench, |workbench, _| {
         workbench.step_match(true);
     });
@@ -3749,6 +3753,8 @@ const PALETTE: &[(&str, &str)] = &[
     ("Run Save Preprocessors", "win.preprocess"),
     ("Redraw", "win.redraw"),
     ("Jump to Definition", "win.definition"),
+    ("Go to Implementation", "win.implementation"),
+    ("Go to Type Definition", "win.type-definition"),
     ("Go Back", "win.back"),
     ("Go Forward", "win.forward"),
     ("Find References", "win.references"),
@@ -6289,6 +6295,57 @@ fn go_to_last_edit(workbench: &Rc<Workbench>) {
     page::land(&page.view);
     page.view.grab_focus();
     LAST_EDIT_WALK.with(|walk| walk.set(Some((place.stamp, document.id, caret_of(&page)))));
+}
+
+/// Go to Implementation: the concrete types behind an interface or a
+/// trait, the bodies of an abstract method. Go to Type Definition (with
+/// `type_definition`): from a variable to the type it holds. One answer
+/// is a jump; several are listed with a preview.
+fn locate(workbench: &Rc<Workbench>, type_definition: bool) {
+    let Some(page) = workbench.selected() else { return };
+    let Some(path) = page.path().borrow().clone() else {
+        workbench.hint(&tr("Save the file first — untitled documents have no server."));
+        return;
+    };
+    let (line, character) = page::lsp_anchor(&page);
+    let shell = Shell::instance();
+    let id = if type_definition {
+        shell.pool.borrow_mut().type_definition(Path::new(&path), line, character)
+    } else {
+        shell.pool.borrow_mut().implementation(Path::new(&path), line, character)
+    };
+    if id == 0 {
+        workbench.hint(&if type_definition {
+            tr("The language server here does not find type definitions.")
+        } else {
+            tr("The language server here does not find implementations.")
+        });
+        return;
+    }
+    let weak = Rc::downgrade(workbench);
+    shell.expect_response(id, move |json| {
+        let Some(workbench) = weak.upgrade() else { return };
+        use textchum_core::definition::Decision;
+        match textchum_core::definition::decide(json, &path, line, character) {
+            Decision::Jump(target) => {
+                workbench.open(
+                    Some(PathBuf::from(target.path)),
+                    Some((target.line as i32, target.character as usize)),
+                );
+            }
+            Decision::Choose(targets) => {
+                let title = if type_definition { tr("Type Definitions") } else { tr("Implementations") };
+                show_places(&workbench, &title, places(&targets));
+            }
+            Decision::AlreadyThere | Decision::Nothing => {
+                workbench.hint(&if type_definition {
+                    tr("No type definition found.")
+                } else {
+                    tr("No implementation found.")
+                });
+            }
+        }
+    });
 }
 
 /// Next Finding and Previous Finding: the caret goes to the start of the

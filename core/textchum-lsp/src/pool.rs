@@ -807,6 +807,38 @@ impl Pool {
         )
     }
 
+    /// Asks where the symbol at an LSP position is implemented: the
+    /// concrete types behind an interface or a trait, the bodies of an
+    /// abstract method. Same contract and answer as [`Self::definition`];
+    /// 0 when no server of the document finds implementations.
+    pub fn implementation(&mut self, path: &Path, line: u32, character: u32) -> u64 {
+        self.request(
+            path,
+            "implementationProvider",
+            "textDocument/implementation",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "position": {"line": line, "character": character},
+            }),
+        )
+    }
+
+    /// Asks where the type of the symbol at an LSP position is declared:
+    /// from a variable to its struct. Same contract and answer as
+    /// [`Self::definition`]; 0 when no server of the document finds
+    /// type definitions.
+    pub fn type_definition(&mut self, path: &Path, line: u32, character: u32) -> u64 {
+        self.request(
+            path,
+            "typeDefinitionProvider",
+            "textDocument/typeDefinition",
+            serde_json::json!({
+                "textDocument": {"uri": crate::uri::path_to_uri(path)},
+                "position": {"line": line, "character": character},
+            }),
+        )
+    }
+
     /// Requests completions at an LSP position; same contract as
     /// [`Self::hover`]. The response's `result` is an LSP
     /// `CompletionItem[]` or `CompletionList`.

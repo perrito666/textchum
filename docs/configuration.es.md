@@ -627,7 +627,7 @@ Teclas: un carácter, de `f1` a `f20`, o
 Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
-`jumpToDefinition`, `findReferences`, `codeActions`, `renameSymbol`, `formatDocument`,
+`jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`, `findReferences`, `codeActions`, `renameSymbol`, `formatDocument`,
 `runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,
 `blameLine`, `goToLine`,

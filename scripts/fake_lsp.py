@@ -134,6 +134,9 @@ def main():
                         "codeActionProvider": {"resolveProvider": True},
                         "hoverProvider": True,
                         "definitionProvider": True,
+                        # Implementations, but no type definitions: the
+                        # client says which of the two it cannot ask.
+                        "implementationProvider": True,
                         "completionProvider": {},
                         "referencesProvider": True,
                         "renameProvider": True,
@@ -336,6 +339,13 @@ def main():
                     },
                 }],
             })
+        elif method == "textDocument/implementation":
+            # One implementation, on the second line.
+            uri = message["params"]["textDocument"]["uri"]
+            send({"jsonrpc": "2.0", "id": message["id"], "result": [{
+                "uri": uri,
+                "range": {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 1}},
+            }]})
         elif method == "textDocument/completion":
             # A position outside the text the client has sent is a
             # request against text the server has not seen; answering

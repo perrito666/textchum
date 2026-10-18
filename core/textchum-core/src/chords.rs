@@ -68,6 +68,8 @@ pub fn menu() -> Vec<Entry> {
             n_("Code"),
             vec![
                 action('d', "Jump to Definition", "jumpToDefinition"),
+                action('i', "Go to Implementation", "goToImplementation"),
+                action('t', "Go to Type Definition", "goToTypeDefinition"),
                 action('r', "Find References", "findReferences"),
                 action('c', "Show Callers", "showCallers"),
                 action('a', "Code Actions", "codeActions"),

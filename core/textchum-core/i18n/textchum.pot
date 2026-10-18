@@ -242,6 +242,16 @@ msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Go to Implementation"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Go to Type Definition"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Find References"
 msgstr ""
 
@@ -969,6 +979,30 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "No earlier edit."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "The language server here does not find type definitions."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "The language server here does not find implementations."
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Type Definitions"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Implementations"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "No type definition found."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "No implementation found."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
@@ -1729,6 +1763,14 @@ msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Move the pointer or the caret over a symbol."
+msgstr ""
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Type Definitions ({})"
+msgstr ""
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Implementations ({})"
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift

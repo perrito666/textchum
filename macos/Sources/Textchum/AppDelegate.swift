@@ -1721,6 +1721,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.performUndo(_:)): "undo",
             #selector(DocumentController.performRedo(_:)): "redo",
             #selector(DocumentController.jumpToDefinition(_:)): "jumpToDefinition",
+            #selector(DocumentController.goToImplementation(_:)): "goToImplementation",
+            #selector(DocumentController.goToTypeDefinition(_:)): "goToTypeDefinition",
             #selector(goBack(_:)): "goBack",
             #selector(goToLastEdit(_:)): "goToLastEdit",
             #selector(showRecentFiles(_:)): "recentFiles",
@@ -3317,6 +3319,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         jump.keyEquivalentModifierMask = [.command, .control]
         editMenu.addItem(jump)
+        let implementation = NSMenuItem(
+            title: t("Go to Implementation"),
+            action: #selector(DocumentController.goToImplementation(_:)),
+            keyEquivalent: "b")
+        implementation.keyEquivalentModifierMask = [.command, .option]
+        editMenu.addItem(implementation)
+        let typeDefinition = NSMenuItem(
+            title: t("Go to Type Definition"),
+            action: #selector(DocumentController.goToTypeDefinition(_:)),
+            keyEquivalent: "b")
+        typeDefinition.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(typeDefinition)
         let backItem = NSMenuItem(
             title: t("Go Back"),
             action: #selector(goBack(_:)),

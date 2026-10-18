@@ -472,6 +472,29 @@ public final class CoreApp {
         router.register(id, completion)
     }
 
+    /// Requests where the symbol at an LSP position is implemented, or
+    /// with `type` true where its type is declared. Same answer as
+    /// ``lspDefinition(path:line:character:completion:)``. False when no
+    /// server of the document answers that, and the completion is never
+    /// called.
+    @MainActor
+    @discardableResult
+    public func lspImplementation(
+        path: String, line: Int, character: Int, type: Bool,
+        completion: @escaping (String) -> Void
+    ) -> Bool {
+        let id = withUTF8(path) { path, pathLen in
+            type
+                ? tc_lsp_type_definition(
+                    handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+                : tc_lsp_implementation(
+                    handle, path, pathLen, UInt32(max(0, line)), UInt32(max(0, character)))
+        }
+        guard id != 0 else { return false }
+        router.register(id, completion)
+        return true
+    }
+
     /// Requests the document's symbol tree; same contract as
     /// ``lspHover(path:line:character:completion:)``. The JSON is an LSP
     /// `DocumentSymbol[]` (hierarchical) or `SymbolInformation[]` (flat).

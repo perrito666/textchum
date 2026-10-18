@@ -127,6 +127,13 @@ Language Servers ; voir [configuration](configuration.md#projets).
   définitions — une déclaration et son implémentation — les propose de
   la même façon. Le raccourci de recherche des références ne change
   pas.
+- **Aller à l'implémentation** (⌥⌘B, Ctrl+F12 sous Linux) va d'une
+  interface, d'un *trait* ou d'une méthode abstraite à ce qui
+  l'implémente, et **Aller à la définition du type** (⇧⌘B,
+  Ctrl+Maj+F12 sous Linux) d'une variable au type qu'elle contient.
+  Une réponse est un saut ; plusieurs sont listées avec le code autour
+  de chacune. Tous les serveurs ne répondent pas aux deux : celui qui
+  ne le fait pas le dit près du curseur.
 - **Chercher les références** (⇧⌘R) liste chaque usage du symbole sous
   le curseur dans un panneau flottant — ↑/↓ pour se déplacer, ⏎ pour
   sauter. Le code d'abord, les tests ensuite, chacun sous un titre

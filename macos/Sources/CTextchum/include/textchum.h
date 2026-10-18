@@ -470,6 +470,34 @@ uint64_t tc_lsp_definition(struct TcApp *app,
                            uint32_t character);
 
 /**
+ * Requests where the symbol at an LSP position is implemented; same
+ * contract and answer as [`tc_lsp_definition`]. 0 when no server of the
+ * document finds implementations.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_implementation(struct TcApp *app,
+                               const char *path,
+                               uintptr_t path_len,
+                               uint32_t line,
+                               uint32_t character);
+
+/**
+ * Requests where the type of the symbol at an LSP position is
+ * declared; same contract and answer as [`tc_lsp_definition`]. 0 when
+ * no server of the document finds type definitions.
+ *
+ * # Safety
+ * Same contract as [`tc_lsp_did_open`].
+ */
+uint64_t tc_lsp_type_definition(struct TcApp *app,
+                                const char *path,
+                                uintptr_t path_len,
+                                uint32_t line,
+                                uint32_t character);
+
+/**
  * Requests the document's symbol tree; same contract as
  * [`tc_lsp_hover`]. The response's `result` is an LSP
  * `DocumentSymbol[]` (hierarchical) or `SymbolInformation[]` (flat).
