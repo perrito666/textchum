@@ -420,10 +420,23 @@ Une commande qui ne dit rien depuis un moment tout en tournant attend
 peut-être une entrée : le panneau le dit, et une ligne tapée dans son
 champ part vers l'entrée de la commande.
 
+Ce qui peut être lancé dans le fichier est marqué dans la marge d'un
+triangle vert : en Rust, un `#[test]`, un `#[bench]` et le `main` d'un
+binaire ou d'un exemple ; en Go, un `TestX`, un `BenchmarkX` et le
+`main` d'un paquet `main` ; en Python, une fonction ou méthode de test
+pytest et le `if __name__ == "__main__":` d'un module. Un clic sur la
+marque lance celui-là seul — `cargo test -- tests::adds --exact`, `go
+test -run '^TestAdds$' .`, `python3 -m pytest tests/test_app.py::test_adds`
+— dans le panneau, depuis le dossier du paquet. **Run → Lancer au
+curseur** (⌃⇧R, Ctrl+Maj+F10 sous Linux) lance le plus intérieur autour
+du curseur. Là où l'ampoule d'une correction est sur la même ligne,
+c'est l'ampoule qui est dessinée et le clic propose la correction.
+
 Pas encore là : le panneau n'est pas un terminal. Un programme qui
 dessine tout l'écran — un éditeur, `top`, un REPL qui édite sa propre
-ligne — n'y a pas sa place. Les marques dans la marge qui lancent un
-test ou un `main`, et un arbre des résultats de tests, viendront après.
+ligne — n'y a pas sa place. Les marques ne sont trouvées que pour Rust,
+Go et Python, un test écrit selon les conventions d'un autre lanceur
+n'est pas marqué, et un arbre des résultats de tests viendra après.
 
 ## Markdown et prose
 

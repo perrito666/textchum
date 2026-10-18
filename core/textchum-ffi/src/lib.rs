@@ -1782,6 +1782,32 @@ pub unsafe extern "C" fn tc_document_last_edit_before(
     true
 }
 
+/// What in the document can be run: `[{line, endLine, kind, name,
+/// command, cwd}]`, lines zero-based. Free with [`tc_string_free`]; null
+/// on a bad pointer.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_runnables_json(document: *const TcDocument) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(document.inner.runnables_json())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Run at Caret: the innermost runnable around zero-based `line`, as one
+/// row of [`tc_document_runnables_json`], or `null`. Free with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_runnable_at_json(document: *const TcDocument, line: usize) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(document.inner.runnable_at_json(line))))
+        .unwrap_or(std::ptr::null_mut())
+}
+
 /// The breadcrumbs at the UTF-16 `offset`: a JSON array of `{label,
 /// offset, siblings: [{label, offset}]}`, outermost first, offsets in
 /// UTF-16. Free with [`tc_string_free`]; null on a bad pointer.

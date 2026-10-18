@@ -1775,6 +1775,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(goToSymbolInProject(_:)): "projectSymbols",
             #selector(showSearchEverywhere(_:)): "searchEverywhere",
             #selector(runCommand(_:)): "runCommand",
+            #selector(DocumentController.runAtCaret(_:)): "runAtCaret",
             #selector(runAgain(_:)): "runAgain",
             #selector(stopRun(_:)): "stopRun",
             #selector(nextOutputPlace(_:)): "nextOutputPlace",
@@ -2626,7 +2627,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Starts `command` in the project in front and shows it in the
     /// workbench's run panel. A run that cannot start says why.
-    func run(_ command: String, in workbench: Workbench) {
+    func run(_ command: String, in workbench: Workbench, cwd: String? = nil) {
         guard let coreApp else { return }
         let panel = workbench.runPanel
         panel.core = coreApp
@@ -2634,7 +2635,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.recordJumpOrigin()
             self?.open(path: path, revealLine: line + 1, revealCharacter: column)
         }
-        switch coreApp.runStart(command: command, cwd: currentScope) {
+        switch coreApp.runStart(command: command, cwd: cwd ?? currentScope) {
         case .success(let id):
             panel.begin(id: id, command: command)
         case .failure(let error):
@@ -3842,6 +3843,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let runItem = NSMenuItem(title: t("Run Command…"), action: #selector(runCommand(_:)), keyEquivalent: "r")
         runItem.keyEquivalentModifierMask = [.control, .option]
         runMenu.addItem(runItem)
+        let runHere = NSMenuItem(
+            title: t("Run at Caret"), action: #selector(DocumentController.runAtCaret(_:)), keyEquivalent: "r")
+        runHere.keyEquivalentModifierMask = [.control, .shift]
+        runMenu.addItem(runHere)
         let rerunItem = NSMenuItem(title: t("Run Again"), action: #selector(runAgain(_:)), keyEquivalent: "r")
         rerunItem.keyEquivalentModifierMask = [.command]
         runMenu.addItem(rerunItem)

@@ -334,6 +334,33 @@ public final class CoreDocument {
         return (try? JSONDecoder().decode([Crumb].self, from: Data(String(cString: json).utf8))) ?? []
     }
 
+    /// Something in the file that can be run: its `main`, a test, a
+    /// benchmark, with the command that runs just that one.
+    public struct Runnable: Decodable, Equatable, Sendable {
+        /// Zero-based lines it spans; the mark goes on the first.
+        public let line: Int
+        public let endLine: Int
+        /// `main`, `test` or `bench`.
+        public let kind: String
+        public let name: String
+        public let command: String
+        public let cwd: String
+    }
+
+    /// What in the file can be run.
+    public var runnables: [Runnable] {
+        guard let json = tc_document_runnables_json(handle) else { return [] }
+        defer { tc_string_free(json) }
+        return (try? JSONDecoder().decode([Runnable].self, from: Data(String(cString: json).utf8))) ?? []
+    }
+
+    /// The innermost runnable around zero-based `line`.
+    public func runnable(at line: Int) -> Runnable? {
+        guard let json = tc_document_runnable_at_json(handle, UInt(max(0, line))) else { return nil }
+        defer { tc_string_free(json) }
+        return try? JSONDecoder().decode(Runnable?.self, from: Data(String(cString: json).utf8))
+    }
+
     public func setInlayHints(_ resultJSON: String) {
         _ = Self.withUTF8Pointer(resultJSON) { pointer, length in
             tc_document_set_inlay_hints(handle, pointer, length)

@@ -414,10 +414,23 @@ orden que lleva un rato sin decir nada mientras sigue en marcha puede
 estar esperando una entrada: el panel lo dice, y una línea escrita en
 su campo va a la entrada de la orden.
 
+Lo que se puede ejecutar en el archivo está marcado en el margen con un
+triángulo verde: en Rust, un `#[test]`, un `#[bench]` y el `main` de un
+binario o de un ejemplo; en Go, un `TestX`, un `BenchmarkX` y el `main`
+de un paquete `main`; en Python, una función o método de prueba de
+pytest y el `if __name__ == "__main__":` de un módulo. Un clic en la
+marca ejecuta solo eso — `cargo test -- tests::adds --exact`, `go test
+-run '^TestAdds$' .`, `python3 -m pytest tests/test_app.py::test_adds`
+— en el panel, desde la carpeta del paquete. **Run → Ejecutar en
+el cursor** (⌃⇧R, Ctrl+Mayús+F10 en Linux) ejecuta el más interior
+alrededor del cursor. Donde la bombilla de un arreglo está en la misma
+línea, se dibuja la bombilla y el clic ofrece el arreglo.
+
 Todavía no: el panel no es una terminal. Un programa que dibuja la
 pantalla entera — un editor, `top`, un REPL que edita su propia línea —
-no cabe en él. Las marcas en el margen que ejecutan una prueba o un
-`main`, y un árbol de resultados de pruebas, vendrán después.
+no cabe en él. Las marcas solo se encuentran para Rust, Go y Python,
+una prueba escrita según las convenciones de otro ejecutor no se marca,
+y un árbol de resultados de pruebas vendrá después.
 
 ## Markdown y prosa
 

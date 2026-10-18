@@ -3109,6 +3109,34 @@ func runSmokeTest() -> Int32 {
         }
     }
     print("run panel ok (output as it comes, its place walked and opened, the end said)")
+
+    // What can be run is marked in the gutter: the main and the test of
+    // a file in a cargo package, and Run at Caret finds the test the
+    // caret is in.
+    do {
+        let package = NSTemporaryDirectory() + "textchum-marks-\(getpid())"
+        try FileManager.default.createDirectory(atPath: package + "/src", withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: package) }
+        try "".write(toFile: package + "/Cargo.toml", atomically: true, encoding: .utf8)
+        try "fn main() {}\n\n#[test]\nfn adds() {\n    check();\n}\n"
+            .write(toFile: package + "/src/main.rs", atomically: true, encoding: .utf8)
+        let marked = try CoreDocument(contentsOf: package + "/src/main.rs")
+        let markBench = Workbench(sidebar: nil)
+        let marking = DocumentController(document: marked)
+        markBench.add(marking)
+        marking.refreshRunMarks()
+        guard let gutter = marking.views.first?.gutter, gutter.runLines == [1, 4],
+            marked.runnable(at: 4)?.command == "cargo test -- adds --exact"
+        else {
+            print("FAIL: run marks on \(String(describing: marking.views.first?.gutter.runLines)), at the caret \(String(describing: marked.runnable(at: 4)))")
+            return 1
+        }
+        markBench.window?.close()
+    } catch {
+        print("FAIL: the run marks' package could not be made: \(error)")
+        return 1
+    }
+    print("run marks ok (main and test marked, the test at the caret found)")
     pinBench.window?.close()
 
     // With the find bar open, the pins move below it: a search field

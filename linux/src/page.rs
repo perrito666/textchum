@@ -549,6 +549,7 @@ fn install_change_handler(
                                 // has the text: its hints are asked for
                                 // afresh.
                                 request_inlay_hints(&view);
+                                refresh_run_marks(&view);
                             }
                             request_semantic_tokens(&document);
                         },
@@ -3597,13 +3598,58 @@ fn line_text(page: &Page, line: i32) -> String {
 /// something the line gets a mark in the gutter; a click on the mark
 /// lists the actions, as Code Actions does. A caret that moves to
 /// another line takes the mark away at once.
+/// Puts a run mark beside each `main`, test and benchmark of the file.
+pub fn refresh_run_marks(page: &Rc<Page>) {
+    let buffer = &page.buffer;
+    buffer.remove_source_marks(&buffer.start_iter(), &buffer.end_iter(), Some("run"));
+    let runnables = page.state.borrow().document.runnables();
+    for runnable in runnables {
+        if let Some(at) = buffer.iter_at_line(runnable.line as i32) {
+            buffer.create_source_mark(None, "run", &at);
+        }
+    }
+}
+
+/// The lines carrying a run mark, for the smoke test.
+pub(crate) fn run_mark_lines(page: &Rc<Page>) -> Vec<i32> {
+    let buffer = &page.buffer;
+    (0..buffer.line_count())
+        .filter(|line| !buffer.source_marks_at_line(*line, Some("run")).is_empty())
+        .collect()
+}
+
 fn install_fix_mark(page: &Rc<Page>) {
     page.view.set_show_line_marks(true);
     let attributes = sourceview5::MarkAttributes::new();
     attributes.set_icon_name("dialog-information-symbolic");
     page.view.set_mark_attributes("fix", &attributes, 10);
-    page.view.connect_line_mark_activated(|view, _, _, _, _| {
-        let _ = gtk::prelude::WidgetExt::activate_action(view, "win.code-actions", None);
+    // What can be run: under the bulb where both are, since the bulb is
+    // about the caret's line now and the run mark is always there.
+    let run = sourceview5::MarkAttributes::new();
+    run.set_icon_name("media-playback-start-symbolic");
+    page.view.set_mark_attributes("run", &run, 5);
+    page.view.connect_line_mark_activated(|view, at, _, _, _| {
+        let buffer = view.buffer();
+        let Some(buffer) = buffer.downcast_ref::<sourceview5::Buffer>() else { return };
+        let line = at.line();
+        if buffer.source_marks_at_line(line, Some("fix")).is_empty()
+            && !buffer.source_marks_at_line(line, Some("run")).is_empty()
+        {
+            let _ = gtk::prelude::WidgetExt::activate_action(
+                view,
+                "win.run-line",
+                Some(&(line as u64).to_variant()),
+            );
+        } else {
+            let _ = gtk::prelude::WidgetExt::activate_action(view, "win.code-actions", None);
+        }
+    });
+    // Once the page has its text and its language.
+    let weak = Rc::downgrade(page);
+    glib::idle_add_local_once(move || {
+        if let Some(page) = weak.upgrade() {
+            refresh_run_marks(&page);
+        }
     });
     let weak = Rc::downgrade(page);
     page.buffer.connect_mark_set(move |buffer, _, mark| {

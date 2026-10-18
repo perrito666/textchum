@@ -32,6 +32,13 @@ final class LineNumberGutterView: NSView {
     private var fixMarkRect: NSRect?
     /// A click on the bulb.
     var onFixMark: (() -> Void)?
+    /// The lines, from one, where something can be run — a `main`, a
+    /// test — marked with a triangle that runs it; and where each was
+    /// drawn, for clicks.
+    private(set) var runLines: Set<Int> = []
+    private var runMarkRects: [Int: NSRect] = [:]
+    /// A click on a run mark, with its line from one.
+    var onRunMark: ((Int) -> Void)?
 
     override var isFlipped: Bool { true }
 
@@ -79,6 +86,13 @@ final class LineNumberGutterView: NSView {
 
     func diagnosticSeverity(ofLine line: Int) -> Int? { diagnosticSeverities[line] }
 
+    func setRunLines(_ lines: Set<Int>) {
+        guard lines != runLines else { return }
+        runLines = lines
+        runMarkRects = [:]
+        needsDisplay = true
+    }
+
     func setFixLine(_ line: Int?) {
         guard line != fixLine else { return }
         fixLine = line
@@ -90,6 +104,12 @@ final class LineNumberGutterView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         if let rect = fixMarkRect, rect.insetBy(dx: -3, dy: -3).contains(point), let onFixMark {
             onFixMark()
+            return
+        }
+        if let (line, _) = runMarkRects.first(where: { $0.value.insetBy(dx: -3, dy: -3).contains(point) }),
+            let onRunMark
+        {
+            onRunMark(line)
             return
         }
         super.mouseDown(with: event)
@@ -270,6 +290,19 @@ final class LineNumberGutterView: NSView {
                         .init(paletteColors: [.systemYellow])) ?? bulb
                     tinted.draw(in: rect)
                     self.fixMarkRect = rect
+                    if let severity = self.diagnosticSeverities[line] {
+                        labelAttributes[.foregroundColor] = Self.diagnosticColor(severity)
+                    }
+                } else if self.runLines.contains(line),
+                    let play = NSImage(systemSymbolName: "play.fill", accessibilityDescription: t("Run"))
+                {
+                    // The bulb wins where both are; a finding still
+                    // colours the number.
+                    let size: CGFloat = 9
+                    let rect = NSRect(x: 4, y: top + 1 + (numberHeight - size) / 2, width: size, height: size)
+                    let tinted = play.withSymbolConfiguration(.init(paletteColors: [.systemGreen])) ?? play
+                    tinted.draw(in: rect)
+                    self.runMarkRects[line] = rect
                     if let severity = self.diagnosticSeverities[line] {
                         labelAttributes[.foregroundColor] = Self.diagnosticColor(severity)
                     }

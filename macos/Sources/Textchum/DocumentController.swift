@@ -479,7 +479,11 @@ final class DocumentController: NSResponder {
         let gutter = LineNumberGutterView(textView: textView)
         gutter.setVisible(appliedSettings?.lineNumbers ?? true)
         gutter.onFixMark = { [weak self] in self?.showCodeActions(nil) }
+        gutter.onRunMark = { [weak self] line in self?.runMark(atLine: line - 1) }
         let view = DocumentView(scrollView: scrollView, textView: textView, gutter: gutter)
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.refreshRunMarks() }
+        }
 
         // The gutter, the change bar and the preview all follow scrolling.
         let clipView = scrollView.contentView
@@ -5131,6 +5135,52 @@ final class DocumentController: NSResponder {
         window?.makeFirstResponder(textView)
     }
 
+    // MARK: Run marks
+
+    private var runMarksTimer: Timer?
+
+    /// The run marks are read again once the typing pauses: a test
+    /// written, a function renamed into one.
+    func scheduleRunMarks() {
+        runMarksTimer?.invalidate()
+        runMarksTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: false) { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.refreshRunMarks() }
+            }
+        }
+    }
+
+    /// Puts a run mark beside each `main`, test and benchmark of the
+    /// file, in every view of it.
+    func refreshRunMarks() {
+        let lines = Set(coreDocument.runnables.map { $0.line + 1 })
+        for view in views {
+            view.gutter.setRunLines(lines)
+        }
+    }
+
+    /// A run mark clicked: what starts on that zero-based line runs.
+    func runMark(atLine line: Int) {
+        guard let runnable = coreDocument.runnables.first(where: { $0.line == line }) else { return }
+        run(runnable)
+    }
+
+    /// Run at Caret (⌃⇧R): the test the caret is in, else the `main`.
+    @objc func runAtCaret(_ sender: Any?) {
+        guard let textView, let gutter = views.first?.gutter else { return }
+        let line = gutter.lineIndex(forOffset: textView.selectedRange().location)
+        guard let runnable = coreDocument.runnable(at: line) else {
+            showHint(t("Nothing here runs: put the caret in a test, a benchmark or a main."))
+            return
+        }
+        run(runnable)
+    }
+
+    private func run(_ runnable: CoreDocument.Runnable) {
+        guard let workbench, let delegate = NSApp.delegate as? AppDelegate else { return }
+        delegate.run(runnable.command, in: workbench, cwd: runnable.cwd)
+    }
+
     /// What the status bar says about this document right now.
     var statusInfo: StatusBar.Info {
         var info = StatusBar.Info()
@@ -5291,6 +5341,7 @@ final class DocumentController: NSResponder {
         lineRuler?.invalidateLineStarts()
         refreshInlayNotes()
         scheduleInlayHints(after: 0.6)
+        scheduleRunMarks()
         scheduleSemanticTokens(after: 0.6)
         assertInSync()
     }
@@ -6543,6 +6594,7 @@ extension DocumentController: NSTextViewDelegate {
         // typing pauses.
         refreshInlayNotes()
         scheduleInlayHints(after: 0.6)
+        scheduleRunMarks()
         scheduleSemanticTokens(after: 0.6)
         for view in views {
             updateContextStrip(for: view)
