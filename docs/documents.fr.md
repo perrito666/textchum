@@ -52,6 +52,17 @@ Les opérations composées s'enregistrent comme des groupes explicites :
 Tout remplacer réécrit chaque occurrence mais s'annule en un seul pas, et
 un rechargement depuis le disque (ci-dessous) est lui aussi un seul pas.
 
+Un renommage ou une action de code d'un serveur de langage est un seul
+pas dans chaque fichier qu'il a modifié. Quand il en a modifié plusieurs,
+Annuler dans n'importe lequel le retire en entier : dans chaque document
+ouvert dont le pas le plus récent est encore celui-là, et dans les
+fichiers qui n'étaient pas ouverts, que l'éditeur a écrits lui-même en en
+gardant une copie. Rétablir le refait partout. Un fichier modifié depuis
+— à la main ou par un autre programme — est laissé tel quel, et la zone
+de notification dit lequel, avec le nombre de fichiers annulés. Cela
+vaut pour la session : après un redémarrage, l'historique de chaque
+document repart de zéro.
+
 ## Plusieurs curseurs
 
 **Ajouter l'occurrence suivante** (⌃G, Alt+J sous Linux) sélectionne le

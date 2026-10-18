@@ -1161,6 +1161,24 @@ bool tc_document_last_edit_before(const struct TcDocument *document,
                                   uint64_t *stamp_out);
 
 /**
+ * [`tc_document_begin_edit_group`] for the edits refactoring `tag`
+ * makes in this document.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+void tc_document_begin_tagged_edit_group(struct TcDocument *document, uint64_t tag);
+
+/**
+ * The refactoring the step Undo (or with `undo` false, Redo) would
+ * act on belongs to; 0 for none.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+uint64_t tc_document_step_tag(const struct TcDocument *document, bool undo);
+
+/**
  * Several carets: `request` is `{selections: [[anchor, head]], op}` in
  * UTF-16 units, the newest selection last; the answer is `{selections,
  * edits: [{start, end, text}]}`, the edits back to front, to be made
@@ -1589,6 +1607,52 @@ void tc_i18n_set_language(const char *tag,
                           uintptr_t tag_len,
                           const char *locale,
                           uintptr_t locale_len);
+
+/**
+ * Starts a refactoring that may touch several files; its id tags the
+ * edit groups it makes. See [`textchum_core::refactoring`].
+ *
+ * # Safety
+ * `label` must point to `label_len` readable bytes.
+ */
+uint64_t tc_refactoring_begin(const char *label, uintptr_t label_len);
+
+/**
+ * An open document took part in refactoring `id`.
+ */
+void tc_refactoring_note_open_document(uint64_t id);
+
+/**
+ * Writes `text` to `path`, a file not open, as part of refactoring
+ * `id`, keeping what it held. Null when written; otherwise why not.
+ * Free with [`tc_string_free`].
+ *
+ * # Safety
+ * `path` and `text` must point to `path_len` and `text_len` readable
+ * bytes.
+ */
+char *tc_refactoring_write_closed(uint64_t id,
+                                  const char *path,
+                                  uintptr_t path_len,
+                                  const char *text,
+                                  uintptr_t text_len);
+
+/**
+ * How many files refactoring `id` touched; 0 for one not remembered.
+ */
+uintptr_t tc_refactoring_files_touched(uint64_t id);
+
+/**
+ * The refactoring's label, or null. Free with [`tc_string_free`].
+ */
+char *tc_refactoring_label(uint64_t id);
+
+/**
+ * Undoes (or with `undo` false, redoes) refactoring `id` in the files
+ * that were not open, after the shell did so in `documents` open ones,
+ * and says what was done. Free with [`tc_string_free`].
+ */
+char *tc_refactoring_finish(uint64_t id, bool undo, uintptr_t documents);
 
 /**
  * Where local history keeps saved versions from now on; an empty `dir`

@@ -47,6 +47,16 @@ Compound operations record as explicit groups: Replace All rewrites every
 match but undoes as a single step, and a reload from disk (below) is one
 step too.
 
+A rename or a code action from a language server is one step in each
+file it changed. When it changed more than one, Undo in any of them
+takes the whole of it back: in every open document whose newest step it
+still is, and in the files that were not open, which the editor wrote
+itself and kept a copy of. Redo makes it again everywhere. A file
+changed since — by hand, or by another program — is left as it is, and
+the notification area says which, along with how many files were
+undone. This holds for the session: after a restart each document's own
+history starts afresh.
+
 ## Several carets
 
 **Add Next Occurrence** (⌃G, Alt+J on Linux) selects the word at the

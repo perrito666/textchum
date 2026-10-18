@@ -2260,6 +2260,55 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         }
         println!("several carets ok (the word, its next match, typed at each as one undo, a column, Escape)");
 
+        // A refactoring across files: one step in the open document, the
+        // closed file written with what it held kept, and one Undo there
+        // taking the whole of it back — then Redo making it again.
+        {
+            let dir = std::env::temp_dir().join(format!("textchum-gtk-refactor-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            let (open, closed) = (dir.join("open.rs"), dir.join("closed.rs"));
+            let _ = std::fs::write(&open, "let name = 1;\n");
+            let _ = std::fs::write(&closed, "use name;\n");
+            let before = workbench.selected().and_then(|page| page.path().borrow().clone());
+            workbench.open(Some(open.clone()), None);
+            let page = workbench.selected().expect("a selected page");
+            let buffer = page.buffer.clone();
+            let text = |buffer: &sourceview5::Buffer| buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+            let read = |path: &std::path::Path| std::fs::read_to_string(path).unwrap_or_default();
+            let edit = r#"[{"range": {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 8}}, "newText": "label"}]"#;
+            let json = format!(
+                r#"{{"changes": {{"file://{}": {edit}, "file://{}": {edit}}}}}"#,
+                open.display(),
+                closed.display()
+            );
+            workbench::apply_workspace_edit(&workbench, &json, &tr("the rename"));
+            let applied = (text(&buffer), read(&closed));
+            let _ = gtk::prelude::WidgetExt::activate_action(&workbench.window, "win.undo", None);
+            context.iteration(false);
+            let undone = (text(&buffer), read(&closed), workbench.notice_text());
+            let _ = gtk::prelude::WidgetExt::activate_action(&workbench.window, "win.redo", None);
+            context.iteration(false);
+            let redone = (text(&buffer), read(&closed));
+            let tab = workbench.active_view().selected_page().expect("a selected tab");
+            workbench.forget(&tab);
+            workbench.active_view().close_page_finish(&tab, true);
+            context.iteration(false);
+            if let Some(path) = before {
+                workbench.open(Some(std::path::PathBuf::from(path)), None);
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+            let renamed = ("let label = 1;\n".to_owned(), "use label;\n".to_owned());
+            if applied != renamed || redone != renamed {
+                eprintln!("FAIL: the workspace edit gave {applied:?}, redone {redone:?}");
+                return 1;
+            }
+            if undone != ("let name = 1;\n".to_owned(), "use name;\n".to_owned(), "Undid the rename in 2 files.".to_owned()) {
+                eprintln!("FAIL: undoing the refactoring gave {undone:?}");
+                return 1;
+            }
+        }
+        println!("refactoring undo ok (one step per document, the closed file kept, one Undo takes it back everywhere)");
+
         // What can be run is marked in the gutter: a main and a test in
         // a Cargo package, each with the command that runs just it.
         {

@@ -3288,6 +3288,59 @@ func runSmokeTest() -> Int32 {
         caretBench.window?.close()
     }
     print("several carets ok (the word, its next match, typed at each as one undo, a column, Escape)")
+
+    // A refactoring across files: one step in the open document, the
+    // closed file written with what it held kept, and one Undo there
+    // taking the whole of it back — then Redo making it again.
+    do {
+        let refactorRoot = NSTemporaryDirectory() + "textchum-refactor-\(getpid())"
+        try FileManager.default.createDirectory(atPath: refactorRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: refactorRoot) }
+        let openPath = refactorRoot + "/open.rs"
+        let closedPath = refactorRoot + "/closed.rs"
+        try "let name = 1;\n".write(toFile: openPath, atomically: true, encoding: .utf8)
+        try "use name;\n".write(toFile: closedPath, atomically: true, encoding: .utf8)
+        let delegate = AppDelegate()
+        let previous = NSApp.delegate
+        NSApp.delegate = delegate
+        defer { NSApp.delegate = previous }
+        let openCore = try CoreDocument(contentsOf: openPath)
+        let refactorBench = Workbench(sidebar: nil)
+        let refactoring = DocumentController(document: openCore)
+        refactorBench.add(refactoring)
+        delegate.adoptForTest(refactoring)
+        let edit = { (line: Int, from: Int, to: Int) in
+            "[{\"range\": {\"start\": {\"line\": \(line), \"character\": \(from)}, \"end\": {\"line\": \(line), \"character\": \(to)}}, \"newText\": \"label\"}]"
+        }
+        let json = "{\"changes\": {\"file://\(openPath)\": \(edit(0, 4, 8)), \"file://\(closedPath)\": \(edit(0, 4, 8))}}"
+        guard delegate.applyWorkspaceEdit(resultJSON: json, label: t("the rename")),
+            openCore.text == "let label = 1;\n",
+            (try? String(contentsOfFile: closedPath, encoding: .utf8)) == "use label;\n"
+        else {
+            print("FAIL: the workspace edit gave \(openCore.text.debugDescription)")
+            return 1
+        }
+        refactoring.performUndo(nil)
+        let closedAfterUndo = try? String(contentsOfFile: closedPath, encoding: .utf8)
+        guard openCore.text == "let name = 1;\n", closedAfterUndo == "use name;\n",
+            delegate.notices.latest == "Undid the rename in 2 files."
+        else {
+            print("FAIL: undoing the refactoring gave \(openCore.text.debugDescription), \(closedAfterUndo.debugDescription), said \(delegate.notices.latest.debugDescription)")
+            return 1
+        }
+        refactoring.performRedo(nil)
+        guard openCore.text == "let label = 1;\n",
+            (try? String(contentsOfFile: closedPath, encoding: .utf8)) == "use label;\n"
+        else {
+            print("FAIL: redoing the refactoring gave \(openCore.text.debugDescription)")
+            return 1
+        }
+        refactorBench.window?.close()
+    } catch {
+        print("FAIL: the refactoring's files could not be made: \(error)")
+        return 1
+    }
+    print("refactoring undo ok (one step per document, the closed file kept, one Undo takes it back everywhere)")
     pinBench.window?.close()
 
     // With the find bar open, the pins move below it: a search field

@@ -242,6 +242,17 @@ public final class CoreDocument {
     }
 
     /// Commits the open edit group.
+    /// `beginEditGroup` for the edits refactoring `tag` makes here.
+    public func beginEditGroup(tag: UInt64) {
+        tc_document_begin_tagged_edit_group(handle, tag)
+    }
+
+    /// The refactoring the step Undo would take back belongs to; 0 for
+    /// none.
+    public var undoTag: UInt64 { tc_document_step_tag(handle, true) }
+    /// The refactoring the step Redo would make again belongs to.
+    public var redoTag: UInt64 { tc_document_step_tag(handle, false) }
+
     public func endEditGroup() {
         tc_document_end_edit_group(handle)
     }

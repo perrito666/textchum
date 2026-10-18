@@ -150,6 +150,24 @@ msgstr "C y C++"
 msgid "clangd, and clang-format before every save."
 msgstr "clangd, y clang-format antes de cada guardado."
 
+#: core/textchum-core/src/refactoring.rs
+msgid "Undid {} in {} file."
+msgid_plural "Undid {} in {} files."
+msgstr[0] "Deshecho {} en {} archivo."
+msgstr[1] "Deshecho {} en {} archivos."
+
+#: core/textchum-core/src/refactoring.rs
+msgid "Redid {} in {} file."
+msgid_plural "Redid {} in {} files."
+msgstr[0] "Rehecho {} en {} archivo."
+msgstr[1] "Rehecho {} en {} archivos."
+
+#: core/textchum-core/src/refactoring.rs
+msgid "{} file had changed since and was left alone: {}."
+msgid_plural "{} files had changed since and were left alone: {}."
+msgstr[0] "{} archivo había cambiado desde entonces y se dejó como estaba: {}."
+msgstr[1] "{} archivos habían cambiado desde entonces y se dejaron como estaban: {}."
+
 #: core/textchum-core/src/run.rs
 msgid "exited with {}"
 msgstr "terminó con {}"
@@ -602,6 +620,12 @@ msgstr "terminado"
 #: macos/Sources/Textchum/SmokeTest.swift
 msgid "the same as now"
 msgstr "igual que ahora"
+
+#: linux/src/main.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "the rename"
+msgstr "el renombrado"
 
 #: linux/src/main.rs macos/Sources/Textchum/SmokeTest.swift
 msgid "A phrase nobody has translated"
@@ -1149,6 +1173,10 @@ msgstr "No se encontraron referencias."
 msgid "The language server has no action for this place."
 msgstr "El servidor de lenguaje no tiene ninguna acción para este lugar."
 
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "the code action"
+msgstr "la acción de código"
+
 #: linux/src/workbench.rs
 msgid "The language server would not run that action."
 msgstr "El servidor de lenguaje no ejecutó esa acción."
@@ -1190,6 +1218,16 @@ msgstr "Esa versión ya no se conserva."
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server had no rename to offer."
 msgstr "El servidor no ofreció ningún renombrado."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Could not write {}: {}"
+msgstr "No se pudo escribir {}: {}"
+
+#: linux/src/workbench.rs
+msgid "Changed {} file."
+msgid_plural "Changed {} files."
+msgstr[0] "{} archivo cambiado."
+msgstr[1] "{} archivos cambiados."
 
 #: linux/src/workbench.rs
 msgid "Not inside a git repository."
@@ -2674,9 +2712,6 @@ msgstr "Aquí no hay archivo."
 
 #~ msgid "Rename Symbol…"
 #~ msgstr "Renombrar símbolo…"
-
-#~ msgid "New name"
-#~ msgstr "Nombre nuevo"
 
 #~ msgid "Rename"
 #~ msgstr "Renombrar"

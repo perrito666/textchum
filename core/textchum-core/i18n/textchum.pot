@@ -149,6 +149,24 @@ msgstr ""
 msgid "clangd, and clang-format before every save."
 msgstr ""
 
+#: core/textchum-core/src/refactoring.rs
+msgid "Undid {} in {} file."
+msgid_plural "Undid {} in {} files."
+msgstr[0] ""
+msgstr[1] ""
+
+#: core/textchum-core/src/refactoring.rs
+msgid "Redid {} in {} file."
+msgid_plural "Redid {} in {} files."
+msgstr[0] ""
+msgstr[1] ""
+
+#: core/textchum-core/src/refactoring.rs
+msgid "{} file had changed since and was left alone: {}."
+msgid_plural "{} files had changed since and were left alone: {}."
+msgstr[0] ""
+msgstr[1] ""
+
 #: core/textchum-core/src/run.rs
 msgid "exited with {}"
 msgstr ""
@@ -600,6 +618,12 @@ msgstr ""
 #: macos/Sources/Textchum/DocumentController.swift
 #: macos/Sources/Textchum/SmokeTest.swift
 msgid "the same as now"
+msgstr ""
+
+#: linux/src/main.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "the rename"
 msgstr ""
 
 #: linux/src/main.rs macos/Sources/Textchum/SmokeTest.swift
@@ -1148,6 +1172,10 @@ msgstr ""
 msgid "The language server has no action for this place."
 msgstr ""
 
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "the code action"
+msgstr ""
+
 #: linux/src/workbench.rs
 msgid "The language server would not run that action."
 msgstr ""
@@ -1185,6 +1213,16 @@ msgstr ""
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server had no rename to offer."
 msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Could not write {}: {}"
+msgstr ""
+
+#: linux/src/workbench.rs
+msgid "Changed {} file."
+msgid_plural "Changed {} files."
+msgstr[0] ""
+msgstr[1] ""
 
 #: linux/src/workbench.rs
 msgid "Not inside a git repository."

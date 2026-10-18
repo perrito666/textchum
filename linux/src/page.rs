@@ -2168,7 +2168,7 @@ pub(crate) fn accept_completion(page: &Rc<Page>) {
     // keeps the place to replace while lines land above it.
     let start_mark = buffer.create_mark(None, &buffer.iter_at_offset(start_offset), true);
     if !item.additional_edits.is_empty() {
-        crate::workbench::apply_edits_to_page(page, item.additional_edits.clone());
+        crate::workbench::apply_edits_to_page(page, item.additional_edits.clone(), 0);
     }
     let mut start = buffer.iter_at_mark(&start_mark);
     let mut caret = buffer.iter_at_mark(&buffer.get_insert());

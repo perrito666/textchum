@@ -1187,6 +1187,24 @@ impl Document {
         self.history.begin_group();
     }
 
+    /// [`Self::begin_edit_group`] for the edits refactoring `tag` makes
+    /// in this document; see [`crate::refactoring`].
+    pub fn begin_tagged_edit_group(&mut self, tag: u64) {
+        self.history.begin_tagged_group(tag);
+    }
+
+    /// The refactoring the step Undo would take back belongs to; 0 for
+    /// none.
+    pub fn undo_tag(&self) -> u64 {
+        self.history.undo_tag()
+    }
+
+    /// The refactoring the step Redo would make again belongs to; 0 for
+    /// none.
+    pub fn redo_tag(&self) -> u64 {
+        self.history.redo_tag()
+    }
+
     /// Commits the open edit group.
     pub fn end_edit_group(&mut self) {
         self.history.end_group();

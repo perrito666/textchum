@@ -1823,6 +1823,29 @@ pub unsafe extern "C" fn tc_document_last_edit_before(
     true
 }
 
+/// [`tc_document_begin_edit_group`] for the edits refactoring `tag`
+/// makes in this document.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_begin_tagged_edit_group(document: *mut TcDocument, tag: u64) {
+    let Some(document) = (unsafe { document.as_mut() }) else { return };
+    let _ = catch_unwind(AssertUnwindSafe(|| document.inner.begin_tagged_edit_group(tag)));
+}
+
+/// The refactoring the step Undo (or with `undo` false, Redo) would
+/// act on belongs to; 0 for none.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_step_tag(document: *const TcDocument, undo: bool) -> u64 {
+    let Some(document) = (unsafe { document.as_ref() }) else { return 0 };
+    catch_unwind(AssertUnwindSafe(|| if undo { document.inner.undo_tag() } else { document.inner.redo_tag() }))
+        .unwrap_or(0)
+}
+
 /// Several carets: `request` is `{selections: [[anchor, head]], op}` in
 /// UTF-16 units, the newest selection last; the answer is `{selections,
 /// edits: [{start, end, text}]}`, the edits back to front, to be made
@@ -2535,6 +2558,73 @@ pub unsafe extern "C" fn tc_i18n_set_language(
         tag.to_string()
     };
     textchum_core::i18n::set_language(&language);
+}
+
+/// Starts a refactoring that may touch several files; its id tags the
+/// edit groups it makes. See [`textchum_core::refactoring`].
+///
+/// # Safety
+/// `label` must point to `label_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_refactoring_begin(label: *const c_char, label_len: usize) -> u64 {
+    let label = unsafe { str_from_raw(label, label_len) }.unwrap_or_default();
+    catch_unwind(|| textchum_core::refactoring::begin(label)).unwrap_or(0)
+}
+
+/// An open document took part in refactoring `id`.
+#[no_mangle]
+pub extern "C" fn tc_refactoring_note_open_document(id: u64) {
+    let _ = catch_unwind(|| textchum_core::refactoring::note_open_document(id));
+}
+
+/// Writes `text` to `path`, a file not open, as part of refactoring
+/// `id`, keeping what it held. Null when written; otherwise why not.
+/// Free with [`tc_string_free`].
+///
+/// # Safety
+/// `path` and `text` must point to `path_len` and `text_len` readable
+/// bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_refactoring_write_closed(
+    id: u64,
+    path: *const c_char,
+    path_len: usize,
+    text: *const c_char,
+    text_len: usize,
+) -> *mut c_char {
+    let (Some(path), Some(text)) = (unsafe { str_from_raw(path, path_len) }, unsafe { str_from_raw(text, text_len) })
+    else {
+        return owned_c_string("bad arguments".to_owned());
+    };
+    match catch_unwind(|| textchum_core::refactoring::write_closed(id, std::path::Path::new(path), text)) {
+        Ok(Ok(())) => std::ptr::null_mut(),
+        Ok(Err(why)) => owned_c_string(why),
+        Err(_) => owned_c_string("panicked".to_owned()),
+    }
+}
+
+/// How many files refactoring `id` touched; 0 for one not remembered.
+#[no_mangle]
+pub extern "C" fn tc_refactoring_files_touched(id: u64) -> usize {
+    catch_unwind(|| textchum_core::refactoring::files_touched(id)).unwrap_or(0)
+}
+
+/// The refactoring's label, or null. Free with [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_refactoring_label(id: u64) -> *mut c_char {
+    catch_unwind(|| textchum_core::refactoring::label(id))
+        .ok()
+        .flatten()
+        .map(owned_c_string)
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Undoes (or with `undo` false, redoes) refactoring `id` in the files
+/// that were not open, after the shell did so in `documents` open ones,
+/// and says what was done. Free with [`tc_string_free`].
+#[no_mangle]
+pub extern "C" fn tc_refactoring_finish(id: u64, undo: bool, documents: usize) -> *mut c_char {
+    owned_c_string(catch_unwind(|| textchum_core::refactoring::finish(id, undo, documents)).unwrap_or_default())
 }
 
 /// Where local history keeps saved versions from now on; an empty `dir`

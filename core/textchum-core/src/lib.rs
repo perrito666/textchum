@@ -47,6 +47,7 @@ pub mod pairs;
 pub mod presets;
 pub mod preview;
 pub mod project_state;
+pub mod refactoring;
 pub mod references;
 pub mod run;
 pub mod runnables;

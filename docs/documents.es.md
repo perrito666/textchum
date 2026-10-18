@@ -52,6 +52,17 @@ Las operaciones compuestas se registran como grupos explícitos: Reemplazar
 todo reescribe cada coincidencia pero se deshace como un solo paso, y una
 recarga desde disco (más abajo) también es un solo paso.
 
+Un renombrado o una acción de código de un servidor de lenguaje es un
+solo paso en cada archivo que cambió. Cuando cambió más de uno, Deshacer
+en cualquiera de ellos lo retira entero: en cada documento abierto cuyo
+paso más nuevo siga siendo ese, y en los archivos que no estaban
+abiertos, que el editor escribió él mismo y de los que guardó una copia.
+Rehacer lo vuelve a hacer en todos. Un archivo cambiado desde entonces —
+a mano o por otro programa — se deja como está, y el área de
+notificaciones dice cuál, junto con cuántos archivos se deshicieron. Vale
+durante la sesión: tras reiniciar, el historial de cada documento empieza
+de nuevo.
+
 ## Varios cursores
 
 **Añadir la siguiente aparición** (⌃G, Alt+J en Linux) selecciona la

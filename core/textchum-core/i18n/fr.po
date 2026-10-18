@@ -150,6 +150,24 @@ msgstr "C et C++"
 msgid "clangd, and clang-format before every save."
 msgstr "clangd, et clang-format avant chaque enregistrement."
 
+#: core/textchum-core/src/refactoring.rs
+msgid "Undid {} in {} file."
+msgid_plural "Undid {} in {} files."
+msgstr[0] "Annulation : {} dans {} fichier."
+msgstr[1] "Annulation : {} dans {} fichiers."
+
+#: core/textchum-core/src/refactoring.rs
+msgid "Redid {} in {} file."
+msgid_plural "Redid {} in {} files."
+msgstr[0] "Rétablissement : {} dans {} fichier."
+msgstr[1] "Rétablissement : {} dans {} fichiers."
+
+#: core/textchum-core/src/refactoring.rs
+msgid "{} file had changed since and was left alone: {}."
+msgid_plural "{} files had changed since and were left alone: {}."
+msgstr[0] "{} fichier avait changé depuis et a été laissé tel quel : {}."
+msgstr[1] "{} fichiers avaient changé depuis et ont été laissés tels quels : {}."
+
 #: core/textchum-core/src/run.rs
 msgid "exited with {}"
 msgstr "terminé avec {}"
@@ -602,6 +620,12 @@ msgstr "terminé"
 #: macos/Sources/Textchum/SmokeTest.swift
 msgid "the same as now"
 msgstr "identique à maintenant"
+
+#: linux/src/main.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "the rename"
+msgstr "renommage"
 
 #: linux/src/main.rs macos/Sources/Textchum/SmokeTest.swift
 msgid "A phrase nobody has translated"
@@ -1154,6 +1178,10 @@ msgstr "Aucune référence trouvée."
 msgid "The language server has no action for this place."
 msgstr "Le serveur de langage n'a aucune action pour cet endroit."
 
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "the code action"
+msgstr "action de code"
+
 #: linux/src/workbench.rs
 msgid "The language server would not run that action."
 msgstr "Le serveur de langage n'a pas exécuté cette action."
@@ -1195,6 +1223,16 @@ msgstr "Cette version n'est plus gardée."
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server had no rename to offer."
 msgstr "Le serveur n'a proposé aucun renommage."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Could not write {}: {}"
+msgstr "Impossible d'écrire {} : {}"
+
+#: linux/src/workbench.rs
+msgid "Changed {} file."
+msgid_plural "Changed {} files."
+msgstr[0] "{} fichier modifié."
+msgstr[1] "{} fichiers modifiés."
 
 #: linux/src/workbench.rs
 msgid "Not inside a git repository."
@@ -2684,9 +2722,6 @@ msgstr "Aucun fichier ici."
 
 #~ msgid "Rename Symbol…"
 #~ msgstr "Renommer le symbole…"
-
-#~ msgid "New name"
-#~ msgstr "Nouveau nom"
 
 #~ msgid "Rename"
 #~ msgstr "Renommer"

@@ -11,6 +11,9 @@
 //! * **Explicit groups.** A caller can bracket several edits with
 //!   [`History::begin_group`]/[`History::end_group`] so a compound operation
 //!   — replace-all, a reload — undoes as a single step.
+//! * **Tags.** A group can carry the id of the refactoring it was part
+//!   of, so a shell can tell that the step about to be undone was made
+//!   in several files at once and undo it in all of them.
 //! * **Save-point tracking.** The history remembers the stack depth at the
 //!   last save; a document is dirty exactly when the current depth differs.
 //!   Coalescing is suppressed at the save point so a record that predates a
@@ -51,6 +54,14 @@ pub(crate) struct History {
     group_broken: bool,
     /// Records accumulated between `begin_group` and `end_group`.
     open_group: Option<Group>,
+    /// The tag of each step, beside the steps themselves; 0 for none.
+    undo_tags: Vec<u64>,
+    redo_tags: Vec<u64>,
+    open_tag: u64,
+    /// How many `begin_group`s are waiting for their `end_group`: a
+    /// group opened inside another — a completion's edits inside the
+    /// accepting of it — joins it and does not close it.
+    depth: usize,
 }
 
 impl History {
@@ -71,7 +82,9 @@ impl History {
         let broke = std::mem::take(&mut self.group_broken);
         // Never mutate the group that represents the saved state.
         let at_save_point = self.saved_at == Some(self.undo.len());
-        if !broke && !at_save_point {
+        // A tagged step is a refactoring's, never typing to run into.
+        let tagged = self.undo_tags.last().is_some_and(|tag| *tag != 0);
+        if !broke && !at_save_point && !tagged {
             // Coalescing only ever targets a plain typing/deletion step,
             // which is by construction a single-record group.
             if let Some([last]) = self.undo.last_mut().map(Vec::as_mut_slice) {
@@ -81,12 +94,14 @@ impl History {
             }
         }
         self.undo.push(vec![edit]);
+        self.undo_tags.push(0);
     }
 
     /// Every new edit discards the redo branch — and the save point with
     /// it, if that is where the save lived.
     fn on_new_edit(&mut self) {
         self.redo.clear();
+        self.redo_tags.clear();
         if let Some(saved_at) = self.saved_at {
             if saved_at > self.undo.len() {
                 self.saved_at = None;
@@ -97,19 +112,43 @@ impl History {
     /// Starts an explicit group; edits recorded until [`Self::end_group`]
     /// form one undo step. Nested calls join the already-open group.
     pub fn begin_group(&mut self) {
+        self.begin_tagged_group(0);
+    }
+
+    /// [`Self::begin_group`] for a step that belongs to refactoring
+    /// `tag`. Joining an open group tags it, if it was not already.
+    pub fn begin_tagged_group(&mut self, tag: u64) {
+        self.depth += 1;
         if self.open_group.is_none() {
             self.open_group = Some(Vec::new());
+            self.open_tag = tag;
+        } else if self.open_tag == 0 {
+            self.open_tag = tag;
         }
     }
 
-    /// Commits the open group as a single undo step. A group with no edits
+    /// Closes the group the matching [`Self::begin_group`] opened; the
+    /// outermost commits it as a single undo step. A group with no edits
     /// leaves no trace. Always ends the current coalescing run.
     pub fn end_group(&mut self) {
+        self.depth = self.depth.saturating_sub(1);
+        if self.depth == 0 {
+            self.commit_group();
+        }
+        self.group_broken = true;
+    }
+
+    /// Commits the open group however deep it is: undo and save act on
+    /// what was edited so far.
+    fn commit_group(&mut self) {
+        self.depth = 0;
         if let Some(group) = self.open_group.take() {
             if !group.is_empty() {
                 self.undo.push(group);
+                self.undo_tags.push(self.open_tag);
             }
         }
+        self.open_tag = 0;
         self.group_broken = true;
     }
 
@@ -130,9 +169,11 @@ impl History {
     /// reverse order). The group moves to the redo stack. An open explicit
     /// group is committed first.
     pub fn pop_undo(&mut self) -> Option<&Group> {
-        self.end_group();
+        self.commit_group();
+        self.group_broken = true;
         let group = self.undo.pop()?;
         self.redo.push(group);
+        self.redo_tags.push(self.undo_tags.pop().unwrap_or(0));
         self.redo.last()
     }
 
@@ -142,12 +183,28 @@ impl History {
         let group = self.redo.pop()?;
         self.group_broken = true;
         self.undo.push(group);
+        self.undo_tags.push(self.redo_tags.pop().unwrap_or(0));
         self.undo.last()
+    }
+
+    /// The tag of the step Undo would take back; 0 for none. An open
+    /// group with edits in it is that step.
+    pub fn undo_tag(&self) -> u64 {
+        if self.open_group.as_ref().is_some_and(|group| !group.is_empty()) {
+            return self.open_tag;
+        }
+        self.undo_tags.last().copied().unwrap_or(0)
+    }
+
+    /// The tag of the step Redo would make again; 0 for none.
+    pub fn redo_tag(&self) -> u64 {
+        self.redo_tags.last().copied().unwrap_or(0)
     }
 
     /// Marks the current state as saved.
     pub fn mark_saved(&mut self) {
-        self.end_group();
+        self.commit_group();
+        self.group_broken = true;
         self.saved_at = Some(self.undo.len());
     }
 
@@ -337,5 +394,41 @@ mod tests {
         assert!(h.is_dirty());
         h.pop_undo();
         assert!(h.is_dirty(), "saved state is no longer reachable");
+    }
+
+    #[test]
+    fn a_group_inside_a_group_joins_it_and_does_not_close_it() {
+        let mut history = History::default();
+        history.begin_group();
+        history.record(insert(0, "a"));
+        history.begin_tagged_group(3);
+        history.record(insert(1, "b"));
+        history.end_group();
+        history.record(insert(2, "c"));
+        history.end_group();
+        assert_eq!(history.undo_tag(), 3, "the inner group's tag is the step's");
+        assert_eq!(history.pop_undo().map(Vec::len), Some(3), "one step");
+    }
+
+    #[test]
+    fn a_tagged_step_keeps_its_tag_through_undo_and_redo_and_is_not_typed_into() {
+        let mut history = History::default();
+        history.record(insert(0, "a"));
+        history.begin_tagged_group(7);
+        history.record(insert(1, "b"));
+        history.end_group();
+        assert_eq!(history.undo_tag(), 7);
+        // Typing right after it is a step of its own.
+        history.record(insert(2, "c"));
+        assert_eq!(history.undo_tag(), 0);
+        history.pop_undo();
+        assert_eq!((history.undo_tag(), history.redo_tag()), (7, 0));
+        history.pop_undo();
+        assert_eq!((history.undo_tag(), history.redo_tag()), (0, 7));
+        history.pop_redo();
+        assert_eq!(history.undo_tag(), 7);
+        // A new edit drops the redo branch and its tags.
+        history.record(insert(2, "d"));
+        assert_eq!(history.redo_tag(), 0);
     }
 }

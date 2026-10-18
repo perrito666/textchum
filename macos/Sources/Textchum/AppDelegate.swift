@@ -36,6 +36,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The open documents, for the smoke test to look at.
     var editorsForTest: [DocumentController] { editors }
 
+    /// Holds an editor the smoke test made, as opening one would.
+    func adoptForTest(_ editor: DocumentController) {
+        editors.append(editor)
+    }
+
     /// `~/Library/Application Support/Textchum/config.json` — GUI-managed,
     /// hand-editable JSON. `--config <path>` points at another file and
     /// `--data-dir <path>` moves the whole profile; see `AppPaths`.
@@ -1215,22 +1220,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Applies a rename's `WorkspaceEdit`: open documents edit in place
-    /// (through the synchronized text-view path, so undo works), files
-    /// nobody has open are rewritten on disk atomically. Returns whether
-    /// anything was applied.
-    func applyWorkspaceEdit(resultJSON: String) -> Bool {
+    /// Applies a `WorkspaceEdit` as one refactoring called `label`: each
+    /// open document edits in place as one step tagged with it (rule
+    /// 9.1), and a file nobody has open is written by the core, which
+    /// keeps what it held — so Undo in any of them takes the whole of it
+    /// back. Returns whether anything was applied.
+    func applyWorkspaceEdit(resultJSON: String, label: String) -> Bool {
         let byPath = LSPEdits.workspaceEdits(fromResultJSON: resultJSON)
         guard !byPath.isEmpty else { return false }
+        let id = CoreRefactoring.begin(label: label)
         for (path, edits) in byPath {
             if let editor = editors.first(where: { $0.coreDocument.path == path }) {
-                editor.apply(textEdits: edits)
-            } else if let contents = try? String(contentsOfFile: path, encoding: .utf8) {
-                try? LSPEdits.applied(to: contents, edits: edits)
-                    .write(toFile: path, atomically: true, encoding: .utf8)
+                editor.apply(textEdits: edits, tag: id)
+                CoreRefactoring.noteOpenDocument(id)
+            } else if let contents = try? String(contentsOfFile: path, encoding: .utf8),
+                let failure = CoreRefactoring.writeClosed(
+                    id, path: path, text: LSPEdits.applied(to: contents, edits: edits))
+            {
+                notify(t("Could not write {}: {}", (path as NSString).lastPathComponent, failure))
             }
         }
         return true
+    }
+
+    /// Undo (or Redo) on a step of refactoring `id`: the same step in
+    /// every open document whose newest step it still is, and the files
+    /// not open, with what was done said in the notification area.
+    func stepRefactoring(_ id: UInt64, undo: Bool) {
+        var documents = 0
+        for editor in editors where (undo ? editor.coreDocument.undoTag : editor.coreDocument.redoTag) == id {
+            editor.replayStep(undo: undo)
+            documents += 1
+        }
+        notify(CoreRefactoring.finish(id, undo: undo, documents: documents))
     }
 
     /// Crash-restart attempts per (server, root), for backoff. Cleared

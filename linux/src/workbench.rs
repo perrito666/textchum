@@ -3474,7 +3474,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 }
                 shell.expect_response(id, move |json| {
                     if let Some(workbench) = weak.upgrade() {
-                        apply_workspace_edit(&workbench, json);
+                        apply_workspace_edit(&workbench, json, &tr("the rename"));
                     }
                 });
             });
@@ -3540,7 +3540,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 return;
             }
             let Some(page) = workbench.page_for(&path) else { return };
-            apply_edits_to_page(&page, edits);
+            apply_edits_to_page(&page, edits, 0);
             workbench.refresh_chrome();
             page.view.grab_focus();
         });
@@ -3580,8 +3580,47 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
 
 fn replay(workbench: &Rc<Workbench>, is_undo: bool) {
     let Some(page) = workbench.selected() else { return };
+    // A step a refactoring made in several files is undone in all of
+    // them; any other only here.
+    let tag = {
+        let state = page.state.borrow();
+        if is_undo { state.document.undo_tag() } else { state.document.redo_tag() }
+    };
+    if tag != 0 && textchum_core::refactoring::files_touched(tag) > 1 {
+        step_refactoring(tag, is_undo);
+    } else {
+        replay_step(&page.buffer, &page.state, is_undo);
+    }
+    workbench.refresh_chrome();
+    // The menu stole focus to run this; give it back so the selection
+    // and caret show again.
+    page.view.grab_focus();
+}
+
+/// Undo (or Redo) on a step of refactoring `tag`: the same step in
+/// every open document whose newest step it still is, and the files
+/// not open, with what was done said in the notification area.
+pub(crate) fn step_refactoring(tag: u64, is_undo: bool) {
+    let shell = Shell::instance();
+    let mut documents = 0;
+    for document in shell.open_documents() {
+        let step = {
+            let state = document.state.borrow();
+            if is_undo { state.document.undo_tag() } else { state.document.redo_tag() }
+        };
+        if step == tag {
+            replay_step(&document.buffer, &document.state, is_undo);
+            documents += 1;
+        }
+    }
+    shell.notify(&textchum_core::refactoring::finish(tag, is_undo, documents));
+}
+
+/// One step of a document's own history, made on its buffer while the
+/// buffer's edits are kept from echoing back into the core.
+fn replay_step(buffer: &sourceview5::Buffer, state: &Rc<RefCell<page::State>>, is_undo: bool) {
     let edits = {
-        let mut state = page.state.borrow_mut();
+        let mut state = state.borrow_mut();
         state.syncing = true;
         if is_undo {
             state.document.undo()
@@ -3589,7 +3628,6 @@ fn replay(workbench: &Rc<Workbench>, is_undo: bool) {
             state.document.redo()
         }
     };
-    let buffer = &page.buffer;
     for edit in &edits {
         let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
         let from = buffer.iter_at_offset(page::char_offset(&text, edit.start_utf16));
@@ -3600,13 +3638,9 @@ fn replay(workbench: &Rc<Workbench>, is_undo: bool) {
         let mut at = from;
         buffer.insert(&mut at, &edit.text);
     }
-    page.state.borrow_mut().syncing = false;
-    workbench.refresh_chrome();
+    state.borrow_mut().syncing = false;
     page::recolor(buffer);
-    page::apply_highlights(buffer, &page.state.borrow().document);
-    // The menu stole focus to run this; give it back so the selection
-    // and caret show again.
-    page.view.grab_focus();
+    page::apply_highlights(buffer, &state.borrow().document);
 }
 
 /// The caret is on the definition, so the jump key asks the question
@@ -5094,7 +5128,7 @@ fn run_code_action(
     use textchum_core::code_action::Outcome;
     let shell = Shell::instance();
     match outcome {
-        Outcome::Edit(edit) => apply_workspace_edit(workbench, &edit.to_string()),
+        Outcome::Edit(edit) => apply_workspace_edit(workbench, &edit.to_string(), &tr("the code action")),
         Outcome::Command { name, arguments } => {
             // The command's own answer is the server saying it is done;
             // the edits it makes arrive as a workspace/applyEdit
@@ -5125,7 +5159,7 @@ fn run_code_action(
                 let resolved = textchum_core::code_action::actions(&format!("[{json}]"));
                 match resolved.first().map(|action| action.outcome()) {
                     Some(Outcome::Edit(edit)) => {
-                        apply_workspace_edit(&workbench, &edit.to_string())
+                        apply_workspace_edit(&workbench, &edit.to_string(), &tr("the code action"))
                     }
                     Some(Outcome::Command { name, arguments }) => {
                         Shell::instance().pool.borrow_mut().execute_command(
@@ -5755,9 +5789,13 @@ fn present_picker_at(
 }
 
 /// Applies LSP text edits to an open page through the buffer (the
-/// choke point carries them into the core, so undo works), bottom-up.
-pub(crate) fn apply_edits_to_page(page: &Rc<Page>, edits: Vec<crate::lsp_edits::TextEdit>) {
+/// choke point carries them into the core, so undo works), bottom-up,
+/// as one step (rule 9.1) tagged with the refactoring they belong to, if
+/// any. No borrow is held across the buffer calls: their handlers take
+/// the document themselves.
+pub(crate) fn apply_edits_to_page(page: &Rc<Page>, edits: Vec<crate::lsp_edits::TextEdit>, tag: u64) {
     let buffer = &page.buffer;
+    page.state.borrow_mut().document.begin_tagged_edit_group(tag);
     for edit in crate::lsp_edits::bottom_up(edits) {
         let Some(start) = page::iter_at_lsp(buffer, edit.start_line, edit.start_character)
         else {
@@ -5772,16 +5810,20 @@ pub(crate) fn apply_edits_to_page(page: &Rc<Page>, edits: Vec<crate::lsp_edits::
         let mut at = start;
         buffer.insert(&mut at, &edit.new_text);
     }
+    page.state.borrow_mut().document.end_edit_group();
 }
 
-/// Applies a rename's WorkspaceEdit: open pages edit in place, files
-/// nobody has open are rewritten on disk.
-fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str) {
+/// Applies a WorkspaceEdit as one refactoring called `label`: each open
+/// page edits in place as one step tagged with it, and a file nobody has
+/// open is written by the core, which keeps what it held — so Undo in
+/// any of them takes the whole of it back.
+pub(crate) fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str, label: &str) {
     let by_file = crate::lsp_edits::workspace_edits(json);
     if by_file.is_empty() {
         workbench.hint(&tr("The server had no rename to offer."));
         return;
     }
+    let id = textchum_core::refactoring::begin(label);
     let mut touched = 0usize;
     for (path, edits) in by_file {
         let mut open_page: Option<Rc<Page>> = None;
@@ -5791,19 +5833,18 @@ fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str) {
             }
         });
         if let Some(page) = open_page {
-            apply_edits_to_page(&page, edits);
+            apply_edits_to_page(&page, edits, id);
+            textchum_core::refactoring::note_open_document(id);
             touched += 1;
         } else if let Ok(text) = std::fs::read_to_string(&path) {
             let rewritten = crate::lsp_edits::apply_to_string(&text, edits);
-            if std::fs::write(&path, rewritten).is_ok() {
-                touched += 1;
+            match textchum_core::refactoring::write_closed(id, Path::new(&path), &rewritten) {
+                Ok(()) => touched += 1,
+                Err(why) => Shell::instance().notify(&fill(&tr("Could not write {}: {}"), &[&path, &why])),
             }
         }
     }
-    workbench.toast(&format!(
-        "Renamed across {touched} file{}.",
-        if touched == 1 { "" } else { "s" }
-    ));
+    workbench.toast(&fill(&tr_n("Changed {} file.", "Changed {} files.", touched), &[&touched.to_string()]));
     workbench.refresh_chrome();
 }
 

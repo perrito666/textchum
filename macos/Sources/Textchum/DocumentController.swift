@@ -1842,7 +1842,7 @@ final class DocumentController: NSResponder {
             lspApp.lspRename(path: path, line: line, character: character, newName: newName) {
                 [weak self] json in
                 let applied =
-                    (NSApp.delegate as? AppDelegate)?.applyWorkspaceEdit(resultJSON: json)
+                    (NSApp.delegate as? AppDelegate)?.applyWorkspaceEdit(resultJSON: json, label: t("the rename"))
                     ?? false
                 if !applied {
                     self?.showHint(t("The server had no rename to offer."))
@@ -1959,14 +1959,23 @@ final class DocumentController: NSResponder {
         return true
     }
 
-    /// Applies LSP edits to this window's document through the normal
-    /// text-view path, so the core stays synchronized and undo works —
-    /// bottom-up, so earlier ranges never shift.
-    func apply(textEdits: [LSPEdits.TextEdit]) {
-        guard let textView else { return }
+    /// Applies LSP edits to this document as one undo step (rule 9.1),
+    /// tagged with the refactoring they belong to, if any — bottom-up, so
+    /// earlier ranges never shift. Through the text view when one shows
+    /// the document, so the two stay synchronized; a document in a tab no
+    /// pane shows is edited in the core alone, and its view reads the
+    /// text from there when it is made.
+    func apply(textEdits: [LSPEdits.TextEdit], tag: UInt64 = 0) {
+        coreDocument.beginEditGroup(tag: tag)
+        defer { coreDocument.endEditGroup() }
         for edit in LSPEdits.bottomUp(textEdits) {
-            let range = LSPEdits.nsRange(of: edit, in: textView.string as NSString)
-            textView.insertText(edit.newText, replacementRange: range)
+            if let textView {
+                let range = LSPEdits.nsRange(of: edit, in: textView.string as NSString)
+                textView.insertText(edit.newText, replacementRange: range)
+            } else {
+                let range = LSPEdits.nsRange(of: edit, in: coreDocument.text as NSString)
+                try? coreDocument.replace(utf16Range: range, with: edit.newText)
+            }
         }
     }
 
@@ -2200,7 +2209,7 @@ final class DocumentController: NSResponder {
         let delegate = NSApp.delegate as? AppDelegate
         switch outcome {
         case .edit(let edit):
-            _ = delegate?.applyWorkspaceEdit(resultJSON: edit)
+            _ = delegate?.applyWorkspaceEdit(resultJSON: edit, label: t("the code action"))
         case .command(let name, let argumentsJSON):
             lspApp?.lspExecuteCommand(path: path, command: name, argumentsJSON: argumentsJSON) {
                 // A command's own answer is the server saying it is
@@ -2216,7 +2225,8 @@ final class DocumentController: NSResponder {
                 // means the server had nothing after all.
                 switch CoreCodeActions.outcome(inResultJSON: "[\(json)]", at: 0) {
                 case .edit(let edit):
-                    _ = (NSApp.delegate as? AppDelegate)?.applyWorkspaceEdit(resultJSON: edit)
+                    _ = (NSApp.delegate as? AppDelegate)?.applyWorkspaceEdit(
+                        resultJSON: edit, label: t("the code action"))
                 case .command(let name, let argumentsJSON):
                     self.lspApp?.lspExecuteCommand(
                         path: path, command: name, argumentsJSON: argumentsJSON) { _ in }
@@ -5452,12 +5462,30 @@ final class DocumentController: NSResponder {
 
     // MARK: Undo / redo
 
+    /// A step a refactoring made in several files is undone in all of
+    /// them; any other only here.
     @objc func performUndo(_ sender: Any?) {
-        replay(coreDocument.undo())
+        let tag = coreDocument.undoTag
+        if tag != 0, CoreRefactoring.filesTouched(tag) > 1, let delegate = NSApp.delegate as? AppDelegate {
+            delegate.stepRefactoring(tag, undo: true)
+        } else {
+            replay(coreDocument.undo())
+        }
     }
 
     @objc func performRedo(_ sender: Any?) {
-        replay(coreDocument.redo())
+        let tag = coreDocument.redoTag
+        if tag != 0, CoreRefactoring.filesTouched(tag) > 1, let delegate = NSApp.delegate as? AppDelegate {
+            delegate.stepRefactoring(tag, undo: false)
+        } else {
+            replay(coreDocument.redo())
+        }
+    }
+
+    /// One step of this document's own history, for a refactoring being
+    /// undone or redone everywhere.
+    func replayStep(undo: Bool) {
+        replay(undo ? coreDocument.undo() : coreDocument.redo())
     }
 
     /// Applies core-reported edits to the display cache, in order. Storage
