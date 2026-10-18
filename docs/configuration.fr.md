@@ -210,6 +210,8 @@ TextMate. Choisissez un fichier de thème, ou un dossier qui en contient
 plusieurs — un répertoire d'extension VS Code (son `package.json` dit
 ce qu'il apporte) ou un bundle TextMate (ses thèmes sont dans
 `Themes/`). Tout ce qui s'y trouve est importé, et le premier est mis.
+Ce qui a été importé, et ce qui n'est pas passé, est dit dans la zone de
+notifications à droite de la barre d'état ; un clic y montre le tout.
 
 Les deux éditeurs décrivent la couleur par **portée TextMate** ;
 importer revient donc à traduire les portées vers les noms de capture

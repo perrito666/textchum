@@ -250,10 +250,5 @@ done.
 
 What breaks these rules today, each to be fixed under its own issue:
 
-- **6.2** A few reports that run to several paragraphs are still
-  dialogs on macOS: the result of installing the `chum` command, of
-  installing a grammar and of importing a theme, and the note that
-  Universal Ctags is missing. They wait for a notice that can carry
-  details.
 - **Linux** Inlay hints are gathered after the line, not inside it
   (see `PLAN_linux.md`).

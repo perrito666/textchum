@@ -206,7 +206,9 @@ se leen al arrancar y al cambiar la selección.
 Elige un archivo de tema, o una carpeta con varios — un directorio de
 extensión de VS Code (su `package.json` dice qué aporta) o un bundle de
 TextMate (sus temas están en `Themes/`). Se importa todo lo que haya, y
-el primero queda puesto.
+el primero queda puesto. Lo importado, y lo que no pasó, se dice en el
+área de notificaciones a la derecha de la barra de estado; un clic allí
+lo muestra entero.
 
 Los dos editores describen el color por **ámbito de TextMate**, así que
 importar es traducir ámbitos a los nombres de captura de Textchum:
