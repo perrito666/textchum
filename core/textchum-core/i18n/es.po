@@ -166,7 +166,8 @@ msgstr[1] "Rehecho {} en {} archivos."
 msgid "{} file had changed since and was left alone: {}."
 msgid_plural "{} files had changed since and were left alone: {}."
 msgstr[0] "{} archivo había cambiado desde entonces y se dejó como estaba: {}."
-msgstr[1] "{} archivos habían cambiado desde entonces y se dejaron como estaban: {}."
+msgstr[1] ""
+"{} archivos habían cambiado desde entonces y se dejaron como estaban: {}."
 
 #: core/textchum-core/src/run.rs
 msgid "exited with {}"
@@ -703,6 +704,12 @@ msgstr "La orden de esta ejecución no se puede acotar a una sola prueba."
 msgid "A configured grammar could not be loaded"
 msgstr "No se pudo cargar una gramática configurada"
 
+#: linux/src/shell.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "the code action"
+msgstr "la acción de código"
+
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "New with Format…"
 msgstr "Nuevo con formato…"
@@ -1055,6 +1062,10 @@ msgid "Put the caret on a name first."
 msgstr "Ponga antes el cursor sobre un nombre."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "The server had no rename to offer."
+msgstr "El servidor no ofreció ningún renombrado."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server offered no outline."
 msgstr "El servidor no ofreció ningún esquema."
 
@@ -1174,8 +1185,8 @@ msgid "The language server has no action for this place."
 msgstr "El servidor de lenguaje no tiene ninguna acción para este lugar."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
-msgid "the code action"
-msgstr "la acción de código"
+msgid "The language server had no edit for that action."
+msgstr "El servidor de lenguaje no tenía ninguna edición para esa acción."
 
 #: linux/src/workbench.rs
 msgid "The language server would not run that action."
@@ -1184,10 +1195,6 @@ msgstr "El servidor de lenguaje no ejecutó esa acción."
 #: linux/src/workbench.rs
 msgid "The language server would not finish that action."
 msgstr "El servidor de lenguaje no terminó esa acción."
-
-#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
-msgid "The language server had no edit for that action."
-msgstr "El servidor de lenguaje no tenía ninguna edición para esa acción."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Local history keeps the versions of saved files: save this one first."
@@ -1214,10 +1221,6 @@ msgstr "Restaurada la versión de {}: Deshacer la retira."
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "That version is no longer kept."
 msgstr "Esa versión ya no se conserva."
-
-#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
-msgid "The server had no rename to offer."
-msgstr "El servidor no ofreció ningún renombrado."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Could not write {}: {}"

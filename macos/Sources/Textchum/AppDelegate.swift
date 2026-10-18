@@ -1161,6 +1161,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             editors.first { $0.coreDocument.path == path }?.apply(diagnostics: items)
         case .lspResponse:
             break  // routed to its completion handler inside CoreApp
+        case let .applyEdit(server, root, request, params):
+            // A code action that runs a command makes its edit this way:
+            // one refactoring, as if the action had carried it.
+            let parsed = (try? JSONSerialization.jsonObject(with: Data(params.utf8))) as? [String: Any]
+            let edit = (parsed?["edit"]).flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+                .flatMap { String(data: $0, encoding: .utf8) }
+            let label = parsed?["label"] as? String ?? t("the code action")
+            let applied = edit.map { applyWorkspaceEdit(resultJSON: $0, label: label) } ?? false
+            coreApp?.lspAnswerApplyEdit(server: server, root: root, request: request, applied: applied)
         case let .run(id, status):
             for workbench in Workbench.all where workbench.runPanel.runID == id {
                 workbench.runPanel.handle(status: status)

@@ -70,6 +70,10 @@ public final class CoreApp {
         /// A command run from the editor has news: `output` (something
         /// new to read), `quiet` (nothing said for a while) or `exited`.
         case run(id: UInt64, status: String)
+        /// A language server asked for a workspace edit: `params` is the
+        /// request's `{label?, edit}` as JSON, `request` its id, to be
+        /// handed back to ``lspAnswerApplyEdit(server:root:request:applied:)``.
+        case applyEdit(server: String, root: String, request: String, params: String)
     }
 
     /// Retained context handed to the C callback as its `userdata`.
@@ -157,6 +161,14 @@ public final class CoreApp {
                 sink.deliver(.lspResponse(id: event.seq, json: payload ?? "null"))
             case UInt32(TC_EVENT_RUN):
                 sink.deliver(.run(id: event.seq, status: event.status.map { String(cString: $0) } ?? ""))
+            case UInt32(TC_EVENT_APPLY_EDIT):
+                sink.deliver(
+                    .applyEdit(
+                        server: event.server.map { String(cString: $0) } ?? "",
+                        root: path ?? "",
+                        request: event.status.map { String(cString: $0) } ?? "",
+                        params: payload ?? "{}"
+                    ))
             default:
                 // Unknown kinds are forward-compatibility, not errors: a
                 // newer core may emit events this shell does not know yet.
@@ -749,6 +761,18 @@ public final class CoreApp {
 
     /// Runs a command a code action carried instead of an edit.
     @MainActor
+    /// Answers a server's workspace/applyEdit request with whether the
+    /// edit was made.
+    public func lspAnswerApplyEdit(server: String, root: String, request: String, applied: Bool) {
+        withUTF8(server) { server, serverLen in
+            withUTF8(root) { root, rootLen in
+                withUTF8(request) { request, requestLen in
+                    tc_lsp_answer_apply_edit(handle, server, serverLen, root, rootLen, request, requestLen, applied)
+                }
+            }
+        }
+    }
+
     public func lspExecuteCommand(
         path: String,
         command: String,

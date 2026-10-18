@@ -821,3 +821,35 @@ fn the_types_a_server_inferred_are_asked_for_by_lines() {
     document.set_inlay_hints(&answer);
     assert_eq!(document.inlay_annotations().len(), 2, "both bindings: {answer}");
 }
+
+#[test]
+fn an_edit_a_server_asks_for_reaches_the_shell_and_the_answer_reaches_the_server() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("apply-edit");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    let uri = format!("file://{}", file.display());
+    let command_id = pool.execute_command(&file, "fake.apply", serde_json::json!([uri]));
+    assert!(command_id > 2);
+    let mut seen = Vec::new();
+    collect_until(&events, "the server's applyEdit", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::ApplyEdit { .. }))
+    });
+    let Some(Event::ApplyEdit { server, root, request, params }) =
+        seen.iter().find(|event| matches!(event, Event::ApplyEdit { .. })).cloned()
+    else {
+        unreachable!()
+    };
+    let params: serde_json::Value = serde_json::from_str(&params).unwrap();
+    assert_eq!(params["label"], "Apply");
+    assert_eq!(params["edit"]["changes"][&uri][0]["newText"], "applied ");
+    // Until the shell answers, the server waits; then it says what it
+    // was told.
+    pool.answer_apply_edit(&server, &root, &request, true);
+    collect_until(&events, "the command's answer", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == command_id && json.contains("\"applied\":true")))
+    });
+    drop(pool);
+}

@@ -114,10 +114,26 @@ def main():
         elif method == "workspace/didChangeConfiguration":
             told["changed"] = message["params"].get("settings")
         elif method == "workspace/executeCommand":
-            # Only the report is answered; other commands stay as silent
-            # as they were.
-            if message["params"].get("command") == "fake.report":
+            # The report is answered, and `fake.apply` asks the client to
+            # make an edit — what a real server's command does — and then
+            # answers with what the client said; other commands stay as
+            # silent as they were.
+            command = message["params"].get("command")
+            if command == "fake.report":
                 send({"jsonrpc": "2.0", "id": message["id"], "result": told})
+            elif command == "fake.apply":
+                uri = (message["params"].get("arguments") or [""])[0]
+                send({"jsonrpc": "2.0", "id": 2000, "method": "workspace/applyEdit",
+                      "params": {"label": "Apply", "edit": {"changes": {uri: [{
+                          "range": {"start": {"line": 0, "character": 0},
+                                    "end": {"line": 0, "character": 0}},
+                          "newText": "applied "}]}}}})
+                answer = {}
+                def applied(result):
+                    answer["result"] = result
+                    return isinstance(result, dict) and "applied" in result
+                expect_answers(stdin, {2000: applied}, held)
+                send({"jsonrpc": "2.0", "id": message["id"], "result": answer["result"]})
         elif method == "initialize":
             told["initializationOptions"] = message["params"].get("initializationOptions")
             told["workspace"] = message["params"].get("capabilities", {}).get("workspace")
@@ -142,7 +158,7 @@ def main():
                         "renameProvider": True,
                         "documentFormattingProvider": True,
                         "documentSymbolProvider": True,
-                        "executeCommandProvider": {"commands": ["fake.report"]},
+                        "executeCommandProvider": {"commands": ["fake.report", "fake.apply"]},
                         "signatureHelpProvider": {"triggerCharacters": ["(", ","]},
                         "documentHighlightProvider": True,
                         "workspaceSymbolProvider": True,

@@ -38,6 +38,11 @@ pub const TC_EVENT_LSP_RESPONSE: u32 = 4;
 /// id; `status` is `output`, `quiet` or `exited` — see
 /// [`textchum_core::run`].
 pub const TC_EVENT_RUN: u32 = 5;
+/// Event kind: a language server asked for a workspace edit. `server`
+/// and `path` name the instance (server id, root), `status` is the
+/// request's id as JSON and `payload` its `{label?, edit}`; answer with
+/// [`tc_lsp_answer_apply_edit`].
+pub const TC_EVENT_APPLY_EDIT: u32 = 6;
 
 /// An event delivered from the core to the shell.
 ///
@@ -182,6 +187,16 @@ pub extern "C" fn tc_app_new(callback: TcEventCallback, userdata: *mut c_void) -
                     out.status = status.as_ptr();
                     callback(&out, userdata.get());
                 }
+                Event::ApplyEdit { server, root, request, params } => {
+                    let (server, root) = (callback_cstring(server), callback_cstring(root));
+                    let (request, params) = (callback_cstring(request), callback_cstring(params));
+                    let mut out = TcEvent::new(TC_EVENT_APPLY_EDIT);
+                    out.server = server.as_ptr();
+                    out.path = root.as_ptr();
+                    out.status = request.as_ptr();
+                    out.payload = params.as_ptr();
+                    callback(&out, userdata.get());
+                }
             }
         });
         let pool = textchum_lsp::Pool::new(app.sender());
@@ -275,6 +290,34 @@ pub unsafe extern "C" fn tc_run_rerun_test(
         .ok()
         .flatten()
         .unwrap_or(std::ptr::null_mut())
+}
+
+/// Answers a server's `workspace/applyEdit` request, as a
+/// `TC_EVENT_APPLY_EDIT` event named it, with whether the edit was made.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; the strings must
+/// point to as many readable bytes as their lengths say.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_answer_apply_edit(
+    app: *mut TcApp,
+    server: *const c_char,
+    server_len: usize,
+    root: *const c_char,
+    root_len: usize,
+    request: *const c_char,
+    request_len: usize,
+    applied: bool,
+) {
+    let Some(app) = (unsafe { app.as_ref() }) else { return };
+    let (Some(server), Some(root), Some(request)) = (
+        unsafe { str_from_raw(server, server_len) },
+        unsafe { str_from_raw(root, root_len) },
+        unsafe { str_from_raw(request, request_len) },
+    ) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| app.pool.answer_apply_edit(server, root, request, applied)));
 }
 
 /// Sends a line to a run's input. False when it is over.

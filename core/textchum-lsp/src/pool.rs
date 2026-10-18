@@ -971,6 +971,16 @@ impl Pool {
         }
     }
 
+    /// Answers a server's `workspace/applyEdit` request — the one an
+    /// [`textchum_core::Event::ApplyEdit`] carried — once the shell has
+    /// made the edit, or found it could not.
+    pub fn answer_apply_edit(&self, server: &str, root: &str, request: &str, applied: bool) {
+        let Ok(id) = serde_json::from_str::<serde_json::Value>(request) else { return };
+        if let Some(instance) = self.instances.get(&(server.to_owned(), PathBuf::from(root))) {
+            instance.send(crate::instance::Command::Reply { id, result: serde_json::json!({"applied": applied}) });
+        }
+    }
+
     /// Requests whole-document formatting; same contract as
     /// [`Self::hover`]. The response's `result` is an LSP `TextEdit[]`.
     pub fn formatting(&mut self, path: &Path, tab_size: u32, insert_spaces: bool) -> u64 {

@@ -44,6 +44,14 @@
 #define TC_EVENT_RUN 5
 
 /**
+ * Event kind: a language server asked for a workspace edit. `server`
+ * and `path` name the instance (server id, root), `status` is the
+ * request's id as JSON and `payload` its `{label?, edit}`; answer with
+ * [`tc_lsp_answer_apply_edit`].
+ */
+#define TC_EVENT_APPLY_EDIT 6
+
+/**
  * Appearance choice: follow the system.
  */
 #define TC_APPEARANCE_SYSTEM 0
@@ -285,6 +293,23 @@ char *tc_run_rerun_test(struct TcApp *app,
                         uintptr_t suite_len,
                         const char *name,
                         uintptr_t name_len);
+
+/**
+ * Answers a server's `workspace/applyEdit` request, as a
+ * `TC_EVENT_APPLY_EDIT` event named it, with whether the edit was made.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; the strings must
+ * point to as many readable bytes as their lengths say.
+ */
+void tc_lsp_answer_apply_edit(struct TcApp *app,
+                              const char *server,
+                              uintptr_t server_len,
+                              const char *root,
+                              uintptr_t root_len,
+                              const char *request,
+                              uintptr_t request_len,
+                              bool applied);
 
 /**
  * Sends a line to a run's input. False when it is over.

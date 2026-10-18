@@ -3100,6 +3100,37 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             return 1;
         }
 
+        // A command the server runs asks for its edit as a request of
+        // its own: the shell makes it, the server is told so, and one
+        // undo takes it back.
+        {
+            let answered: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+            let uri = format!("file://{}", path.display());
+            let shell = shell::Shell::instance();
+            let id = shell.pool.borrow_mut().execute_command(&path, "fake.apply", serde_json::json!([uri]));
+            let sink = Rc::clone(&answered);
+            shell.expect_response(id, move |json| *sink.borrow_mut() = Some(json.to_owned()));
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+            while answered.borrow().is_none() {
+                context.iteration(true);
+                if std::time::Instant::now() > deadline {
+                    eprintln!("FAIL: the server's command never answered");
+                    return 1;
+                }
+            }
+            let text = |buffer: &sourceview5::Buffer| buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+            let applied = text(&buffer);
+            fire("win.undo");
+            context.iteration(false);
+            let undone = text(&buffer);
+            let answer = answered.borrow().clone().unwrap_or_default();
+            if !applied.starts_with("applied ") || !answer.contains("\"applied\":true") || undone.starts_with("applied ") {
+                eprintln!("FAIL: the server's edit gave {applied:?}, told {answer}, one undo {undone:?}");
+                return 1;
+            }
+        }
+        println!("server edits ok (asked for by a command, made, answered, one undo)");
+
         // Formatting: the scripted server prepends "formatted: " as a
         // TextEdit; the action must carry it through the buffer (and
         // therefore the core) — proving the whole edits pipeline.

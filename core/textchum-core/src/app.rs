@@ -48,6 +48,16 @@ pub enum Event {
     /// `status` is `output` (something new to read), `quiet` (nothing
     /// said for a while, perhaps waiting for input) or `exited`.
     Run { id: u64, status: String },
+    /// A language server asked the editor to apply a workspace edit —
+    /// what a code action that runs a command does. `request` is the
+    /// request's id as JSON, to be handed back with the answer;
+    /// `params` is the request's `{label?, edit}` as JSON.
+    ApplyEdit {
+        server: String,
+        root: String,
+        request: String,
+        params: String,
+    },
 }
 
 /// A handle for pushing events into the app's delivery channel from

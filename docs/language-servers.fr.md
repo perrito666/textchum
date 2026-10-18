@@ -193,7 +193,10 @@ Language Servers ; voir [configuration](configuration.md#projets).
   reconstruit ne lui dit rien. Une action que le serveur a envoyée sans
   sa modification lui est renvoyée pour qu'il la termine avant qu'elle
   soit appliquée, et une action qui porte une commande plutôt qu'une
-  modification est exécutée par le serveur.
+  modification est exécutée par le serveur, qui renvoie la
+  modification que fait la commande — c'est ainsi que fonctionne
+  l'organisation des imports — et cette modification est appliquée
+  comme celle d'une action.
   Quand le curseur s'arrête sur une ligne où le serveur a quelque chose
   à proposer, une ampoule apparaît dans la marge à côté ; un clic sur
   l'ampoule liste ces mêmes actions. Passer à une autre ligne la retire.
@@ -201,10 +204,13 @@ Language Servers ; voir [configuration](configuration.md#projets).
   curseur devient un champ là où il se trouve, prérempli et
   sélectionné, ses autres usages dans le document étant marqués
   pendant ce temps. Entrée renomme dans tout l'espace de travail — les
-  fenêtres ouvertes sont éditées sur place (l'annulation fonctionne
-  par fenêtre) et les fichiers que personne n'a ouverts sont réécrits
-  sur disque — et Échap, ou le clavier allant ailleurs, laisse tout
-  comme c'était.
+  documents ouverts sont édités sur place, un pas d'annulation chacun,
+  et les fichiers que personne n'a ouverts sont réécrits sur disque —
+  et Échap, ou le clavier allant ailleurs, laisse tout comme c'était.
+  Annuler dans n'importe quel fichier touché par le renommage le
+  retire en entier ; voir [Annuler et rétablir](documents.md).
+  Il en va de même pour une action de code qui modifie plusieurs
+  fichiers.
 - **Formater le document** (⌥⇧⌘F) reformate via le serveur, en gardant
   les tabulations si le document indente avec des tabulations, des
   espaces sinon.

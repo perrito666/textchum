@@ -2213,8 +2213,9 @@ final class DocumentController: NSResponder {
         case .command(let name, let argumentsJSON):
             lspApp?.lspExecuteCommand(path: path, command: name, argumentsJSON: argumentsJSON) {
                 // A command's own answer is the server saying it is
-                // done; the edits it made arrive as a workspace/applyEdit
-                // request, which the pool handles.
+                // done; the edits it makes arrive as a workspace/applyEdit
+                // request of their own, applied as a refactoring when the
+                // event comes (AppDelegate.handleCoreEvent).
                 _ = $0
             }
         case .resolve(let actionJSON):

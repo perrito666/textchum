@@ -3474,7 +3474,9 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
                 }
                 shell.expect_response(id, move |json| {
                     if let Some(workbench) = weak.upgrade() {
-                        apply_workspace_edit(&workbench, json, &tr("the rename"));
+                        if !apply_workspace_edit(&workbench, json, &tr("the rename")) {
+                            workbench.hint(&tr("The server had no rename to offer."));
+                        }
                     }
                 });
             });
@@ -5128,7 +5130,11 @@ fn run_code_action(
     use textchum_core::code_action::Outcome;
     let shell = Shell::instance();
     match outcome {
-        Outcome::Edit(edit) => apply_workspace_edit(workbench, &edit.to_string(), &tr("the code action")),
+        Outcome::Edit(edit) => {
+            if !apply_workspace_edit(workbench, &edit.to_string(), &tr("the code action")) {
+                workbench.hint(&tr("The language server had no edit for that action."));
+            }
+        }
         Outcome::Command { name, arguments } => {
             // The command's own answer is the server saying it is done;
             // the edits it makes arrive as a workspace/applyEdit
@@ -5159,7 +5165,9 @@ fn run_code_action(
                 let resolved = textchum_core::code_action::actions(&format!("[{json}]"));
                 match resolved.first().map(|action| action.outcome()) {
                     Some(Outcome::Edit(edit)) => {
-                        apply_workspace_edit(&workbench, &edit.to_string(), &tr("the code action"))
+                        if !apply_workspace_edit(&workbench, &edit.to_string(), &tr("the code action")) {
+                            workbench.hint(&tr("The language server had no edit for that action."));
+                        }
                     }
                     Some(Outcome::Command { name, arguments }) => {
                         Shell::instance().pool.borrow_mut().execute_command(
@@ -5816,12 +5824,12 @@ pub(crate) fn apply_edits_to_page(page: &Rc<Page>, edits: Vec<crate::lsp_edits::
 /// Applies a WorkspaceEdit as one refactoring called `label`: each open
 /// page edits in place as one step tagged with it, and a file nobody has
 /// open is written by the core, which keeps what it held — so Undo in
-/// any of them takes the whole of it back.
-pub(crate) fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str, label: &str) {
+/// any of them takes the whole of it back. False when there was nothing
+/// in it to apply.
+pub(crate) fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str, label: &str) -> bool {
     let by_file = crate::lsp_edits::workspace_edits(json);
     if by_file.is_empty() {
-        workbench.hint(&tr("The server had no rename to offer."));
-        return;
+        return false;
     }
     let id = textchum_core::refactoring::begin(label);
     let mut touched = 0usize;
@@ -5846,6 +5854,7 @@ pub(crate) fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str, label:
     }
     workbench.toast(&fill(&tr_n("Changed {} file.", "Changed {} files.", touched), &[&touched.to_string()]));
     workbench.refresh_chrome();
+    true
 }
 
 pub fn percent_decode(text: &str) -> String {

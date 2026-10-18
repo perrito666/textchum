@@ -51,6 +51,12 @@ pub enum Command {
         method: String,
         params: Value,
     },
+    /// The answer to a server→client request the shell handled, such as
+    /// `workspace/applyEdit`: `id` is the request's own.
+    Reply {
+        id: Value,
+        result: Value,
+    },
     Shutdown,
 }
 
@@ -382,6 +388,10 @@ fn run_manager(
                 "workspace": {
                     "configuration": true,
                     "workspaceFolders": true,
+                    // Applied by the shell as one refactoring, its answer
+                    // given once it has been.
+                    "applyEdit": true,
+                    "workspaceEdit": {"documentChanges": true},
                     "didChangeConfiguration": {"dynamicRegistration": false},
                     "symbol": {}
                 },
@@ -412,7 +422,7 @@ fn run_manager(
                     }
                     break;
                 }
-                answer_if_request(&stdin, &root, &options.settings, &message);
+                answer_if_request(&stdin, &events, &server_id, &root, &options.settings, &message);
             }
             Ok(None) => {
                 status(&events, &server_id, &root, "exited", "during initialize");
@@ -488,7 +498,7 @@ fn run_manager(
                                 }
                             }
                         } else {
-                            answer_if_request(&stdin, &root, &settings, &message);
+                            answer_if_request(&stdin, &events, &server_id, &root, &settings, &message);
                         }
                     }
                     // EOF or a broken pipe both mean the server is gone;
@@ -559,6 +569,11 @@ fn run_manager(
                 "method": method,
                 "params": params,
             }),
+            Command::Reply { id, result } => json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": result,
+            }),
             Command::Shutdown => break,
         };
         if write_message(&mut *stdin.lock().unwrap(), &message).is_err() {
@@ -592,10 +607,13 @@ fn run_manager(
 /// gets an array with one entry per item — the configured settings'
 /// section the item names, or the null the specification prescribes
 /// when there is none — and `workspace/workspaceFolders` gets the root
-/// the instance was started for. Everything else the editor cannot
-/// answer is void, and null is its answer.
+/// the instance was started for. `workspace/applyEdit` goes to the
+/// shell, which answers once the edit is made. Everything else the
+/// editor cannot answer is void, and null is its answer.
 fn answer_if_request(
     stdin: &Arc<Mutex<std::process::ChildStdin>>,
+    events: &EventSender,
+    server: &str,
     root: &Path,
     settings: &Value,
     message: &Value,
@@ -606,6 +624,18 @@ fn answer_if_request(
     ) else {
         return;
     };
+    if method == "workspace/applyEdit" {
+        let params = message.get("params").cloned().unwrap_or(Value::Null);
+        let sent = events.send(Event::ApplyEdit {
+            server: server.to_owned(),
+            root: root.to_string_lossy().into_owned(),
+            request: id.to_string(),
+            params: params.to_string(),
+        });
+        if sent.is_ok() {
+            return;
+        }
+    }
     let reply = json!({
         "jsonrpc": "2.0",
         "id": id,

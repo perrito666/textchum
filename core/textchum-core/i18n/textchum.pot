@@ -702,6 +702,12 @@ msgstr ""
 msgid "A configured grammar could not be loaded"
 msgstr ""
 
+#: linux/src/shell.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "the code action"
+msgstr ""
+
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "New with Format…"
 msgstr ""
@@ -1054,6 +1060,10 @@ msgid "Put the caret on a name first."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "The server had no rename to offer."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server offered no outline."
 msgstr ""
 
@@ -1173,7 +1183,7 @@ msgid "The language server has no action for this place."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
-msgid "the code action"
+msgid "The language server had no edit for that action."
 msgstr ""
 
 #: linux/src/workbench.rs
@@ -1182,10 +1192,6 @@ msgstr ""
 
 #: linux/src/workbench.rs
 msgid "The language server would not finish that action."
-msgstr ""
-
-#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
-msgid "The language server had no edit for that action."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
@@ -1208,10 +1214,6 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "That version is no longer kept."
-msgstr ""
-
-#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
-msgid "The server had no rename to offer."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift

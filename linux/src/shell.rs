@@ -842,6 +842,23 @@ impl Shell {
                         callback(&json);
                     }
                 }
+                Event::ApplyEdit { server, root, request, params } => {
+                    // A code action that runs a command makes its edit
+                    // this way: one refactoring, as if the action had
+                    // carried it, and the server told once it is made.
+                    let params: serde_json::Value = serde_json::from_str(&params).unwrap_or_default();
+                    let label = params["label"].as_str().map(str::to_owned).unwrap_or_else(|| tr("the code action"));
+                    let mut front = None;
+                    crate::workbench::Workbench::for_each(|workbench| {
+                        if front.is_none() {
+                            front = Some(Rc::clone(workbench));
+                        }
+                    });
+                    let applied = front.is_some_and(|workbench| {
+                        crate::workbench::apply_workspace_edit(&workbench, &params["edit"].to_string(), &label)
+                    });
+                    self.pool.borrow().answer_apply_edit(&server, &root, &request, applied);
+                }
                 Event::Run { id, status } => {
                     crate::workbench::Workbench::for_each(|workbench| {
                         if workbench.run_panel.run_id() == Some(id) {

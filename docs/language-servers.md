@@ -169,16 +169,21 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   finding, and a reconstructed one gets a shrug. An action the server
   answered without its edit is sent back to be finished before it is
   applied, and one that carries a command rather than an edit is run by
-  the server.
+  the server, which sends back the edit the command makes — organize
+  imports works this way — and that edit is made the same way as an
+  action's own.
   When the caret rests on a line where the server has something to
   offer, a bulb appears in the gutter beside it; a click on the bulb
   lists the same actions. Moving to another line takes it away.
 - **Rename Symbol** (⌃⌘R) asks in place: the name under the caret
   becomes a field where it stands, prefilled and selected, with its
   other uses in the document marked meanwhile. Return renames across
-  the whole workspace — open windows edit in place (undo works per
-  window), files nobody has open are rewritten on disk — and Escape,
-  or the keyboard going elsewhere, leaves everything as it was.
+  the whole workspace — open documents edit in place, one undo step
+  each, and files nobody has open are rewritten on disk — and Escape,
+  or the keyboard going elsewhere, leaves everything as it was. Undo in
+  any file the rename touched takes all of it back; see
+  [Undo and redo](documents.md#undo-and-redo). The same holds for a
+  code action that changes several files.
 - **Format Document** (⌥⇧⌘F) asks the server first and falls back to
   the save-preprocessor chain — so formatting works on untitled
   documents and languages without a server, whenever a chain is
