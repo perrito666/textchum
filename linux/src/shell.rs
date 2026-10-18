@@ -316,6 +316,8 @@ pub struct Shell {
     pub pool: RefCell<Pool>,
     /// Commands run from the editor; see [`textchum_core::run`].
     pub runs: RefCell<textchum_core::run::Runs>,
+    /// Every debug session, by id.
+    pub debuggers: RefCell<textchum_dap::Debuggers>,
     events: RefCell<Receiver<Event>>,
     pub pages: RefCell<HashMap<String, Rc<PageHandles>>>,
     pub chum_wait_sentinels: RefCell<HashMap<String, String>>,
@@ -460,6 +462,7 @@ impl Shell {
             textchum_lsp::log::set_path(&log_path);
             let (sender, receiver) = std::sync::mpsc::channel();
             let runs = textchum_core::run::Runs::new(sender.clone());
+            let debuggers = textchum_dap::Debuggers::new(sender.clone());
             let mut pool = Pool::new(sender);
             // Screenshot/demo hook: route rust at the scripted server.
             if let Some(script) = std::env::var_os("TEXTCHUM_FAKE_LSP") {
@@ -475,6 +478,7 @@ impl Shell {
                 config: RefCell::new(config),
                 pool: RefCell::new(pool),
                 runs: RefCell::new(runs),
+                debuggers: RefCell::new(debuggers),
                 events: RefCell::new(receiver),
                 pages: RefCell::new(HashMap::new()),
                 chum_wait_sentinels: RefCell::new(HashMap::new()),
@@ -842,8 +846,13 @@ impl Shell {
                         callback(&json);
                     }
                 }
-                // This shell starts no debug session yet, so none has news.
-                Event::Debug { .. } => {}
+                Event::Debug { session, kind, json } => {
+                    crate::workbench::Workbench::for_each(|workbench| {
+                        if workbench.debug_panel.session_id() == Some(session) {
+                            workbench.debug_panel.handle(&kind, &json);
+                        }
+                    });
+                }
                 Event::ApplyEdit { server, root, request, params } => {
                     // A code action that runs a command makes its edit
                     // this way: one refactoring, as if the action had

@@ -159,6 +159,7 @@ pub struct Workbench {
     status_crumbs: gtk::Box,
     /// The output of a command run from this window, under the editor.
     pub run_panel: Rc<crate::run_panel::RunPanel>,
+    pub debug_panel: Rc<crate::debug_panel::DebugPanel>,
     shown_crumbs: RefCell<Vec<(String, usize, Vec<(String, usize)>)>>,
     /// The notification area at the bar's right end: the last thing the
     /// editor had to say, as much as fits; a click lists the session's.
@@ -420,6 +421,14 @@ impl Workbench {
         run_section.append(Some(&tr("Next Output Place")), Some("win.next-output-place"));
         run_section.append(Some(&tr("Previous Output Place")), Some("win.previous-output-place"));
         run_section.append(Some(&tr("Show Run Output")), Some("win.toggle-run-panel"));
+        run_section.append(Some(&tr("Debug at Caret")), Some("win.debug-at-caret"));
+        run_section.append(Some(&tr("Toggle Breakpoint")), Some("win.toggle-breakpoint"));
+        run_section.append(Some(&tr("Continue")), Some("win.debug-continue"));
+        run_section.append(Some(&tr("Step Over")), Some("win.step-over"));
+        run_section.append(Some(&tr("Step Into")), Some("win.step-into"));
+        run_section.append(Some(&tr("Step Out")), Some("win.step-out"));
+        run_section.append(Some(&tr("Stop Debugging")), Some("win.stop-debugging"));
+        run_section.append(Some(&tr("Show Debugger")), Some("win.toggle-debug-panel"));
         menu.append_submenu(Some(&tr("Run")), &run_section);
         menu.append_section(None, &app_section);
         let menu_button = gtk::MenuButton::builder()
@@ -519,6 +528,8 @@ impl Workbench {
         }
         status_notice.connect_clicked(|button| show_notices(button));
         status_bar.append(&status_notice);
+        let debug_panel = crate::debug_panel::DebugPanel::new();
+        content_box.append(&debug_panel.root);
         let run_panel = crate::run_panel::RunPanel::new();
         content_box.append(&run_panel.root);
         content_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
@@ -598,6 +609,7 @@ impl Workbench {
             status_encoding: status_encoding.clone(),
             status_crumbs: status_crumbs.clone(),
             run_panel: Rc::clone(&run_panel),
+            debug_panel: Rc::clone(&debug_panel),
             shown_crumbs: RefCell::new(Vec::new()),
             status_notice: status_notice.clone(),
             search_bar,
@@ -2673,6 +2685,25 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("stop-run", workbench, |workbench, _| workbench.run_panel.stop());
     add("next-output-place", workbench, |workbench, _| step_output_place(workbench, true));
     add("previous-output-place", workbench, |workbench, _| step_output_place(workbench, false));
+    add("debug-at-caret", workbench, |workbench, _| debug_runnable(workbench, None));
+    add("toggle-breakpoint", workbench, |workbench, _| {
+        if let Some(page) = workbench.selected() {
+            let line = page.buffer.iter_at_mark(&page.buffer.get_insert()).line();
+            page::toggle_breakpoint(&page, line);
+        }
+    });
+    add("debug-continue", workbench, |workbench, _| debug_step(workbench, "continue"));
+    add("step-over", workbench, |workbench, _| debug_step(workbench, "next"));
+    add("step-into", workbench, |workbench, _| debug_step(workbench, "stepIn"));
+    add("step-out", workbench, |workbench, _| debug_step(workbench, "stepOut"));
+    add("stop-debugging", workbench, |workbench, _| debug_step(workbench, "stop"));
+    add("toggle-debug-panel", workbench, |workbench, _| {
+        if workbench.debug_panel.is_shown() {
+            workbench.debug_panel.hide();
+        } else {
+            workbench.debug_panel.show();
+        }
+    });
     add("toggle-run-panel", workbench, |workbench, _| {
         if workbench.run_panel.is_shown() {
             workbench.run_panel.hide();
@@ -2995,6 +3026,17 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         workbench.refresh_chrome();
         workbench.rebuild_buffer_list();
     });
+    // A run mark clicked with Alt: what starts on that line is debugged.
+    {
+        let action = gtk::gio::SimpleAction::new("debug-line", Some(glib::VariantTy::UINT64));
+        let weak = Rc::downgrade(workbench);
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some(line) = parameter.and_then(|p| p.get::<u64>()) else { return };
+            debug_runnable(&workbench, Some(line as i32));
+        });
+        workbench.window.add_action(&action);
+    }
     // A run mark clicked: what starts on that zero-based line runs.
     {
         let action = gtk::gio::SimpleAction::new("run-line", Some(glib::VariantTy::UINT64));
@@ -3957,6 +3999,14 @@ const PALETTE: &[(&str, &str)] = &[
     ("Next Output Place", "win.next-output-place"),
     ("Previous Output Place", "win.previous-output-place"),
     ("Show Run Output", "win.toggle-run-panel"),
+    ("Debug at Caret", "win.debug-at-caret"),
+    ("Toggle Breakpoint", "win.toggle-breakpoint"),
+    ("Continue", "win.debug-continue"),
+    ("Step Over", "win.step-over"),
+    ("Step Into", "win.step-into"),
+    ("Step Out", "win.step-out"),
+    ("Stop Debugging", "win.stop-debugging"),
+    ("Show Debugger", "win.toggle-debug-panel"),
     ("Save", "win.save"),
     ("Save As…", "win.save-as"),
     ("Revert to Saved", "win.revert"),
@@ -6244,6 +6294,74 @@ fn run_runnable(workbench: &Rc<Workbench>, line: Option<i32>) {
     match found {
         Some(runnable) => run_in_directory(workbench, &runnable.command, &runnable.cwd),
         None => workbench.hint(&tr("Nothing here runs: put the caret in a test, a benchmark or a main.")),
+    }
+}
+
+/// Debug at Caret, or a run mark clicked with Alt on zero-based `line`:
+/// the innermost test or `main` around the line, under the debugger.
+fn debug_runnable(workbench: &Rc<Workbench>, line: Option<i32>) {
+    let Some(page) = workbench.selected() else { return };
+    let line = line.unwrap_or_else(|| page.buffer.iter_at_mark(&page.buffer.get_insert()).line());
+    let found = page.state.borrow().document.runnable_at(line.max(0) as usize);
+    match found.filter(|runnable| !runnable.launch.is_null()) {
+        Some(runnable) => {
+            let title = fill(&tr("Debug {}"), &[&runnable.name]);
+            start_debugging(workbench, &runnable.launch, &runnable.cwd, &title);
+        }
+        None => workbench.hint(&tr("Nothing here can be debugged: put the caret in a test or a main.")),
+    }
+}
+
+/// Starts a debug session for a launch description, with every
+/// breakpoint of every open document, in the debug panel. One that
+/// cannot start says why.
+pub(crate) fn start_debugging(workbench: &Rc<Workbench>, launch: &serde_json::Value, cwd: &Path, title: &str) {
+    let shell = Shell::instance();
+    let breakpoints: Vec<(PathBuf, Vec<usize>)> = shell
+        .open_documents()
+        .into_iter()
+        .filter_map(|document| {
+            let path = document.path.borrow().clone()?;
+            let lines = document.state.borrow().document.breakpoints();
+            (!lines.is_empty()).then(|| (PathBuf::from(path), lines))
+        })
+        .collect();
+    let started = shell.debuggers.borrow_mut().start(launch, cwd, breakpoints);
+    match started {
+        Ok(id) => {
+            let weak = Rc::downgrade(workbench);
+            workbench.debug_panel.set_on_frame(Rc::new(move |path: &str, line: i32| {
+                let Some(workbench) = weak.upgrade() else { return };
+                workbench.open(Some(PathBuf::from(path)), Some((line, 0)));
+                Workbench::for_each(|each| {
+                    for page in each.all_pages() {
+                        let here = page.path().borrow().as_deref() == Some(path);
+                        page::set_execution_line(&page, here.then_some(line));
+                    }
+                });
+            }));
+            workbench.debug_panel.set_on_resumed(Rc::new(|| {
+                Workbench::for_each(|each| {
+                    for page in each.all_pages() {
+                        page::set_execution_line(&page, None);
+                    }
+                });
+            }));
+            workbench.debug_panel.begin(id, title);
+        }
+        Err(why) => workbench.hint(&why),
+    }
+}
+
+/// Continue, Step Over, Step Into, Step Out, Stop Debugging: to the debug
+/// panel of this window.
+fn debug_step(workbench: &Rc<Workbench>, command: &str) {
+    if !workbench.debug_panel.perform(command) {
+        workbench.hint(&if command == "stop" {
+            tr("Nothing is being debugged.")
+        } else {
+            tr("The program is not stopped in the debugger: set a breakpoint and debug a test or a main.")
+        });
     }
 }
 

@@ -171,7 +171,9 @@ msgstr[1] ""
 msgid "exited with {}"
 msgstr ""
 
-#: core/textchum-core/src/run.rs
+#: core/textchum-core/src/run.rs linux/src/debug_panel.rs
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/SmokeTest.swift
 msgid "stopped"
 msgstr ""
 
@@ -225,7 +227,8 @@ msgstr ""
 msgid "Formats with the server's own formatter"
 msgstr ""
 
-#: core/textchum-dap/src/lib.rs
+#: core/textchum-dap/src/lib.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing here can be debugged: put the caret in a test or a main."
 msgstr ""
 
@@ -260,6 +263,87 @@ msgstr ""
 
 #: linux/src/chords.rs macos/Sources/Textchum/ChordPanel.swift
 msgid "esc closes"
+msgstr ""
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "Continue"
+msgstr ""
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "Step Over"
+msgstr ""
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "Step Into"
+msgstr ""
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "Step Out"
+msgstr ""
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/run_panel.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/RunPanel.swift
+msgid "Stop"
+msgstr ""
+
+#: linux/src/debug_panel.rs linux/src/run_panel.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/RunPanel.swift
+msgid "Close"
+msgstr ""
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "Call Stack"
+msgstr ""
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "Variables"
+msgstr ""
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "An expression to evaluate where the program stopped — ⏎"
+msgstr ""
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "starting"
+msgstr ""
+
+#: linux/src/debug_panel.rs linux/src/run_panel.rs
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/RunPanel.swift
+msgid "running"
+msgstr ""
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "the debugger did not say why"
+msgstr ""
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "The breakpoint at {}:{} is not set: {}"
+msgstr ""
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "stopped: {}"
+msgstr ""
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "— exited with {}"
+msgstr ""
+
+#: linux/src/debug_panel.rs linux/src/main.rs
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "ended"
 msgstr ""
 
 #: linux/src/keyboard.rs
@@ -313,12 +397,6 @@ msgstr ""
 msgid "Rerun Failed Tests"
 msgstr ""
 
-#: linux/src/keyboard.rs linux/src/run_panel.rs linux/src/workbench.rs
-#: macos/Sources/Textchum/AppDelegate.swift
-#: macos/Sources/Textchum/RunPanel.swift
-msgid "Stop"
-msgstr ""
-
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Next Output Place"
@@ -332,6 +410,26 @@ msgstr ""
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Show Run Output"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Debug at Caret"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Toggle Breakpoint"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Stop Debugging"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Show Debugger"
 msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
@@ -702,21 +800,12 @@ msgstr ""
 msgid "Rerun Failed"
 msgstr ""
 
-#: linux/src/run_panel.rs linux/src/workbench.rs
-#: macos/Sources/Textchum/RunPanel.swift
-msgid "Close"
-msgstr ""
-
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "Tests"
 msgstr ""
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "A line for its input — ⏎ sends it"
-msgstr ""
-
-#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
-msgid "running"
 msgstr ""
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
@@ -1291,6 +1380,20 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing here runs: put the caret in a test, a benchmark or a main."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Debug {}"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Nothing is being debugged."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid ""
+"The program is not stopped in the debugger: set a breakpoint and debug a "
+"test or a main."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
@@ -2105,6 +2208,10 @@ msgstr ""
 msgid ""
 "The ctags fallback needs Universal Ctags (install with: brew install "
 "universal-ctags)."
+msgstr ""
+
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "failed"
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift

@@ -450,6 +450,40 @@ Repetir fallidas, y una prueba de la lista todavía no abre su código —
 el sitio de su fallo en la salida sí. Escribir todavía no filtra la
 lista.
 
+## Depuración
+
+Un clic en la columna de marcas del margen, en una línea sin otra
+marca, pone ahí un punto de interrupción — un disco rojo — y un segundo
+clic lo quita; **Run → Alternar punto de interrupción** (⌘F8, Ctrl+F8
+en Linux) hace lo mismo en la línea del cursor. Los puntos de
+interrupción se mueven con el texto que se edita encima de ellos.
+**Run → Depurar en el cursor** (⌃⇧D, Mayús+F9 en Linux), o un ⌥-clic
+(Alt-clic en Linux) en una marca de ejecución, ejecuta la prueba o el
+`main` bajo un depurador: debugpy para Python, Delve para Go, lldb-dap
+para Rust — después de que cargo haya compilado la prueba o el
+programa, con sus mensajes en la consola de depuración.
+
+El panel de depuración se abre bajo el editor. Cuando el programa se
+detiene en un punto de interrupción, su línea se tiñe y el archivo se
+abre ahí; el panel lista la pila del hilo que se detuvo, las variables
+del marco elegido en ella — un valor estructurado se abre para mostrar
+lo que contiene — y la salida del programa, con un campo que evalúa una
+expresión en ese marco. **Continuar** (F9, F5 en Linux), **Paso por
+encima** (F8, F6 en Linux), **Paso adentro** (F7), **Paso afuera** (⇧F8,
+Mayús+F7 en Linux) y **Detener la depuración** (⇧⌘F2, Ctrl+Mayús+F2 en
+Linux) están en el menú Run y en el panel. Un adaptador que no está
+instalado se nombra, con la orden que lo instala; un programa que no
+arranca dice qué suele retenerlo — en macOS, el permiso que necesita un
+depurador para tomar el control de un programa, que concede el modo de
+desarrollador (`DevToolsSecurity -enable`).
+
+Todavía no: la depuración solo empieza desde una prueba o un `main` que
+encuentran las marcas de ejecución, en Rust, Go y Python; no se puede
+elegir el adaptador de un lenguaje; no hay forma de engancharse a un
+programa en marcha, ni puntos de interrupción condicionales, ni lista
+de expresiones vigiladas; y los puntos de interrupción no se conservan
+entre reinicios.
+
 ## Markdown y prosa
 
 Los documentos Markdown abren con una vista previa viva junto al

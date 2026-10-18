@@ -455,6 +455,41 @@ tube ou `&&` n'est pas restreinte pour Relancer les échecs, et un test
 de la liste n'ouvre pas encore son code — l'endroit de son échec dans
 la sortie, si. Taper ne filtre pas encore la liste.
 
+## Débogage
+
+Un clic dans la colonne des marques de la marge, sur une ligne sans
+autre marque, y pose un point d'arrêt — un disque rouge — et un second
+clic le retire ; **Run → Basculer le point d'arrêt** (⌘F8, Ctrl+F8 sous
+Linux) fait de même sur la ligne du curseur. Les points d'arrêt suivent
+le texte modifié au-dessus d'eux. **Run → Déboguer au curseur** (⌃⇧D,
+Maj+F9 sous Linux), ou un ⌥-clic (Alt-clic sous Linux) sur une marque
+de lancement, lance le test ou le `main` sous un débogueur : debugpy
+pour Python, Delve pour Go, lldb-dap pour Rust — une fois que cargo a
+compilé le test ou le programme, ses messages dans la console de
+débogage.
+
+Le panneau de débogage s'ouvre sous l'éditeur. Quand le programme
+s'arrête sur un point d'arrêt, sa ligne est teintée et le fichier
+s'ouvre à cet endroit ; le panneau liste la pile du fil qui s'est
+arrêté, les variables du cadre choisi dans celle-ci — une valeur
+structurée s'ouvre pour montrer ce qu'elle contient — et la sortie du
+programme, avec un champ qui évalue une expression dans ce cadre.
+**Continuer** (F9, F5 sous Linux), **Pas à pas principal** (F8, F6
+sous Linux), **Pas à pas détaillé** (F7), **Pas à pas sortant** (⇧F8,
+Maj+F7 sous Linux) et **Arrêter le débogage** (⇧⌘F2, Ctrl+Maj+F2 sous
+Linux) sont dans le menu Run et sur le panneau. Un adaptateur absent
+est nommé, avec la commande qui l'installe ; un programme qui ne
+démarre pas dit ce qui le retient d'habitude — sous macOS, la
+permission dont un débogueur a besoin pour prendre le contrôle d'un
+programme, qu'accorde le mode développeur (`DevToolsSecurity -enable`).
+
+Pas encore là : le débogage ne part que d'un test ou d'un `main` que
+trouvent les marques de lancement, en Rust, Go et Python ; l'adaptateur
+d'un langage ne peut pas être choisi ; on ne peut pas s'attacher à un
+programme en cours, ni poser de point d'arrêt conditionnel, ni suivre
+des expressions ; et les points d'arrêt ne sont pas gardés d'un
+redémarrage à l'autre.
+
 ## Markdown et prose
 
 Les documents Markdown s'ouvrent avec un aperçu vivant à côté du

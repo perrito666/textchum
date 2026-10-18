@@ -74,6 +74,9 @@ public final class CoreApp {
         /// request's `{label?, edit}` as JSON, `request` its id, to be
         /// handed back to ``lspAnswerApplyEdit(server:root:request:applied:)``.
         case applyEdit(server: String, root: String, request: String, params: String)
+        /// A debug session has news: `kind` says what (stopped, output,
+        /// variables, ended, …), `json` carries it.
+        case debug(session: UInt64, kind: String, json: String)
     }
 
     /// Retained context handed to the C callback as its `userdata`.
@@ -161,6 +164,11 @@ public final class CoreApp {
                 sink.deliver(.lspResponse(id: event.seq, json: payload ?? "null"))
             case UInt32(TC_EVENT_RUN):
                 sink.deliver(.run(id: event.seq, status: event.status.map { String(cString: $0) } ?? ""))
+            case UInt32(TC_EVENT_DEBUG):
+                sink.deliver(
+                    .debug(
+                        session: event.seq, kind: event.status.map { String(cString: $0) } ?? "",
+                        json: payload ?? "{}"))
             case UInt32(TC_EVENT_APPLY_EDIT):
                 sink.deliver(
                     .applyEdit(
@@ -241,6 +249,47 @@ public final class CoreApp {
     }
 
     public struct RunError: Error, Sendable { public let message: String }
+
+    /// Debugs what a launch description says, from `cwd`, with the
+    /// breakpoints there are (`path` → zero-based lines). The id names the
+    /// session in its `debug` events.
+    public func debugStart(launch: String, cwd: String, breakpoints: [String: [Int]]) -> Result<UInt64, RunError> {
+        let breakpointsJSON = (try? JSONSerialization.data(withJSONObject: breakpoints))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        let answer = withUTF8(launch) { launch, launchLen in
+            withUTF8(cwd) { cwd, cwdLen in
+                withUTF8(breakpointsJSON) { points, pointsLen in
+                    tc_debug_start(handle, launch, launchLen, cwd, cwdLen, points, pointsLen)
+                }
+            }
+        }
+        guard let answer else { return .failure(RunError(message: "the debugger could not be started")) }
+        defer { tc_string_free(answer) }
+        let parsed = (try? JSONSerialization.jsonObject(with: Data(String(cString: answer).utf8))) as? [String: Any]
+        if let id = parsed?["id"] as? Int { return .success(UInt64(id)) }
+        return .failure(RunError(message: parsed?["error"] as? String ?? "the debugger could not be started"))
+    }
+
+    /// Sends a session a command: `["command": "next"]`, with `frame`,
+    /// `reference` or `expression` where the command takes one. False
+    /// when the session is over.
+    @discardableResult
+    public func debugSend(id: UInt64, _ command: [String: Any]) -> Bool {
+        guard let data = try? JSONSerialization.data(withJSONObject: command),
+            let json = String(data: data, encoding: .utf8)
+        else { return false }
+        return withUTF8(json) { json, jsonLen in tc_debug_send(handle, id, json, jsonLen) }
+    }
+
+    /// A file's breakpoints changed; every session is told.
+    public func debugSetBreakpoints(path: String, lines: [Int]) {
+        let json = (try? JSONSerialization.data(withJSONObject: lines)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        withUTF8(path) { path, pathLen in
+            withUTF8(json) { lines, linesLen in tc_debug_set_breakpoints(handle, path, pathLen, lines, linesLen) }
+        }
+    }
+
+    public func debugForget(id: UInt64) { tc_debug_forget(handle, id) }
 
     /// What changed in a run's output since it was last read.
     public func runRead(id: UInt64) -> RunUpdate? {

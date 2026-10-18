@@ -1161,6 +1161,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             editors.first { $0.coreDocument.path == path }?.apply(diagnostics: items)
         case .lspResponse:
             break  // routed to its completion handler inside CoreApp
+        case let .debug(session, kind, json):
+            for workbench in Workbench.all where workbench.debugPanel.sessionID == session {
+                workbench.debugPanel.handle(kind: kind, json: json)
+            }
         case let .applyEdit(server, root, request, params):
             // A code action that runs a command makes its edit this way:
             // one refactoring, as if the action had carried it.
@@ -1821,6 +1825,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.runAtCaret(_:)): "runAtCaret",
             #selector(runAgain(_:)): "runAgain",
             #selector(rerunFailedTests(_:)): "rerunFailedTests",
+            #selector(DocumentController.debugAtCaret(_:)): "debugAtCaret",
+            #selector(DocumentController.toggleBreakpointAtCaret(_:)): "toggleBreakpoint",
+            #selector(debugContinue(_:)): "debugContinue",
+            #selector(debugStepOver(_:)): "stepOver",
+            #selector(debugStepInto(_:)): "stepInto",
+            #selector(debugStepOut(_:)): "stepOut",
+            #selector(stopDebugging(_:)): "stopDebugging",
+            #selector(toggleDebugPanel(_:)): "toggleDebugPanel",
             #selector(stopRun(_:)): "stopRun",
             #selector(nextOutputPlace(_:)): "nextOutputPlace",
             #selector(previousOutputPlace(_:)): "previousOutputPlace",
@@ -2701,6 +2713,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .failure(let error):
             workbench.focusedDocument?.showHint(error.message)
         }
+    }
+
+    /// Debugs a runnable in the workbench's debug panel, with every
+    /// breakpoint of every open document. A session that cannot start
+    /// says why by the caret.
+    func debug(_ runnable: CoreDocument.Runnable, in workbench: Workbench) {
+        guard let coreApp else { return }
+        var breakpoints: [String: [Int]] = [:]
+        for editor in editors {
+            if let path = editor.coreDocument.path, !editor.coreDocument.breakpoints.isEmpty {
+                breakpoints[path] = editor.coreDocument.breakpoints
+            }
+        }
+        let panel = workbench.debugPanel
+        panel.core = coreApp
+        panel.onFrame = { [weak self] path, line in
+            guard let self else { return }
+            self.open(path: path, revealLine: line + 1, revealCharacter: 0)
+            for editor in self.editors {
+                editor.setExecutionLine(editor.coreDocument.path == path ? line : nil)
+            }
+        }
+        panel.onResumed = { [weak self] in
+            for editor in self?.editors ?? [] {
+                editor.setExecutionLine(nil)
+            }
+        }
+        switch coreApp.debugStart(launch: runnable.launch.text, cwd: runnable.cwd, breakpoints: breakpoints) {
+        case .success(let id):
+            panel.begin(id: id, title: t("Debug {}", runnable.name))
+        case .failure(let error):
+            workbench.focusedDocument?.showHint(error.message)
+        }
+    }
+
+    /// A document's breakpoints changed: the debug sessions are told.
+    func breakpointsChanged(path: String, lines: [Int]) {
+        coreApp?.debugSetBreakpoints(path: path, lines: lines)
+    }
+
+    /// Run → Continue (F9), Step Over (F8), Step Into (F7), Step Out (⇧F8),
+    /// Stop Debugging (⇧⌘F2): to the debug panel in front.
+    @objc func debugContinue(_ sender: Any?) { debugStep("continue") }
+    @objc func debugStepOver(_ sender: Any?) { debugStep("next") }
+    @objc func debugStepInto(_ sender: Any?) { debugStep("stepIn") }
+    @objc func debugStepOut(_ sender: Any?) { debugStep("stepOut") }
+    @objc func stopDebugging(_ sender: Any?) { debugStep("stop") }
+
+    private func debugStep(_ command: String) {
+        guard let workbench = frontWorkbench else { return }
+        if !workbench.debugPanel.perform(command) {
+            workbench.focusedDocument?.showHint(
+                command == "stop"
+                    ? t("Nothing is being debugged.")
+                    : t("The program is not stopped in the debugger: set a breakpoint and debug a test or a main."))
+        }
+    }
+
+    /// Run → Show Debugger: the panel back, or away.
+    @objc func toggleDebugPanel(_ sender: Any?) {
+        guard let panel = frontWorkbench?.debugPanel else { return }
+        if panel.isShown { panel.hide() } else { panel.show() }
     }
 
     @objc func stopRun(_ sender: Any?) {
@@ -3951,6 +4025,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         previousPlace.keyEquivalentModifierMask = [.shift]
         runMenu.addItem(previousPlace)
         runMenu.addItem(withTitle: t("Show Run Output"), action: #selector(toggleRunPanel(_:)), keyEquivalent: "")
+        runMenu.addItem(.separator())
+        let debugItem = NSMenuItem(
+            title: t("Debug at Caret"), action: #selector(DocumentController.debugAtCaret(_:)), keyEquivalent: "d")
+        debugItem.keyEquivalentModifierMask = [.control, .shift]
+        runMenu.addItem(debugItem)
+        let breakpointItem = NSMenuItem(
+            title: t("Toggle Breakpoint"), action: #selector(DocumentController.toggleBreakpointAtCaret(_:)),
+            keyEquivalent: String(UnicodeScalar(NSF8FunctionKey)!))
+        breakpointItem.keyEquivalentModifierMask = [.command]
+        runMenu.addItem(breakpointItem)
+        let steps: [(String, Selector, Int, NSEvent.ModifierFlags)] = [
+            (t("Continue"), #selector(debugContinue(_:)), NSF9FunctionKey, []),
+            (t("Step Over"), #selector(debugStepOver(_:)), NSF8FunctionKey, []),
+            (t("Step Into"), #selector(debugStepInto(_:)), NSF7FunctionKey, []),
+            (t("Step Out"), #selector(debugStepOut(_:)), NSF8FunctionKey, [.shift]),
+            (t("Stop Debugging"), #selector(stopDebugging(_:)), NSF2FunctionKey, [.command, .shift]),
+        ]
+        for (title, action, key, modifiers) in steps {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: String(UnicodeScalar(key)!))
+            item.keyEquivalentModifierMask = modifiers
+            runMenu.addItem(item)
+        }
+        runMenu.addItem(withTitle: t("Show Debugger"), action: #selector(toggleDebugPanel(_:)), keyEquivalent: "")
         let runMenuItem = NSMenuItem()
         runMenuItem.submenu = runMenu
         mainMenu.addItem(runMenuItem)

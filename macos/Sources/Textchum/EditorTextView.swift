@@ -192,6 +192,7 @@ final class EditorTextView: NSTextView {
             line.fill()
             tintedLine = line
         }
+        drawExecutionLine(in: rect)
         drawBackgroundMarks(in: rect)
         drawExtraCarets(in: rect)
         drawInlineNotes(in: rect)
@@ -250,6 +251,31 @@ final class EditorTextView: NSTextView {
             if NSRect(x: at.x, y: at.y, width: width, height: caret.height).intersects(rect) {
                 (note.text as NSString).draw(at: at, withAttributes: attributes)
             }
+        }
+    }
+
+    /// The line the debugged program is stopped at, as its UTF-16 range,
+    /// line break included; tinted across the view.
+    var executionLine: NSRange? {
+        didSet { needsDisplay = true }
+    }
+
+    private func drawExecutionLine(in rect: NSRect) {
+        guard let range = executionLine, let layoutManager = textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            let viewport = layoutManager.textViewportLayoutController.viewportRange,
+            NSMaxRange(range) <= (string as NSString).length,
+            let start = contentManager.location(layoutManager.documentRange.location, offsetBy: range.location),
+            viewport.contains(start) || viewport.endLocation.compare(start) == .orderedSame,
+            let end = contentManager.location(start, offsetBy: max(range.length, 0)),
+            let textRange = NSTextRange(location: start, end: end)
+        else { return }
+        let origin = textContainerOrigin
+        NSColor.systemYellow.withAlphaComponent(0.25).setFill()
+        layoutManager.enumerateTextSegments(in: textRange, type: .highlight, options: [.rangeNotRequired]) {
+            _, frame, _, _ in
+            NSRect(x: 0, y: frame.minY + origin.y, width: self.bounds.width, height: frame.height).intersection(rect).fill()
+            return true
         }
     }
 

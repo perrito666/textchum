@@ -59,6 +59,12 @@ pub fn adapter(name: &str) -> Option<Adapter> {
             command: words(&["lldb-dap"]),
             install: "your distribution's lldb package, which carries lldb-dap",
         }),
+        // The scripted adapter the smoke tests drive, where they say it is.
+        "fake" => std::env::var("TEXTCHUM_FAKE_DAP").ok().map(|script| Adapter {
+            id: "fake",
+            command: vec!["python3".to_owned(), script],
+            install: "scripts/fake_dap.py",
+        }),
         _ => None,
     }
 }
@@ -82,6 +88,7 @@ fn launch_arguments(adapter: &str, launch: &Value, cwd: &Path, program: Option<&
             }
             arguments
         }
+        "fake" => json!({"program": launch["program"], "args": args}),
         "dlv" => json!({
             "request": "launch", "mode": launch["mode"], "program": launch["program"], "args": args, "cwd": cwd,
         }),

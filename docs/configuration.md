@@ -602,7 +602,7 @@ character, `f1` to `f20`, or
 `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
 Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `showLocalHistory`, `close`,
 `undo`, `redo`, `find`, `findAndReplace`, `findNext`, `findPrevious`,
-`useSelectionForFind`, `findInProject`, `searchEverywhere`, `runCommand`, `runAtCaret`, `runAgain`, `rerunFailedTests`, `stopRun`, `nextOutputPlace`, `previousOutputPlace`, `toggleRunPanel`, `jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`,
+`useSelectionForFind`, `findInProject`, `searchEverywhere`, `runCommand`, `runAtCaret`, `runAgain`, `rerunFailedTests`, `debugAtCaret`, `toggleBreakpoint`, `debugContinue`, `stepOver`, `stepInto`, `stepOut`, `stopDebugging`, `toggleDebugPanel`, `stopRun`, `nextOutputPlace`, `previousOutputPlace`, `toggleRunPanel`, `jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`,
 `findReferences`, `showUsages`, `codeActions`, `renameSymbol`, `formatDocument`, `runPreprocessors`,
 `documentOutline`,
 `goBack`, `goForward`,

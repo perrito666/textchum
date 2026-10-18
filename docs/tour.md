@@ -433,6 +433,37 @@ command line with a pipe or `&&` is not narrowed for Rerun Failed, and
 a test in the list does not open its source yet — the failure's own
 place in the output does. Typing does not filter the list yet.
 
+## Debugging
+
+A click in the gutter's marks column, on a line with no other mark,
+puts a breakpoint there — a red disc — and a second click takes it away;
+**Run → Toggle Breakpoint** (⌘F8, Ctrl+F8 on Linux) does the same on
+the caret's line. Breakpoints move with the text edited above them.
+**Run → Debug at Caret** (⌃⇧D, Shift+F9 on Linux), or a ⌥-click
+(Alt-click on Linux) on a run mark, runs the test or the `main` under a
+debugger: debugpy for Python, Delve for Go, lldb-dap for Rust — after
+cargo has built the test or the program, its messages in the debug
+console.
+
+The debug panel opens under the editor. When the program stops at a
+breakpoint, its line is tinted and the file opens there; the panel
+lists the stack of the thread that stopped, the variables of the frame
+chosen in it — a structured value opens to show what it holds — and the
+program's output, with a field that evaluates an expression in that
+frame. **Continue** (F9, F5 on Linux), **Step Over** (F8, F6 on Linux),
+**Step Into** (F7), **Step Out** (⇧F8, Shift+F7 on Linux) and **Stop
+Debugging** (⇧⌘F2, Ctrl+Shift+F2 on Linux) are in the Run menu and on
+the panel. An adapter that is not installed is named, with the command
+that installs it; a program that does not start says what usually holds
+it up — on macOS, the permission a debugger needs to take control of a
+program, which developer mode (`DevToolsSecurity -enable`) grants.
+
+Not there yet: debugging starts only from a test or a `main` the run
+marks find, in Rust, Go and Python; the adapter for a language cannot be
+chosen; there is no attaching to a running program, no conditional
+breakpoint and no watch list; and breakpoints are not kept across
+restarts.
+
 ## Markdown and prose
 
 Markdown documents open with a live preview beside the text, and the

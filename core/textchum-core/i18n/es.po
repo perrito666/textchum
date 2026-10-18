@@ -173,7 +173,9 @@ msgstr[1] ""
 msgid "exited with {}"
 msgstr "terminó con {}"
 
-#: core/textchum-core/src/run.rs
+#: core/textchum-core/src/run.rs linux/src/debug_panel.rs
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/SmokeTest.swift
 msgid "stopped"
 msgstr "detenido"
 
@@ -227,9 +229,11 @@ msgstr "Servidor de lenguaje"
 msgid "Formats with the server's own formatter"
 msgstr "Formatea con el formateador propio del servidor"
 
-#: core/textchum-dap/src/lib.rs
+#: core/textchum-dap/src/lib.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing here can be debugged: put the caret in a test or a main."
-msgstr "Aquí no hay nada que depurar: pon el cursor en una prueba o en un main."
+msgstr ""
+"Aquí no hay nada que depurar: pon el cursor en una prueba o en un main."
 
 #: core/textchum-dap/src/lib.rs
 msgid "The build made no program to debug."
@@ -252,17 +256,103 @@ msgid ""
 "The program has not started after 15 seconds. macOS may be asking whether a "
 "debugger can take control of it: approve the request, or turn on developer "
 "mode with DevToolsSecurity -enable."
-msgstr "El programa no ha arrancado tras 15 segundos. Puede que macOS esté preguntando si un depurador puede tomar el control: aprueba la petición, o activa el modo de desarrollador con DevToolsSecurity -enable."
+msgstr ""
+"El programa no ha arrancado tras 15 segundos. Puede que macOS esté "
+"preguntando si un depurador puede tomar el control: aprueba la petición, o "
+"activa el modo de desarrollador con DevToolsSecurity -enable."
 
 #: core/textchum-dap/src/session.rs
 msgid ""
 "The program has not started after 15 seconds; the adapter may be waiting for "
 "something it cannot ask for here."
-msgstr "El programa no ha arrancado tras 15 segundos; puede que el adaptador espere algo que aquí no puede pedir."
+msgstr ""
+"El programa no ha arrancado tras 15 segundos; puede que el adaptador espere "
+"algo que aquí no puede pedir."
 
 #: linux/src/chords.rs macos/Sources/Textchum/ChordPanel.swift
 msgid "esc closes"
 msgstr "esc cierra"
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "Continue"
+msgstr "Continuar"
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "Step Over"
+msgstr "Paso por encima"
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "Step Into"
+msgstr "Paso adentro"
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "Step Out"
+msgstr "Paso afuera"
+
+#: linux/src/debug_panel.rs linux/src/keyboard.rs linux/src/run_panel.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/RunPanel.swift
+msgid "Stop"
+msgstr "Detener"
+
+#: linux/src/debug_panel.rs linux/src/run_panel.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/RunPanel.swift
+msgid "Close"
+msgstr "Cerrar"
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "Call Stack"
+msgstr "Pila de llamadas"
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "Variables"
+msgstr "Variables"
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "An expression to evaluate where the program stopped — ⏎"
+msgstr "Una expresión que evaluar donde se detuvo el programa — ⏎"
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "starting"
+msgstr "arrancando"
+
+#: linux/src/debug_panel.rs linux/src/run_panel.rs
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/RunPanel.swift
+msgid "running"
+msgstr "en marcha"
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "the debugger did not say why"
+msgstr "el depurador no dijo por qué"
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "The breakpoint at {}:{} is not set: {}"
+msgstr "El punto de interrupción en {}:{} no está puesto: {}"
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "stopped: {}"
+msgstr "detenido: {}"
+
+#: linux/src/debug_panel.rs macos/Sources/Textchum/DebugPanel.swift
+msgid "— exited with {}"
+msgstr "— terminó con {}"
+
+#: linux/src/debug_panel.rs linux/src/main.rs
+#: macos/Sources/Textchum/DebugPanel.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "ended"
+msgstr "terminado"
 
 #: linux/src/keyboard.rs
 msgid "New Tab"
@@ -315,12 +405,6 @@ msgstr "Ejecutar de nuevo"
 msgid "Rerun Failed Tests"
 msgstr "Repetir pruebas fallidas"
 
-#: linux/src/keyboard.rs linux/src/run_panel.rs linux/src/workbench.rs
-#: macos/Sources/Textchum/AppDelegate.swift
-#: macos/Sources/Textchum/RunPanel.swift
-msgid "Stop"
-msgstr "Detener"
-
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Next Output Place"
@@ -335,6 +419,26 @@ msgstr "Sitio anterior de la salida"
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Show Run Output"
 msgstr "Mostrar la salida"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Debug at Caret"
+msgstr "Depurar en el cursor"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Toggle Breakpoint"
+msgstr "Alternar punto de interrupción"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Stop Debugging"
+msgstr "Detener la depuración"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Show Debugger"
+msgstr "Mostrar el depurador"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
@@ -704,11 +808,6 @@ msgstr "Copiar la URL de la forja para la línea"
 msgid "Rerun Failed"
 msgstr "Repetir fallidas"
 
-#: linux/src/run_panel.rs linux/src/workbench.rs
-#: macos/Sources/Textchum/RunPanel.swift
-msgid "Close"
-msgstr "Cerrar"
-
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "Tests"
 msgstr "Pruebas"
@@ -716,10 +815,6 @@ msgstr "Pruebas"
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "A line for its input — ⏎ sends it"
 msgstr "Una línea para su entrada — ⏎ la envía"
-
-#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
-msgid "running"
-msgstr "en marcha"
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "no output for a while — it may be waiting for input"
@@ -1302,6 +1397,20 @@ msgid "Nothing here runs: put the caret in a test, a benchmark or a main."
 msgstr ""
 "Aquí no hay nada que ejecutar: pon el cursor en una prueba, un benchmark o "
 "un main."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Debug {}"
+msgstr "Depurar {}"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Nothing is being debugged."
+msgstr "No se está depurando nada."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid ""
+"The program is not stopped in the debugger: set a breakpoint and debug a "
+"test or a main."
+msgstr "El programa no está detenido en el depurador: pon un punto de interrupción y depura una prueba o un main."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "The run's output names no place in a file."
@@ -2144,6 +2253,10 @@ msgid ""
 msgstr ""
 "El recurso a ctags necesita Universal Ctags (instalar con: brew install "
 "universal-ctags)."
+
+#: macos/Sources/Textchum/DebugPanel.swift
+msgid "failed"
+msgstr "falló"
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing is reported on this line."

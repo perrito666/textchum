@@ -356,6 +356,22 @@ public final class CoreDocument {
         public let name: String
         public let command: String
         public let cwd: String
+        /// How a debugger runs it; null for what cannot be debugged.
+        public let launch: JSONValue
+    }
+
+    /// Puts a breakpoint on zero-based `line`, or takes away the one
+    /// there; true when there is one now.
+    @discardableResult
+    public func toggleBreakpoint(line: Int) -> Bool {
+        tc_document_toggle_breakpoint(handle, UInt(max(0, line)))
+    }
+
+    /// The zero-based lines with a breakpoint, in order.
+    public var breakpoints: [Int] {
+        guard let json = tc_document_breakpoints(handle) else { return [] }
+        defer { tc_string_free(json) }
+        return (try? JSONDecoder().decode([Int].self, from: Data(String(cString: json).utf8))) ?? []
     }
 
     /// What in the file can be run.

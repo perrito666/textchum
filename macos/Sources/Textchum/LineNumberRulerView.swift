@@ -39,6 +39,14 @@ final class LineNumberGutterView: NSView {
     private var runMarkRects: [Int: NSRect] = [:]
     /// A click on a run mark, with its line from one.
     var onRunMark: ((Int) -> Void)?
+    /// The lines, from one, with a breakpoint: a red disc, drawn in place
+    /// of any other mark on the line.
+    private(set) var breakpointLines: Set<Int> = []
+    /// A click in the marks column where there is no other mark to click:
+    /// a breakpoint put or taken away on that line, from one.
+    var onBreakpoint: ((Int) -> Void)?
+    /// The line, from one, the debugged program is stopped at.
+    private(set) var stoppedLine: Int?
 
     override var isFlipped: Bool { true }
 
@@ -93,6 +101,25 @@ final class LineNumberGutterView: NSView {
         needsDisplay = true
     }
 
+    func setBreakpointLines(_ lines: Set<Int>) {
+        guard lines != breakpointLines else { return }
+        breakpointLines = lines
+        needsDisplay = true
+    }
+
+    func setStoppedLine(_ line: Int?) {
+        guard line != stoppedLine else { return }
+        stoppedLine = line
+        needsDisplay = true
+    }
+
+    /// The line, from one, at a point of the gutter.
+    private func line(at point: NSPoint) -> Int? {
+        guard let textView else { return nil }
+        let inText = textView.convert(NSPoint(x: textView.textContainerOrigin.x, y: point.y), from: self)
+        return lineNumber(forOffset: textView.characterIndexForInsertion(at: inText))
+    }
+
     func setFixLine(_ line: Int?) {
         guard line != fixLine else { return }
         fixLine = line
@@ -110,6 +137,10 @@ final class LineNumberGutterView: NSView {
             let onRunMark
         {
             onRunMark(line)
+            return
+        }
+        if point.x < 16, let onBreakpoint, let line = line(at: point) {
+            onBreakpoint(line)
             return
         }
         super.mouseDown(with: event)
@@ -251,6 +282,10 @@ final class LineNumberGutterView: NSView {
             .foregroundColor: NSColor.tertiaryLabelColor,
         ]
 
+        // Where the marks are is where this pass draws them; a mark not
+        // drawn this time is not there to click.
+        fixMarkRect = nil
+        runMarkRects = [:]
         // Only fragments the viewport already laid out; never force
         // layout from inside a draw pass.
         var lastLine = -1
@@ -281,7 +316,19 @@ final class LineNumberGutterView: NSView {
                 self.drawChangeMark(forLine: line, top: top, height: frame.height)
                 var labelAttributes = attributes
                 let numberHeight = NSAttributedString(string: "0", attributes: attributes).size().height
-                if line == self.fixLine,
+                if line == self.stoppedLine {
+                    NSColor.systemYellow.withAlphaComponent(0.35).setFill()
+                    NSRect(x: 0, y: top, width: self.bounds.width - 1, height: frame.height).fill()
+                }
+                if self.breakpointLines.contains(line) {
+                    let size: CGFloat = 10
+                    let disc = NSRect(x: 3, y: top + 1 + (numberHeight - size) / 2, width: size, height: size)
+                    NSColor.systemRed.setFill()
+                    NSBezierPath(ovalIn: disc).fill()
+                    if let severity = self.diagnosticSeverities[line] {
+                        labelAttributes[.foregroundColor] = Self.diagnosticColor(severity)
+                    }
+                } else if line == self.fixLine,
                     let bulb = NSImage(systemSymbolName: "lightbulb.fill", accessibilityDescription: t("Code Actions"))
                 {
                     let size: CGFloat = 11

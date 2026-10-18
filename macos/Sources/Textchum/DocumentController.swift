@@ -480,9 +480,13 @@ final class DocumentController: NSResponder {
         gutter.setVisible(appliedSettings?.lineNumbers ?? true)
         gutter.onFixMark = { [weak self] in self?.showCodeActions(nil) }
         gutter.onRunMark = { [weak self] line in self?.runMark(atLine: line - 1) }
+        gutter.onBreakpoint = { [weak self] line in self?.toggleBreakpoint(atLine: line - 1) }
         let view = DocumentView(scrollView: scrollView, textView: textView, gutter: gutter)
         DispatchQueue.main.async { [weak self] in
-            MainActor.assumeIsolated { self?.refreshRunMarks() }
+            MainActor.assumeIsolated {
+                self?.refreshRunMarks()
+                self?.refreshBreakpoints()
+            }
         }
 
         // The gutter, the change bar and the preview all follow scrolling.
@@ -5328,10 +5332,83 @@ final class DocumentController: NSResponder {
         }
     }
 
-    /// A run mark clicked: what starts on that zero-based line runs.
+    /// A run mark clicked: what starts on that zero-based line runs, or,
+    /// clicked with ⌥, is debugged.
     func runMark(atLine line: Int) {
         guard let runnable = coreDocument.runnables.first(where: { $0.line == line }) else { return }
-        run(runnable)
+        if NSEvent.modifierFlags.contains(.option) {
+            debug(runnable)
+        } else {
+            run(runnable)
+        }
+    }
+
+    // MARK: Debugging
+
+    /// The breakpoints sent to the debugger last, to tell it when edits
+    /// move them.
+    private var sentBreakpoints: [Int] = []
+
+    /// Puts a breakpoint on zero-based `line`, or takes away the one there.
+    func toggleBreakpoint(atLine line: Int) {
+        coreDocument.toggleBreakpoint(line: line)
+        refreshBreakpoints()
+    }
+
+    /// Run → Toggle Breakpoint (⌘F8): on the caret's line.
+    @objc func toggleBreakpointAtCaret(_ sender: Any?) {
+        guard let textView, let gutter = views.first?.gutter else { return }
+        toggleBreakpoint(atLine: gutter.lineIndex(forOffset: textView.selectedRange().location))
+    }
+
+    /// Draws the breakpoints in every view, and tells the debugger when
+    /// they changed — toggled, or moved by an edit above them.
+    func refreshBreakpoints() {
+        let lines = coreDocument.breakpoints
+        for view in views {
+            view.gutter.setBreakpointLines(Set(lines.map { $0 + 1 }))
+        }
+        if lines != sentBreakpoints, let path = coreDocument.path {
+            sentBreakpoints = lines
+            (NSApp.delegate as? AppDelegate)?.breakpointsChanged(path: path, lines: lines)
+        }
+    }
+
+    /// Run → Debug at Caret (⌃⇧D): the test the caret is in, else the
+    /// `main`, under the debugger.
+    @objc func debugAtCaret(_ sender: Any?) {
+        guard let textView, let gutter = views.first?.gutter else { return }
+        let line = gutter.lineIndex(forOffset: textView.selectedRange().location)
+        guard let runnable = coreDocument.runnable(at: line) else {
+            showHint(t("Nothing here can be debugged: put the caret in a test or a main."))
+            return
+        }
+        debug(runnable)
+    }
+
+    private func debug(_ runnable: CoreDocument.Runnable) {
+        guard let workbench, let delegate = NSApp.delegate as? AppDelegate else { return }
+        guard !runnable.launch.isNull else {
+            showHint(t("Nothing here can be debugged: put the caret in a test or a main."))
+            return
+        }
+        delegate.debug(runnable, in: workbench)
+    }
+
+    /// The line the debugged program is stopped at, zero-based; nil
+    /// when it is not stopped in this file.
+    func setExecutionLine(_ line: Int?) {
+        for view in views {
+            view.gutter.setStoppedLine(line.map { $0 + 1 })
+            guard let line else {
+                (view.textView as? EditorTextView)?.executionLine = nil
+                continue
+            }
+            let text = view.textView.string as NSString
+            let start = view.gutter.lineStart(ofLine: line)
+            (view.textView as? EditorTextView)?.executionLine =
+                start <= text.length ? text.lineRange(for: NSRange(location: start, length: 0)) : nil
+        }
     }
 
     /// Run at Caret (⌃⇧R): the test the caret is in, else the `main`.
@@ -5530,6 +5607,7 @@ final class DocumentController: NSResponder {
         scheduleInlayHints(after: 0.6)
         scheduleRunMarks()
         scheduleSemanticTokens(after: 0.6)
+        refreshBreakpoints()
         assertInSync()
     }
 
@@ -6793,6 +6871,8 @@ extension DocumentController: NSTextViewDelegate {
         scheduleInlayHints(after: 0.6)
         scheduleRunMarks()
         scheduleSemanticTokens(after: 0.6)
+        // They moved with the text in the core.
+        refreshBreakpoints()
         for view in views {
             updateContextStrip(for: view)
         }

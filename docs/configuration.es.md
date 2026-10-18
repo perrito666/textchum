@@ -628,7 +628,7 @@ Teclas: un carácter, de `f1` a `f20`, o
 `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
 Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`, `showLocalHistory`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
-`findPrevious`, `useSelectionForFind`, `findInProject`, `searchEverywhere`, `runCommand`, `runAtCaret`, `runAgain`, `rerunFailedTests`, `stopRun`, `nextOutputPlace`, `previousOutputPlace`, `toggleRunPanel`,
+`findPrevious`, `useSelectionForFind`, `findInProject`, `searchEverywhere`, `runCommand`, `runAtCaret`, `runAgain`, `rerunFailedTests`, `debugAtCaret`, `toggleBreakpoint`, `debugContinue`, `stepOver`, `stepInto`, `stepOut`, `stopDebugging`, `toggleDebugPanel`, `stopRun`, `nextOutputPlace`, `previousOutputPlace`, `toggleRunPanel`,
 `jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`, `findReferences`, `showUsages`, `codeActions`, `renameSymbol`, `formatDocument`,
 `runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,

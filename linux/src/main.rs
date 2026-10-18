@@ -12,6 +12,7 @@ mod page;
 mod paths;
 mod path_actions;
 mod preprocessors;
+mod debug_panel;
 mod run_panel;
 mod spell;
 mod session;
@@ -549,6 +550,13 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.run-at-caret", "<Ctrl><Shift>F10"),
     ("win.run-again", "<Ctrl>F5"),
     ("win.stop-run", "<Ctrl>F2"),
+    ("win.debug-at-caret", "<Shift>F9"),
+    ("win.toggle-breakpoint", "<Ctrl>F8"),
+    ("win.debug-continue", "F5"),
+    ("win.step-over", "F6"),
+    ("win.step-into", "F7"),
+    ("win.step-out", "<Shift>F7"),
+    ("win.stop-debugging", "<Ctrl><Shift>F2"),
     ("win.next-output-place", "F4"),
     ("win.previous-output-place", "<Shift>F4"),
     ("win.definition", "F12"),
@@ -2308,6 +2316,81 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
         }
         println!("refactoring undo ok (one step per document, the closed file kept, one Undo takes it back everywhere)");
+
+        // The debugger, against the scripted adapter: a breakpoint in the
+        // gutter, a stop there with its stack, the variables and what one
+        // of them holds, an expression, a step, and the end.
+        {
+            let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../scripts/fake_dap.py");
+            std::env::set_var("TEXTCHUM_FAKE_DAP", &script);
+            let dir = std::env::temp_dir().join(format!("textchum-gtk-debug-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            let file = dir.join("main.py");
+            let _ = std::fs::write(&file, "a = 1\nb = 2\nc = 3\nd = 4\ne = 5\n");
+            let before = workbench.selected().and_then(|page| page.path().borrow().clone());
+            workbench.open(Some(file.clone()), None);
+            let page = workbench.selected().expect("a selected page");
+            page::toggle_breakpoint(&page, 2);
+            let marked = page::breakpoint_mark_lines(&page);
+            let launch = serde_json::json!({"adapter": "fake", "program": "main.py", "args": []});
+            workbench::start_debugging(&workbench, &launch, &dir, "Debug main.py");
+            let panel = Rc::clone(&workbench.debug_panel);
+            let wait = |what: &str, done: &dyn Fn() -> bool| -> bool {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+                while !done() {
+                    context.iteration(true);
+                    if std::time::Instant::now() > deadline {
+                        eprintln!("FAIL: the debugger never got to {what}: {} / {}", panel.status_text(), panel.console_text());
+                        return false;
+                    }
+                }
+                true
+            };
+            if !wait("the stop", &|| panel.variable_texts().iter().any(|text| text.starts_with("count = 1"))) {
+                return 1;
+            }
+            let frames = panel.frame_names();
+            let stopped_at = page::execution_line(&page);
+            let Some(reference) = panel.reference_of("shop") else {
+                eprintln!("FAIL: no variable to open in {:?}", panel.variable_texts());
+                return 1;
+            };
+            panel.toggle(reference);
+            if !wait("the children", &|| panel.variable_texts().iter().any(|text| text.starts_with("name = \"corner\""))) {
+                return 1;
+            }
+            panel.evaluate_expression("count + 1");
+            if !wait("the evaluation", &|| panel.console_text().contains("› count + 1\n2")) {
+                return 1;
+            }
+            panel.perform("next");
+            if !wait("the step", &|| page::execution_line(&page) == Some(3)) {
+                return 1;
+            }
+            panel.perform("continue");
+            if !wait("the end", &|| panel.status_text() == tr("ended")) {
+                return 1;
+            }
+            let cleared = page::execution_line(&page).is_none();
+            let console = panel.console_text();
+            let tab = workbench.active_view().selected_page().expect("a selected tab");
+            workbench.forget(&tab);
+            workbench.active_view().close_page_finish(&tab, true);
+            context.iteration(false);
+            if let Some(path) = before {
+                workbench.open(Some(std::path::PathBuf::from(path)), None);
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+            if marked != [2] || frames != ["main", "start"] || stopped_at != Some(2) {
+                eprintln!("FAIL: the breakpoint marked {marked:?}, the stop {frames:?} at {stopped_at:?}");
+                return 1;
+            }
+            if !cleared || !console.contains("hello from the program") {
+                eprintln!("FAIL: after the end the line marked was kept: {}, console {console:?}", !cleared);
+                return 1;
+            }
+        }
+        println!("debugger ok (a breakpoint, the stop and its stack, variables and children, an expression, a step, the end)");
 
         // What can be run is marked in the gutter: a main and a test in
         // a Cargo package, each with the command that runs just it.

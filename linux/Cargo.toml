@@ -11,6 +11,7 @@ license = "MIT"
 [dependencies]
 textchum-core = { path = "../core/textchum-core" }
 textchum-lsp = { path = "../core/textchum-lsp" }
+textchum-dap = { path = "../core/textchum-dap" }
 serde_json = "1"
 gtk = { package = "gtk4", version = "0.9", features = ["v4_12"] }
 adw = { package = "libadwaita", version = "0.7", features = ["v1_5"] }

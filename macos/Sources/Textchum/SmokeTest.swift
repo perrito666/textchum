@@ -3341,6 +3341,83 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     print("refactoring undo ok (one step per document, the closed file kept, one Undo takes it back everywhere)")
+
+    // The debugger, against the scripted adapter: a breakpoint in the
+    // gutter, a stop there with its stack, the variables and what one of
+    // them holds, an expression, a step, and the end.
+    do {
+        let script = FileManager.default.currentDirectoryPath + "/scripts/fake_dap.py"
+        guard FileManager.default.fileExists(atPath: script) else {
+            print("FAIL: the scripted adapter is not at \(script)")
+            return 1
+        }
+        setenv("TEXTCHUM_FAKE_DAP", script, 1)
+        let debugRoot = NSTemporaryDirectory() + "textchum-debug-\(getpid())"
+        try FileManager.default.createDirectory(atPath: debugRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: debugRoot) }
+        let debugPath = debugRoot + "/main.py"
+        try "a = 1\nb = 2\nc = 3\nd = 4\ne = 5\n".write(toFile: debugPath, atomically: true, encoding: .utf8)
+        let debugged = try CoreDocument(contentsOf: debugPath)
+        let debugBench = Workbench(sidebar: nil)
+        let debugging = DocumentController(document: debugged)
+        debugBench.add(debugging)
+        debugging.toggleBreakpoint(atLine: 2)
+        guard debugging.views.first?.gutter.breakpointLines == [3], debugged.breakpoints == [2] else {
+            print("FAIL: the breakpoint is on \(debugged.breakpoints)")
+            return 1
+        }
+        let panel = debugBench.debugPanel
+        let debugCore = CoreApp { event in
+            if case let .debug(_, kind, json) = event { panel.handle(kind: kind, json: json) }
+        }
+        panel.core = debugCore
+        var shown: [(String, Int)] = []
+        panel.onFrame = { path, line in
+            shown.append((path, line))
+            debugging.setExecutionLine(line)
+        }
+        panel.onResumed = { debugging.setExecutionLine(nil) }
+        guard case .success(let id) = debugCore.debugStart(
+            launch: "{\"adapter\": \"fake\", \"program\": \"main.py\", \"args\": []}", cwd: debugRoot,
+            breakpoints: [debugPath: debugged.breakpoints])
+        else {
+            print("FAIL: the debugger did not start")
+            return 1
+        }
+        panel.begin(id: id, title: "Debug main.py")
+        spin(untilTrue: { panel.statusText.hasPrefix(t("stopped")) }, seconds: 15)
+        spin(untilTrue: { panel.variableTexts.contains("count = 1") }, seconds: 10)
+        guard panel.frameNames == ["main", "start"], shown.last?.0 == debugPath, shown.last?.1 == 2,
+            debugging.views.first?.gutter.stoppedLine == 3
+        else {
+            print("FAIL: the stop showed \(panel.statusText) \(panel.frameNames) \(shown)")
+            return 1
+        }
+        panel.expandForTest(named: "shop")
+        spin(untilTrue: { panel.variableTexts.contains("name = \"corner\"") }, seconds: 10)
+        panel.evaluateForTest("count + 1")
+        spin(untilTrue: { panel.consoleText.contains("› count + 1\n2") }, seconds: 10)
+        guard panel.variableTexts.contains("name = \"corner\""), panel.consoleText.contains("hello from the program")
+        else {
+            print("FAIL: the variables read \(panel.variableTexts), the console \(panel.consoleText.debugDescription)")
+            return 1
+        }
+        panel.perform("next")
+        spin(untilTrue: { shown.last?.1 == 3 }, seconds: 10)
+        panel.perform("continue")
+        spin(untilTrue: { panel.statusText == t("ended") }, seconds: 10)
+        guard shown.last?.1 == 3, panel.statusText == t("ended"), debugging.views.first?.gutter.stoppedLine == nil
+        else {
+            print("FAIL: stepping and continuing gave \(shown) and \(panel.statusText)")
+            return 1
+        }
+        debugCore.debugForget(id: id)
+        debugBench.window?.close()
+    } catch {
+        print("FAIL: the debugged file could not be made: \(error)")
+        return 1
+    }
+    print("debugger ok (a breakpoint, the stop and its stack, variables and children, an expression, a step, the end)")
     pinBench.window?.close()
 
     // With the find bar open, the pins move below it: a search field

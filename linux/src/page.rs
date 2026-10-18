@@ -86,6 +86,9 @@ pub struct Page {
     /// A caret command's edits or selection are on their way through
     /// the buffer, which is not a click or a key for one caret.
     applying_carets: Cell<bool>,
+    /// The breakpoints the debugger was told of last, to tell it when
+    /// edits move them.
+    sent_breakpoints: RefCell<Vec<usize>>,
     /// Counts edits and requests, so an answer about text that has
     /// since changed is dropped.
     inlay_asked: Cell<u64>,
@@ -419,6 +422,7 @@ impl Page {
             carets: RefCell::new(None),
             caret_marks: RefCell::new(Vec::new()),
             applying_carets: Cell::new(false),
+            sent_breakpoints: RefCell::new(Vec::new()),
             inlay_asked: Cell::new(0),
             completion: CompletionState {
                 popover: completion_popover,
@@ -563,6 +567,7 @@ fn install_change_handler(
                                 // afresh.
                                 request_inlay_hints(&view);
                                 refresh_run_marks(&view);
+                                refresh_breakpoints(&view);
                             }
                             request_semantic_tokens(&document);
                         },
@@ -3628,6 +3633,58 @@ pub fn refresh_run_marks(page: &Rc<Page>) {
     }
 }
 
+const BREAKPOINT_MARK: &str = "breakpoint";
+const EXECUTION_MARK: &str = "execution";
+
+/// Puts a breakpoint on zero-based `line`, or takes away the one there.
+pub fn toggle_breakpoint(page: &Rc<Page>, line: i32) {
+    page.state.borrow_mut().document.toggle_breakpoint(line.max(0) as usize);
+    refresh_breakpoints(page);
+}
+
+/// Marks the document's breakpoints, and tells the debugger when they
+/// changed — toggled, or moved by an edit above them.
+pub fn refresh_breakpoints(page: &Rc<Page>) {
+    let buffer = &page.buffer;
+    buffer.remove_source_marks(&buffer.start_iter(), &buffer.end_iter(), Some(BREAKPOINT_MARK));
+    let lines = page.state.borrow().document.breakpoints();
+    for line in &lines {
+        if let Some(at) = buffer.iter_at_line(*line as i32) {
+            buffer.create_source_mark(None, BREAKPOINT_MARK, &at);
+        }
+    }
+    if *page.sent_breakpoints.borrow() != lines {
+        if let Some(path) = page.path().borrow().clone() {
+            Shell::instance().debuggers.borrow().set_breakpoints(Path::new(&path), &lines);
+        }
+        *page.sent_breakpoints.borrow_mut() = lines;
+    }
+}
+
+/// The lines carrying a breakpoint mark, for the smoke test.
+pub(crate) fn breakpoint_mark_lines(page: &Rc<Page>) -> Vec<i32> {
+    let buffer = &page.buffer;
+    (0..buffer.line_count())
+        .filter(|line| !buffer.source_marks_at_line(*line, Some(BREAKPOINT_MARK)).is_empty())
+        .collect()
+}
+
+/// The line the debugged program is stopped at, zero-based; None when
+/// it is not stopped in this file.
+pub fn set_execution_line(page: &Rc<Page>, line: Option<i32>) {
+    let buffer = &page.buffer;
+    buffer.remove_source_marks(&buffer.start_iter(), &buffer.end_iter(), Some(EXECUTION_MARK));
+    if let Some(at) = line.and_then(|line| buffer.iter_at_line(line)) {
+        buffer.create_source_mark(None, EXECUTION_MARK, &at);
+    }
+}
+
+/// The line marked as stopped at, for the smoke test.
+pub(crate) fn execution_line(page: &Rc<Page>) -> Option<i32> {
+    let buffer = &page.buffer;
+    (0..buffer.line_count()).find(|line| !buffer.source_marks_at_line(*line, Some(EXECUTION_MARK)).is_empty())
+}
+
 /// The lines carrying a run mark, for the smoke test.
 pub(crate) fn run_mark_lines(page: &Rc<Page>) -> Vec<i32> {
     let buffer = &page.buffer;
@@ -3646,20 +3703,30 @@ fn install_fix_mark(page: &Rc<Page>) {
     let run = sourceview5::MarkAttributes::new();
     run.set_icon_name("media-playback-start-symbolic");
     page.view.set_mark_attributes("run", &run, 5);
-    page.view.connect_line_mark_activated(|view, at, _, _, _| {
-        let buffer = view.buffer();
-        let Some(buffer) = buffer.downcast_ref::<sourceview5::Buffer>() else { return };
+    // A breakpoint is drawn over either; the line the debugged program
+    // is stopped at over everything, and tinted across.
+    let breakpoint = sourceview5::MarkAttributes::new();
+    breakpoint.set_icon_name("media-record-symbolic");
+    page.view.set_mark_attributes(BREAKPOINT_MARK, &breakpoint, 20);
+    let execution = sourceview5::MarkAttributes::new();
+    execution.set_icon_name("go-next-symbolic");
+    execution.set_background(&gtk::gdk::RGBA::new(0.96, 0.83, 0.18, 0.3));
+    page.view.set_mark_attributes(EXECUTION_MARK, &execution, 30);
+    let weak = Rc::downgrade(page);
+    page.view.connect_line_mark_activated(move |view, at, _, modifiers, _| {
+        let Some(page) = weak.upgrade() else { return };
+        let buffer = &page.buffer;
         let line = at.line();
-        if buffer.source_marks_at_line(line, Some("fix")).is_empty()
-            && !buffer.source_marks_at_line(line, Some("run")).is_empty()
-        {
-            let _ = gtk::prelude::WidgetExt::activate_action(
-                view,
-                "win.run-line",
-                Some(&(line as u64).to_variant()),
-            );
-        } else {
+        let fix = !buffer.source_marks_at_line(line, Some("fix")).is_empty();
+        let run = !buffer.source_marks_at_line(line, Some("run")).is_empty();
+        if fix {
             let _ = gtk::prelude::WidgetExt::activate_action(view, "win.code-actions", None);
+        } else if run {
+            // With Alt, what the mark would run is debugged instead.
+            let action = if modifiers.contains(gtk::gdk::ModifierType::ALT_MASK) { "win.debug-line" } else { "win.run-line" };
+            let _ = gtk::prelude::WidgetExt::activate_action(view, action, Some(&(line as u64).to_variant()));
+        } else {
+            toggle_breakpoint(&page, line);
         }
     });
     // Once the page has its text and its language.
@@ -3667,6 +3734,7 @@ fn install_fix_mark(page: &Rc<Page>) {
     glib::idle_add_local_once(move || {
         if let Some(page) = weak.upgrade() {
             refresh_run_marks(&page);
+            refresh_breakpoints(&page);
         }
     });
     let weak = Rc::downgrade(page);

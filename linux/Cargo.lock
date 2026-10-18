@@ -1124,6 +1124,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "textchum-dap"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "textchum-core",
+]
+
+[[package]]
 name = "textchum-gtk"
 version = "0.1.0"
 dependencies = [
@@ -1132,6 +1140,7 @@ dependencies = [
  "serde_json",
  "sourceview5",
  "textchum-core",
+ "textchum-dap",
  "textchum-lsp",
  "webkit6",
 ]

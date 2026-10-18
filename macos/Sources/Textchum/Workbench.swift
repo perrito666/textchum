@@ -128,8 +128,11 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         editorSide.addSubview(previewSplit)
         editorSide.addSubview(statusBar)
         editorSide.addSubview(runPanel)
+        editorSide.addSubview(debugPanel)
         let runHeight = runPanel.heightAnchor.constraint(equalToConstant: 0)
         runPanel.heightConstraint = runHeight
+        let debugHeight = debugPanel.heightAnchor.constraint(equalToConstant: 0)
+        debugPanel.heightConstraint = debugHeight
         statusBar.onProperties = { [weak self] in
             self?.focusedDocument?.showFileProperties(nil)
         }
@@ -148,7 +151,11 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
             previewSplit.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
             previewSplit.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
             previewSplit.topAnchor.constraint(equalTo: tabHost.bottomAnchor),
-            previewSplit.bottomAnchor.constraint(equalTo: runPanel.topAnchor),
+            previewSplit.bottomAnchor.constraint(equalTo: debugPanel.topAnchor),
+            debugPanel.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
+            debugPanel.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
+            debugPanel.bottomAnchor.constraint(equalTo: runPanel.topAnchor),
+            debugHeight,
             runPanel.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
             runPanel.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
             runPanel.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
@@ -899,6 +906,8 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
     let statusBar = StatusBar()
     /// The output of a command run from this window, under the editor.
     let runPanel = RunPanel()
+    /// Under the editor, above the run panel: the debug session on show.
+    let debugPanel = DebugPanel()
     /// Columns on the left, the focused document's Markdown preview —
     /// when it has one — on the right, all of it under the tab bar.
     let previewSplit = NSSplitView()
