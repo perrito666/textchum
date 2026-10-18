@@ -23,6 +23,14 @@ use crate::shell::Shell;
 /// characters, the line and column zero-based.
 type Named = (usize, usize, String, usize, usize);
 
+/// A test's row in the list.
+#[derive(Clone)]
+struct TestRow {
+    suite: String,
+    name: String,
+    line: Option<usize>,
+}
+
 pub struct RunPanel {
     pub root: gtk::Box,
     title: gtk::Label,
@@ -49,9 +57,9 @@ pub struct RunPanel {
     /// The tests as last read, to leave the list alone when unchanged.
     tests_json: RefCell<String>,
     rerun_command: RefCell<Option<String>>,
-    /// Each list row's test name and the output line that reported it;
-    /// None for a suite's row.
-    test_rows: RefCell<Vec<Option<(String, Option<usize>)>>>,
+    /// Each list row's suite and test names and the output line that
+    /// reported it; None for a suite's row.
+    test_rows: RefCell<Vec<Option<TestRow>>>,
 }
 
 impl RunPanel {
@@ -97,6 +105,9 @@ impl RunPanel {
         let scroll = gtk::ScrolledWindow::builder().child(&view).vexpand(true).hexpand(true).build();
         let tests_list = gtk::ListBox::new();
         tests_list.add_css_class("navigation-sidebar");
+        // A double-click is Return: either runs the test alone; a single
+        // click only chooses it.
+        tests_list.set_activate_on_single_click(false);
         tests_list.update_property(&[gtk::accessible::Property::Label(&tr("Tests"))]);
         let tests_scroll = gtk::ScrolledWindow::builder()
             .child(&tests_list)
@@ -165,9 +176,17 @@ impl RunPanel {
                     .test_rows
                     .borrow()
                     .get(row.index() as usize)
-                    .and_then(|test| test.as_ref().and_then(|(_, line)| *line));
+                    .and_then(|test| test.as_ref().and_then(|test| test.line));
                 if let Some(line) = line {
                     panel.show_output_line(line);
+                }
+            });
+        }
+        {
+            let weak = Rc::downgrade(&panel);
+            tests_list.connect_row_activated(move |_, _| {
+                if let Some(panel) = weak.upgrade() {
+                    panel.run_chosen_test();
                 }
             });
         }
@@ -383,15 +402,19 @@ impl RunPanel {
         for suite in &suites {
             let tests = suite["tests"].as_array().cloned().unwrap_or_default();
             let outcomes: Vec<&str> = tests.iter().filter_map(|test| test["outcome"].as_str()).collect();
-            let name = suite["name"].as_str().filter(|name| !name.is_empty());
-            let label = name.map(str::to_owned).unwrap_or_else(|| tr("package not reported yet"));
+            let suite_name = suite["name"].as_str().unwrap_or_default();
+            let label = if suite_name.is_empty() { tr("package not reported yet") } else { suite_name.to_owned() };
             self.tests_list.append(&test_row(&label, None, &outcomes, true));
             rows.push(None);
             for test in &tests {
                 let name = test["name"].as_str().unwrap_or_default();
                 let outcome = test["outcome"].as_str().unwrap_or_default();
                 self.tests_list.append(&test_row(name, test["duration"].as_str(), &[outcome], false));
-                rows.push(Some((name.to_owned(), test["line"].as_u64().map(|line| line as usize))));
+                rows.push(Some(TestRow {
+                    suite: suite_name.to_owned(),
+                    name: name.to_owned(),
+                    line: test["line"].as_u64().map(|line| line as usize),
+                }));
             }
         }
         *self.test_rows.borrow_mut() = rows;
@@ -430,6 +453,28 @@ impl RunPanel {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Return or a double-click on a test: that test alone, from where
+    /// the run was started. False when no test is chosen or the run's
+    /// command cannot be narrowed to it, which the status says.
+    pub fn run_chosen_test(&self) -> bool {
+        let Some(id) = self.run_id.get() else { return false };
+        let Some(index) = self.tests_list.selected_row().map(|row| row.index() as usize) else { return false };
+        let Some(test) = self.test_rows.borrow().get(index).cloned().flatten() else { return false };
+        let Some(command) = Shell::instance().runs.borrow().rerun_test(id, &test.suite, &test.name) else {
+            self.status.set_text(&tr("This run's command cannot be narrowed to one test."));
+            return false;
+        };
+        let run = self.on_run.borrow().clone();
+        match run {
+            Some(run) => {
+                let cwd = self.cwd();
+                run(&command, &cwd);
+                true
+            }
+            None => false,
         }
     }
 
@@ -502,7 +547,7 @@ impl RunPanel {
             .test_rows
             .borrow()
             .iter()
-            .position(|row| row.as_ref().is_some_and(|(test, _)| test == name));
+            .position(|row| row.as_ref().is_some_and(|test| test.name == name));
         if let Some(row) = index.and_then(|index| self.tests_list.row_at_index(index as i32)) {
             self.tests_list.select_row(Some(&row));
         }

@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 
 use crate::app::{Event, EventSender};
 use crate::output::{changes_json, Place, Transcript};
-use crate::test_results::{rerun_failed, Outcome, TestLog};
+use crate::test_results::{rerun, Outcome, TestLog};
 
 /// How long a running command may say nothing before it is said that it
 /// may be waiting for input.
@@ -260,7 +260,7 @@ impl Runs {
                 serde_json::json!({"name": suite.name, "tests": tests})
             })
             .collect();
-        let rerun = rerun_failed(&state.command, state.tests.runner, &state.tests.failed());
+        let again = rerun(&state.command, state.tests.runner, &state.tests.failed());
         // Failures first: they are what the line is read for.
         let counted = |text: String, count: usize| crate::i18n::fill(&text, &[&count.to_string()]);
         let [passed, failed, skipped, running] = counts;
@@ -289,11 +289,18 @@ impl Runs {
                 "failed": counts[Outcome::Failed as usize],
                 "skipped": counts[Outcome::Skipped as usize],
                 "running": counts[Outcome::Running as usize],
-                "rerun": rerun,
+                "rerun": again,
                 "summary": summary,
             })
             .to_string(),
         )
+    }
+
+    /// The command that runs only the test `name` of `suite` again, from
+    /// the command the run was; None when it cannot be narrowed.
+    pub fn rerun_test(&self, id: u64, suite: &str, name: &str) -> Option<String> {
+        let state = self.runs.get(&id)?.lock().ok()?;
+        rerun(&state.command, state.tests.runner, &[(suite.to_owned(), name.to_owned())])
     }
 
     /// Lets go of a run that is over; a running one is stopped first.
@@ -439,6 +446,7 @@ mod tests {
         assert_eq!(tests["summary"], "1 failed, 1 passed");
         // Not a `cargo test` command line, so not narrowed.
         assert_eq!(tests["rerun"], serde_json::Value::Null);
+        assert_eq!(runs.rerun_test(id, "", "a::one"), None, "not a cargo test command line");
         // Asked again, nothing is read twice.
         let again: serde_json::Value = serde_json::from_str(&runs.tests(id).unwrap()).unwrap();
         assert_eq!(again["passed"].as_u64(), Some(1));

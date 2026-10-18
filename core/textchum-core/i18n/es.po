@@ -636,6 +636,10 @@ msgstr "sin salida desde hace un rato — puede que espere una entrada"
 msgid "package not reported yet"
 msgstr "paquete aún sin indicar"
 
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "This run's command cannot be narrowed to one test."
+msgstr "La orden de esta ejecución no se puede acotar a una sola prueba."
+
 #: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "A configured grammar could not be loaded"
 msgstr "No se pudo cargar una gramática configurada"
@@ -1146,7 +1150,9 @@ msgstr "Se ejecuta con el shell en {}."
 msgid ""
 "No failed tests to run again: the last run reported none, or its command "
 "cannot be narrowed to them."
-msgstr "No hay pruebas fallidas que repetir: la última ejecución no informó de ninguna, o su orden no se puede acotar a ellas."
+msgstr ""
+"No hay pruebas fallidas que repetir: la última ejecución no informó de "
+"ninguna, o su orden no se puede acotar a ellas."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Nothing here runs: put the caret in a test, a benchmark or a main."

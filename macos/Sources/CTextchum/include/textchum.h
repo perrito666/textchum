@@ -271,6 +271,22 @@ char *tc_run_read(struct TcApp *app, uint64_t id);
 char *tc_run_tests(struct TcApp *app, uint64_t id);
 
 /**
+ * The command that runs only the test `name` of `suite` again, from
+ * the command run `id` was; null when it cannot be narrowed. Free with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; `suite` and `name`
+ * must point to `suite_len` and `name_len` readable bytes.
+ */
+char *tc_run_rerun_test(struct TcApp *app,
+                        uint64_t id,
+                        const char *suite,
+                        uintptr_t suite_len,
+                        const char *name,
+                        uintptr_t name_len);
+
+/**
  * Sends a line to a run's input. False when it is over.
  *
  * # Safety

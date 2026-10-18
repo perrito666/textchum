@@ -252,3 +252,6 @@ What breaks these rules today, each to be fixed under its own issue:
 
 - **Linux** Inlay hints are gathered after the line, not inside it
   (see `PLAN_linux.md`).
+- **Both** The run panel's test list is not filtered by typing (3.3);
+  on macOS typing only jumps to a test whose name starts with what was
+  typed.

@@ -37,7 +37,7 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
     private let summary = NSTextField(labelWithString: "")
     private let split = NSSplitView()
     private let testsScroll = NSScrollView()
-    private let testsOutline = NSOutlineView()
+    private let testsOutline = TestOutline()
     /// The tests as last listed, and the rows standing for them.
     private(set) var tests: CoreApp.RunTests?
     private var suiteRows: [TestRow] = []
@@ -111,6 +111,10 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
         testsOutline.dataSource = self
         testsOutline.delegate = self
         testsOutline.setAccessibilityLabel(t("Tests"))
+        // A double-click is Return: either runs the test alone.
+        testsOutline.target = self
+        testsOutline.doubleAction = #selector(runChosenTest(_:))
+        testsOutline.onReturn = { [weak self] in self?.runChosenTest() }
         testsScroll.documentView = testsOutline
         testsScroll.hasVerticalScroller = true
         testsScroll.borderType = .noBorder
@@ -310,12 +314,28 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
     /// A suite or a test in the list.
     final class TestRow {
         let name: String
+        /// The suite as the core names it, for running a test alone.
+        let suite: String
         let test: CoreApp.RunTests.Test?
         let children: [TestRow]
-        init(name: String, test: CoreApp.RunTests.Test?, children: [TestRow] = []) {
+        init(name: String, suite: String, test: CoreApp.RunTests.Test?, children: [TestRow] = []) {
             self.name = name
+            self.suite = suite
             self.test = test
             self.children = children
+        }
+    }
+
+    /// The test list, where Return runs the chosen test as a double-click
+    /// does, and never reaches the text.
+    final class TestOutline: NSOutlineView {
+        var onReturn: (() -> Void)?
+        override func keyDown(with event: NSEvent) {
+            if event.keyCode == 36 || event.keyCode == 76 {
+                onReturn?()
+            } else {
+                super.keyDown(with: event)
+            }
         }
     }
 
@@ -326,8 +346,8 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
         tests = found
         suiteRows = found.suites.map { suite in
             TestRow(
-                name: suite.name.isEmpty ? t("package not reported yet") : suite.name, test: nil,
-                children: suite.tests.map { TestRow(name: $0.name, test: $0) })
+                name: suite.name.isEmpty ? t("package not reported yet") : suite.name, suite: suite.name, test: nil,
+                children: suite.tests.map { TestRow(name: $0.name, suite: suite.name, test: $0) })
         }
         let hasTests = !found.suites.isEmpty
         if hasTests && first {
@@ -443,6 +463,26 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
 
     @objc private func rerunFailed(_ sender: Any?) {
         rerunFailed()
+    }
+
+    /// Return or a double-click on a test: that test alone, from where
+    /// the run was started. False when no test is chosen or the run's
+    /// command cannot be narrowed to it, which the status says.
+    @discardableResult
+    func runChosenTest() -> Bool {
+        guard let id = runID, let core, let onRun,
+            let row = testsOutline.item(atRow: testsOutline.selectedRow) as? TestRow, let test = row.test
+        else { return false }
+        guard let command = core.runRerunTest(id: id, suite: row.suite, name: test.name) else {
+            status.stringValue = t("This run's command cannot be narrowed to one test.")
+            return false
+        }
+        onRun(command, cwd ?? "")
+        return true
+    }
+
+    @objc private func runChosenTest(_ sender: Any?) {
+        runChosenTest()
     }
 
     @objc private func send(_ sender: Any?) {

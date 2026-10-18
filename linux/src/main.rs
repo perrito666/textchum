@@ -2115,6 +2115,9 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             let listed = (workbench.run_panel.shows_tests(), workbench.run_panel.summary_text());
             workbench.run_panel.choose_test("a::two");
             let selected = workbench.run_panel.selected_output_text();
+            workbench.run_panel.choose_test("a::one");
+            let alone_ran = workbench.run_panel.run_chosen_test();
+            let alone = rerun.borrow().clone();
             let ran = workbench.run_panel.rerun_failed();
             let again = rerun.borrow().clone();
             workbench.run_panel.hide();
@@ -2127,12 +2130,16 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 eprintln!("FAIL: choosing a test selected {selected:?}");
                 return 1;
             }
+            if !alone_ran || alone != Some(("sh harness.sh cargo test -- a::one --exact".to_owned(), dir.clone())) {
+                eprintln!("FAIL: running a test alone ran {alone:?}");
+                return 1;
+            }
             if !ran || again != Some(("sh harness.sh cargo test -- a::two --exact".to_owned(), dir.clone())) {
                 eprintln!("FAIL: Rerun Failed ran {again:?}");
                 return 1;
             }
         }
-        println!("test results ok (listed by suite, counted, a test shows its line, the failed run again)");
+        println!("test results ok (listed by suite, counted, a test shows its line, run alone, the failed run again)");
 
         // What can be run is marked in the gutter: a main and a test in
         // a Cargo package, each with the command that runs just it.

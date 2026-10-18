@@ -635,6 +635,10 @@ msgstr ""
 msgid "package not reported yet"
 msgstr ""
 
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "This run's command cannot be narrowed to one test."
+msgstr ""
+
 #: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "A configured grammar could not be loaded"
 msgstr ""

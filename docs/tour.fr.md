@@ -436,7 +436,8 @@ Quand la sortie rend compte de tests — le `test x ... ok` de cargo, `go
 test -v`, pytest — le panneau les liste à côté par suite, chacun marqué
 réussi, échoué, ignoré ou encore en cours, avec les totaux dans son
 en-tête. Un test choisi dans la liste montre la ligne de la sortie qui
-l'a signalé, suivie de son échec. **Relancer les échecs** dans le
+l'a signalé, suivie de son échec ; Entrée ou un double clic lance ce
+test seul. **Relancer les échecs** dans le
 panneau, ou **Run → Relancer les tests échoués**, relance seulement ceux
 qui ont échoué, depuis le même dossier : la commande est celle qui les
 a lancés, ses propres filtres remplacés par les noms échoués.
@@ -452,7 +453,7 @@ n'est pas marqué. Les tests ne sont lus que dans la sortie de cargo, de
 ce qui a échoué, et seul cela est listé. Une ligne de commande avec un
 tube ou `&&` n'est pas restreinte pour Relancer les échecs, et un test
 de la liste n'ouvre pas encore son code — l'endroit de son échec dans
-la sortie, si.
+la sortie, si. Taper ne filtre pas encore la liste.
 
 ## Markdown et prose
 

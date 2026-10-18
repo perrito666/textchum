@@ -269,6 +269,17 @@ public final class CoreApp {
         return try? JSONDecoder().decode(RunTests.self, from: Data(String(cString: answer).utf8))
     }
 
+    /// The command that runs only the test `name` of `suite` again;
+    /// nil when the run's command cannot be narrowed to it.
+    public func runRerunTest(id: UInt64, suite: String, name: String) -> String? {
+        let answer = withUTF8(suite) { suite, suiteLen in
+            withUTF8(name) { name, nameLen in tc_run_rerun_test(handle, id, suite, suiteLen, name, nameLen) }
+        }
+        guard let answer else { return nil }
+        defer { tc_string_free(answer) }
+        return String(cString: answer)
+    }
+
     @discardableResult
     public func runWrite(id: UInt64, line: String) -> Bool {
         withUTF8(line) { line, lineLen in tc_run_write(handle, id, line, lineLen) }

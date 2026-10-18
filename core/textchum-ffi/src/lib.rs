@@ -250,6 +250,33 @@ pub unsafe extern "C" fn tc_run_tests(app: *mut TcApp, id: u64) -> *mut c_char {
         .unwrap_or(std::ptr::null_mut())
 }
 
+/// The command that runs only the test `name` of `suite` again, from
+/// the command run `id` was; null when it cannot be narrowed. Free with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; `suite` and `name`
+/// must point to `suite_len` and `name_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_run_rerun_test(
+    app: *mut TcApp,
+    id: u64,
+    suite: *const c_char,
+    suite_len: usize,
+    name: *const c_char,
+    name_len: usize,
+) -> *mut c_char {
+    let Some(app) = (unsafe { app.as_ref() }) else { return std::ptr::null_mut() };
+    let (Some(suite), Some(name)) = (unsafe { str_from_raw(suite, suite_len) }, unsafe { str_from_raw(name, name_len) })
+    else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| app.runs.rerun_test(id, suite, name).map(owned_c_string)))
+        .ok()
+        .flatten()
+        .unwrap_or(std::ptr::null_mut())
+}
+
 /// Sends a line to a run's input. False when it is over.
 ///
 /// # Safety

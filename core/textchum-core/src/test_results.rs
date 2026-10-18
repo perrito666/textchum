@@ -1,6 +1,6 @@
 //! The tests a run reported, read from its output: what passed, what
 //! failed, what was skipped, grouped by the suite that ran them — and
-//! the command that runs again only the ones that failed.
+//! the command that runs again only the ones that failed, or one.
 //!
 //! Read from the lines the tools print for people, not from a report
 //! format asked for on the side, so any command line that runs tests is
@@ -298,10 +298,12 @@ const GO_VALUED: [&str; 12] =
 /// Options of pytest that take a value as the next word.
 const PYTEST_VALUED: [&str; 10] = ["-k", "-m", "-p", "-c", "-o", "--rootdir", "--maxfail", "-W", "--tb", "--deselect"];
 
-/// The command that runs again only `failed` — (suite, test) pairs —
-/// made from the `command` that ran them; None when nothing failed or
-/// the command is not one this knows how to narrow.
-pub fn rerun_failed(command: &str, runner: Option<Runner>, failed: &[(String, String)]) -> Option<String> {
+/// The command that runs again only `tests` — (suite, test) pairs, the
+/// failed ones or one chosen — made from the `command` that ran them;
+/// None when there are none or the command is not one this knows how
+/// to narrow.
+pub fn rerun(command: &str, runner: Option<Runner>, tests: &[(String, String)]) -> Option<String> {
+    let failed = tests;
     if failed.is_empty() {
         return None;
     }
@@ -353,16 +355,24 @@ pub fn rerun_failed(command: &str, runner: Option<Runner>, failed: &[(String, St
                     }
                 }
             }
-            // A failed subtest fails its parent: run the parents again,
+            // One subtest alone is matched level by level. Among several,
+            // a failed subtest fails its parent: run the parents again,
             // which runs the subtests with them.
-            let mut names: Vec<String> = Vec::new();
-            for (_, name) in failed {
-                let top = name.split('/').next().unwrap_or(name).to_owned();
-                if !names.contains(&top) {
-                    names.push(top);
+            let pattern = match failed {
+                [(_, name)] if name.contains('/') => {
+                    name.split('/').map(|level| format!("^{level}$")).collect::<Vec<_>>().join("/")
                 }
-            }
-            let pattern = format!("^({})$", names.join("|"));
+                _ => {
+                    let mut names: Vec<String> = Vec::new();
+                    for (_, name) in failed {
+                        let top = name.split('/').next().unwrap_or(name).to_owned();
+                        if !names.contains(&top) {
+                            names.push(top);
+                        }
+                    }
+                    format!("^({})$", names.join("|"))
+                }
+            };
             kept.insert(at + 2, "-run".to_owned());
             kept.insert(at + 3, pattern);
             Some(join(&kept))
@@ -427,7 +437,7 @@ mod tests {
         );
         assert_eq!(log.suites()[0].tests[1].line, 5);
         assert_eq!(
-            rerun_failed("cargo test --bin shop tests", log.runner, &log.failed()).as_deref(),
+            rerun("cargo test --bin shop tests", log.runner, &log.failed()).as_deref(),
             Some("cargo test --bin shop -- tests::sells --exact")
         );
     }
@@ -450,8 +460,13 @@ mod tests {
             ]
         );
         assert_eq!(log.suites()[0].tests[0].duration.as_deref(), Some("0.01s"));
+        let one = [(String::new(), "TestSell/empty".to_owned())];
         assert_eq!(
-            rerun_failed("go test -v -run '^TestSell$' -count=1 ./...", log.runner, &log.failed()).as_deref(),
+            rerun("go test -v ./...", log.runner, &one).as_deref(),
+            Some("go test -run '^TestSell$/^empty$' -v ./...")
+        );
+        assert_eq!(
+            rerun("go test -v -run '^TestSell$' -count=1 ./...", log.runner, &log.failed()).as_deref(),
             Some("go test -run '^(TestSell)$' -v -count=1 ./...")
         );
     }
@@ -474,7 +489,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            rerun_failed("python3 -m pytest -v -k shop tests", log.runner, &log.failed()).as_deref(),
+            rerun("python3 -m pytest -v -k shop tests", log.runner, &log.failed()).as_deref(),
             Some("python3 -m pytest -v tests/test_shop.py::TestShop::test_sells tests/test_cart.py::test_total")
         );
     }
@@ -482,9 +497,9 @@ mod tests {
     #[test]
     fn a_command_line_with_more_than_words_is_not_taken_apart() {
         let failed = [(String::new(), "adds".to_owned())];
-        assert_eq!(rerun_failed("cargo test && echo done", Some(Runner::Cargo), &failed), None);
-        assert_eq!(rerun_failed("make test", Some(Runner::Cargo), &failed), None);
-        assert_eq!(rerun_failed("cargo test", Some(Runner::Cargo), &[]), None);
+        assert_eq!(rerun("cargo test && echo done", Some(Runner::Cargo), &failed), None);
+        assert_eq!(rerun("make test", Some(Runner::Cargo), &failed), None);
+        assert_eq!(rerun("cargo test", Some(Runner::Cargo), &[]), None);
         assert_eq!(words("a 'b c' \"d\\\"e\" f\\ g"), Some(vec!["a".into(), "b c".into(), "d\"e".into(), "f g".into()]));
     }
 }

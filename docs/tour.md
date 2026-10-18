@@ -416,7 +416,8 @@ When the output reports tests — cargo's `test x ... ok`, `go test -v`,
 pytest — the panel lists them beside it by suite, each marked passed,
 failed, skipped or still running, with the counts in its header. A test
 chosen in the list shows the output line that reported it, where its
-failure follows. **Rerun Failed** in the panel, or **Run → Rerun Failed
+failure follows; Return or a double-click runs that test alone. **Rerun
+Failed** in the panel, or **Run → Rerun Failed
 Tests**, runs only the ones that failed again, from the same folder:
 the command is the one that ran them, its own filters replaced by the
 failed names. **Run Again** also runs in the folder the run started
@@ -430,7 +431,7 @@ are read from cargo, `go test` and pytest output only; without `-v`,
 `go test` and pytest name only what failed, so only that is listed. A
 command line with a pipe or `&&` is not narrowed for Rerun Failed, and
 a test in the list does not open its source yet — the failure's own
-place in the output does.
+place in the output does. Typing does not filter the list yet.
 
 ## Markdown and prose
 
