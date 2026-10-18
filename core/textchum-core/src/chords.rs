@@ -79,6 +79,8 @@ pub fn menu() -> Vec<Entry> {
                 action(']', "Next Finding", "nextFinding"),
                 action('[', "Previous Finding", "previousFinding"),
                 action('l', "Diagnostics", "diagnosticList"),
+                action('=', "Expand Selection", "expandSelection"),
+                action('-', "Shrink Selection", "shrinkSelection"),
             ],
         ),
         group(

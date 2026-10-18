@@ -1480,6 +1480,41 @@ pub unsafe extern "C" fn tc_document_neighbouring_finding(
     document.inner.neighbouring_finding(offset, forward).map_or(-1, |start| start as i64)
 }
 
+/// Expand Selection, or with `grow` false Shrink Selection, from the
+/// UTF-16 selection `start..end`: writes the new selection into
+/// `region_out`. False when there is no step to take — nothing larger,
+/// or nothing Expand Selection left to give back — or on a bad pointer.
+///
+/// # Safety
+/// `document` must be a live document pointer; `region_out` must point
+/// to a writable slot.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_step_selection(
+    document: *mut TcDocument,
+    start: usize,
+    end: usize,
+    grow: bool,
+    region_out: *mut TcRegion,
+) -> bool {
+    if region_out.is_null() {
+        return false;
+    }
+    let Some(document) = (unsafe { document.as_mut() }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let stepped = if grow {
+            document.inner.grow_selection(start, end)
+        } else {
+            document.inner.shrink_selection(start, end)
+        };
+        let Some((start, end)) = stepped else { return false };
+        unsafe { *region_out = TcRegion { start, end } };
+        true
+    }))
+    .unwrap_or(false)
+}
+
 /// Starts a tabstop session over the text
 /// [`tc_document_snippet_expand`] returned, now sitting at `origin`.
 /// Writes the range to select into `region_out`: the first placeholder,

@@ -102,6 +102,28 @@ impl SyntaxState {
         }
     }
 
+    /// The next larger piece of the code's structure around the bytes
+    /// `start..end`: a name, then what holds it — the inside of a pair
+    /// of brackets or quotes before the pair itself, the expression, the
+    /// statement, the block — one step at a time. None past the whole
+    /// file.
+    pub fn grow(&self, rope: &Rope, start: usize, end: usize) -> Option<Range<usize>> {
+        let mut node = self.tree.root_node().named_descendant_for_byte_range(start, end)?;
+        let larger = |range: &Range<usize>| {
+            range.start <= start && end <= range.end && range.end - range.start > end - start
+        };
+        loop {
+            if let Some(inside) = inside_of_pair(node, rope).filter(|inside| larger(inside)) {
+                return Some(inside);
+            }
+            let whole = node.start_byte()..node.end_byte();
+            if larger(&whole) {
+                return Some(whole);
+            }
+            node = node.parent()?;
+        }
+    }
+
     /// The lines that answer "where am I?" for `line`: the first line
     /// of each enclosing multi-line construct, outermost first. The
     /// `class` line and the `def` line for a statement inside a Python
@@ -230,6 +252,31 @@ impl SyntaxState {
         }
         spans
     }
+}
+
+/// What a node holds between its opening and closing token — the
+/// arguments inside parentheses, the statements inside braces, a
+/// string's text inside its quotes — without the space next to them.
+/// None for a node that does not open and close with such a pair.
+fn inside_of_pair(node: Node<'_>, rope: &Rope) -> Option<Range<usize>> {
+    const PAIRS: [(&str, &str); 6] =
+        [("(", ")"), ("[", "]"), ("{", "}"), ("<", ">"), ("\"", "\""), ("'", "'")];
+    if node.child_count() < 2 {
+        return None;
+    }
+    let first = node.child(0)?;
+    let last = node.child(node.child_count() as u32 - 1)?;
+    if first.is_named() || last.is_named() || !PAIRS.contains(&(first.kind(), last.kind())) {
+        return None;
+    }
+    let (mut from, mut to) = (first.end_byte(), last.start_byte());
+    while from < to && rope.byte(from).is_ascii_whitespace() {
+        from += 1;
+    }
+    while to > from && rope.byte(to - 1).is_ascii_whitespace() {
+        to -= 1;
+    }
+    (from < to).then_some(from..to)
 }
 
 /// One resolved injection site: a language name and the byte ranges of its

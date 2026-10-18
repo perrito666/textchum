@@ -631,14 +631,22 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,
 `blameLine`, `goToLine`,
-`goToBlockStart`, `goToBlockEnd`,
+`goToBlockStart`, `goToBlockEnd`, `expandSelection`, `shrinkSelection`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
 `toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `nextFinding`, `previousFinding`, `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nombre desconocido se registra junto a la lista completa. Ir al
 inicio/fin de bloque (⌃⌥↑/⌃⌥↓ por defecto) salta sobre el bloque
 sintáctico multilínea más interno alrededor del cursor, cortesía del
-mismo árbol que alimenta el coloreado. Y cuando un atajo se escapa de
+mismo árbol que alimenta el coloreado. El mismo árbol está detrás de
+**Expandir selección** (⌥↑, Alt+Arriba en Linux): cada pulsación amplía
+la selección un paso del código — el nombre, el interior de sus
+paréntesis o comillas, los paréntesis con él, la expresión, la
+sentencia, el bloque, hasta el archivo entero — y **Reducir selección**
+(⌥↓, Alt+Abajo en Linux) desanda los mismos pasos. Un archivo que
+ninguna gramática lee crece por palabra, luego por línea, luego al
+todo. Reducir solo devuelve lo que tomó expandir; una selección hecha
+con el ratón o las flechas no tiene pasos que deshacer. Y cuando un atajo se escapa de
 la memoria por completo, la **paleta de comandos** (⇧⌘P) busca de forma
 difusa cualquier acción de menú por su nombre y ejecuta la selección.
 

@@ -132,6 +132,11 @@ pub struct Document {
     /// [`crate::semantic`]. Moved by every edit, dropped where one
     /// touched it.
     semantic_tokens: Vec<crate::semantic::Token>,
+    /// The selections Expand Selection grew from, latest last, and what
+    /// it grew to: Shrink Selection walks back down them while the
+    /// selection is still the one it left. Any edit forgets them.
+    selection_steps: Vec<(usize, usize)>,
+    selection_grown: Option<(usize, usize)>,
 }
 
 impl Default for Document {
@@ -158,6 +163,8 @@ impl Document {
             diagnostics: Vec::new(),
             inlay_hints: Vec::new(),
             semantic_tokens: Vec::new(),
+            selection_steps: Vec::new(),
+            selection_grown: None,
         }
     }
 
@@ -180,6 +187,8 @@ impl Document {
             diagnostics: Vec::new(),
             inlay_hints: Vec::new(),
             semantic_tokens: Vec::new(),
+            selection_steps: Vec::new(),
+            selection_grown: None,
         };
         doc.history.mark_saved();
         doc.detect_language();
@@ -515,6 +524,8 @@ impl Document {
                 self.snippet = None;
             }
         }
+        self.selection_steps.clear();
+        self.selection_grown = None;
         for finding in &mut self.diagnostics {
             (finding.start, finding.end) =
                 diagnostics::shifted((finding.start, finding.end), start, end, new_len);
@@ -594,6 +605,44 @@ impl Document {
     /// The findings as they stand, on the text as it is now.
     pub fn diagnostics(&self) -> &[Finding] {
         &self.diagnostics
+    }
+
+    /// Expand Selection: the UTF-16 selection `start..end` grown by one
+    /// step of the code's structure (10.3) — see
+    /// [`crate::syntax::SyntaxState::grow`]. Text no grammar reads grows
+    /// by word, then by line, then to the whole. None when there is
+    /// nothing larger.
+    pub fn grow_selection(&mut self, start: usize, end: usize) -> Option<(usize, usize)> {
+        if self.selection_grown != Some((start, end)) {
+            self.selection_steps.clear();
+        }
+        let (from, to) = self.buffer.utf16_range_to_bytes(start, end).ok()?;
+        let grown = self
+            .syntax
+            .as_ref()
+            .and_then(|syntax| syntax.grow(self.buffer.rope(), from, to))
+            .or_else(|| plain_growth(&self.buffer.text(), from, to))?;
+        let grown = (
+            self.buffer.byte_to_utf16(grown.start).ok()?,
+            self.buffer.byte_to_utf16(grown.end).ok()?,
+        );
+        self.selection_steps.push((start, end));
+        self.selection_grown = Some(grown);
+        Some(grown)
+    }
+
+    /// Shrink Selection: the selection Expand Selection grew `start..end`
+    /// from. None unless `start..end` is what it last grew to: a
+    /// selection made any other way has no structure to give back.
+    pub fn shrink_selection(&mut self, start: usize, end: usize) -> Option<(usize, usize)> {
+        if self.selection_grown != Some((start, end)) {
+            self.selection_steps.clear();
+            self.selection_grown = None;
+            return None;
+        }
+        let previous = self.selection_steps.pop()?;
+        self.selection_grown = Some(previous);
+        Some(previous)
     }
 
     /// Where Next Finding (or, with `forward` false, Previous Finding)
@@ -1160,6 +1209,30 @@ fn encode(text: &str, encoding: Encoding) -> (Vec<u8>, Encoding) {
     }
 }
 
+/// How text no grammar reads grows, in bytes: the word around the
+/// selection, then the whole lines it is on, then everything.
+fn plain_growth(text: &str, from: usize, to: usize) -> Option<std::ops::Range<usize>> {
+    let larger = |a: usize, b: usize| a <= from && to <= b && b - a > to - from;
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let mut a = from;
+    while let Some(c) = text[..a].chars().next_back().filter(|c| is_word(*c)) {
+        a -= c.len_utf8();
+    }
+    let mut b = to;
+    while let Some(c) = text[b..].chars().next().filter(|c| is_word(*c)) {
+        b += c.len_utf8();
+    }
+    if larger(a, b) && text[from..to].chars().all(is_word) {
+        return Some(a..b);
+    }
+    let a = text[..from].rfind('\n').map_or(0, |at| at + 1);
+    let b = text[to..].find('\n').map_or(text.len(), |at| to + at);
+    if larger(a, b) {
+        return Some(a..b);
+    }
+    larger(0, text.len()).then_some(0..text.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1240,6 +1313,63 @@ use d;
         assert_eq!(tokens, vec![(10, 11), (33, 34)]);
         document.set_semantic_tokens("null", "null");
         assert!(document.semantic_tokens().is_empty());
+    }
+
+    #[test]
+    fn selection_grows_by_structure_and_shrinks_back_the_same_way() {
+        let mut document = Document::new();
+        document.set_language(Some("rust"));
+        let text = "fn main() {\n    let total = add(first, \"two\");\n}\n";
+        document.replace_utf16(0, 0, text).unwrap();
+        let caret = text.find("first").unwrap() + 2;
+        let mut steps = Vec::new();
+        let (mut start, mut end) = (caret, caret);
+        while let Some(grown) = document.grow_selection(start, end) {
+            (start, end) = grown;
+            steps.push(text[start..end].to_owned());
+        }
+        assert_eq!(
+            steps[..4],
+            ["first", "first, \"two\"", "(first, \"two\")", "add(first, \"two\")"],
+            "the name, the inside of the brackets, the brackets, the call"
+        );
+        assert!(steps.iter().any(|step| step == "let total = add(first, \"two\");"), "the statement");
+        assert_eq!(steps.last().map(String::as_str), Some(text), "the whole file last");
+        // Back down, one step at a time, to where it started.
+        let mut back = Vec::new();
+        while let Some(shrunk) = document.shrink_selection(start, end) {
+            (start, end) = shrunk;
+            back.push(text[start..end].to_owned());
+        }
+        assert_eq!((start, end), (caret, caret));
+        assert_eq!(back[back.len() - 2], "first");
+        // A string's text is inside its quotes before the quotes.
+        let inside = text.find("two").unwrap() + 1;
+        let grown = document.grow_selection(inside, inside).unwrap();
+        assert_eq!(&text[grown.0..grown.1], "two");
+        let grown = document.grow_selection(grown.0, grown.1).unwrap();
+        assert_eq!(&text[grown.0..grown.1], "\"two\"");
+        // A selection made some other way has nothing to shrink back to,
+        // and an edit forgets the steps.
+        assert_eq!(document.shrink_selection(0, 2), None);
+        document.replace_utf16(0, 0, " ").unwrap();
+        assert_eq!(document.shrink_selection(grown.0 + 1, grown.1 + 1), None);
+    }
+
+    #[test]
+    fn plain_text_grows_by_word_then_line_then_everything() {
+        let mut document = Document::new();
+        let text = "one two\nthree four\n";
+        document.replace_utf16(0, 0, text).unwrap();
+        let at = text.find("four").unwrap() + 1;
+        let word = document.grow_selection(at, at).unwrap();
+        let line = document.grow_selection(word.0, word.1).unwrap();
+        let all = document.grow_selection(line.0, line.1).unwrap();
+        assert_eq!(
+            [&text[word.0..word.1], &text[line.0..line.1], &text[all.0..all.1]],
+            ["four", "three four", text]
+        );
+        assert_eq!(document.grow_selection(all.0, all.1), None);
     }
 
     #[test]

@@ -954,6 +954,22 @@ int64_t tc_document_neighbouring_finding(const struct TcDocument *document,
                                          bool forward);
 
 /**
+ * Expand Selection, or with `grow` false Shrink Selection, from the
+ * UTF-16 selection `start..end`: writes the new selection into
+ * `region_out`. False when there is no step to take — nothing larger,
+ * or nothing Expand Selection left to give back — or on a bad pointer.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `region_out` must point
+ * to a writable slot.
+ */
+bool tc_document_step_selection(struct TcDocument *document,
+                                uintptr_t start,
+                                uintptr_t end,
+                                bool grow,
+                                struct TcRegion *region_out);
+
+/**
  * Starts a tabstop session over the text
  * [`tc_document_snippet_expand`] returned, now sitting at `origin`.
  * Writes the range to select into `region_out`: the first placeholder,

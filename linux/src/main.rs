@@ -588,6 +588,10 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.diagnostic-list", "<Ctrl><Shift>e"),
     ("win.block-start", "<Ctrl><Alt>Up"),
     ("win.block-end", "<Ctrl><Alt>Down"),
+    // Alt with left and right walks the jumps; with up and down, the
+    // structure.
+    ("win.expand-selection", "<Alt>Up"),
+    ("win.shrink-selection", "<Alt>Down"),
 ];
 
 /// The shortcut an action comes with, for a screen that has to say
@@ -1426,6 +1430,38 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
     if buffer.iter_at_offset(0).tags().is_empty() {
         eprintln!("FAIL: no highlight tag at offset 0");
         return 1;
+    }
+
+    // Expand Selection grows by the code's structure and Shrink Selection
+    // walks back down the same steps (10.3).
+    {
+        let page = workbench.selected().expect("a selected page");
+        let buffer = page.buffer.clone();
+        let before = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+        let code = "fn main() {\n    let total = add(first, 2);\n}\n";
+        buffer.set_text(code);
+        let caret = code.find("first").unwrap() as i32 + 2;
+        buffer.place_cursor(&buffer.iter_at_offset(caret));
+        let selected = |buffer: &sourceview5::Buffer| {
+            buffer
+                .selection_bounds()
+                .map(|(from, to)| buffer.text(&from, &to, true).to_string())
+                .unwrap_or_default()
+        };
+        let mut grown = Vec::new();
+        for _ in 0..4 {
+            fire("win.expand-selection");
+            grown.push(selected(&buffer));
+        }
+        fire("win.shrink-selection");
+        fire("win.shrink-selection");
+        let shrunk = selected(&buffer);
+        buffer.set_text(&before);
+        if grown != ["first", "first, 2", "(first, 2)", "add(first, 2)"] || shrunk != "first, 2" {
+            eprintln!("FAIL: selection steps: {grown:?} back to {shrunk:?}");
+            return 1;
+        }
+        println!("selection steps ok (name, inside the brackets, the brackets, the call; back down the same way)");
     }
 
     // Snippets: the core expands the body, the buffer inserts what comes

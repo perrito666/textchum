@@ -56,6 +56,8 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("goForward", n_("Go Forward"), "win.forward"),
     ("goToLine", n_("Go to Line"), "win.goto-line"),
     ("goToBlockStart", n_("Go to Block Start"), "win.block-start"),
+    ("expandSelection", n_("Expand Selection"), "win.expand-selection"),
+    ("shrinkSelection", n_("Shrink Selection"), "win.shrink-selection"),
     ("goToBlockEnd", n_("Go to Block End"), "win.block-end"),
     ("blameLine", n_("Blame Line"), "win.blame"),
     ("showDiagnostic", n_("Show Diagnostic for Line"), "win.diagnostic"),

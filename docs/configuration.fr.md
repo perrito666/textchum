@@ -643,14 +643,22 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,
 `blameLine`, `goToLine`,
-`goToBlockStart`, `goToBlockEnd`,
+`goToBlockStart`, `goToBlockEnd`, `expandSelection`, `shrinkSelection`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
 `toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `nextFinding`, `previousFinding`, `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à
 la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique
 multiligne le plus interne autour du curseur, grâce à l'arbre qui
-alimente déjà la coloration. Et quand un raccourci échappe tout à fait
+alimente déjà la coloration. Le même arbre est derrière **Étendre la
+sélection** (⌥↑, Alt+Haut sous Linux) : chaque appui agrandit la
+sélection d'un pas du code — le nom, l'intérieur de ses parenthèses ou
+guillemets, les parenthèses avec, l'expression, l'instruction, le bloc,
+jusqu'au fichier entier — et **Réduire la sélection** (⌥↓, Alt+Bas
+sous Linux) redescend les mêmes pas. Un fichier qu'aucune grammaire ne
+lit grandit par mot, puis par ligne, puis au tout. Réduire ne rend que
+ce qu'étendre a pris ; une sélection faite à la souris ou aux flèches
+n'a pas de pas à défaire. Et quand un raccourci échappe tout à fait
 à la mémoire, la **palette de commandes** (⇧⌘P) cherche floue n'importe
 quelle action de menu par son nom et exécute la sélection.
 
