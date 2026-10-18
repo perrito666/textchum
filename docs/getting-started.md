@@ -99,7 +99,9 @@ textchum/
 **Textchum → Install chum Command…** (or, from a checkout,
 `make install-cli` — honors `PREFIX`, default `/usr/local`) installs a
 small terminal command that talks to the running app; the menu route
-asks for administrator rights only when `/usr/local/bin` needs them:
+asks for administrator rights only when `/usr/local/bin` needs them, and
+says how it went in the notification area at the right of the status
+bar:
 
 ```sh
 chum notes.md                # open (tab or window per your settings)

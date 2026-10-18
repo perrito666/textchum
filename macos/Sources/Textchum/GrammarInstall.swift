@@ -30,12 +30,10 @@ extension AppDelegate {
     }
 
     private func finishGrammarInstall(_ outcome: CoreLanguages.BuildOutcome) {
-        let alert = NSAlert()
+        // Reports, not dialogs (6.2): the first line in the status bar,
+        // the whole of it in the notification area's list.
         if let error = outcome.error {
-            alert.alertStyle = .warning
-            alert.messageText = t("The grammar was not installed")
-            alert.informativeText = error
-            alert.runModal()
+            notify(t("The grammar was not installed") + "\n" + error)
             return
         }
         guard let config else { return }
@@ -49,19 +47,14 @@ extension AppDelegate {
             grammarsJSON: "{\"languages\":{\"\(name)\":\(outcome.entryJSON)}}")
         finishGrammarLoading(problems: problems, relearn: true)
 
-        alert.alertStyle = .informational
-        alert.messageText = "Installed “\(outcome.name)”"
+        config.setLanguageEntry(name: outcome.name, json: outcome.entryJSON)
+        saveConfigAsOwn()
         var lines = [
-            t("Files of its types open as it from now on, and the ones already open are coloured.")
+            "Installed “\(outcome.name)”",
+            t("Files of its types open as it from now on, and the ones already open are coloured."),
         ]
         lines.append(contentsOf: problems)
         lines.append(contentsOf: outcome.warnings)
-        alert.informativeText = lines.joined(separator: "\n\n")
-        alert.runModal()
-        // Saved after the alert: the watcher tells the app's own save
-        // from an outside edit by how recent it is, and a modal that
-        // sat open for a while would make this one look outside.
-        config.setLanguageEntry(name: outcome.name, json: outcome.entryJSON)
-        saveConfigAsOwn()
+        notify(lines.joined(separator: "\n\n"))
     }
 }

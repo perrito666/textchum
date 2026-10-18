@@ -7,13 +7,12 @@ extension AppDelegate {
     /// directory needs more rights than we have, macOS asks for them
     /// with the standard administrator prompt.
     @objc func installCommandLineTool(_ sender: Any?) {
+        // Reports, not dialogs (6.2): the first line in the status bar,
+        // the whole of it in the notification area's list.
         guard let source = Self.chumScript() else {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = t("Could not find the chum script")
-            alert.informativeText =
-                t("The app bundle is missing its chum resource; rebuild with `make app`, or install from a checkout with `make install-cli`.")
-            alert.runModal()
+            notify(
+                t("Could not find the chum script") + "\n"
+                    + t("The app bundle is missing its chum resource; rebuild with `make app`, or install from a checkout with `make install-cli`."))
             return
         }
         let target = "/usr/local/bin/chum"
@@ -30,21 +29,16 @@ extension AppDelegate {
         } catch {
             failure = escalatedInstall(source: source)
         }
-        let alert = NSAlert()
         if let failure {
-            alert.alertStyle = .warning
-            alert.messageText = t("chum was not installed")
-            alert.informativeText = failure
+            notify(t("chum was not installed") + "\n" + failure)
         } else {
-            alert.alertStyle = .informational
-            alert.messageText = t("chum installed")
-            alert.informativeText =
-                "\(target) is ready. From a terminal:\n\n"
-                + "chum notes.md — open a file\n"
-                + "chum +120 main.rs — open at a line\n"
-                + "chum -w draft.md — open in its own window"
+            notify(
+                t("chum installed") + "\n"
+                    + "\(target) is ready. From a terminal:\n\n"
+                    + "chum notes.md — open a file\n"
+                    + "chum +120 main.rs — open at a line\n"
+                    + "chum -w draft.md — open in its own window")
         }
-        alert.runModal()
     }
 
     /// The install rerun with administrator rights, via the standard

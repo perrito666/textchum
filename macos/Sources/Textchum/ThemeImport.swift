@@ -52,23 +52,20 @@ extension AppDelegate {
     /// which side of the palette was filled, and any scope that had
     /// nowhere to go.
     private func report(_ outcome: CoreTheme.ImportOutcome, from source: CoreTheme.ImportSource) {
-        let alert = NSAlert()
+        // A report, not a dialog (6.2): the first line in the status bar,
+        // the whole of it in the notification area's list.
         if outcome.written.isEmpty {
-            alert.alertStyle = .warning
-            alert.messageText = t("Nothing was imported")
-            alert.informativeText =
-                outcome.errors.first ?? "No \(source.label) theme was found there."
-            alert.runModal()
+            notify(
+                t("Nothing was imported") + "\n"
+                    + (outcome.errors.first ?? "No \(source.label) theme was found there."))
             return
         }
 
-        alert.alertStyle = .informational
-        alert.messageText =
+        var lines: [String] = [
             outcome.written.count == 1
-            ? "Imported “\(outcome.written[0])”"
-            : "Imported \(outcome.written.count) themes"
-
-        var lines: [String] = []
+                ? "Imported “\(outcome.written[0])”"
+                : "Imported \(outcome.written.count) themes"
+        ]
         for (name, appearance) in zip(outcome.written, outcome.appearances) {
             lines.append(
                 "\(name) — written for a \(appearance) background, so its \(appearance) "
@@ -84,7 +81,6 @@ extension AppDelegate {
         if !outcome.errors.isEmpty {
             lines.append(contentsOf: outcome.errors)
         }
-        alert.informativeText = lines.joined(separator: "\n\n")
-        alert.runModal()
+        notify(lines.joined(separator: "\n\n"))
     }
 }

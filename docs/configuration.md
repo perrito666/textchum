@@ -195,7 +195,9 @@ Theme files are read at launch and when the selection changes.
 TextMate. Pick a theme file, or a folder holding several — a VS Code
 extension directory (its `package.json` says what it contributes) or a
 TextMate bundle (its themes live in `Themes/`). Everything found is
-imported, and the first is put on.
+imported, and the first is put on. What was imported, and anything that
+did not come across, is said in the notification area at the right of
+the status bar; a click there shows the whole of it.
 
 Both editors describe colour by **TextMate scope**, so importing is a
 matter of translating scopes to Textchum's capture names:

@@ -109,11 +109,9 @@ final class CtagsIndex {
     private func warnOnce() {
         guard !warnedMissingBinary else { return }
         warnedMissingBinary = true
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = t("Universal Ctags is not installed")
-        alert.informativeText =
-            t("The ctags fallback needs Universal Ctags (install with: brew install universal-ctags).")
-        alert.runModal()
+        // A report, not a dialog (6.2).
+        (NSApp.delegate as? AppDelegate)?.notify(
+            t("Universal Ctags is not installed") + "\n"
+                + t("The ctags fallback needs Universal Ctags (install with: brew install universal-ctags)."))
     }
 }
