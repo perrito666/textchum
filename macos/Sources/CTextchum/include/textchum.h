@@ -1134,6 +1134,26 @@ bool tc_document_last_edit_before(const struct TcDocument *document,
                                   uint64_t *stamp_out);
 
 /**
+ * What in the document can be run: `[{line, endLine, kind, name,
+ * command, cwd}]`, lines zero-based. Free with [`tc_string_free`]; null
+ * on a bad pointer.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_runnables_json(const struct TcDocument *document);
+
+/**
+ * Run at Caret: the innermost runnable around zero-based `line`, as one
+ * row of [`tc_document_runnables_json`], or `null`. Free with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_runnable_at_json(const struct TcDocument *document, uintptr_t line);
+
+/**
  * The breadcrumbs at the UTF-16 `offset`: a JSON array of `{label,
  * offset, siblings: [{label, offset}]}`, outermost first, offsets in
  * UTF-16. Free with [`tc_string_free`]; null on a bad pointer.

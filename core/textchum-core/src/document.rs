@@ -714,6 +714,57 @@ impl Document {
         serde_json::Value::Array(crumbs).to_string()
     }
 
+    /// What in this file can be run — its `main`, each test, each
+    /// benchmark — with the command for each; see [`crate::runnables`].
+    /// Empty for a file with no path or no grammar.
+    pub fn runnables(&self) -> Vec<crate::runnables::Runnable> {
+        match (&self.syntax, &self.path) {
+            (Some(syntax), Some(path)) => syntax.runnables(path, self.buffer.rope()),
+            _ => Vec::new(),
+        }
+    }
+
+    /// [`Self::runnables`] as JSON: `[{line, endLine, kind, name,
+    /// command, cwd}]`, lines zero-based.
+    pub fn runnables_json(&self) -> String {
+        let rows: Vec<serde_json::Value> = self
+            .runnables()
+            .into_iter()
+            .map(|runnable| {
+                serde_json::json!({
+                    "line": runnable.line, "endLine": runnable.end_line, "kind": runnable.kind,
+                    "name": runnable.name, "command": runnable.command,
+                    "cwd": runnable.cwd.to_string_lossy(),
+                })
+            })
+            .collect();
+        serde_json::Value::Array(rows).to_string()
+    }
+
+    /// [`Self::runnable_at`] as one row of [`Self::runnables_json`], or
+    /// `null`.
+    pub fn runnable_at_json(&self, line: usize) -> String {
+        match self.runnable_at(line) {
+            Some(runnable) => serde_json::json!({
+                "line": runnable.line, "endLine": runnable.end_line, "kind": runnable.kind,
+                "name": runnable.name, "command": runnable.command,
+                "cwd": runnable.cwd.to_string_lossy(),
+            })
+            .to_string(),
+            None => "null".to_owned(),
+        }
+    }
+
+    /// Run at Caret: the innermost runnable around zero-based `line` —
+    /// the test the caret is in, else the file's `main` when the caret is
+    /// in it.
+    pub fn runnable_at(&self, line: usize) -> Option<crate::runnables::Runnable> {
+        self.runnables()
+            .into_iter()
+            .filter(|runnable| runnable.line <= line && line <= runnable.end_line)
+            .min_by_key(|runnable| runnable.end_line - runnable.line)
+    }
+
     /// Where Next Finding (or, with `forward` false, Previous Finding)
     /// goes from the UTF-16 `offset`: a finding's start, wrapping round
     /// the document. None with nothing reported.
@@ -1479,6 +1530,23 @@ use d;
         assert_eq!(crumbs[0].0, "main");
         assert_eq!(crumbs[0].1, 5, "after a two-byte character that is one UTF-16 unit");
         assert!(document.breadcrumbs_json(caret).contains("\"label\":\"main\""));
+    }
+
+    #[test]
+    fn the_runnable_at_a_line_is_the_innermost_around_it() {
+        let dir = std::env::temp_dir().join(format!("textchum-runnable-at-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("Cargo.toml"), "").unwrap();
+        let path = dir.join("src/main.rs");
+        std::fs::write(&path, "").unwrap();
+        let mut document = Document::open(&path).unwrap();
+        let text = "fn main() {\n    run();\n}\n\n#[test]\nfn adds() {\n    check();\n}\n";
+        document.replace_utf16(0, 0, text).unwrap();
+        assert_eq!(document.runnable_at(1).map(|runnable| runnable.kind), Some("main"));
+        assert_eq!(document.runnable_at(6).map(|runnable| runnable.name), Some("adds".to_owned()));
+        assert_eq!(document.runnable_at(3), None, "between the two, nothing");
+        assert!(document.runnables_json().contains("cargo test -- adds --exact"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

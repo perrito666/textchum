@@ -210,6 +210,11 @@ msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Run at Caret"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Run Again"
 msgstr ""
 
@@ -713,6 +718,7 @@ msgid "Run Command…"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/LineNumberRulerView.swift
 msgid "Run"
 msgstr ""
 
@@ -1086,6 +1092,10 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Run through the shell in {}."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Nothing here runs: put the caret in a test, a benchmark or a main."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift

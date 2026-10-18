@@ -400,10 +400,23 @@ walk them like findings. A command that has said nothing for a while
 while still running may be waiting for input: the panel says so, and a
 line typed in its field goes to the command's input.
 
+What can be run in the file is marked in the gutter with a green
+triangle: in Rust, a `#[test]`, a `#[bench]` and the `main` of a binary
+or an example; in Go, a `TestX`, a `BenchmarkX` and the `main` of a
+`main` package; in Python, a pytest test function or method and a
+module's `if __name__ == "__main__":`. A click on the mark runs just
+that one — `cargo test -- tests::adds --exact`, `go test -run
+'^TestAdds$' .`, `python3 -m pytest tests/test_app.py::test_adds` — in
+the panel, from the package's folder. **Run → Run at Caret** (⌃⇧R,
+Ctrl+Shift+F10 on Linux) runs the innermost one around the caret.
+Where the light bulb of a fix stands on the same line, the bulb is
+drawn and the click offers the fix.
+
 Not there yet: the panel is not a terminal. A program that draws the
 whole screen — an editor, `top`, a REPL that edits its own line — does
-not belong in it. Marks in the gutter that run a test or a `main`, and
-a tree of test results, come later.
+not belong in it. Marks are found for Rust, Go and Python only, a test
+written under another runner's conventions is not marked, and a tree of
+test results comes later.
 
 ## Markdown and prose
 

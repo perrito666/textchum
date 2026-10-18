@@ -71,6 +71,11 @@ impl SyntaxState {
         })
     }
 
+    /// What in the file at `path` can be run; see [`crate::runnables`].
+    pub fn runnables(&self, path: &std::path::Path, rope: &Rope) -> Vec<crate::runnables::Runnable> {
+        crate::runnables::find(self.language.spec.name, path, self.tree.root_node(), rope)
+    }
+
     pub fn language(&self) -> &'static RegisteredLanguage {
         self.language
     }

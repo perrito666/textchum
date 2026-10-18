@@ -409,6 +409,7 @@ impl Workbench {
         menu.append_section(None, &go_section);
         let run_section = gtk::gio::Menu::new();
         run_section.append(Some(&tr("Run Command…")), Some("win.run-command"));
+        run_section.append(Some(&tr("Run at Caret")), Some("win.run-at-caret"));
         run_section.append(Some(&tr("Run Again")), Some("win.run-again"));
         run_section.append(Some(&tr("Stop")), Some("win.stop-run"));
         run_section.append(Some(&tr("Next Output Place")), Some("win.next-output-place"));
@@ -2648,6 +2649,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("search-everywhere", workbench, |workbench, _| show_everywhere(workbench));
     add("run-command", workbench, |workbench, _| ask_for_command(workbench));
+    add("run-at-caret", workbench, |workbench, _| run_runnable(workbench, None));
     add("run-again", workbench, |workbench, _| {
         let command = workbench.run_panel.command();
         let command = if command.is_empty() { last_command(workbench) } else { command };
@@ -2979,6 +2981,17 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         workbench.refresh_chrome();
         workbench.rebuild_buffer_list();
     });
+    // A run mark clicked: what starts on that zero-based line runs.
+    {
+        let action = gtk::gio::SimpleAction::new("run-line", Some(glib::VariantTy::UINT64));
+        let weak = Rc::downgrade(workbench);
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some(line) = parameter.and_then(|p| p.get::<u64>()) else { return };
+            run_runnable(&workbench, Some(line as i32));
+        });
+        workbench.window.add_action(&action);
+    }
     // A breadcrumb's sibling chosen: a jump to a UTF-16 offset in the
     // page in front.
     {
@@ -3874,6 +3887,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Go to Symbol in Project…", "win.project-symbols"),
     ("Search Everywhere…", "win.search-everywhere"),
     ("Run Command…", "win.run-command"),
+    ("Run at Caret", "win.run-at-caret"),
     ("Run Again", "win.run-again"),
     ("Stop", "win.stop-run"),
     ("Next Output Place", "win.next-output-place"),
@@ -5995,8 +6009,12 @@ fn ask_for_command(workbench: &Rc<Workbench>) {
 /// Starts `command` in the project in front and shows it in the run
 /// panel; one that cannot start says why.
 pub(crate) fn run_in(workbench: &Rc<Workbench>, command: &str) {
-    let directory = run_directory(workbench);
-    let started = Shell::instance().runs.borrow_mut().start(command, &directory);
+    run_in_directory(workbench, command, &run_directory(workbench));
+}
+
+/// Starts `command` in `directory` and shows it in the run panel.
+fn run_in_directory(workbench: &Rc<Workbench>, command: &str, directory: &Path) {
+    let started = Shell::instance().runs.borrow_mut().start(command, directory);
     match started {
         Ok(id) => {
             let weak = Rc::downgrade(workbench);
@@ -6008,6 +6026,18 @@ pub(crate) fn run_in(workbench: &Rc<Workbench>, command: &str) {
             workbench.run_panel.begin(id, command);
         }
         Err(error) => workbench.hint(&error),
+    }
+}
+
+/// Run at Caret, or a run mark clicked on zero-based `line`: the
+/// innermost test, benchmark or `main` around the line.
+fn run_runnable(workbench: &Rc<Workbench>, line: Option<i32>) {
+    let Some(page) = workbench.selected() else { return };
+    let line = line.unwrap_or_else(|| page.buffer.iter_at_mark(&page.buffer.get_insert()).line());
+    let found = page.state.borrow().document.runnable_at(line.max(0) as usize);
+    match found {
+        Some(runnable) => run_in_directory(workbench, &runnable.command, &runnable.cwd),
+        None => workbench.hint(&tr("Nothing here runs: put the caret in a test, a benchmark or a main.")),
     }
 }
 

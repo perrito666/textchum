@@ -23,6 +23,7 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("projectSymbols", n_("Go to Symbol in Project"), "win.project-symbols"),
     ("searchEverywhere", n_("Search Everywhere"), "win.search-everywhere"),
     ("runCommand", n_("Run Command"), "win.run-command"),
+    ("runAtCaret", n_("Run at Caret"), "win.run-at-caret"),
     ("runAgain", n_("Run Again"), "win.run-again"),
     ("stopRun", n_("Stop"), "win.stop-run"),
     ("nextOutputPlace", n_("Next Output Place"), "win.next-output-place"),

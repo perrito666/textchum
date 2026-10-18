@@ -211,6 +211,11 @@ msgstr "Ejecutar un comando"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Run at Caret"
+msgstr "Ejecutar en el cursor"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Run Again"
 msgstr "Ejecutar de nuevo"
 
@@ -714,6 +719,7 @@ msgid "Run Command…"
 msgstr "Ejecutar un comando…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/LineNumberRulerView.swift
 msgid "Run"
 msgstr "Ejecutar"
 
@@ -1088,6 +1094,10 @@ msgstr "Símbolos visitados hace poco."
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Run through the shell in {}."
 msgstr "Se ejecuta con el shell en {}."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Nothing here runs: put the caret in a test, a benchmark or a main."
+msgstr "Aquí no hay nada que ejecutar: pon el cursor en una prueba, un benchmark o un main."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "The run's output names no place in a file."

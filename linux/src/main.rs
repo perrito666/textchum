@@ -546,6 +546,7 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.project-symbols", "<Ctrl><Alt>o"),
     ("win.search-everywhere", "<Ctrl><Shift>a"),
     ("win.run-command", "<Shift>F10"),
+    ("win.run-at-caret", "<Ctrl><Shift>F10"),
     ("win.run-again", "<Ctrl>F5"),
     ("win.stop-run", "<Ctrl>F2"),
     ("win.next-output-place", "F4"),
@@ -2079,6 +2080,37 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             workbench.run_panel.hide();
         }
         println!("run panel ok (output as it comes, its place walked, the end said)");
+
+        // What can be run is marked in the gutter: a main and a test in
+        // a Cargo package, each with the command that runs just it.
+        {
+            let dir = std::env::temp_dir().join(format!("textchum-gtk-marks-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(dir.join("src"));
+            let _ = std::fs::write(dir.join("Cargo.toml"), "[package]\nname = \"marks\"\n");
+            let file = dir.join("src/main.rs");
+            let _ = std::fs::write(&file, "fn main() {}\n\n#[test]\nfn adds() {}\n");
+            workbench.open(Some(file.clone()), None);
+            let page = workbench.selected().expect("a selected page");
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while page::run_mark_lines(&page) != [0, 3] {
+                context.iteration(false);
+                if std::time::Instant::now() > deadline {
+                    eprintln!("FAIL: the run marks stood on lines {:?}", page::run_mark_lines(&page));
+                    return 1;
+                }
+            }
+            let command = page.state.borrow().document.runnable_at(3).map(|runnable| runnable.command);
+            let tab = workbench.active_view().selected_page().expect("a selected tab");
+            workbench.forget(&tab);
+            workbench.active_view().close_page_finish(&tab, true);
+            context.iteration(false);
+            let _ = std::fs::remove_dir_all(&dir);
+            if command.as_deref() != Some("cargo test -- adds --exact") {
+                eprintln!("FAIL: the test's run mark runs {command:?}");
+                return 1;
+            }
+        }
+        println!("run marks ok (a main and a test marked, each run on its own)");
 
         // The shell holds documents; the UI holds views of them. What
         // is checked here is that the table behaves like a registry: a
