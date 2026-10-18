@@ -3493,6 +3493,63 @@ pub unsafe extern "C" fn tc_config_inlay_hints(config: *const TcConfig) -> bool 
     catch_unwind(AssertUnwindSafe(|| config.inner.inlay_hints())).unwrap_or(true)
 }
 
+/// Every on/off setting Search Everywhere offers, as `[{id, label,
+/// on}]` with the labels in the user's language. Free with
+/// [`tc_string_free`]; null on a bad pointer.
+///
+/// # Safety
+/// `config` must be a live configuration pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_switches_json(config: *const TcConfig) -> *mut c_char {
+    let Some(config) = (unsafe { config.as_ref() }) else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(config.inner.switches_json())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Turns the switch `id` (one of [`tc_config_switches_json`]'s) on or
+/// off. False for an id there is no switch for, or a bad pointer.
+///
+/// # Safety
+/// `config` must be a live configuration pointer; `id` must point to
+/// `id_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_config_set_switch(
+    config: *mut TcConfig,
+    id: *const c_char,
+    id_len: usize,
+    on: bool,
+) -> bool {
+    let Some(config) = (unsafe { config.as_mut() }) else { return false };
+    let Some(id) = (unsafe { str_from_raw(id, id_len) }) else { return false };
+    catch_unwind(AssertUnwindSafe(|| config.inner.set_switch(id, on))).unwrap_or(false)
+}
+
+/// Search Everywhere's rows for `query`: `groups_json` is `[{kind,
+/// labels}]` with kind `files`, `symbols`, `commands` or `settings`;
+/// the answer is `[{kind, title, rows}]`, the group with the best match
+/// first, rows being indices into that group's labels. Free with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// Each pointer must point to its length of readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_everywhere_arrange_json(
+    query: *const c_char,
+    query_len: usize,
+    groups_json: *const c_char,
+    groups_len: usize,
+) -> *mut c_char {
+    let (Some(query), Some(groups)) =
+        (unsafe { str_from_raw(query, query_len) }, unsafe { str_from_raw(groups_json, groups_len) })
+    else {
+        return owned_c_string("[]".into());
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(textchum_core::everywhere::arrange_json(query, groups))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Sets whether a server's inlay hints are shown.
 ///
 /// # Safety

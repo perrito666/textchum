@@ -3024,6 +3024,30 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     print("breadcrumbs ok (the class and the method around the caret, each among its siblings)")
+
+    // Search Everywhere: the core's order, each group under its heading,
+    // a setting listed with whether it is on.
+    do {
+        let scratch = NSTemporaryDirectory() + "textchum-everywhere-\(getpid()).json"
+        let everywhere = SearchEverywhere()
+        everywhere.config = CoreConfig(path: scratch)
+        // An empty folder: the walk has nothing to add to the files given.
+        let emptyRoot = NSTemporaryDirectory() + "textchum-everywhere-root-\(getpid())"
+        try? FileManager.default.createDirectory(atPath: emptyRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: emptyRoot) }
+        everywhere.show(root: emptyRoot, projectRoot: nil, over: nil)
+        everywhere.debugSearch("numbers", files: ["src/numbers.rs", "src/other.rs"])
+        let shown = everywhere.shownTexts
+        guard shown.contains(t("Files")), shown.contains("src/numbers.rs"), !shown.contains("src/other.rs"),
+            shown.contains(t("Settings")),
+            shown.contains(where: { $0.hasPrefix(t("Show line numbers")) })
+        else {
+            print("FAIL: Search Everywhere showed \(shown)")
+            return 1
+        }
+        try? FileManager.default.removeItem(atPath: scratch)
+    }
+    print("search everywhere ok (files and settings grouped, a switch listed with its state)")
     pinBench.window?.close()
 
     // With the find bar open, the pins move below it: a search field

@@ -19,6 +19,51 @@ msgstr "Code"
 msgid "Search"
 msgstr "Rechercher"
 
+#: core/textchum-core/src/config.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/Settings.swift macos/Sources/Textchum/SmokeTest.swift
+msgid "Show line numbers"
+msgstr "Afficher les numéros de ligne"
+
+#: core/textchum-core/src/config.rs
+msgid "Show the types the language server inferred"
+msgstr "Afficher les types déduits par le serveur de langage"
+
+#: core/textchum-core/src/config.rs
+msgid "Show documentation when the mouse rests on a symbol"
+msgstr "Afficher la documentation quand la souris s'arrête sur un symbole"
+
+#: core/textchum-core/src/config.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/Settings.swift
+msgid "Pin enclosing context lines"
+msgstr "Épingler les lignes de contexte"
+
+#: core/textchum-core/src/config.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/Settings.swift
+msgid "Colour bracket pairs by depth"
+msgstr "Colorer les paires de crochets selon la profondeur"
+
+#: core/textchum-core/src/config.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/Settings.swift
+msgid "Close brackets and quotes as they are typed"
+msgstr "Fermer les crochets et les guillemets à la frappe"
+
+#: core/textchum-core/src/config.rs macos/Sources/Textchum/Settings.swift
+msgid "Mark the selected word elsewhere on screen"
+msgstr "Marquer le mot sélectionné ailleurs à l'écran"
+
+#: core/textchum-core/src/config.rs macos/Sources/Textchum/Settings.swift
+msgid "Reveal the current file in the tree"
+msgstr "Révéler le fichier courant dans l'arbre"
+
+#: core/textchum-core/src/config.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/Settings.swift
+msgid "Keep files open when their window closes"
+msgstr "Garder les fichiers ouverts quand leur fenêtre se ferme"
+
+#: core/textchum-core/src/config.rs
+msgid "Save anyway when a save preprocessor fails"
+msgstr "Enregistrer quand même si un préprocesseur d'enregistrement échoue"
+
 #: core/textchum-core/src/document.rs
 msgid "document has no file path"
 msgstr "le document n'a pas de chemin de fichier"
@@ -132,6 +177,10 @@ msgstr "Modifié dans la branche"
 #: macos/Sources/Textchum/QuickFinderPanel.swift
 msgid "Go to Symbol in Project"
 msgstr "Aller à un symbole du projet"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+msgid "Search Everywhere"
+msgstr "Chercher partout"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
@@ -492,6 +541,10 @@ msgstr "Modifié dans la branche…"
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Go to Symbol in Project…"
 msgstr "Aller à un symbole du projet…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Search Everywhere…"
+msgstr "Chercher partout…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Save As…"
@@ -953,6 +1006,18 @@ msgstr "Tapez une partie du nom d'un symbole."
 msgid "Symbols gone to lately."
 msgstr "Symboles visités récemment."
 
+#: linux/src/workbench.rs
+msgid "file, symbol, command or setting…"
+msgstr "fichier, symbole, commande ou réglage…"
+
+#: linux/src/workbench.rs
+msgid "on"
+msgstr "activé"
+
+#: linux/src/workbench.rs
+msgid "off"
+msgstr "désactivé"
+
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
 msgid "symbol name…"
 msgstr "nom de symbole…"
@@ -1085,14 +1150,6 @@ msgid "Font size"
 msgstr "Corps de la police"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Show line numbers"
-msgstr "Afficher les numéros de ligne"
-
-#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Pin enclosing context lines"
-msgstr "Épingler les lignes de contexte"
-
-#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Gutter marks compare against"
 msgstr "Les marques de la marge comparent avec"
 
@@ -1111,10 +1168,6 @@ msgstr "Branches de base, la plus probable d'abord"
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Tried in order when git does not name a default branch."
 msgstr "Essayées dans l'ordre quand git ne nomme pas de branche par défaut."
-
-#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Keep files open when their window closes"
-msgstr "Garder les fichiers ouverts quand leur fenêtre se ferme"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
 msgid "Keep each project's state with the checkout"
@@ -1185,10 +1238,6 @@ msgstr "Alt est maintenue"
 msgid "Super is held"
 msgstr "Super est maintenue"
 
-#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Colour bracket pairs by depth"
-msgstr "Colorer les paires de crochets selon la profondeur"
-
 #: linux/src/workbench.rs
 msgid "Each nesting level of (), [] and {} in a colour of its own"
 msgstr "Chaque niveau d'imbrication de (), [] et {} dans sa propre couleur"
@@ -1200,10 +1249,6 @@ msgstr "Afficher les types inférés par le serveur de langage, après la ligne"
 #: linux/src/workbench.rs
 msgid "Dimmed, at the end of the line each is about"
 msgstr "Estompés, à la fin de la ligne que chacun concerne"
-
-#: linux/src/workbench.rs macos/Sources/Textchum/Settings.swift
-msgid "Close brackets and quotes as they are typed"
-msgstr "Fermer les crochets et les guillemets à la frappe"
 
 #: linux/src/workbench.rs
 msgid "An opening half brings its closing half; the closer typed steps over it"
@@ -2083,14 +2128,6 @@ msgid "⌘ Command is held"
 msgstr "⌘ Commande est maintenue"
 
 #: macos/Sources/Textchum/Settings.swift
-msgid "Reveal the current file in the tree"
-msgstr "Révéler le fichier courant dans l'arbre"
-
-#: macos/Sources/Textchum/Settings.swift
-msgid "Mark the selected word elsewhere on screen"
-msgstr "Marquer le mot sélectionné ailleurs à l'écran"
-
-#: macos/Sources/Textchum/Settings.swift
 msgid "  Match case"
 msgstr "  Respecter la casse"
 
@@ -2328,7 +2365,7 @@ msgstr "Nomme un serveur que l'éditeur sait démarrer"
 msgid "commands, one per line"
 msgstr "commandes, une par ligne"
 
-#: macos/Sources/Textchum/Settings.swift
+#: macos/Sources/Textchum/Settings.swift macos/Sources/Textchum/SmokeTest.swift
 msgid "Settings"
 msgstr "Réglages"
 
@@ -2382,6 +2419,10 @@ msgstr "Propriétés du fichier…"
 #: macos/Sources/Textchum/Sidebar.swift
 msgid "No project"
 msgstr "Aucun projet"
+
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Files"
+msgstr "Fichiers"
 
 #: macos/Sources/Textchum/StatusBar.swift
 msgid "The git branch checked out in this file's project"

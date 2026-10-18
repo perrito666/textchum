@@ -331,6 +331,9 @@ pub struct Shell {
     pub notices: RefCell<textchum_core::notices::Notices>,
     /// Keeps the config-file monitor alive.
     config_monitor: RefCell<Option<gtk::gio::FileMonitor>>,
+    /// What else a configuration change needs, handed over with
+    /// [`Shell::watch_config`]: the parts that live with the windows.
+    reapply: RefCell<Option<Rc<dyn Fn()>>>,
     /// Every open document, by id, and the paths that name them. A
     /// document is here once however many views show it.
     documents: RefCell<HashMap<DocumentId, Rc<OpenDocument>>>,
@@ -468,6 +471,7 @@ impl Shell {
                 status_log: RefCell::new(Vec::new()),
                 notices: RefCell::new(notices),
                 config_monitor: RefCell::new(None),
+                reapply: RefCell::new(None),
                 documents: RefCell::new(HashMap::new()),
                 documents_by_path: RefCell::new(HashMap::new()),
                 grammar_problems: RefCell::new(grammar_problems),
@@ -739,6 +743,7 @@ impl Shell {
     /// reloaded wholesale and `reapply` runs the same pipeline a
     /// Preferences change does. The app's own saves are ignored.
     pub fn watch_config(self: &Rc<Self>, reapply: impl Fn() + 'static) {
+        *self.reapply.borrow_mut() = Some(Rc::new(reapply));
         let file = gtk::gio::File::for_path(config_path());
         let Ok(monitor) = file.monitor_file(
             gtk::gio::FileMonitorFlags::NONE,
@@ -765,19 +770,30 @@ impl Shell {
             if let Some(warning) = shell.config.borrow_mut().reload() {
                 eprintln!("textchum: config reload: {warning}");
             }
-            // The `languages` section too, which no Preferences row
-            // edits: a grammar added or fixed arrives without a restart.
-            let grammars_json = shell.config.borrow().grammars_json();
-            for problem in textchum_core::grammar::load_configured(&grammars_json) {
-                eprintln!("textchum: languages: {problem}");
-            }
-            shell.apply_appearance();
-            shell.apply_theme();
-            shell.apply_icon_pack();
-            shell.reconfigure_pool();
-            reapply();
+            shell.reapply_config();
         });
         *self.config_monitor.borrow_mut() = Some(monitor);
+    }
+
+    /// Puts the configuration as it now is into effect everywhere, the
+    /// way a Preferences change does: for a change made somewhere else —
+    /// on disk, or a switch flipped from Search Everywhere.
+    pub fn reapply_config(&self) {
+        // The `languages` section too, which no Preferences row edits: a
+        // grammar added or fixed arrives without a restart.
+        let grammars_json = self.config.borrow().grammars_json();
+        for problem in textchum_core::grammar::load_configured(&grammars_json) {
+            eprintln!("textchum: languages: {problem}");
+        }
+        self.apply_appearance();
+        self.apply_theme();
+        self.apply_icon_pack();
+        self.reconfigure_pool();
+        // Cloned out first: the closure reaches back into the shell.
+        let reapply = self.reapply.borrow().clone();
+        if let Some(reapply) = reapply {
+            reapply();
+        }
     }
 
     /// Registers a request's continuation; the pump calls it when the

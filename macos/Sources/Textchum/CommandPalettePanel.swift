@@ -8,7 +8,7 @@ import TextchumKit
 /// and keyboard shortcut. ↑/↓ move, ⏎ runs, ⎋ closes.
 @MainActor
 final class CommandPalettePanel: NSObject {
-    private struct Command {
+    struct Command {
         /// "File › Save As…"
         let title: String
         let shortcut: String
@@ -56,7 +56,7 @@ final class CommandPalettePanel: NSObject {
 
     /// Every actionable item of the main menu, depth-first, titled with
     /// its menu path.
-    private static func harvest() -> [Command] {
+    static func harvest() -> [Command] {
         var commands: [Command] = []
         func walk(_ menu: NSMenu, path: [String]) {
             for item in menu.items {
@@ -177,16 +177,22 @@ final class CommandPalettePanel: NSObject {
         return panel
     }
 
+    /// Runs `command` the way its menu item would, and remembers it as
+    /// run lately in `projectRoot`.
+    static func run(_ command: Command, projectRoot: String?) {
+        ProjectState.noteRecent("commands", command.title, projectRoot: projectRoot)
+        // Through the responder chain when the item has no fixed target,
+        // exactly as the menu itself would dispatch it.
+        NSApp.sendAction(command.action, to: command.target, from: command.representedItem)
+    }
+
     @objc private func runSelection() {
         let index = table.selectedRow >= 0 ? table.selectedRow : 0
         guard rows.indices.contains(index) else { return }
         let command = rows[index]
         Self.lastQuery = queryField.stringValue
-        ProjectState.noteRecent("commands", command.title, projectRoot: projectRoot)
         panel?.orderOut(nil)
-        // Through the responder chain when the item has no fixed target,
-        // exactly as the menu itself would dispatch it.
-        NSApp.sendAction(command.action, to: command.target, from: command.representedItem)
+        Self.run(command, projectRoot: projectRoot)
     }
 
     /// Debug hook: force a query, for screenshot-driven verification.

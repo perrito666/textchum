@@ -2075,6 +2075,41 @@ void tc_config_set_hover_modifier(struct TcConfig *config,
 bool tc_config_inlay_hints(const struct TcConfig *config);
 
 /**
+ * Every on/off setting Search Everywhere offers, as `[{id, label,
+ * on}]` with the labels in the user's language. Free with
+ * [`tc_string_free`]; null on a bad pointer.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer.
+ */
+char *tc_config_switches_json(const struct TcConfig *config);
+
+/**
+ * Turns the switch `id` (one of [`tc_config_switches_json`]'s) on or
+ * off. False for an id there is no switch for, or a bad pointer.
+ *
+ * # Safety
+ * `config` must be a live configuration pointer; `id` must point to
+ * `id_len` readable bytes.
+ */
+bool tc_config_set_switch(struct TcConfig *config, const char *id, uintptr_t id_len, bool on);
+
+/**
+ * Search Everywhere's rows for `query`: `groups_json` is `[{kind,
+ * labels}]` with kind `files`, `symbols`, `commands` or `settings`;
+ * the answer is `[{kind, title, rows}]`, the group with the best match
+ * first, rows being indices into that group's labels. Free with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * Each pointer must point to its length of readable bytes.
+ */
+char *tc_everywhere_arrange_json(const char *query,
+                                 uintptr_t query_len,
+                                 const char *groups_json,
+                                 uintptr_t groups_len);
+
+/**
  * Sets whether a server's inlay hints are shown.
  *
  * # Safety

@@ -543,6 +543,7 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     // there): both macOS modifiers land on Alt.
     ("win.changed-files", "<Ctrl><Alt>g"),
     ("win.project-symbols", "<Ctrl><Alt>o"),
+    ("win.search-everywhere", "<Ctrl><Shift>a"),
     ("win.definition", "F12"),
     ("win.implementation", "<Ctrl>F12"),
     ("win.type-definition", "<Ctrl><Shift>F12"),
@@ -1979,6 +1980,33 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             buffer.set_text(&before);
         }
         println!("completion ranking ok (match, then chosen before, then the server; documentation beside the list)");
+
+        // A switch flipped from Search Everywhere is saved and put into
+        // effect, and reads back the other way.
+        {
+            let before = shell::Shell::instance().config.borrow().switch("rainbowBrackets").unwrap_or(false);
+            workbench::flip_switch("rainbowBrackets", !before);
+            let after = shell::Shell::instance().config.borrow().switch("rainbowBrackets");
+            workbench::flip_switch("rainbowBrackets", before);
+            if after != Some(!before) {
+                eprintln!("FAIL: the switch read {after:?} after being flipped from {before}");
+                return 1;
+            }
+            let arranged = textchum_core::everywhere::arrange(
+                "save",
+                &[
+                    (textchum_core::everywhere::Kind::File, vec!["docs/save.md".to_owned()]),
+                    (textchum_core::everywhere::Kind::Command, vec!["Save".to_owned(), "Save As…".to_owned()]),
+                ],
+            );
+            if arranged.first().map(|(kind, rows)| (*kind, rows.clone()))
+                != Some((textchum_core::everywhere::Kind::Command, vec![0, 1]))
+            {
+                eprintln!("FAIL: Search Everywhere's order for a command name: {:?}", arranged.len());
+                return 1;
+            }
+        }
+        println!("search everywhere ok (a switch flips and saves, the best group first)");
 
         // The shell holds documents; the UI holds views of them. What
         // is checked here is that the table behaves like a registry: a

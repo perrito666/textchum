@@ -17,7 +17,24 @@ Ambos recorridos respetan `.gitignore`, omiten archivos ocultos y limitan
 el tamaño de archivo, cortesía del motor del propio ripgrep incrustado en
 el núcleo — no un subproceso.
 
-## Abrir rápidamente (⌘T)
+## Buscar en todo (⇧⌘A)
+
+Una caja para archivos, símbolos, comandos y ajustes (Ctrl+Mayús+A en
+Linux). Lo escrito se compara con los cuatro a la vez, y cada clase de
+respuesta llega en un grupo propio, el grupo con la mejor coincidencia
+primero: escribir `save` pone los comandos Save sobre un `save.md`,
+escribir `main` pone `main.rs` sobre un comando que lo menciona. Un
+grupo muestra unas pocas filas, suficientes para elegir con el grupo
+siguiente aún a la vista. Los archivos son los del proyecto, buscados
+primero por nombre; los símbolos son los del servidor de lenguaje, y
+llegan cuando responde; los comandos son los de los menús; los ajustes
+son los interruptores del editor, cada uno con si está activado. Sin
+nada escrito lista los archivos abiertos y los comandos ejecutados
+últimamente. El archivo o símbolo seleccionado muestra su código junto
+a la lista. ⏎ abre un archivo o un símbolo, ejecuta un comando, y
+cambia un ajuste — guardado, y en efecto al momento, como si se
+cambiara en Ajustes.
+
 
 Escriba fragmentos del nombre de archivo — `editwc` encuentra
 `EditorWindowController.swift` — con coincidencia difusa y ranking. ↑/↓ mueven la selección, ⏎ abre (trayendo al frente la
@@ -145,6 +162,9 @@ se mueve de una vez.
 
 ## Aún no está
 
+- Buscar en todo lista solo los ajustes que se activan o desactivan;
+  un ancho de tabulación o un tema se eligen en Ajustes. Dos toques de
+  Mayús no la abren.
 - Reemplazar entre archivos.
 - Conmutadores de mayúsculas/palabra completa en el panel (el propio
   patrón puede expresar ambos).
