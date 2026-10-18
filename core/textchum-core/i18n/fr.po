@@ -472,6 +472,21 @@ msgstr "Étendre la sélection"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Add Next Occurrence"
+msgstr "Ajouter l'occurrence suivante"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Add Caret Above"
+msgstr "Ajouter un curseur au-dessus"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Add Caret Below"
+msgstr "Ajouter un curseur au-dessous"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Shrink Selection"
 msgstr "Réduire la sélection"
 
@@ -1067,6 +1082,14 @@ msgid "No enclosing block here."
 msgstr "Aucun bloc englobant ici."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "No other occurrence to add."
+msgstr "Aucune autre occurrence à ajouter."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "No line there to add a caret on."
+msgstr "Pas de ligne à cet endroit où ajouter un curseur."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The whole document is selected already."
 msgstr "Le document entier est déjà sélectionné."
 
@@ -1145,13 +1168,17 @@ msgstr "Le serveur de langage n'avait aucune modification pour cette action."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Local history keeps the versions of saved files: save this one first."
-msgstr "L'historique local garde les versions des fichiers enregistrés : enregistrez d'abord celui-ci."
+msgstr ""
+"L'historique local garde les versions des fichiers enregistrés : enregistrez "
+"d'abord celui-ci."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid ""
 "No saved versions of this file are kept yet: they are kept from its next "
 "save."
-msgstr "Aucune version enregistrée de ce fichier n'est encore gardée : elles le sont dès son prochain enregistrement."
+msgstr ""
+"Aucune version enregistrée de ce fichier n'est encore gardée : elles le sont "
+"dès son prochain enregistrement."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Local History"
@@ -2636,9 +2663,6 @@ msgstr "Ouvrez un fichier depuis l'arbre, ou avec ⌘O."
 #: macos/Sources/Textchum/Workbench.swift
 msgid "No file here."
 msgstr "Aucun fichier ici."
-
-#~ msgid "No other worktrees"
-#~ msgstr "Pas d'autre arbre de travail"
 
 #~ msgid "On the definition"
 #~ msgstr "Sur la définition"

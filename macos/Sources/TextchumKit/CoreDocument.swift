@@ -361,6 +361,34 @@ public final class CoreDocument {
         return try? JSONDecoder().decode(Runnable?.self, from: Data(String(cString: json).utf8))
     }
 
+    /// What several carets become after a caret command or a keystroke.
+    public struct CaretAnswer: Decodable, Sendable {
+        public struct Edit: Decodable, Sendable {
+            public let start: Int
+            public let end: Int
+            public let text: String
+        }
+        /// `[anchor, head]` in UTF-16 units, the newest last.
+        public let selections: [[Int]]
+        /// Back to front, to be made as one undo group.
+        public let edits: [Edit]
+    }
+
+    /// Several carets: `op` (next, above, below, insert, backspace,
+    /// delete, left, right, up, down, home, end) applied to `selections`;
+    /// nil when it has nothing to do.
+    public func carets(_ selections: [[Int]], op: String, text: String? = nil, extend: Bool = false) -> CaretAnswer? {
+        var request: [String: Any] = ["selections": selections, "op": op, "extend": extend]
+        if let text { request["text"] = text }
+        guard let data = try? JSONSerialization.data(withJSONObject: request),
+            let json = String(data: data, encoding: .utf8)
+        else { return nil }
+        let answer = Self.withUTF8Pointer(json) { pointer, length in tc_document_carets(handle, pointer, length) }
+        guard let answer else { return nil }
+        defer { tc_string_free(answer) }
+        return try? JSONDecoder().decode(CaretAnswer.self, from: Data(String(cString: answer).utf8))
+    }
+
     /// A saved version local history keeps of the document's file.
     public struct HistoryVersion: Decodable, Sendable {
         public let id: String

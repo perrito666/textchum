@@ -193,6 +193,7 @@ final class EditorTextView: NSTextView {
             tintedLine = line
         }
         drawBackgroundMarks(in: rect)
+        drawExtraCarets(in: rect)
         drawInlineNotes(in: rect)
         // In the gap, where no text is drawn over it, so drawing it
         // under the text is drawing it on top. It does not blink.
@@ -248,6 +249,48 @@ final class EditorTextView: NSTextView {
                 x: caret.minX + origin.x - (atLineEnd ? 0 : width / 2), y: caret.minY + origin.y)
             if NSRect(x: at.x, y: at.y, width: width, height: caret.height).intersects(rect) {
                 (note.text as NSString).draw(at: at, withAttributes: attributes)
+            }
+        }
+    }
+
+    /// The carets besides the text view's own, and their selections:
+    /// empty ranges are carets, the others selected text. They do not
+    /// blink.
+    var extraCarets: [NSRange] = [] {
+        didSet { needsDisplay = true }
+    }
+
+    private func drawExtraCarets(in rect: NSRect) {
+        guard !extraCarets.isEmpty, let layoutManager = textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            // Only what is laid out for the viewport: see drawInlineNotes.
+            let viewport = layoutManager.textViewportLayoutController.viewportRange
+        else { return }
+        let origin = textContainerOrigin
+        let length = (string as NSString).length
+        for range in extraCarets where NSMaxRange(range) <= length {
+            guard let start = contentManager.location(layoutManager.documentRange.location, offsetBy: range.location),
+                viewport.contains(start) || viewport.endLocation.compare(start) == .orderedSame,
+                let end = contentManager.location(start, offsetBy: range.length),
+                let textRange = NSTextRange(location: start, end: end)
+            else { continue }
+            if range.length > 0 {
+                NSColor.selectedTextBackgroundColor.setFill()
+                layoutManager.enumerateTextSegments(in: textRange, type: .highlight, options: [.rangeNotRequired]) {
+                    _, frame, _, _ in
+                    frame.offsetBy(dx: origin.x, dy: origin.y).intersection(rect).fill()
+                    return true
+                }
+            } else {
+                layoutManager.enumerateTextSegments(in: textRange, type: .standard, options: [.upstreamAffinity]) {
+                    _, frame, _, _ in
+                    let caret = NSRect(x: frame.minX + origin.x, y: frame.minY + origin.y, width: 2, height: frame.height)
+                    if caret.intersects(rect) {
+                        insertionPointColor.setFill()
+                        caret.fill()
+                    }
+                    return false
+                }
             }
         }
     }

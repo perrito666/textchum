@@ -633,7 +633,7 @@ Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`, `showLocalHi
 `runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,
 `blameLine`, `goToLine`,
-`goToBlockStart`, `goToBlockEnd`, `expandSelection`, `shrinkSelection`,
+`goToBlockStart`, `goToBlockEnd`, `expandSelection`, `shrinkSelection`, `addNextOccurrence`, `addCaretAbove`, `addCaretBelow`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
 `toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `goToLastEdit`, `recentFiles`, `recentPlaces`, `nextFinding`, `previousFinding`, `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —

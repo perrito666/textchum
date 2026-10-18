@@ -743,6 +743,12 @@ impl Document {
 
     /// [`Self::runnable_at`] as one row of [`Self::runnables_json`], or
     /// `null`.
+    /// Several carets: what a caret command or a keystroke does to the
+    /// selections in `request` — see [`crate::carets::request_json`].
+    pub fn carets_json(&self, request: &str) -> String {
+        crate::carets::request_json(self.buffer.rope(), request)
+    }
+
     /// The saved versions of this document's file kept by local history,
     /// as [`crate::local_history::versions_json`] against the text now;
     /// `[]` for an untitled document.

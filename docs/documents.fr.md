@@ -52,6 +52,34 @@ Les opérations composées s'enregistrent comme des groupes explicites :
 Tout remplacer réécrit chaque occurrence mais s'annule en un seul pas, et
 un rechargement depuis le disque (ci-dessous) est lui aussi un seul pas.
 
+## Plusieurs curseurs
+
+**Ajouter l'occurrence suivante** (⌃G, Alt+J sous Linux) sélectionne le
+mot sous le curseur ; appuyé de nouveau, il ajoute la correspondance
+suivante de ce qui est sélectionné comme une sélection à part entière,
+en repartant du début du fichier — mots entiers seulement quand la
+sélection est un mot entier. **Ajouter un curseur au-dessus** et
+**au-dessous** (⌃⇧↑ et ⌃⇧↓, Alt+Maj+Haut et Bas sous Linux) ajoutent un
+curseur sur la ligne voisine, dans la colonne du premier curseur ou en
+fin de ligne quand elle est plus courte. Les trois sont dans le menu Edit
+et réassignables comme `addNextOccurrence`, `addCaretAbove` et
+`addCaretBelow`.
+
+Avec plusieurs curseurs, taper, coller, Retour arrière, Suppr, Entrée et
+Tab agissent à chacun, en une seule étape d'annulation ; les flèches,
+Début et Fin déplacent tous les curseurs, et avec Maj étendent toutes les
+sélections. Les curseurs qui se rejoignent n'en font plus qu'un. Échap,
+quand il n'y a plus rien d'autre à fermer, ne laisse que le curseur le
+plus récent ; un clic aussi, ou toute autre commande, qui ne concerne
+qu'un curseur.
+
+Pas encore là : une colonne de curseurs se fait ligne par ligne, pas en
+faisant glisser ; Entrée et Tab avec plusieurs curseurs insèrent un saut
+de ligne et une tabulation simples, sans l'indentation qu'obtient un
+seul curseur ; les déplacements par mot et les autres commandes ne
+laissent que le curseur le plus récent ; et sous Linux le texte composé
+par une méthode de saisie ne va qu'au curseur le plus récent.
+
 ## Repliement
 
 **Fold** (Ctrl+[) replie le bloc qu'ouvre la ligne du curseur ; la

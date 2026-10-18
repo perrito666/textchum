@@ -4870,6 +4870,108 @@ final class DocumentController: NSResponder {
         }
     }
 
+    // MARK: Several carets
+
+    /// Every selection while there are several, `[anchor, head]` in
+    /// UTF-16 units, the newest last — which is the view's own; nil with
+    /// one.
+    private(set) var carets: [[Int]]?
+    /// The edits of a caret command are on their way through the text
+    /// view: they go to the core as they are, not to the carets again.
+    private var applyingCaretEdit = false
+    /// The view's selection is being set to the newest caret, which is
+    /// not a click.
+    private var settingCaretSelection = false
+
+    /// Edit → Add Next Occurrence (⌃G): the word at the caret, then each
+    /// next match of what is selected, as another selection.
+    @objc func addNextOccurrence(_ sender: Any?) {
+        if !caretCommand("next") {
+            showHint(t("No other occurrence to add."))
+        }
+    }
+
+    /// Edit → Add Caret Above (⌃⇧↑) and Below (⌃⇧↓).
+    @objc func addCaretAbove(_ sender: Any?) {
+        if !caretCommand("above") { showHint(t("No line there to add a caret on.")) }
+    }
+
+    @objc func addCaretBelow(_ sender: Any?) {
+        if !caretCommand("below") { showHint(t("No line there to add a caret on.")) }
+    }
+
+    /// The caret command or keystroke `op` at every selection: its edits
+    /// made through the text view as one undo group, then the carets
+    /// shown where the core says. False when it had nothing to do.
+    @discardableResult
+    func caretCommand(_ op: String, text: String? = nil, extend: Bool = false) -> Bool {
+        guard let textView else { return false }
+        let selected = textView.selectedRange()
+        let current = carets ?? [[selected.location, NSMaxRange(selected)]]
+        guard let answer = coreDocument.carets(current, op: op, text: text, extend: extend) else { return false }
+        if !answer.edits.isEmpty {
+            applyingCaretEdit = true
+            coreDocument.beginEditGroup()
+            for edit in answer.edits {
+                textView.insertText(edit.text, replacementRange: NSRange(location: edit.start, length: edit.end - edit.start))
+            }
+            coreDocument.endEditGroup()
+            applyingCaretEdit = false
+        }
+        showCarets(answer.selections)
+        return true
+    }
+
+    /// The view's selection on the newest, scrolled to; the rest drawn.
+    private func showCarets(_ selections: [[Int]]) {
+        guard let textView, let newest = selections.last, newest.count == 2 else { return }
+        let range = { (pair: [Int]) in NSRange(location: min(pair[0], pair[1]), length: abs(pair[1] - pair[0])) }
+        carets = selections.count > 1 ? selections : nil
+        settingCaretSelection = true
+        textView.setSelectedRange(range(newest))
+        settingCaretSelection = false
+        textView.scrollRangeToVisible(range(newest))
+        (textView as? EditorTextView)?.extraCarets = selections.dropLast().filter { $0.count == 2 }.map(range)
+    }
+
+    /// Back to one caret: the view's own, the newest.
+    func dropExtraCarets() {
+        carets = nil
+        for view in views {
+            (view.textView as? EditorTextView)?.extraCarets = []
+        }
+    }
+
+    /// What a key command does at every caret: the core's op, the text
+    /// it types, and whether it extends the selections.
+    private static func caretOp(for selector: Selector) -> (String, String?, Bool)? {
+        switch selector {
+        case #selector(NSResponder.deleteBackward(_:)): return ("backspace", nil, false)
+        case #selector(NSResponder.deleteForward(_:)): return ("delete", nil, false)
+        case #selector(NSResponder.insertNewline(_:)): return ("insert", "\n", false)
+        case #selector(NSResponder.insertTab(_:)): return ("insert", "\t", false)
+        case #selector(NSResponder.moveLeft(_:)): return ("left", nil, false)
+        case #selector(NSResponder.moveRight(_:)): return ("right", nil, false)
+        case #selector(NSResponder.moveUp(_:)): return ("up", nil, false)
+        case #selector(NSResponder.moveDown(_:)): return ("down", nil, false)
+        case #selector(NSResponder.moveToBeginningOfLine(_:)), #selector(NSResponder.moveToLeftEndOfLine(_:)):
+            return ("home", nil, false)
+        case #selector(NSResponder.moveToEndOfLine(_:)), #selector(NSResponder.moveToRightEndOfLine(_:)):
+            return ("end", nil, false)
+        case #selector(NSResponder.moveLeftAndModifySelection(_:)): return ("left", nil, true)
+        case #selector(NSResponder.moveRightAndModifySelection(_:)): return ("right", nil, true)
+        case #selector(NSResponder.moveUpAndModifySelection(_:)): return ("up", nil, true)
+        case #selector(NSResponder.moveDownAndModifySelection(_:)): return ("down", nil, true)
+        case #selector(NSResponder.moveToBeginningOfLineAndModifySelection(_:)),
+            #selector(NSResponder.moveToLeftEndOfLineAndModifySelection(_:)):
+            return ("home", nil, true)
+        case #selector(NSResponder.moveToEndOfLineAndModifySelection(_:)),
+            #selector(NSResponder.moveToRightEndOfLineAndModifySelection(_:)):
+            return ("end", nil, true)
+        default: return nil
+        }
+    }
+
     /// File → Local History…: the saved versions kept of this file,
     /// newest first, each beside what restoring it would change.
     /// Choosing one puts its text in the buffer as one edit, which Undo
@@ -6384,15 +6486,25 @@ extension DocumentController: NSTextViewDelegate {
         // caret, and the character before an inlay note carries the
         // kern that opens the note's gap: typed text must not.
         textView.typingAttributes.removeValue(forKey: .kern)
-        if wrapSelection(in: textView, range: affectedCharRange, typed: replacementString) {
+        // Typed or pasted with several carets up: at every one of them.
+        if carets != nil, !applyingCaretEdit, affectedCharRange == textView.selectedRange() {
+            caretCommand("insert", text: replacementString)
+            return false
+        }
+        // Any other edit — a formatter's, a rename's — moves text under
+        // the carets that were worked out before it.
+        if carets != nil, !applyingCaretEdit {
+            dropExtraCarets()
+        }
+        if !applyingCaretEdit, wrapSelection(in: textView, range: affectedCharRange, typed: replacementString) {
             // The wrap did the edit itself, with the selection kept on
             // what was wrapped so the next delimiter nests inside it.
             return false
         }
-        if outdentClosingBracket(in: textView, range: affectedCharRange, typed: replacementString) {
+        if !applyingCaretEdit, outdentClosingBracket(in: textView, range: affectedCharRange, typed: replacementString) {
             return false
         }
-        if closePair(in: textView, range: affectedCharRange, typed: replacementString) {
+        if !applyingCaretEdit, closePair(in: textView, range: affectedCharRange, typed: replacementString) {
             return false
         }
         do {
@@ -6688,6 +6800,9 @@ extension DocumentController: NSTextViewDelegate {
             // The marks go, and only the marks: the selection stays, so
             // the word is still there to act on.
             clearOccurrences()
+        } else if carets != nil {
+            // The newest caret stays, where the view's own already is.
+            dropExtraCarets()
         }
         return true
     }
@@ -6695,6 +6810,15 @@ extension DocumentController: NSTextViewDelegate {
     func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
             return backOutOneLevel()
+        }
+        if carets != nil, !completionPopup.isVisible {
+            if let (op, text, extend) = Self.caretOp(for: commandSelector) {
+                caretCommand(op, text: text, extend: extend)
+                return true
+            }
+            // Anything else is about one caret: the newest, which the
+            // view already has.
+            dropExtraCarets()
         }
         guard completionPopup.isVisible else {
             if coreDocument.isSnippetActive {
@@ -6871,6 +6995,11 @@ extension DocumentController: NSTextViewDelegate {
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
+        // A click, or anything else that moved the view's own selection,
+        // is about one caret.
+        if carets != nil, !applyingCaretEdit, !settingCaretSelection {
+            dropExtraCarets()
+        }
         // A hint answered the command just given; moving on is done
         // with it.
         closeHint()

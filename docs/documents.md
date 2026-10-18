@@ -47,6 +47,30 @@ Compound operations record as explicit groups: Replace All rewrites every
 match but undoes as a single step, and a reload from disk (below) is one
 step too.
 
+## Several carets
+
+**Add Next Occurrence** (⌃G, Alt+J on Linux) selects the word at the
+caret; pressed again, it adds the next match of what is selected as a
+selection of its own, round the end of the file — whole words only when
+the selection is a whole word. **Add Caret Above** and **Below** (⌃⇧↑ and
+⌃⇧↓, Alt+Shift+Up and Down on Linux) add a caret on the next line up or
+down, in the first caret's column or at the line's end when it is
+shorter. All three are in the Edit menu and rebindable as
+`addNextOccurrence`, `addCaretAbove` and `addCaretBelow`.
+
+With several carets up, typing, pasting, Backspace, Delete, Return and
+Tab happen at every one, as one undo step; the arrows, Home and End move
+every caret, and with Shift extend every selection. Carets that meet
+become one. Escape, once nothing else is up for it to close, leaves only
+the newest caret; so does a click, or any other command, which is about
+one caret.
+
+Not there yet: a column of carets is made one line at a time, not by
+dragging; Return and Tab at several carets insert a plain line break and
+tab, without the indentation one caret gets; word moves and other
+commands leave the newest caret only; and on Linux an input method's
+composed text goes to the newest caret only.
+
 ## Folding
 
 **Fold** (Ctrl+[) collapses the block the caret's line opens; the line

@@ -605,6 +605,9 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     // Alt with left and right walks the jumps; with up and down, the
     // structure.
     ("win.expand-selection", "<Alt>Up"),
+    ("win.add-next-occurrence", "<Alt>j"),
+    ("win.add-caret-above", "<Alt><Shift>Up"),
+    ("win.add-caret-below", "<Alt><Shift>Down"),
     ("win.shrink-selection", "<Alt>Down"),
 ];
 
@@ -2206,6 +2209,56 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
         }
         println!("local history ok (each save kept, the replaced one too, what restoring changes, one undo takes it back)");
+
+        // Several carets: the word, then each next match; typing goes to
+        // every one as one undo; a caret below; Escape leaves the newest.
+        {
+            let dir = std::env::temp_dir().join(format!("textchum-gtk-carets-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            let file = dir.join("carets.txt");
+            let _ = std::fs::write(&file, "item = item + items\nab\nab\n");
+            let before = workbench.selected().and_then(|page| page.path().borrow().clone());
+            workbench.open(Some(file.clone()), None);
+            let page = workbench.selected().expect("a selected page");
+            let buffer = page.buffer.clone();
+            let text = |buffer: &sourceview5::Buffer| buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+            buffer.place_cursor(&buffer.iter_at_offset(1));
+            page::caret_command(&page, "next", None, false);
+            page::caret_command(&page, "next", None, false);
+            let picked = page::carets(&page);
+            let none = gtk::gdk::ModifierType::empty();
+            let typed_ok = page::caret_key(&page, gtk::gdk::Key::x, none);
+            let typed = text(&buffer);
+            let _ = gtk::prelude::WidgetExt::activate_action(&workbench.window, "win.undo", None);
+            context.iteration(false);
+            let undone = text(&buffer);
+            buffer.place_cursor(&buffer.iter_at_offset(21));
+            let below = page::caret_command(&page, "below", None, false);
+            page::caret_key(&page, gtk::gdk::Key::BackSpace, none);
+            let column = text(&buffer);
+            let escaped = page::back_out_one_level(&page) && page::carets(&page).is_none();
+            let tab = workbench.active_view().selected_page().expect("a selected tab");
+            workbench.forget(&tab);
+            workbench.active_view().close_page_finish(&tab, true);
+            context.iteration(false);
+            if let Some(path) = before {
+                workbench.open(Some(std::path::PathBuf::from(path)), None);
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+            if picked != Some(vec![(0, 4), (7, 11)]) {
+                eprintln!("FAIL: Add Next Occurrence picked {picked:?}");
+                return 1;
+            }
+            if !typed_ok || !typed.starts_with("x = x + items") || !undone.starts_with("item = item + items") {
+                eprintln!("FAIL: typing at the carets gave {typed:?}, one undo {undone:?}");
+                return 1;
+            }
+            if !below || !column.ends_with("\nb\nb\n") || !escaped {
+                eprintln!("FAIL: a column of carets gave {column:?}, Escape left one: {escaped}");
+                return 1;
+            }
+        }
+        println!("several carets ok (the word, its next match, typed at each as one undo, a column, Escape)");
 
         // What can be run is marked in the gutter: a main and a test in
         // a Cargo package, each with the command that runs just it.

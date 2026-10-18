@@ -359,6 +359,9 @@ impl Workbench {
             transforms.append_section(None, &section);
             edit_section.append(Some(&tr("Expand Selection")), Some("win.expand-selection"));
             edit_section.append(Some(&tr("Shrink Selection")), Some("win.shrink-selection"));
+            edit_section.append(Some(&tr("Add Next Occurrence")), Some("win.add-next-occurrence"));
+            edit_section.append(Some(&tr("Add Caret Above")), Some("win.add-caret-above"));
+            edit_section.append(Some(&tr("Add Caret Below")), Some("win.add-caret-below"));
             edit_section.append_submenu(Some(&tr("Transform")), &transforms);
         }
         let go_section = gtk::gio::Menu::new();
@@ -2978,6 +2981,9 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     add("block-start", workbench, |workbench, _| move_to_block_edge(workbench, true));
     add("block-end", workbench, |workbench, _| move_to_block_edge(workbench, false));
     add("expand-selection", workbench, |workbench, _| step_selection(workbench, true));
+    add("add-next-occurrence", workbench, |workbench, _| add_carets(workbench, "next"));
+    add("add-caret-above", workbench, |workbench, _| add_carets(workbench, "above"));
+    add("add-caret-below", workbench, |workbench, _| add_carets(workbench, "below"));
     add("shrink-selection", workbench, |workbench, _| step_selection(workbench, false));
     add("palette", workbench, |workbench, _| show_palette(workbench));
     add("new-format-picker", workbench, |workbench, _| show_format_picker(workbench));
@@ -3847,6 +3853,18 @@ fn move_to_block_edge(workbench: &Rc<Workbench>, to_start: bool) {
     page::land(&page.view);
 }
 
+/// Add Next Occurrence, Add Caret Above and Below, on the page in front.
+fn add_carets(workbench: &Rc<Workbench>, op: &str) {
+    let Some(page) = workbench.selected() else { return };
+    if !page::caret_command(&page, op, None, false) {
+        workbench.hint(&if op == "next" {
+            tr("No other occurrence to add.")
+        } else {
+            tr("No line there to add a caret on.")
+        });
+    }
+}
+
 /// Expand Selection and Shrink Selection: the selection grows by one
 /// step of the code's structure — a name, the inside of its brackets,
 /// the brackets, the expression, the statement, the block — and shrinks
@@ -3937,6 +3955,9 @@ const PALETTE: &[(&str, &str)] = &[
     ("Go to Block Start", "win.block-start"),
     ("Go to Block End", "win.block-end"),
     ("Expand Selection", "win.expand-selection"),
+    ("Add Next Occurrence", "win.add-next-occurrence"),
+    ("Add Caret Above", "win.add-caret-above"),
+    ("Add Caret Below", "win.add-caret-below"),
     ("Shrink Selection", "win.shrink-selection"),
     ("Language Server Status", "win.server-status"),
     ("Toggle File Tree", "win.sidebar"),

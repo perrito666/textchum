@@ -607,7 +607,7 @@ Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `showLocalHistor
 `documentOutline`,
 `goBack`, `goForward`,
 `blameLine`, `goToLine`,
-`goToBlockStart`, `goToBlockEnd`, `expandSelection`, `shrinkSelection`, `toggleNavigator`, `togglePreview`,
+`goToBlockStart`, `goToBlockEnd`, `expandSelection`, `shrinkSelection`, `addNextOccurrence`, `addCaretAbove`, `addCaretBelow`, `toggleNavigator`, `togglePreview`,
 `toggleLineNumbers`, `toggleHover`, `showHover`, `goToLastEdit`, `recentFiles`, `recentPlaces`, `nextFinding`, `previousFinding`, `togglePathDisplay`,
 `redraw`, `commandPalette`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `settings` — an unknown name is

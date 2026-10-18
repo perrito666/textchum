@@ -1161,6 +1161,22 @@ bool tc_document_last_edit_before(const struct TcDocument *document,
                                   uint64_t *stamp_out);
 
 /**
+ * Several carets: `request` is `{selections: [[anchor, head]], op}` in
+ * UTF-16 units, the newest selection last; the answer is `{selections,
+ * edits: [{start, end, text}]}`, the edits back to front, to be made
+ * as one undo group; `null` when the command has nothing to do. See
+ * [`textchum_core::carets::request_json`]. Free with
+ * [`tc_string_free`].
+ *
+ * # Safety
+ * `document` must be a live document pointer; `request` must point to
+ * `request_len` readable bytes.
+ */
+char *tc_document_carets(const struct TcDocument *document,
+                         const char *request,
+                         uintptr_t request_len);
+
+/**
  * The saved versions local history keeps of the document's file:
  * `[{id, time, size, added, removed}]`, newest first, `time` in
  * milliseconds since the epoch, `added` and `removed` the lines

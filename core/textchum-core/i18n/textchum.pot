@@ -471,6 +471,21 @@ msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Add Next Occurrence"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Add Caret Above"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Add Caret Below"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Shrink Selection"
 msgstr ""
 
@@ -1058,6 +1073,14 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No enclosing block here."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "No other occurrence to add."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "No line there to add a caret on."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift

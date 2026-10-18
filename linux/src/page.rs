@@ -77,6 +77,15 @@ pub struct Page {
     /// at the end of their lines, in buffer coordinates, so they
     /// scroll with the text and are not part of it.
     inlay_labels: RefCell<Vec<gtk::Label>>,
+    /// Every selection while there are several, `(anchor, head)` in
+    /// UTF-16 units, the newest last — which is the buffer's own; None
+    /// with one.
+    carets: RefCell<Option<Vec<(usize, usize)>>>,
+    /// The other carets, drawn over the view in buffer coordinates.
+    caret_marks: RefCell<Vec<gtk::DrawingArea>>,
+    /// A caret command's edits or selection are on their way through
+    /// the buffer, which is not a click or a key for one caret.
+    applying_carets: Cell<bool>,
     /// Counts edits and requests, so an answer about text that has
     /// since changed is dropped.
     inlay_asked: Cell<u64>,
@@ -407,6 +416,9 @@ impl Page {
             symbol_uses_asked: Cell::new(0),
             fix_asked: Cell::new(0),
             inlay_labels: RefCell::new(Vec::new()),
+            carets: RefCell::new(None),
+            caret_marks: RefCell::new(Vec::new()),
+            applying_carets: Cell::new(false),
             inlay_asked: Cell::new(0),
             completion: CompletionState {
                 popover: completion_popover,
@@ -437,6 +449,7 @@ impl Page {
             });
         }
         install_escape(&page);
+        install_carets(&page);
         install_completion_keys(&page);
         install_snippet_keys(&page);
         install_change_bar(&page);
@@ -3940,10 +3953,208 @@ pub fn back_out_one_level(page: &Rc<Page>) -> bool {
         // The marks go, and only the marks: the selection stays, so the
         // word is still there to act on.
         clear_occurrences(page);
+    } else if page.carets.borrow().is_some() {
+        // The newest caret stays, where the buffer's own already is.
+        drop_extra_carets(page);
     } else {
         return false;
     }
     true
+}
+
+// MARK: Several carets
+
+const EXTRA_SELECTION_TAG: &str = "extra-selection";
+
+/// While there are several carets, the keys that type, delete and move
+/// go to every one; any other key is about one caret, the newest, and
+/// the others go. A click moves the buffer's own caret, which also
+/// leaves one.
+fn install_carets(page: &Rc<Page>) {
+    let tag = gtk::TextTag::builder().name(EXTRA_SELECTION_TAG).background("rgba(53,132,228,0.35)").build();
+    page.buffer.tag_table().add(&tag);
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let weak = Rc::downgrade(page);
+    keys.connect_key_pressed(move |_, key, _, modifiers| {
+        let Some(page) = weak.upgrade() else { return glib::Propagation::Proceed };
+        if caret_key(&page, key, modifiers) {
+            glib::Propagation::Stop
+        } else {
+            glib::Propagation::Proceed
+        }
+    });
+    page.view.add_controller(keys);
+    let weak = Rc::downgrade(page);
+    page.buffer.connect_mark_set(move |buffer, _, mark| {
+        let Some(page) = weak.upgrade() else { return };
+        if mark == &buffer.get_insert() && !page.applying_carets.get() && page.carets.borrow().is_some() {
+            drop_extra_carets(&page);
+        }
+    });
+}
+
+/// A key while there are several carets: true when it went to every
+/// one of them.
+pub(crate) fn caret_key(page: &Rc<Page>, key: gtk::gdk::Key, modifiers: gtk::gdk::ModifierType) -> bool {
+    use gtk::gdk::{Key, ModifierType};
+    if page.carets.borrow().is_none() {
+        return false;
+    }
+    let command = modifiers.intersects(ModifierType::CONTROL_MASK | ModifierType::ALT_MASK | ModifierType::SUPER_MASK);
+    let extend = modifiers.contains(ModifierType::SHIFT_MASK);
+    if command && modifiers.contains(ModifierType::CONTROL_MASK) && (key == Key::v || key == Key::V) {
+        // Pasted at every caret, once the clipboard answers.
+        let weak = Rc::downgrade(page);
+        page.view.clipboard().read_text_async(None::<&gtk::gio::Cancellable>, move |text| {
+            if let (Some(page), Ok(Some(text))) = (weak.upgrade(), text) {
+                caret_command(&page, "insert", Some(text.as_str()), false);
+            }
+        });
+        return true;
+    }
+    let (op, text): (&str, Option<String>) = match key {
+        _ if command => ("", None),
+        Key::BackSpace => ("backspace", None),
+        Key::Delete | Key::KP_Delete => ("delete", None),
+        Key::Return | Key::KP_Enter => ("insert", Some("\n".to_owned())),
+        Key::Tab => ("insert", Some("\t".to_owned())),
+        Key::Left | Key::KP_Left => ("left", None),
+        Key::Right | Key::KP_Right => ("right", None),
+        Key::Up | Key::KP_Up => ("up", None),
+        Key::Down | Key::KP_Down => ("down", None),
+        Key::Home | Key::KP_Home => ("home", None),
+        Key::End | Key::KP_End => ("end", None),
+        _ => match key.to_unicode().filter(|c| !c.is_control()) {
+            Some(c) => ("insert", Some(c.to_string())),
+            None => ("", None),
+        },
+    };
+    if op.is_empty() {
+        // A modifier on its way to a chord is not a key yet.
+        let modifier_only = matches!(
+            key,
+            Key::Shift_L | Key::Shift_R | Key::Control_L | Key::Control_R | Key::Alt_L | Key::Alt_R | Key::Super_L | Key::Super_R
+        );
+        if !modifier_only {
+            drop_extra_carets(page);
+        }
+        return false;
+    }
+    let motion = text.is_none() && !matches!(op, "backspace" | "delete");
+    caret_command(page, op, text.as_deref(), motion && extend);
+    true
+}
+
+/// The caret command or keystroke `op` at every selection: its edits
+/// made through the buffer as one undo group, then the carets shown
+/// where the core says. False when it had nothing to do.
+pub(crate) fn caret_command(page: &Rc<Page>, op: &str, text: Option<&str>, extend: bool) -> bool {
+    let buffer = &page.buffer;
+    let current = page.carets.borrow().clone().unwrap_or_else(|| {
+        let anchor = buffer.iter_at_mark(&buffer.selection_bound()).offset();
+        let head = buffer.iter_at_mark(&buffer.get_insert()).offset();
+        vec![(utf16_offset(buffer, anchor), utf16_offset(buffer, head))]
+    });
+    let request = serde_json::json!({
+        "selections": current.iter().map(|(anchor, head)| [*anchor, *head]).collect::<Vec<_>>(),
+        "op": op,
+        "text": text,
+        "extend": extend,
+    })
+    .to_string();
+    let answer = page.state.borrow().document.carets_json(&request);
+    let Ok(answer) = serde_json::from_str::<serde_json::Value>(&answer) else { return false };
+    if answer.is_null() {
+        return false;
+    }
+    let edits = answer["edits"].as_array().cloned().unwrap_or_default();
+    page.applying_carets.set(true);
+    if !edits.is_empty() {
+        // Back to front, so the offsets in the text as it was hold for
+        // every edit. No borrow is held across the buffer calls: their
+        // handlers take the document themselves.
+        let before = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+        page.state.borrow_mut().document.begin_edit_group();
+        for edit in &edits {
+            let start = char_offset(&before, edit["start"].as_u64().unwrap_or(0) as usize);
+            let end = char_offset(&before, edit["end"].as_u64().unwrap_or(0) as usize);
+            let mut from = buffer.iter_at_offset(start);
+            let mut to = buffer.iter_at_offset(end);
+            buffer.delete(&mut from, &mut to);
+            let inserted = edit["text"].as_str().unwrap_or_default();
+            if !inserted.is_empty() {
+                let mut at = buffer.iter_at_offset(start);
+                buffer.insert(&mut at, inserted);
+            }
+        }
+        page.state.borrow_mut().document.end_edit_group();
+    }
+    let selections: Vec<(usize, usize)> = answer["selections"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|pair| Some((pair[0].as_u64()? as usize, pair[1].as_u64()? as usize)))
+        .collect();
+    show_carets(page, &selections);
+    page.applying_carets.set(false);
+    true
+}
+
+/// The buffer's selection on the newest, scrolled to; the others drawn.
+fn show_carets(page: &Rc<Page>, selections: &[(usize, usize)]) {
+    let Some(&(anchor, head)) = selections.last() else { return };
+    let buffer = &page.buffer;
+    let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+    let iter = |utf16: usize| buffer.iter_at_offset(char_offset(&text, utf16));
+    clear_caret_marks(page);
+    *page.carets.borrow_mut() = (selections.len() > 1).then(|| selections.to_vec());
+    buffer.select_range(&iter(head), &iter(anchor));
+    page.view.scroll_mark_onscreen(&buffer.get_insert());
+    let mut marks = Vec::new();
+    for &(anchor, head) in &selections[..selections.len() - 1] {
+        if anchor != head {
+            buffer.apply_tag_by_name(EXTRA_SELECTION_TAG, &iter(anchor.min(head)), &iter(anchor.max(head)));
+        }
+        let place = page.view.iter_location(&iter(head));
+        let caret = gtk::DrawingArea::new();
+        caret.set_content_width(2);
+        caret.set_content_height(place.height().max(1));
+        caret.set_can_target(false);
+        caret.set_draw_func(|area, context, width, height| {
+            let colour = area.color();
+            context.set_source_rgba(
+                colour.red() as f64,
+                colour.green() as f64,
+                colour.blue() as f64,
+                colour.alpha() as f64,
+            );
+            context.rectangle(0.0, 0.0, width as f64, height as f64);
+            let _ = context.fill();
+        });
+        page.view.add_overlay(&caret, place.x(), place.y());
+        marks.push(caret);
+    }
+    *page.caret_marks.borrow_mut() = marks;
+}
+
+fn clear_caret_marks(page: &Rc<Page>) {
+    for caret in page.caret_marks.borrow_mut().drain(..) {
+        page.view.remove(&caret);
+    }
+    let buffer = &page.buffer;
+    buffer.remove_tag_by_name(EXTRA_SELECTION_TAG, &buffer.start_iter(), &buffer.end_iter());
+}
+
+/// Back to one caret: the buffer's own, the newest.
+pub fn drop_extra_carets(page: &Rc<Page>) {
+    *page.carets.borrow_mut() = None;
+    clear_caret_marks(page);
+}
+
+/// The selections while there are several, for the smoke test.
+pub(crate) fn carets(page: &Rc<Page>) -> Option<Vec<(usize, usize)>> {
+    page.carets.borrow().clone()
 }
 
 /// Puts the balloon away and gives the keyboard back to the text, if

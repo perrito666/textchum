@@ -1823,6 +1823,28 @@ pub unsafe extern "C" fn tc_document_last_edit_before(
     true
 }
 
+/// Several carets: `request` is `{selections: [[anchor, head]], op}` in
+/// UTF-16 units, the newest selection last; the answer is `{selections,
+/// edits: [{start, end, text}]}`, the edits back to front, to be made
+/// as one undo group; `null` when the command has nothing to do. See
+/// [`textchum_core::carets::request_json`]. Free with
+/// [`tc_string_free`].
+///
+/// # Safety
+/// `document` must be a live document pointer; `request` must point to
+/// `request_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_carets(
+    document: *const TcDocument,
+    request: *const c_char,
+    request_len: usize,
+) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else { return std::ptr::null_mut() };
+    let Some(request) = (unsafe { str_from_raw(request, request_len) }) else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(document.inner.carets_json(request))))
+        .unwrap_or(std::ptr::null_mut())
+}
+
 /// The saved versions local history keeps of the document's file:
 /// `[{id, time, size, added, removed}]`, newest first, `time` in
 /// milliseconds since the epoch, `added` and `removed` the lines

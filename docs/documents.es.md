@@ -52,6 +52,33 @@ Las operaciones compuestas se registran como grupos explícitos: Reemplazar
 todo reescribe cada coincidencia pero se deshace como un solo paso, y una
 recarga desde disco (más abajo) también es un solo paso.
 
+## Varios cursores
+
+**Añadir la siguiente aparición** (⌃G, Alt+J en Linux) selecciona la
+palabra del cursor; pulsado otra vez, añade la siguiente coincidencia de
+lo seleccionado como una selección propia, dando la vuelta al final del
+archivo — solo palabras enteras cuando la selección es una palabra
+entera. **Añadir cursor arriba** y **abajo** (⌃⇧↑ y ⌃⇧↓, Alt+Mayús+Arriba
+y Abajo en Linux) añaden un cursor en la línea siguiente hacia arriba o
+hacia abajo, en la columna del primer cursor o al final de la línea si es
+más corta. Los tres están en el menú Edit y se pueden reasignar como
+`addNextOccurrence`, `addCaretAbove` y `addCaretBelow`.
+
+Con varios cursores, escribir, pegar, Retroceso, Suprimir, Retorno y
+Tabulador ocurren en cada uno, como un solo paso de deshacer; las
+flechas, Inicio y Fin mueven todos los cursores, y con Mayús extienden
+todas las selecciones. Los cursores que se encuentran se vuelven uno.
+Escape, cuando no queda nada más que cerrar, deja solo el cursor más
+nuevo; también un clic, o cualquier otra orden, que trata de un solo
+cursor.
+
+Todavía no: una columna de cursores se hace línea a línea, no
+arrastrando; Retorno y Tabulador con varios cursores insertan un salto
+de línea y un tabulador simples, sin la sangría que recibe un solo
+cursor; los movimientos por palabra y las demás órdenes dejan solo el
+cursor más nuevo; y en Linux el texto compuesto por un método de entrada
+va solo al cursor más nuevo.
+
 ## Plegado
 
 **Fold** (Ctrl+[) pliega el bloque que abre la línea del cursor; la

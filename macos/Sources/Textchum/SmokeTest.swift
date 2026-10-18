@@ -3243,6 +3243,51 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     print("local history ok (each save kept, the replaced one too, what restoring changes, restored as an edit)")
+
+    // Several carets: the word, then each next match; typing goes to
+    // every one as one undo; a caret below; Escape leaves the newest.
+    do {
+        let caretCore = CoreDocument()
+        let caretBench = Workbench(sidebar: nil)
+        let caretController = DocumentController(document: caretCore)
+        caretBench.add(caretController)
+        guard let caretView = caretController.primaryView as? EditorTextView else {
+            print("FAIL: no view for carets")
+            return 1
+        }
+        caretView.insertText("item = item + items\nab\nab\n", replacementRange: NSRange(location: 0, length: 0))
+        caretView.setSelectedRange(NSRange(location: 1, length: 0))
+        caretController.addNextOccurrence(nil)
+        caretController.addNextOccurrence(nil)
+        let picked = caretController.carets ?? []
+        guard picked == [[0, 4], [7, 11]], caretView.extraCarets == [NSRange(location: 0, length: 4)] else {
+            print("FAIL: Add Next Occurrence picked \(picked), drew \(caretView.extraCarets)")
+            return 1
+        }
+        // Typed into the view as a key would, it reaches every caret.
+        caretView.insertText("x", replacementRange: caretView.selectedRange())
+        let typed = caretView.string
+        caretController.performUndo(nil)
+        let undone = caretView.string
+        guard typed.hasPrefix("x = x + items"), caretCore.text == undone, undone.hasPrefix("item = item + items") else {
+            print("FAIL: typing at the carets gave \(typed.debugDescription), one undo \(undone.debugDescription)")
+            return 1
+        }
+        caretView.setSelectedRange(NSRange(location: 21, length: 0))
+        caretController.addCaretBelow(nil)
+        _ = caretController.textView(caretView, doCommandBy: #selector(NSResponder.deleteBackward(_:)))
+        guard caretView.string.hasSuffix("\nb\nb\n"), caretController.carets?.count == 2 else {
+            print("FAIL: Backspace at a column of carets gave \(caretView.string.debugDescription)")
+            return 1
+        }
+        _ = caretController.backOutOneLevel()
+        guard caretController.carets == nil, caretView.extraCarets.isEmpty else {
+            print("FAIL: Escape left \(String(describing: caretController.carets))")
+            return 1
+        }
+        caretBench.window?.close()
+    }
+    print("several carets ok (the word, its next match, typed at each as one undo, a column, Escape)")
     pinBench.window?.close()
 
     // With the find bar open, the pins move below it: a search field

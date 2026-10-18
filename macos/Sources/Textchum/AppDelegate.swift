@@ -1774,6 +1774,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.goToNextFinding(_:)): "nextFinding",
             #selector(DocumentController.expandSelection(_:)): "expandSelection",
             #selector(DocumentController.shrinkSelection(_:)): "shrinkSelection",
+            #selector(DocumentController.addNextOccurrence(_:)): "addNextOccurrence",
+            #selector(DocumentController.addCaretAbove(_:)): "addCaretAbove",
+            #selector(DocumentController.addCaretBelow(_:)): "addCaretBelow",
             #selector(DocumentController.goToPreviousFinding(_:)): "previousFinding",
             #selector(DocumentController.showDiagnosticList(_:)): "diagnosticList",
             #selector(DocumentController.goToLine(_:)): "goToLine",
@@ -3619,6 +3622,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         shrink.keyEquivalentModifierMask = [.option]
         editMenu.addItem(shrink)
+        let nextOccurrence = NSMenuItem(
+            title: t("Add Next Occurrence"),
+            action: #selector(DocumentController.addNextOccurrence(_:)),
+            keyEquivalent: "g"
+        )
+        nextOccurrence.keyEquivalentModifierMask = [.control]
+        editMenu.addItem(nextOccurrence)
+        let caretAbove = NSMenuItem(
+            title: t("Add Caret Above"),
+            action: #selector(DocumentController.addCaretAbove(_:)),
+            keyEquivalent: String(UnicodeScalar(NSUpArrowFunctionKey)!)
+        )
+        caretAbove.keyEquivalentModifierMask = [.control, .shift]
+        editMenu.addItem(caretAbove)
+        let caretBelow = NSMenuItem(
+            title: t("Add Caret Below"),
+            action: #selector(DocumentController.addCaretBelow(_:)),
+            keyEquivalent: String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        )
+        caretBelow.keyEquivalentModifierMask = [.control, .shift]
+        editMenu.addItem(caretBelow)
         let complete = NSMenuItem(
             title: t("Complete"),
             action: #selector(DocumentController.triggerCompletion(_:)),
