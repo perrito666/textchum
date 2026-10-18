@@ -104,6 +104,13 @@ Ordered roughly by how much daily pain each gap causes.
     each type with its name, and leaves parameter names out. A widget
     anchored in the buffer would be text; a Pango shape attribute on a
     tag might do it, and is the thing to try.
+21. **Toggle Full Paths' Ctrl+Alt+T under Ubuntu's GNOME.** Ubuntu's
+    session binds Ctrl+Alt+T to opening a terminal, and the desktop
+    takes the key before the editor sees it, so there the toggle is
+    reachable only from the menu, the palette, or a key given to
+    `togglePathDisplay` in Settings ▸ Keyboard. Upstream GNOME binds
+    nothing to it. Every other free Ctrl+Alt letter is a candidate for
+    a default that works everywhere; none has been picked yet.
 
 ## Behavioral differences that are choices, not gaps
 
@@ -126,6 +133,12 @@ Ordered roughly by how much daily pain each gap causes.
   sibling-view scar tissue.
 - The shell links the core as a crate: no FFI ceremony, no header to
   drift.
+- A key answers to one command: when a profile or a `keys` override
+  puts a command on another's default key, that command gives the key
+  up (`accels_in_force`), and of a profile's `ctrl` and `cmd` bindings
+  that land on one key here, `cmd` keeps it. The macOS shell applies
+  bindings one by one and a shared key reaches only one menu item; the
+  same rule belongs there, against its own defaults.
 
 ## Where this stands
 

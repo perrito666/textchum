@@ -571,6 +571,16 @@ to modify a bundled preset, since those ship with the build. Saved
 profiles live in `key_profiles`, and one that reuses a bundled name
 replaces it.
 
+A key answers to one command. When a profile or an override puts a
+command on a key another command has by default, that other command
+gives the key up and its field is left blank: a profile that puts
+`new` on `cmd+n` means Ctrl+N opens a tab, not a window. On Linux,
+where `cmd` and `ctrl` are the same key, a profile that names both for
+one letter — `cmd+g` for `findNext`, `ctrl+g` for `goToLine` — leaves
+the key to the `cmd` binding, and the other command keeps its own
+shortcut. The macOS build does not settle these yet: a key two
+commands share there reaches only one of them.
+
 The file spells the overrides as a `keys` section: an object of action
 names to `modifiers+key` specs, applied over the profile.
 

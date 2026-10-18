@@ -596,6 +596,16 @@ modificar un preajuste, que viene con la compilación. Los perfiles
 guardados viven en `key_profiles`, y uno que reutilice un nombre
 incluido lo reemplaza.
 
+Una tecla responde a una sola orden. Cuando un perfil o una anulación
+pone una orden en una tecla que otra tiene por defecto, esa otra orden
+la cede y su campo queda vacío: un perfil que pone `new` en `cmd+n`
+quiere que Ctrl+N abra una pestaña, no una ventana. En Linux, donde
+`cmd` y `ctrl` son la misma tecla, un perfil que nombra las dos para
+una letra — `cmd+g` para `findNext`, `ctrl+g` para `goToLine` — deja la
+tecla a la asignación con `cmd`, y la otra orden conserva su propio
+atajo. La versión para macOS todavía no resuelve estos casos: allí una
+tecla que comparten dos órdenes solo llega a una de ellas.
+
 El archivo escribe las anulaciones como una sección `keys`: un objeto
 de nombres de acción a especificaciones `modificadores+tecla`, aplicado
 sobre el perfil.

@@ -607,6 +607,17 @@ tous. **Save as profile** transforme ce qui est en vigueur en un profil
 fournis avec la compilation. Les profils enregistrés vivent dans
 `key_profiles`, et un profil qui reprend un nom fourni le remplace.
 
+Une touche répond à une seule commande. Quand un profil ou un
+remplacement place une commande sur une touche qu'une autre a par
+défaut, cette autre commande la cède et son champ reste vide : un
+profil qui met `new` sur `cmd+n` veut que Ctrl+N ouvre un onglet, pas
+une fenêtre. Sous Linux, où `cmd` et `ctrl` sont la même touche, un
+profil qui nomme les deux pour une lettre — `cmd+g` pour `findNext`,
+`ctrl+g` pour `goToLine` — laisse la touche au raccourci en `cmd`, et
+l'autre commande garde le sien. La version macOS ne règle pas encore
+ces cas : une touche partagée par deux commandes n'y atteint que l'une
+d'elles.
+
 Le fichier écrit les remplacements dans une section `keys` : un objet
 de noms d'action vers des spécifications `modificateurs+touche`,
 appliqué par-dessus le profil.
