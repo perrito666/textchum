@@ -2141,6 +2141,18 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         }
         println!("test results ok (listed by suite, counted, a test shows its line, run alone, the failed run again)");
 
+        // The notification area shows a notice's first line; the whole
+        // of it is a click away.
+        {
+            workbench.set_notice("cargo is not installed\nInstall it from rustup.rs");
+            let shown = workbench.notice_text();
+            if shown != "cargo is not installed" {
+                eprintln!("FAIL: the notification area showed {shown:?}");
+                return 1;
+            }
+        }
+        println!("notification area ok (the first line of a notice)");
+
         // What can be run is marked in the gutter: a main and a test in
         // a Cargo package, each with the command that runs just it.
         {
@@ -2379,6 +2391,27 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                     return 1;
                 }
                 println!("wrapping ok (delimiters nest, letters do not wrap)");
+
+                // An opener typed brings its closer when asked to, the
+                // caret between them; off, it is only itself.
+                {
+                    let shell = shell::Shell::instance();
+                    let was = shell.config.borrow().auto_close_pairs();
+                    let paren = gtk::gdk::Key::from_name("parenleft").expect("a key");
+                    shell.config.borrow_mut().set_auto_close_pairs(true);
+                    buffer.set_text("");
+                    let closed = crate::page::close_pair_for_test(&page, paren);
+                    let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+                    let caret = buffer.iter_at_mark(&buffer.get_insert()).offset();
+                    shell.config.borrow_mut().set_auto_close_pairs(false);
+                    let left_alone = !crate::page::close_pair_for_test(&page, paren);
+                    shell.config.borrow_mut().set_auto_close_pairs(was);
+                    if !closed || text != "()" || caret != 1 || !left_alone {
+                        eprintln!("FAIL: auto-close gave {text:?}, caret {caret}, off left alone {left_alone}");
+                        return 1;
+                    }
+                }
+                println!("auto-close ok (an opener brings its closer, the caret between, off when told)");
 
                 // Code's own word boundaries, and a closer that takes
                 // its opener's indentation.
