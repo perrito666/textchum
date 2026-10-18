@@ -178,7 +178,8 @@ Vim — grupos `\(` `\)`, `\|`, `\+`, `\?`, `\{n,m}`, `\<` `\>`, `\v` y
 coincidencia, `\n`, y `\u` `\l` `\U` `\L` `\E` para las mayúsculas. ⏎
 en el patrón va a la siguiente coincidencia, ⇧⏎ a la anterior, ⏎ en el
 reemplazo reemplaza la actual y sigue; Todo reemplaza todas como un
-solo paso de deshacer.
+solo paso de deshacer. ⎋, en la barra o en el texto, guarda la barra y
+sus marcas y deja el teclado en el texto.
 
 **Ir a la línea** (⌘L, Ctrl+L en Linux) acepta un número, o el
 `src/main.rs:412:8` entero pegado desde un registro de compilación —

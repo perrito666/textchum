@@ -263,7 +263,5 @@ What breaks these rules today, each to be fixed under its own issue:
 - **12.3** Completion ranked by the server's order alone and without
   documentation beside it.
 - **13.2** Go to Symbol lists no recent symbols with nothing typed.
-- **2.1** On Linux, Escape in the text does not close the find bar,
-  which belongs to the window rather than the document.
 - **Linux** Inlay hints are gathered after the line, not inside it
   (see `PLAN_linux.md`).

@@ -3658,13 +3658,12 @@ fn schedule_hover_close(page: &Rc<Page>) {
     });
 }
 
-/// Shows hover documentation for the symbol under the caret — works
-/// even with mouse hover switched off; this is the deliberate ask.
 /// Escape, from the text: the topmost transient thing goes, one per
 /// press, in the order INTERACTION.md gives it (2.1) — the completion
 /// list, a hint, the balloon (which also holds the signature here), a
-/// snippet's stops, the marks of a name's uses. Never the caret, never
-/// the document (2.2). False when there was nothing to close.
+/// snippet's stops, the window's find bar, the marks of a name's uses.
+/// Never the caret, never the document (2.2). False when there was
+/// nothing to close.
 pub fn back_out_one_level(page: &Rc<Page>) -> bool {
     if page.completion.popover.is_visible() {
         page.completion.popover.popdown();
@@ -3676,6 +3675,9 @@ pub fn back_out_one_level(page: &Rc<Page>) -> bool {
         // The keys are given back where the caret is, rather than the
         // caret jumping to the end of the snippet.
         page.state.borrow_mut().document.cancel_snippet();
+    } else if crate::workbench::Workbench::close_find_bar_for(page) {
+        // The find bar belongs to the window, not to this text, but it
+        // is the next thing up from here.
     } else if has_occurrences(page) {
         // The marks go, and only the marks: the selection stays, so the
         // word is still there to act on.
@@ -3751,6 +3753,8 @@ fn install_escape(page: &Rc<Page>) {
     }
 }
 
+/// Shows hover documentation for the symbol under the caret — works
+/// even with mouse hover switched off; this is the deliberate ask.
 pub fn hover_at_caret(page: &Rc<Page>) {
     // Asked again while it is up: the keyboard goes inside (1.3).
     if enter_hover(page) {
