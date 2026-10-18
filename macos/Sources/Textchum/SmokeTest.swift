@@ -956,6 +956,19 @@ func runSmokeTest() -> Int32 {
         let folder = CoreMemory.option(key: "folder.open", root: memoryRoot, directory: memoryDir, inProject: false)
         let order = CoreMemory.recentFirst(["File › Open", "File › Save", "Edit › Format"], recent: recent)
         CoreMemory.setOption(key: "folder.open", value: nil, root: memoryRoot, directory: memoryDir, inProject: false)
+        // A symbol gone to is listed again where its name stands now,
+        // once however often it was chosen.
+        let symbolFile = memoryRoot + "/lib.rs"
+        try? "// moved\nstruct Server;\n".write(toFile: symbolFile, atomically: true, encoding: .utf8)
+        let server = CoreSymbol(
+            name: "Server", kind: "struct", container: "", path: symbolFile, line: 0, character: 0)
+        CoreSymbols.noteRecent(server, root: memoryRoot, directory: memoryDir, inProject: false)
+        CoreSymbols.noteRecent(server, root: memoryRoot, directory: memoryDir, inProject: false)
+        let symbols = CoreSymbols.recent(root: memoryRoot, directory: memoryDir, inProject: false)
+        guard symbols.map(\.line) == [1], symbols.first?.character == 7 else {
+            print("FAIL: recent symbols: \(symbols)")
+            return 1
+        }
         guard recent == ["File › Save", "Edit › Format"], folder as? String == "/tmp/somewhere",
             order == [1, 2, 0],
             CoreMemory.option(key: "folder.open", root: memoryRoot, directory: memoryDir, inProject: false) == nil
@@ -965,7 +978,7 @@ func runSmokeTest() -> Int32 {
         }
         try? FileManager.default.removeItem(atPath: memoryDir)
     }
-    print("project memory ok (recent choices first and once, options kept and forgotten)")
+    print("project memory ok (recent choices first and once, options kept and forgotten, symbols found where they moved)")
 
     // A list with a filter field opens with the caret in the field and
     // its first item selected. Return there chooses that item, and the

@@ -65,6 +65,18 @@ enum ProjectState {
             inProject: inProject && projectRoot != nil)
     }
 
+    static func recentSymbols(projectRoot: String?) -> [CoreSymbol] {
+        CoreSymbols.recent(
+            root: memoryRoot(projectRoot), directory: directory.path,
+            inProject: inProject && projectRoot != nil)
+    }
+
+    static func noteRecentSymbol(_ symbol: CoreSymbol, projectRoot: String?) {
+        CoreSymbols.noteRecent(
+            symbol, root: memoryRoot(projectRoot), directory: directory.path,
+            inProject: inProject && projectRoot != nil)
+    }
+
     static func option(_ key: String, projectRoot: String?) -> Any? {
         CoreMemory.option(
             key: key, root: memoryRoot(projectRoot), directory: directory.path,

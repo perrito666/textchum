@@ -876,11 +876,15 @@ msgid "fuzzy file name…"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
-msgid "symbol name…"
+msgid "Type part of a symbol's name."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
-msgid "Type part of a symbol's name."
+msgid "Symbols gone to lately."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "symbol name…"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift

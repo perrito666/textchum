@@ -115,6 +115,19 @@ pub fn recent(kind: &str, project_root: Option<&str>) -> Vec<String> {
         .to_vec()
 }
 
+/// A project's recent symbols, most recent first, each where its name
+/// stands in its file now.
+pub fn recent_symbols(project_root: Option<&str>) -> Vec<textchum_core::symbols::Symbol> {
+    let (root, in_project) = memory_record(project_root);
+    textchum_core::symbols::recent(&root, &project_state_dir(), in_project)
+}
+
+/// Puts `symbol` first among a project's recent symbols, once.
+pub fn note_recent_symbol(symbol: &textchum_core::symbols::Symbol, project_root: Option<&str>) {
+    let (root, in_project) = memory_record(project_root);
+    let _ = textchum_core::symbols::remember(&root, &project_state_dir(), in_project, symbol);
+}
+
 /// One of a project's options, as the JSON it was written as.
 pub fn memory_option(key: &str, project_root: Option<&str>) -> Option<serde_json::Value> {
     let (root, in_project) = memory_record(project_root);
