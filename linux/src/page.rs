@@ -1669,9 +1669,11 @@ pub fn parse_completion_items(json: &str) -> Vec<Completion> {
         .iter()
         .filter_map(|item| {
             let label = item["label"].as_str()?.to_string();
-            let insert = item["insertText"]
+            // The protocol ignores `insertText` when there is a
+            // `textEdit`, and servers that send both mean the edit's.
+            let insert = item["textEdit"]["newText"]
                 .as_str()
-                .or_else(|| item["textEdit"]["newText"].as_str())
+                .or_else(|| item["insertText"].as_str())
                 .unwrap_or(&label)
                 .to_string();
             let is_snippet = match item["insertTextFormat"].as_u64() {
@@ -1754,6 +1756,20 @@ mod snippet_tests {
         assert_eq!(items[0].additional_edits[0].new_text, "use std::dbg;\n");
         let insert = items[1].edit.as_ref().unwrap();
         assert_eq!((insert.start_character, insert.end_character), (2, 4));
+    }
+
+    #[test]
+    fn a_text_edit_wins_over_insert_text() {
+        let json = r#"[{
+            "label": "not", "insertText": "!",
+            "textEdit": {"range": {"start": {"line": 2, "character": 4}, "end": {"line": 2, "character": 9}}, "newText": "!${1:ready}$0"}
+        }, {
+            "label": "bare", "insertText": "bare()"
+        }]"#;
+        let items = parse_completion_items(json);
+        assert_eq!((&items[0].insert[..], items[0].is_snippet), ("!${1:ready}$0", true));
+        assert_eq!(items[0].edit.as_ref().unwrap().new_text, items[0].insert);
+        assert_eq!((&items[1].insert[..], items[1].is_snippet), ("bare()", false));
     }
 
     #[test]
