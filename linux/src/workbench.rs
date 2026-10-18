@@ -324,6 +324,7 @@ impl Workbench {
         file_section.append(Some(&tr("Save")), Some("win.save"));
         file_section.append(Some(&tr("Save As…")), Some("win.save-as"));
         file_section.append(Some(&tr("Revert to Saved")), Some("win.revert"));
+        file_section.append(Some(&tr("Local History…")), Some("win.local-history"));
         let edit_section = gtk::gio::Menu::new();
         edit_section.append(Some(&tr("Undo")), Some("win.undo"));
         edit_section.append(Some(&tr("Redo")), Some("win.redo"));
@@ -3250,6 +3251,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             )),
         }
     });
+    add("local-history", workbench, |workbench, _| show_local_history(workbench));
     add("revert", workbench, |workbench, _| {
         let Some(page) = workbench.selected() else { return };
         if page.path().borrow().is_none() {
@@ -3904,6 +3906,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Save", "win.save"),
     ("Save As…", "win.save-as"),
     ("Revert to Saved", "win.revert"),
+    ("Local History…", "win.local-history"),
     ("Undo", "win.undo"),
     ("Redo", "win.redo"),
     ("Find…", "win.find"),
@@ -5160,6 +5163,7 @@ fn show_places_at(
                 label: describe(reference),
                 heading: (at == 0).then(|| format!("Code ({})", code.len())),
                 place: Some((reference.0.clone(), reference.1)),
+                diff: None,
             });
         }
         for (at, reference) in tests.iter().enumerate() {
@@ -5167,6 +5171,7 @@ fn show_places_at(
                 label: describe(reference),
                 heading: (at == 0).then(|| format!("Tests ({})", tests.len())),
                 place: Some((reference.0.clone(), reference.1)),
+                diff: None,
             });
         }
         // The order the labels are in is the order the rows must be in.
@@ -5270,6 +5275,9 @@ struct PickerRow {
     /// Where the row goes, for a list of places: the file and the
     /// zero-based line, shown beside the list while the row is selected.
     place: Option<(String, i32)>,
+    /// What choosing the row would change, for a list of versions: asked
+    /// for when the row is selected, and shown as a diff in its place.
+    diff: Option<Rc<dyn Fn() -> String>>,
 }
 
 /// Every label as a row, for pickers with nothing to divide.
@@ -5280,6 +5288,7 @@ fn picker_items(labels: Vec<String>) -> Vec<PickerRow> {
             label,
             heading: None,
             place: None,
+            diff: None,
         })
         .collect()
 }
@@ -5289,8 +5298,83 @@ fn picker_places(labels: Vec<String>, places: Vec<Option<(String, i32)>>) -> Vec
     labels
         .into_iter()
         .zip(places)
-        .map(|(label, place)| PickerRow { label, heading: None, place })
+        .map(|(label, place)| PickerRow { label, heading: None, place, diff: None })
         .collect()
+}
+
+/// When a version was kept, as the locale writes a date and a time.
+fn history_time(milliseconds: f64) -> String {
+    glib::DateTime::from_unix_local((milliseconds / 1000.0) as i64)
+        .and_then(|time| time.format("%x %X"))
+        .map(|text| text.to_string())
+        .unwrap_or_default()
+}
+
+/// The saved versions kept of `page`'s file, newest first, as picker
+/// rows that show what restoring each would change; with each, its id
+/// and when it was kept.
+pub(crate) fn local_history_rows(page: &Rc<Page>) -> (Vec<String>, Vec<(String, String)>, Vec<Rc<dyn Fn() -> String>>) {
+    let json = page.state.borrow().document.local_history_json();
+    let versions: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap_or_default();
+    let mut labels = Vec::new();
+    let mut kept = Vec::new();
+    let mut diffs: Vec<Rc<dyn Fn() -> String>> = Vec::new();
+    for version in versions {
+        let id = version["id"].as_str().unwrap_or_default().to_owned();
+        let (added, removed) = (version["added"].as_u64().unwrap_or(0), version["removed"].as_u64().unwrap_or(0));
+        let changes = if added == 0 && removed == 0 { tr("the same as now") } else { format!("+{added} −{removed}") };
+        let time = history_time(version["time"].as_f64().unwrap_or(0.0));
+        labels.push(format!("{time}    {changes}"));
+        let weak = Rc::downgrade(page);
+        let diff_id = id.clone();
+        diffs.push(Rc::new(move || {
+            weak.upgrade()
+                .and_then(|page| page.state.borrow().document.local_history_diff(&diff_id))
+                .unwrap_or_default()
+        }));
+        kept.push((id, time));
+    }
+    (labels, kept, diffs)
+}
+
+/// File → Local History…: the saved versions kept of the file in front,
+/// newest first, each beside what restoring it would change. Choosing
+/// one puts its text in the buffer as one edit, which Undo takes back
+/// and Save keeps.
+fn show_local_history(workbench: &Rc<Workbench>) {
+    let Some(page) = workbench.selected() else { return };
+    if page.path().borrow().is_none() {
+        workbench.hint(&tr("Local history keeps the versions of saved files: save this one first."));
+        return;
+    }
+    let (labels, kept, diffs) = local_history_rows(&page);
+    if labels.is_empty() {
+        workbench.hint(&tr("No saved versions of this file are kept yet: they are kept from its next save."));
+        return;
+    }
+    let rows = labels
+        .into_iter()
+        .zip(diffs)
+        .map(|(label, diff)| PickerRow { label, heading: None, place: None, diff: Some(diff) })
+        .collect();
+    let weak = Rc::downgrade(&page);
+    present_picker(workbench, &tr("Local History"), rows, move |workbench, index| {
+        if let (Some(page), Some((id, time))) = (weak.upgrade(), kept.get(index)) {
+            restore_local_version(workbench, &page, id, time);
+        }
+    });
+}
+
+/// Puts version `id` of `page`'s file in the buffer, as one edit.
+pub(crate) fn restore_local_version(workbench: &Rc<Workbench>, page: &Rc<Page>, id: &str, time: &str) {
+    let text = page.state.borrow().document.local_history_text(id);
+    match text {
+        Some(text) => {
+            page::apply_whole_document(page, &text);
+            workbench.hint(&fill(&tr("Restored the version of {}: Undo takes it back."), &[time]));
+        }
+        None => workbench.hint(&tr("That version is no longer kept.")),
+    }
 }
 
 /// The view a list of places shows the selected one in (3.5).
@@ -5303,7 +5387,31 @@ pub(crate) fn place_preview() -> gtk::TextView {
     preview.set_top_margin(8);
     let mark = gtk::TextTag::builder().name("place").paragraph_background("rgba(53,132,228,0.25)").build();
     preview.buffer().tag_table().add(&mark);
+    for (name, colour) in [("added", "#26a269"), ("removed", "#c01c28"), ("hunk", "#8a8a8a")] {
+        preview.buffer().tag_table().add(&gtk::TextTag::builder().name(name).foreground(colour).build());
+    }
     preview
+}
+
+/// Shows unified diff text: added lines green, removed red, the hunk
+/// headers dimmed.
+fn show_diff(preview: &gtk::TextView, diff: &str) {
+    let buffer = preview.buffer();
+    buffer.set_text(diff);
+    for line in 0..buffer.line_count() {
+        let Some(start) = buffer.iter_at_line(line) else { continue };
+        let mut end = start;
+        if !end.ends_line() {
+            end.forward_to_line_end();
+        }
+        let tag = match buffer.text(&start, &end, false).chars().next() {
+            Some('+') => "added",
+            Some('-') => "removed",
+            Some('@') => "hunk",
+            _ => continue,
+        };
+        buffer.apply_tag_by_name(tag, &start, &end);
+    }
 }
 
 /// Shows the zero-based `line` of a file among the lines around it,
@@ -5485,16 +5593,20 @@ fn present_picker_at(
         .vexpand(true)
         .build();
     // A list of places shows the selected one beside it (3.5).
-    let has_places = rows.iter().any(|row| row.place.is_some());
+    // A list of versions shows what the selected one would change.
+    let has_places = rows.iter().any(|row| row.place.is_some() || row.diff.is_some());
     let preview = place_preview();
     if has_places {
         let rows = Rc::clone(&rows);
         let visible = Rc::clone(&visible);
         let preview = preview.clone();
         list.connect_row_selected(move |_, row| {
-            let place = row
-                .and_then(|row| visible.borrow().get(row.index().max(0) as usize).copied())
-                .and_then(|at| rows[at].place.clone());
+            let at = row.and_then(|row| visible.borrow().get(row.index().max(0) as usize).copied());
+            if let Some(diff) = at.and_then(|at| rows[at].diff.clone()) {
+                show_diff(&preview, &diff());
+                return;
+            }
+            let place = at.and_then(|at| rows[at].place.clone());
             show_place(&preview, place.as_ref().map(|(path, line)| (path.as_str(), *line)));
         });
     }

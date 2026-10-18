@@ -4870,6 +4870,62 @@ final class DocumentController: NSResponder {
         }
     }
 
+    /// File → Local History…: the saved versions kept of this file,
+    /// newest first, each beside what restoring it would change.
+    /// Choosing one puts its text in the buffer as one edit, which Undo
+    /// takes back and Save keeps.
+    @objc func showLocalHistory(_ sender: Any?) {
+        guard coreDocument.path != nil else {
+            showHint(t("Local history keeps the versions of saved files: save this one first."))
+            return
+        }
+        let versions = coreDocument.localHistory
+        guard !versions.isEmpty else {
+            showHint(t("No saved versions of this file are kept yet: they are kept from its next save."))
+            return
+        }
+        let rows: [ListPanel.Row] = versions.map { version in
+            let changes = version.added == 0 && version.removed == 0
+                ? t("the same as now") : "+\(version.added) −\(version.removed)"
+            return .item("\(Self.historyTime(version.time))    \(changes)", styled: nil)
+        }
+        listPanel.show(
+            rows: rows, over: textView?.window, title: t("Local History"), placeholder: t("Filter versions"),
+            diff: { [weak self] index in
+                guard let self, versions.indices.contains(index) else { return nil }
+                return self.coreDocument.localHistoryDiff(id: versions[index].id)
+            }
+        ) { [weak self] index in
+            guard let self, versions.indices.contains(index) else { return }
+            self.restoreLocalVersion(versions[index])
+        }
+    }
+
+    /// Puts version's text in the buffer, as one edit.
+    func restoreLocalVersion(_ version: CoreDocument.HistoryVersion) {
+        guard let text = coreDocument.localHistoryText(id: version.id) else {
+            showHint(t("That version is no longer kept."))
+            return
+        }
+        applyWholeDocument(text)
+        showHint(t("Restored the version of {}: Undo takes it back.", Self.historyTime(version.time)))
+    }
+
+    /// When a version was kept, as a person says it: today and yesterday
+    /// by name.
+    static func historyTime(_ milliseconds: Double) -> String {
+        let formatter = DateFormatter()
+        formatter.doesRelativeDateFormatting = true
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .medium
+        return formatter.string(from: Date(timeIntervalSince1970: milliseconds / 1000))
+    }
+
+    /// The local history list as shown, and its preview, for the smoke
+    /// test.
+    var debugListRows: [String] { listPanel.debugShownTexts }
+    var debugListPreview: String { listPanel.debugPreview }
+
     /// File → Revert to Saved: throw away the buffer and take the disk's
     /// word for it — the manual escape hatch for the rare external change
     /// the watcher misses (delete-and-replace flows like git checkout).

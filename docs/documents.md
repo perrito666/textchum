@@ -126,6 +126,30 @@ unsaved changes (and one Undo to take it back). It exists for the rare
 external change the watcher misses — delete-and-replace flows like a
 git checkout.
 
+## Local history
+
+Every save keeps the version it wrote, apart from the file, and the
+first save of a file also keeps the version it replaced — so a save
+that should not have happened, a formatter that went too far, or work
+thrown away by a checkout can be brought back. **File → Local
+History…** (rebindable as `showLocalHistory`) lists the versions kept
+of the file in front, newest first, each with the lines restoring it
+would add and remove; the selected one is shown beside the list as the
+difference from the text now. Choosing one puts it in the editor as one
+edit: Undo takes it back, and saving keeps it, as a new version.
+
+Versions live in a `history` folder among the editor's own data
+(`~/Library/Application Support/Textchum/history` on macOS,
+`~/.local/share/textchum/history` on Linux, or under `--data-dir`), one
+folder per file. A version the same as the newest is not kept twice. Up
+to 100 versions are kept per file, for 30 days; a file over 4 MB is not
+kept.
+
+Not there yet: only saves are kept, not the text between them; a
+deleted file's versions cannot be opened from the editor, though they
+stay in the folder until their 30 days are up; and how long they are
+kept is not a setting.
+
 ## Dirty state
 
 A document knows the exact point in its history where it was last saved, so

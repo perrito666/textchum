@@ -1823,6 +1823,44 @@ pub unsafe extern "C" fn tc_document_last_edit_before(
     true
 }
 
+/// The saved versions local history keeps of the document's file:
+/// `[{id, time, size, added, removed}]`, newest first, `time` in
+/// milliseconds since the epoch, `added` and `removed` the lines
+/// restoring it would change. Free with [`tc_string_free`]; null on a
+/// bad pointer.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_local_history(document: *const TcDocument) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(document.inner.local_history_json())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// What restoring version `id` would change, as unified diff text; or,
+/// with `diff` false, the version's text itself. Null for a version not
+/// kept. Free with [`tc_string_free`].
+///
+/// # Safety
+/// `document` must be a live document pointer; `id` must point to
+/// `id_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_local_history_version(
+    document: *const TcDocument,
+    id: *const c_char,
+    id_len: usize,
+    diff: bool,
+) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else { return std::ptr::null_mut() };
+    let Some(id) = (unsafe { str_from_raw(id, id_len) }) else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| {
+        let found = if diff { document.inner.local_history_diff(id) } else { document.inner.local_history_text(id) };
+        found.map(owned_c_string).unwrap_or(std::ptr::null_mut())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// What in the document can be run: `[{line, endLine, kind, name,
 /// command, cwd}]`, lines zero-based. Free with [`tc_string_free`]; null
 /// on a bad pointer.
@@ -2475,6 +2513,24 @@ pub unsafe extern "C" fn tc_i18n_set_language(
         tag.to_string()
     };
     textchum_core::i18n::set_language(&language);
+}
+
+/// Where local history keeps saved versions from now on; an empty `dir`
+/// keeps none.
+///
+/// # Safety
+/// The pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_local_history_set_dir(dir: *const c_char, dir_len: usize) {
+    let dir = unsafe { str_from_raw(dir, dir_len) }.filter(|dir| !dir.is_empty());
+    textchum_core::local_history::set_directory(dir.map(std::path::Path::new));
+}
+
+/// Drops the saved versions older than local history keeps them; how
+/// many went. Slow on a large history: off the main thread.
+#[no_mangle]
+pub extern "C" fn tc_local_history_sweep() -> usize {
+    catch_unwind(textchum_core::local_history::sweep).unwrap_or(0)
 }
 
 /// Reads user catalogues from `dir`, over the built-in ones.

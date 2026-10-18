@@ -361,6 +361,39 @@ public final class CoreDocument {
         return try? JSONDecoder().decode(Runnable?.self, from: Data(String(cString: json).utf8))
     }
 
+    /// A saved version local history keeps of the document's file.
+    public struct HistoryVersion: Decodable, Sendable {
+        public let id: String
+        /// Milliseconds since 1970.
+        public let time: Double
+        public let size: Int
+        /// The lines restoring it would add and remove.
+        public let added: Int
+        public let removed: Int
+    }
+
+    /// The saved versions kept of the document's file, newest first.
+    public var localHistory: [HistoryVersion] {
+        guard let json = tc_document_local_history(handle) else { return [] }
+        defer { tc_string_free(json) }
+        return (try? JSONDecoder().decode([HistoryVersion].self, from: Data(String(cString: json).utf8))) ?? []
+    }
+
+    /// What restoring version `id` would change, as unified diff text.
+    public func localHistoryDiff(id: String) -> String? { localHistoryVersion(id: id, diff: true) }
+
+    /// The text of version `id`.
+    public func localHistoryText(id: String) -> String? { localHistoryVersion(id: id, diff: false) }
+
+    private func localHistoryVersion(id: String, diff: Bool) -> String? {
+        let answer = Self.withUTF8Pointer(id) { pointer, length in
+            tc_document_local_history_version(handle, pointer, length, diff)
+        }
+        guard let answer else { return nil }
+        defer { tc_string_free(answer) }
+        return String(cString: answer)
+    }
+
     public func setInlayHints(_ resultJSON: String) {
         _ = Self.withUTF8Pointer(resultJSON) { pointer, length in
             tc_document_set_inlay_hints(handle, pointer, length)

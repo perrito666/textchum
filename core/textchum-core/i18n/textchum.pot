@@ -102,6 +102,15 @@ msgstr ""
 msgid "Close Tab"
 msgstr ""
 
+#: core/textchum-core/src/local_history.rs
+msgid "Too large to compare."
+msgstr ""
+
+#: core/textchum-core/src/local_history.rs
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "The same as the text now."
+msgstr ""
+
 #: core/textchum-core/src/presets.rs
 msgid "rust-analyzer checking with clippy, and rustfmt before every save."
 msgstr ""
@@ -287,6 +296,11 @@ msgstr ""
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Revert to Saved"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Local History…"
 msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
@@ -565,6 +579,12 @@ msgstr ""
 #: linux/src/main.rs linux/src/run_panel.rs
 #: macos/Sources/Textchum/RunPanel.swift macos/Sources/Textchum/SmokeTest.swift
 msgid "finished"
+msgstr ""
+
+#: linux/src/main.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "the same as now"
 msgstr ""
 
 #: linux/src/main.rs macos/Sources/Textchum/SmokeTest.swift
@@ -1115,6 +1135,28 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The language server had no edit for that action."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Local history keeps the versions of saved files: save this one first."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid ""
+"No saved versions of this file are kept yet: they are kept from its next "
+"save."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Local History"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Restored the version of {}: Undo takes it back."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "That version is no longer kept."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
@@ -2039,6 +2081,10 @@ msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Reload From Disk"
+msgstr ""
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Filter versions"
 msgstr ""
 
 #: macos/Sources/Textchum/DocumentController.swift

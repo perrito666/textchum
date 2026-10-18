@@ -638,7 +638,7 @@ Modificateurs : `cmd`, `shift`, `alt`, `ctrl` — `cmd` est Command sur
 macOS et Ctrl sur Linux, un profil veut donc dire la même chose des
 deux côtés. Touches : un caractère, de `f1` à `f20`, ou
 `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
-Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
+Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`, `showLocalHistory`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`, `searchEverywhere`, `runCommand`, `runAtCaret`, `runAgain`, `rerunFailedTests`, `stopRun`, `nextOutputPlace`, `previousOutputPlace`, `toggleRunPanel`,
 `jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`, `findReferences`, `showUsages`, `codeActions`, `renameSymbol`, `formatDocument`,

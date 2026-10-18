@@ -60,4 +60,21 @@ final class PlacePreview {
         text.textStorage?.setAttributedString(shownText)
         text.scroll(.zero)
     }
+
+    /// Shows unified diff text: added lines green, removed red, the
+    /// hunk headers dimmed.
+    func show(diff: String) {
+        let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        let shownText = NSMutableAttributedString()
+        for line in diff.split(separator: "\n", omittingEmptySubsequences: false) {
+            let colour: NSColor =
+                line.hasPrefix("+") ? .systemGreen
+                : line.hasPrefix("-") ? .systemRed
+                : line.hasPrefix("@@") ? .tertiaryLabelColor : .labelColor
+            shownText.append(
+                NSAttributedString(string: line + "\n", attributes: [.font: font, .foregroundColor: colour]))
+        }
+        text.textStorage?.setAttributedString(shownText)
+        text.scroll(.zero)
+    }
 }

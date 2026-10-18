@@ -90,6 +90,15 @@ pub fn grammars_dir() -> PathBuf {
     }
 }
 
+/// The saved versions local history keeps, a folder per file: user
+/// data, which losing would lose.
+pub fn history_dir() -> PathBuf {
+    match data_dir() {
+        Some(dir) => dir.join("history"),
+        None => glib::user_data_dir().join("textchum/history"),
+    }
+}
+
 /// Imported icon packs.
 pub fn icons_dir() -> PathBuf {
     match data_dir() {

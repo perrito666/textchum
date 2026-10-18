@@ -36,6 +36,7 @@ pub mod icons;
 pub mod indent;
 pub mod inlay;
 pub mod keys;
+pub mod local_history;
 pub mod markdown;
 pub mod occurrences;
 pub mod output;

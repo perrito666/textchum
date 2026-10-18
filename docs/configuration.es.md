@@ -626,7 +626,7 @@ Modificadores: `cmd`, `shift`, `alt`, `ctrl` — `cmd` es Command en
 macOS y Ctrl en Linux, así que un perfil significa lo mismo en ambos.
 Teclas: un carácter, de `f1` a `f20`, o
 `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
-Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`,
+Entre las acciones: `new`, `open`, `openQuickly`, `save`, `saveAs`, `showLocalHistory`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`, `searchEverywhere`, `runCommand`, `runAtCaret`, `runAgain`, `rerunFailedTests`, `stopRun`, `nextOutputPlace`, `previousOutputPlace`, `toggleRunPanel`,
 `jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`, `findReferences`, `showUsages`, `codeActions`, `renameSymbol`, `formatDocument`,

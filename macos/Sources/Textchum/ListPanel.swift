@@ -60,6 +60,10 @@ final class ListPanel: NSObject {
     /// Where an item goes, for the lists of places: the place is shown
     /// beside the list, so the right one can be told before going.
     private var placeOf: ((Int) -> (path: String, line: Int)?)?
+    /// What an item would change, for the lists of versions: shown
+    /// beside the list as a diff.
+    private var diffOf: ((Int) -> String?)?
+    private var hasPreview: Bool { placeOf != nil || diffOf != nil }
     private let preview = PlacePreview()
     private var previewScroll: NSScrollView { preview.scroll }
 
@@ -69,7 +73,9 @@ final class ListPanel: NSObject {
     /// the items of `rows`, in the order they were given.
     ///
     /// `place`, for a list of places, says where an item goes; the
-    /// selected one is then shown beside the list.
+    /// selected one is then shown beside the list. `diff`, for a list of
+    /// versions, says what choosing an item would change, shown the same
+    /// way.
     func show(
         rows: [Row],
         over window: NSWindow?,
@@ -77,6 +83,7 @@ final class ListPanel: NSObject {
         placeholder: String? = nil,
         monospaced: Bool = false,
         place: ((Int) -> (path: String, line: Int)?)? = nil,
+        diff: ((Int) -> String?)? = nil,
         near anchor: NSRect? = nil,
         search: ((String) -> Void)? = nil,
         onChoose: @escaping (Int) -> Void
@@ -87,6 +94,7 @@ final class ListPanel: NSObject {
         self.onChoose = onChoose
         self.filtering = placeholder != nil
         self.placeOf = place
+        self.diffOf = diff
 
         let panel = self.panel ?? makePanel()
         self.panel = panel
@@ -97,7 +105,7 @@ final class ListPanel: NSObject {
         layOut(in: panel)
         // Wide enough for a preview beside the list, when there is one.
         var size = panel.frame.size
-        size.width = place == nil ? 640 : 1040
+        size.width = hasPreview ? 1040 : 640
         panel.setContentSize(NSSize(width: size.width, height: panel.contentRect(forFrameRect: panel.frame).height))
         applyFilter()
         refreshPreview()
@@ -275,6 +283,12 @@ final class ListPanel: NSObject {
     /// The selected item's place, around its line, with the line
     /// marked.
     private func refreshPreview() {
+        if let diffOf {
+            let row = table.selectedRow
+            let item = shown.indices.contains(row) ? shown[row].item : nil
+            preview.show(diff: item.flatMap(diffOf) ?? "")
+            return
+        }
         guard let placeOf else { return }
         let row = table.selectedRow
         guard shown.indices.contains(row), let item = shown[row].item, let place = placeOf(item)
@@ -297,7 +311,7 @@ final class ListPanel: NSObject {
             scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ]
-        if placeOf != nil {
+        if hasPreview {
             content.addSubview(previewScroll)
             constraints += [
                 scroll.widthAnchor.constraint(equalTo: content.widthAnchor, multiplier: 0.45),

@@ -66,6 +66,12 @@ enum AppPaths {
             .appendingPathComponent("grammars", isDirectory: true)
     }
 
+    /// The saved versions local history keeps, a folder per file.
+    static var historyDirectory: URL {
+        (dataDirectory ?? applicationSupport)
+            .appendingPathComponent("history", isDirectory: true)
+    }
+
     /// Imported icon packs.
     static var iconsDirectory: URL {
         (dataDirectory ?? applicationSupport)

@@ -54,6 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // it starts now, in the background, so the rows find it done.
         SystemFileIcon.warmUp()
         stamp("begin")
+        // Before anything can be saved, so every save keeps its version.
+        CoreLocalHistory.setDirectory(AppPaths.historyDirectory.path)
         if let spec = ProcessInfo.processInfo.environment["TEXTCHUM_DEBUG_SELECT"] {
             // "from:length": selects that range in the first editor, so
             // the other occurrences of the word can be looked at.
@@ -486,6 +488,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // Records for roots that are gone, and those past their
                 // keep window, on a thread of their own.
                 ProjectState.sweepAtLaunch()
+                DispatchQueue.global(qos: .utility).async {
+                    let gone = CoreLocalHistory.sweep()
+                    if gone > 0 {
+                        NSLog("local history: dropped \(gone) old versions")
+                    }
+                }
             }
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -1727,6 +1735,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.saveDocument(_:)): "save",
             #selector(DocumentController.saveDocumentAs(_:)): "saveAs",
             #selector(DocumentController.revertToSaved(_:)): "revertToSaved",
+            #selector(DocumentController.showLocalHistory(_:)): "showLocalHistory",
             #selector(reopenClosedDocument(_:)): "reopenClosed",
             #selector(DocumentController.showFileProperties(_:)): "fileProperties",
             #selector(DocumentController.performUndo(_:)): "undo",
@@ -3413,6 +3422,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         revert.keyEquivalentModifierMask = [.command, .option]
         fileMenu.addItem(revert)
+        fileMenu.addItem(
+            withTitle: t("Local History…"), action: #selector(DocumentController.showLocalHistory(_:)),
+            keyEquivalent: "")
         fileMenu.addItem(.separator())
         // The front tab's location in every useful spelling; also on the
         // context menus of buffer-list and file-tree rows.

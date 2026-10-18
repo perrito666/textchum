@@ -600,7 +600,7 @@ Modifiers: `cmd`, `shift`, `alt`, `ctrl` — `cmd` is Command on macOS
 and Ctrl on Linux, so one profile means the same thing on both. Keys: a
 character, `f1` to `f20`, or
 `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
-Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
+Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `showLocalHistory`, `close`,
 `undo`, `redo`, `find`, `findAndReplace`, `findNext`, `findPrevious`,
 `useSelectionForFind`, `findInProject`, `searchEverywhere`, `runCommand`, `runAtCaret`, `runAgain`, `rerunFailedTests`, `stopRun`, `nextOutputPlace`, `previousOutputPlace`, `toggleRunPanel`, `jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`,
 `findReferences`, `showUsages`, `codeActions`, `renameSymbol`, `formatDocument`, `runPreprocessors`,

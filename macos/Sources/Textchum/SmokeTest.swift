@@ -3188,6 +3188,61 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     print("run marks ok (main and test marked, the test at the caret found)")
+
+    // Local history: each save keeps its version, and the one the first
+    // save replaced; the list shows what restoring each would change,
+    // and choosing one puts it back as an edit.
+    do {
+        let historyRoot = NSTemporaryDirectory() + "textchum-history-\(getpid())"
+        try FileManager.default.createDirectory(atPath: historyRoot, withIntermediateDirectories: true)
+        CoreLocalHistory.setDirectory(historyRoot + "/history")
+        defer {
+            CoreLocalHistory.setDirectory(nil)
+            try? FileManager.default.removeItem(atPath: historyRoot)
+        }
+        try "as found\n".write(toFile: historyRoot + "/notes.txt", atomically: true, encoding: .utf8)
+        let kept = try CoreDocument(contentsOf: historyRoot + "/notes.txt")
+        let historyBench = Workbench(sidebar: nil)
+        let keeping = DocumentController(document: kept)
+        historyBench.add(keeping)
+        guard let historyView = keeping.primaryView as? EditorTextView else {
+            print("FAIL: no view to keep history of")
+            return 1
+        }
+        historyView.insertText("edited, ", replacementRange: NSRange(location: 0, length: 0))
+        try kept.save()
+        historyView.insertText("again, ", replacementRange: NSRange(location: 0, length: 0))
+        try kept.save()
+        let versions = kept.localHistory
+        guard versions.count == 3, versions[2].removed == 1, versions[2].added == 1 else {
+            print("FAIL: local history kept \(versions)")
+            return 1
+        }
+        keeping.showLocalHistory(nil)
+        let rows = keeping.debugListRows
+        guard rows.count == 3, rows[0].hasSuffix(t("the same as now")), rows[2].hasSuffix("+1 −1"),
+            keeping.debugListPreview.hasPrefix(t("The same as the text now."))
+        else {
+            print("FAIL: the local history list showed \(rows) / \(keeping.debugListPreview)")
+            return 1
+        }
+        guard let diff = kept.localHistoryDiff(id: versions[2].id),
+            diff.contains("-again, edited, as found"), diff.contains("+as found")
+        else {
+            print("FAIL: restoring the oldest would change \(String(describing: kept.localHistoryDiff(id: versions[2].id)))")
+            return 1
+        }
+        keeping.restoreLocalVersion(versions[2])
+        guard historyView.string == "as found\n", kept.text == "as found\n", kept.isDirty else {
+            print("FAIL: restoring gave \(historyView.string.debugDescription)")
+            return 1
+        }
+        historyBench.window?.close()
+    } catch {
+        print("FAIL: local history's file could not be made: \(error)")
+        return 1
+    }
+    print("local history ok (each save kept, the replaced one too, what restoring changes, restored as an edit)")
     pinBench.window?.close()
 
     // With the find bar open, the pins move below it: a search field

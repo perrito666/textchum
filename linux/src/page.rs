@@ -709,9 +709,14 @@ pub fn apply_whole_document(page: &Rc<Page>, new: &str) {
     let replacement: String = new_chars[prefix..new_chars.len() - suffix].iter().collect();
     let mut start = buffer.iter_at_offset(prefix as i32);
     let mut end = buffer.iter_at_offset((old_chars.len() - suffix) as i32);
+    // The delete and the insert reach the core as two edits; one group
+    // makes them one undo step (rule 9). No borrow is held across the
+    // buffer calls: their handlers take the document themselves.
+    page.state.borrow_mut().document.begin_edit_group();
     buffer.delete(&mut start, &mut end);
     let mut at = start;
     buffer.insert(&mut at, &replacement);
+    page.state.borrow_mut().document.end_edit_group();
 }
 
 /// What a view reads through to its document for.

@@ -2153,6 +2153,60 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         }
         println!("notification area ok (the first line of a notice)");
 
+        // Local history: each save keeps its version, and the one the
+        // first save replaced; the list shows what restoring each would
+        // change, and choosing one puts it back as one undoable edit.
+        // The smoke profile's own history folder is the one in use.
+        {
+            let dir = std::env::temp_dir().join(format!("textchum-gtk-history-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            let file = dir.join("notes.txt");
+            let _ = std::fs::write(&file, "as found\n");
+            let before = workbench.selected().and_then(|page| page.path().borrow().clone());
+            workbench.open(Some(file.clone()), None);
+            let page = workbench.selected().expect("a selected page");
+            let buffer = page.buffer.clone();
+            buffer.insert(&mut buffer.start_iter(), "edited, ");
+            let first = page.state.borrow_mut().document.save().is_ok();
+            buffer.insert(&mut buffer.start_iter(), "again, ");
+            let second = page.state.borrow_mut().document.save().is_ok();
+            let (labels, kept, diffs) = workbench::local_history_rows(&page);
+            let oldest_diff = diffs.get(2).map(|diff| diff()).unwrap_or_default();
+            if let Some((id, time)) = kept.get(2) {
+                workbench::restore_local_version(&workbench, &page, id, time);
+            }
+            let text = |buffer: &sourceview5::Buffer| buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+            let restored = text(&buffer);
+            let _ = gtk::prelude::WidgetExt::activate_action(&workbench.window, "win.undo", None);
+            context.iteration(false);
+            let undone = text(&buffer);
+            let tab = workbench.active_view().selected_page().expect("a selected tab");
+            workbench.forget(&tab);
+            workbench.active_view().close_page_finish(&tab, true);
+            context.iteration(false);
+            if let Some(path) = before {
+                workbench.open(Some(std::path::PathBuf::from(path)), None);
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+            if !first || !second || labels.len() != 3 {
+                eprintln!("FAIL: local history kept {labels:?} (saved {first} {second})");
+                return 1;
+            }
+            if !labels[0].ends_with(&tr("the same as now")) || !labels[2].ends_with("+1 −1") {
+                eprintln!("FAIL: the local history rows read {labels:?}");
+                return 1;
+            }
+            if !oldest_diff.contains("-again, edited, as found") || !oldest_diff.contains("+as found") {
+                eprintln!("FAIL: restoring the oldest would change {oldest_diff:?}");
+                return 1;
+            }
+            if restored != "as found\n" || undone != "again, edited, as found\n" {
+                eprintln!("FAIL: restoring gave {restored:?}, one undo {undone:?}");
+                return 1;
+            }
+        }
+        println!("local history ok (each save kept, the replaced one too, what restoring changes, one undo takes it back)");
+
         // What can be run is marked in the gutter: a main and a test in
         // a Cargo package, each with the command that runs just it.
         {

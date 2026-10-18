@@ -135,6 +135,35 @@ modifications non enregistrées (et une Annulation pour les retrouver).
 Il existe pour le rare changement externe que le veilleur manque — les
 flux supprimer-et-remplacer comme un git checkout.
 
+## Historique local
+
+Chaque enregistrement garde la version qu'il a écrite, à part du
+fichier, et le premier enregistrement d'un fichier garde aussi la
+version qu'il a remplacée — on peut ainsi retrouver un enregistrement
+qui n'aurait pas dû avoir lieu, un formateur allé trop loin ou un
+travail perdu dans un checkout. **File → Historique local…**
+(réassignable comme `showLocalHistory`) liste les versions gardées du
+fichier au premier plan, de la plus récente à la plus ancienne, chacune
+avec les lignes que la restaurer ajouterait et retirerait ; celle qui
+est sélectionnée s'affiche à côté de la liste comme la différence avec
+le texte actuel. En choisir une la met dans l'éditeur en une seule
+modification : Annuler la retire, et enregistrer la garde, comme une
+nouvelle version.
+
+Les versions vivent dans un dossier `history` parmi les données de
+l'éditeur (`~/Library/Application Support/Textchum/history` sous
+macOS, `~/.local/share/textchum/history` sous Linux, ou sous
+`--data-dir`), un dossier par fichier. Une version identique à la plus
+récente n'est pas gardée deux fois. Jusqu'à 100 versions sont gardées
+par fichier, pendant 30 jours ; un fichier de plus de 4 Mo n'est pas
+gardé.
+
+Pas encore là : seuls les enregistrements sont gardés, pas le texte
+entre eux ; les versions d'un fichier supprimé ne peuvent pas être
+ouvertes depuis l'éditeur, même si elles restent dans le dossier
+jusqu'à leurs 30 jours ; et leur durée de conservation n'est pas un
+réglage.
+
 ## Modifications non enregistrées
 
 Un document connaît le point exact de son historique où il a été enregistré

@@ -133,6 +133,32 @@ cambios sin guardar (y un Deshacer para recuperarlos). Existe para el
 raro cambio externo que el vigilante no ve — flujos de borrar y
 reemplazar como un git checkout.
 
+## Historial local
+
+Cada guardado conserva la versión que escribió, aparte del archivo, y
+el primer guardado de un archivo conserva también la versión que
+reemplazó — así se puede recuperar un guardado que no debió ocurrir, un
+formateador que se pasó o un trabajo descartado por un checkout.
+**File → Historial local…** (reasignable como `showLocalHistory`) lista
+las versiones conservadas del archivo en primer plano, de la más nueva a
+la más vieja, cada una con las líneas que restaurarla añadiría y
+quitaría; la seleccionada se muestra junto a la lista como la diferencia
+con el texto actual. Elegir una la pone en el editor como una sola
+edición: Deshacer la retira, y guardar la conserva, como una versión
+nueva.
+
+Las versiones viven en una carpeta `history` entre los datos del editor
+(`~/Library/Application Support/Textchum/history` en macOS,
+`~/.local/share/textchum/history` en Linux, o bajo `--data-dir`), una
+carpeta por archivo. Una versión igual a la más nueva no se guarda dos
+veces. Se conservan hasta 100 versiones por archivo, durante 30 días; un
+archivo de más de 4 MB no se conserva.
+
+Todavía no: solo se conservan los guardados, no el texto entre ellos;
+las versiones de un archivo borrado no se pueden abrir desde el editor,
+aunque siguen en la carpeta hasta cumplir sus 30 días; y cuánto tiempo
+se conservan no es un ajuste.
+
 ## Estado de cambios sin guardar
 
 Un documento conoce el punto exacto de su historial en el que se guardó por

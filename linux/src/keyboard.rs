@@ -33,6 +33,7 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("save", n_("Save"), "win.save"),
     ("saveAs", n_("Save As"), "win.save-as"),
     ("revertToSaved", n_("Revert to Saved"), "win.revert"),
+    ("showLocalHistory", n_("Local History…"), "win.local-history"),
     ("close", n_("Close Tab"), "win.close-tab"),
     ("fold", n_("Fold"), "win.fold"),
     ("foldAll", n_("Fold All"), "win.fold-all"),

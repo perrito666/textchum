@@ -80,6 +80,84 @@ pub fn line_changes(baseline: &str, current: &str) -> Vec<LineChange> {
     changes
 }
 
+/// What turning `old` into `new` changes, as unified-diff lines: a
+/// `@@ -a,b +c,d @@` header per hunk, then the lines, each led by
+/// ` ` (kept, `context` of them around each change), `-` or `+`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Diff {
+    pub text: String,
+    pub added: usize,
+    pub removed: usize,
+    /// Over [`MAX_LINES`] on either side: not compared.
+    pub too_large: bool,
+}
+
+pub fn unified(old: &str, new: &str, context: usize) -> Diff {
+    let old_lines: Vec<&str> = old.lines().collect();
+    let new_lines: Vec<&str> = new.lines().collect();
+    if old_lines.len() > MAX_LINES || new_lines.len() > MAX_LINES {
+        return Diff { too_large: true, ..Diff::default() };
+    }
+    let mut head = 0;
+    while head < old_lines.len() && head < new_lines.len() && old_lines[head] == new_lines[head] {
+        head += 1;
+    }
+    let mut tail = 0;
+    while tail < old_lines.len() - head
+        && tail < new_lines.len() - head
+        && old_lines[old_lines.len() - 1 - tail] == new_lines[new_lines.len() - 1 - tail]
+    {
+        tail += 1;
+    }
+    let runs: Vec<Run> = diff_runs(&old_lines[head..old_lines.len() - tail], &new_lines[head..new_lines.len() - tail])
+        .into_iter()
+        .map(|(old_run, new_run)| (old_run.start + head..old_run.end + head, new_run.start + head..new_run.end + head))
+        .collect();
+
+    let mut diff = Diff::default();
+    let mut first = 0;
+    while first < runs.len() {
+        // Runs whose context would touch go in one hunk.
+        let mut last = first;
+        while last + 1 < runs.len() && runs[last + 1].0.start - runs[last].0.end <= 2 * context {
+            last += 1;
+        }
+        // Between and around runs the two sides are equal, so a stretch
+        // of context is as long on one side as on the other.
+        let old_from = runs[first].0.start.saturating_sub(context);
+        let old_to = (runs[last].0.end + context).min(old_lines.len());
+        let new_from = runs[first].1.start - (runs[first].0.start - old_from);
+        let new_to = runs[last].1.end + (old_to - runs[last].0.end);
+        diff.text.push_str(&format!(
+            "@@ -{},{} +{},{} @@\n",
+            old_from + 1,
+            old_to - old_from,
+            new_from + 1,
+            new_to - new_from
+        ));
+        let mut at = old_from;
+        for (old_run, new_run) in &runs[first..=last] {
+            for line in &old_lines[at..old_run.start] {
+                diff.text.push_str(&format!(" {line}\n"));
+            }
+            for line in &old_lines[old_run.clone()] {
+                diff.text.push_str(&format!("-{line}\n"));
+                diff.removed += 1;
+            }
+            for line in &new_lines[new_run.clone()] {
+                diff.text.push_str(&format!("+{line}\n"));
+                diff.added += 1;
+            }
+            at = old_run.end;
+        }
+        for line in &old_lines[at..old_to] {
+            diff.text.push_str(&format!(" {line}\n"));
+        }
+        first = last + 1;
+    }
+    diff
+}
+
 /// A run of the middle: the old lines removed and the new lines added
 /// at one place, as `(old range, new range)` in middle coordinates.
 type Run = (std::ops::Range<usize>, std::ops::Range<usize>);
@@ -786,6 +864,19 @@ mod tests {
     fn json_carries_the_line_and_the_kind() {
         let json = to_json(&line_changes("a\nb\n", "a\nB\n"));
         assert_eq!(json, r#"[{"kind":"modified","line":1}]"#);
+    }
+
+    #[test]
+    fn a_unified_diff_keeps_context_and_joins_close_changes() {
+        let old = "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n";
+        let new = "a\nB\nc\nd\ne\nf\ng\nh\ni\nj\nk\n";
+        let diff = unified(old, new, 1);
+        assert_eq!(diff.text, "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n@@ -10,1 +10,2 @@\n j\n+k\n");
+        assert_eq!((diff.added, diff.removed), (2, 1));
+        // With more context the two changes are one hunk.
+        let joined = unified(old, new, 4);
+        assert_eq!(joined.text.matches("@@").count(), 2, "one header: {}", joined.text);
+        assert_eq!(unified(old, old, 3), Diff::default());
     }
 }
 

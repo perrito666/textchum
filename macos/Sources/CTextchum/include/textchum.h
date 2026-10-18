@@ -1161,6 +1161,32 @@ bool tc_document_last_edit_before(const struct TcDocument *document,
                                   uint64_t *stamp_out);
 
 /**
+ * The saved versions local history keeps of the document's file:
+ * `[{id, time, size, added, removed}]`, newest first, `time` in
+ * milliseconds since the epoch, `added` and `removed` the lines
+ * restoring it would change. Free with [`tc_string_free`]; null on a
+ * bad pointer.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_local_history(const struct TcDocument *document);
+
+/**
+ * What restoring version `id` would change, as unified diff text; or,
+ * with `diff` false, the version's text itself. Null for a version not
+ * kept. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * `document` must be a live document pointer; `id` must point to
+ * `id_len` readable bytes.
+ */
+char *tc_document_local_history_version(const struct TcDocument *document,
+                                        const char *id,
+                                        uintptr_t id_len,
+                                        bool diff);
+
+/**
  * What in the document can be run: `[{line, endLine, kind, name,
  * command, cwd}]`, lines zero-based. Free with [`tc_string_free`]; null
  * on a bad pointer.
@@ -1547,6 +1573,21 @@ void tc_i18n_set_language(const char *tag,
                           uintptr_t tag_len,
                           const char *locale,
                           uintptr_t locale_len);
+
+/**
+ * Where local history keeps saved versions from now on; an empty `dir`
+ * keeps none.
+ *
+ * # Safety
+ * The pointer and length must describe valid UTF-8.
+ */
+void tc_local_history_set_dir(const char *dir, uintptr_t dir_len);
+
+/**
+ * Drops the saved versions older than local history keeps them; how
+ * many went. Slow on a large history: off the main thread.
+ */
+uintptr_t tc_local_history_sweep(void);
 
 /**
  * Reads user catalogues from `dir`, over the built-in ones.

@@ -96,6 +96,15 @@ msgstr ""
 msgid "Close Tab"
 msgstr "Fermer l'onglet"
 
+#: core/textchum-core/src/local_history.rs
+msgid "Too large to compare."
+msgstr "Trop grand pour être comparé."
+
+#: core/textchum-core/src/local_history.rs
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "The same as the text now."
+msgstr "Identique au texte actuel."
+
 #: core/textchum-core/src/presets.rs
 msgid "rust-analyzer checking with clippy, and rustfmt before every save."
 msgstr ""
@@ -289,6 +298,11 @@ msgstr "Enregistrer sous"
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Revert to Saved"
 msgstr "Revenir au fichier enregistré"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Local History…"
+msgstr "Historique local…"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
@@ -568,6 +582,12 @@ msgstr "Tout enregistrer"
 msgid "finished"
 msgstr "terminé"
 
+#: linux/src/main.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "the same as now"
+msgstr "identique à maintenant"
+
 #: linux/src/main.rs macos/Sources/Textchum/SmokeTest.swift
 msgid "A phrase nobody has translated"
 msgstr ""
@@ -638,7 +658,8 @@ msgstr "paquet pas encore indiqué"
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "This run's command cannot be narrowed to one test."
-msgstr "La commande de ce lancement ne peut pas être restreinte à un seul test."
+msgstr ""
+"La commande de ce lancement ne peut pas être restreinte à un seul test."
 
 #: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "A configured grammar could not be loaded"
@@ -1121,6 +1142,28 @@ msgstr "Le serveur de langage n'a pas terminé cette action."
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The language server had no edit for that action."
 msgstr "Le serveur de langage n'avait aucune modification pour cette action."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Local history keeps the versions of saved files: save this one first."
+msgstr "L'historique local garde les versions des fichiers enregistrés : enregistrez d'abord celui-ci."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid ""
+"No saved versions of this file are kept yet: they are kept from its next "
+"save."
+msgstr "Aucune version enregistrée de ce fichier n'est encore gardée : elles le sont dès son prochain enregistrement."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Local History"
+msgstr "Historique local"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Restored the version of {}: Undo takes it back."
+msgstr "Version du {} restaurée : Annuler la retire."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "That version is no longer kept."
+msgstr "Cette version n'est plus gardée."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "The server had no rename to offer."
@@ -2084,6 +2127,10 @@ msgstr "Garder mes modifications"
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Reload From Disk"
 msgstr "Recharger depuis le disque"
+
+#: macos/Sources/Textchum/DocumentController.swift
+msgid "Filter versions"
+msgstr "Filtrer les versions"
 
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "Revert to the saved version?"

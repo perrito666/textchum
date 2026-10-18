@@ -423,6 +423,15 @@ impl Shell {
             };
             textchum_core::i18n::set_language(&language);
             textchum_core::i18n::set_catalogue_dir(&crate::paths::translations_dir());
+            // Before anything can be saved, so every save keeps its
+            // version; the old ones go on a thread of their own.
+            textchum_core::local_history::set_directory(Some(&crate::paths::history_dir()));
+            std::thread::spawn(|| {
+                let gone = textchum_core::local_history::sweep();
+                if gone > 0 {
+                    eprintln!("textchum: local history: dropped {gone} old versions");
+                }
+            });
 
             // Records for roots that are gone, and those past their
             // keep window, on a thread of their own: a machine that has

@@ -743,6 +743,26 @@ impl Document {
 
     /// [`Self::runnable_at`] as one row of [`Self::runnables_json`], or
     /// `null`.
+    /// The saved versions of this document's file kept by local history,
+    /// as [`crate::local_history::versions_json`] against the text now;
+    /// `[]` for an untitled document.
+    pub fn local_history_json(&self) -> String {
+        match &self.path {
+            Some(path) => crate::local_history::versions_json(path, &self.buffer.text()),
+            None => "[]".to_owned(),
+        }
+    }
+
+    /// What restoring version `id` would change in the text now.
+    pub fn local_history_diff(&self, id: &str) -> Option<String> {
+        crate::local_history::diff(self.path.as_deref()?, id, &self.buffer.text())
+    }
+
+    /// The text of version `id`, to restore.
+    pub fn local_history_text(&self, id: &str) -> Option<String> {
+        crate::local_history::read(self.path.as_deref()?, id)
+    }
+
     pub fn runnable_at_json(&self, line: usize) -> String {
         match self.runnable_at(line) {
             Some(runnable) => serde_json::json!({
@@ -1280,10 +1300,14 @@ impl Document {
     fn save_to(&mut self, path: &Path) -> Result<(), DocumentError> {
         let text = self.buffer.text();
         let (bytes, encoding) = encode(&text, self.encoding);
+        // Every save of both shells comes through here, so this is where
+        // local history keeps what is replaced and what is written.
+        crate::local_history::before_save(path);
         write_atomically(path, &bytes).map_err(|source| DocumentError::Io {
             path: path.to_owned(),
             source,
         })?;
+        crate::local_history::after_save(path, &text);
         self.encoding = encoding;
         self.history.mark_saved();
         Ok(())
@@ -1530,6 +1554,31 @@ use d;
         assert_eq!(crumbs[0].0, "main");
         assert_eq!(crumbs[0].1, 5, "after a two-byte character that is one UTF-16 unit");
         assert!(document.breadcrumbs_json(caret).contains("\"label\":\"main\""));
+    }
+
+    #[test]
+    fn saving_keeps_the_version_replaced_and_the_version_written() {
+        let dir = std::env::temp_dir().join(format!("textchum-saved-versions-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("notes.txt");
+        std::fs::write(&path, "as found\n").unwrap();
+        let history = dir.join("history");
+        let mut document = Document::open(&path).unwrap();
+        // Only this test sets the directory; another test saving while it
+        // is set keeps its versions here too, under its own path.
+        crate::local_history::set_directory(Some(&history));
+        document.replace_utf16(0, 0, "edited, ").unwrap();
+        document.save().unwrap();
+        document.replace_utf16(0, 0, "again, ").unwrap();
+        document.save().unwrap();
+        crate::local_history::set_directory(None);
+        let texts: Vec<String> = crate::local_history::versions_in(&history, &path)
+            .iter()
+            .filter_map(|version| crate::local_history::read_in(&history, &path, &version.id))
+            .collect();
+        assert_eq!(texts, ["again, edited, as found\n", "edited, as found\n", "as found\n"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
