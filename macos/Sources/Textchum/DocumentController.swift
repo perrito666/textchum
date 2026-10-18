@@ -1195,10 +1195,7 @@ final class DocumentController: NSResponder {
         // The balloon up now is about the finding being left.
         hoverTimer?.invalidate()
         closeBalloon()
-        selectionChangeIsFromEditing = false
-        let caret = NSRange(location: min(start, (textView.string as NSString).length), length: 0)
-        textView.setSelectedRange(caret)
-        textView.scrollRangeToVisible(caret)
+        land(on: NSRange(location: min(start, (textView.string as NSString).length), length: 0))
         showDiagnosticAtCaret(nil)
     }
 
@@ -1387,9 +1384,7 @@ final class DocumentController: NSResponder {
                     let range = self.nsRange(of: diagnostic, in: text)
                 else { return }
                 (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
-                self.selectionChangeIsFromEditing = false
-                textView.setSelectedRange(NSRange(location: range.location, length: 0))
-                textView.scrollRangeToVisible(range)
+                self.land(on: NSRange(location: range.location, length: 0))
                 self.window?.makeFirstResponder(textView)
             }
         }
@@ -1584,9 +1579,7 @@ final class DocumentController: NSResponder {
             let diagnostic = ordered[index]
             guard let range = self.nsRange(of: diagnostic, in: text) else { return }
             (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
-            self.selectionChangeIsFromEditing = false
-            textView.setSelectedRange(NSRange(location: range.location, length: 0))
-            textView.scrollRangeToVisible(range)
+            self.land(on: NSRange(location: range.location, length: 0))
             self.window?.makeFirstResponder(textView)
         }
     }
@@ -2322,31 +2315,78 @@ final class DocumentController: NSResponder {
         (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
         let offset = coreDocument.offset(ofLine: target.line, column: target.column)
         let clamped = min(offset, (textView.string as NSString).length)
-        selectionChangeIsFromEditing = false
-        textView.setSelectedRange(NSRange(location: clamped, length: 0))
-        // Centred rather than merely visible: a line scrolled to the
-        // last row of the window is a line you have to scroll to read.
-        centerSelection()
+        land(on: NSRange(location: clamped, length: 0))
         window?.makeFirstResponder(textView)
     }
 
-    /// Scrolls so the selection sits near the middle of the view, when
-    /// there is enough document either side of it to do so.
-    private func centerSelection() {
-        guard let textView, let scrollView = textView.enclosingScrollView else { return }
-        let rect = textView.firstRect(
-            forCharacterRange: textView.selectedRange(), actualRange: nil)
-        guard rect.height > 0, let window = textView.window else {
-            textView.scrollRangeToVisible(textView.selectedRange())
+    // MARK: Landing
+
+    /// Off for the smoke test, which reads where a jump landed in the
+    /// same turn it asked for it.
+    static var animatesJumps = true
+
+    /// Selects `range` the way a jump lands (7.3). When its line is on
+    /// screen the view stays where it is: the eye is already there.
+    /// Otherwise the view moves, in a short animation, so the line sits a
+    /// third of the way down — with context above it, never at an edge.
+    /// A far jump starts the motion a screen short of the target, so it
+    /// says which way it went without sweeping through everything
+    /// between. The animation never holds up the next key.
+    func land(on range: NSRange) {
+        guard let textView else { return }
+        selectionChangeIsFromEditing = false
+        textView.setSelectedRange(range)
+        guard !isOnScreen(range), let scrollView = textView.enclosingScrollView else { return }
+        let clip = scrollView.contentView
+        let from = clip.bounds.origin
+        // Lays the target's lines out, so its position can be read; the
+        // origin is put back before anything is drawn.
+        textView.scrollRangeToVisible(range)
+        let height = clip.bounds.height
+        guard let line = lineRect(for: range), height > 0 else { return }
+        let lowest = max(0, textView.frame.height - height)
+        let to = NSPoint(x: clip.bounds.origin.x, y: min(max(0, line.minY - height / 3), lowest))
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        guard Self.animatesJumps, !reduceMotion else {
+            clip.setBoundsOrigin(to)
+            scrollView.reflectScrolledClipView(clip)
             return
         }
-        let inWindow = window.convertPoint(fromScreen: rect.origin)
-        let inView = textView.convert(inWindow, from: nil)
-        let height = scrollView.contentView.bounds.height
-        let target = max(0, inView.y - height / 2)
-        textView.scroll(NSPoint(x: 0, y: target))
-        scrollView.reflectScrolledClipView(scrollView.contentView)
+        var start = NSPoint(x: to.x, y: from.y)
+        if abs(to.y - from.y) > height * 2 {
+            start.y = to.y + (to.y > from.y ? -height : height)
+        }
+        clip.setBoundsOrigin(start)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            clip.animator().setBoundsOrigin(to)
+        } completionHandler: {
+            scrollView.reflectScrolledClipView(clip)
+        }
     }
+
+    /// Whether the line `range` starts on is wholly inside the visible
+    /// part of the view.
+    private func isOnScreen(_ range: NSRange) -> Bool {
+        guard let textView, let line = lineRect(for: range) else { return false }
+        let visible = textView.visibleRect
+        return visible.height > 0 && line.minY >= visible.minY && line.maxY <= visible.maxY
+    }
+
+    /// The rectangle of the line `range` starts on, in the view's own
+    /// coordinates; nil before the view is in a window.
+    private func lineRect(for range: NSRange) -> NSRect? {
+        guard let textView, let window = textView.window else { return nil }
+        let rect = textView.firstRect(
+            forCharacterRange: NSRange(location: range.location, length: 0), actualRange: nil)
+        guard rect.height > 0 else { return nil }
+        let inWindow = window.convertFromScreen(rect)
+        return textView.convert(inWindow, from: nil)
+    }
+
+    /// Where the selection is out of sight, so moving there is a jump.
+    private func isJump(to range: NSRange) -> Bool { !isOnScreen(range) }
 
     /// Moves the caret to an LSP position and reveals it.
     func reveal(line: Int, character: Int) {
@@ -2363,9 +2403,7 @@ final class DocumentController: NSResponder {
             currentLine += 1
         }
         let target = min(index + max(0, character), text.length)
-        selectionChangeIsFromEditing = false
-        textView.setSelectedRange(NSRange(location: target, length: 0))
-        textView.scrollRangeToVisible(NSRange(location: target, length: 0))
+        land(on: NSRange(location: target, length: 0))
         window?.makeFirstResponder(textView)
         // A file opened for this jump has a view with no height yet, and
         // a scroll into a clip of no height goes nowhere; giving the view
@@ -2376,7 +2414,7 @@ final class DocumentController: NSResponder {
                 guard let self, let textView, self.textView === textView,
                     textView.selectedRange().location == target
                 else { return }
-                textView.scrollRangeToVisible(NSRange(location: target, length: 0))
+                self.land(on: NSRange(location: target, length: 0))
             }
         }
     }
@@ -3964,9 +4002,11 @@ final class DocumentController: NSResponder {
     private func select(match index: Int) {
         guard let textView, findMatches.indices.contains(index) else { return }
         let range = findMatches[index]
-        selectionChangeIsFromEditing = false
-        textView.setSelectedRange(range)
-        textView.scrollRangeToVisible(range)
+        // A match out of sight is a jump Go Back returns from (7.1).
+        if isJump(to: range), textView.selectedRange() != range {
+            (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
+        }
+        land(on: range)
     }
 
     private func findStep(_ step: Int) {
@@ -5331,8 +5371,13 @@ final class DocumentController: NSResponder {
     private func moveCaret(to offset: Int) {
         guard let textView else { return }
         let clamped = min(max(0, offset), (textView.string as NSString).length)
-        textView.setSelectedRange(NSRange(location: clamped, length: 0))
-        textView.scrollRangeToVisible(NSRange(location: clamped, length: 0))
+        let target = NSRange(location: clamped, length: 0)
+        // A block's far end out of sight is a jump Go Back returns from
+        // (7.1).
+        if isJump(to: target) {
+            (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
+        }
+        land(on: target)
     }
 
     @objc func goToBlockStart(_ sender: Any?) {

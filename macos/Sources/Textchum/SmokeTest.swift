@@ -35,6 +35,8 @@ func runSmokeTest() -> Int32 {
     SessionStore.directory = URL(
         fileURLWithPath: NSTemporaryDirectory() + "textchum-smoke-profile-\(getpid())", isDirectory: true)
     try? FileManager.default.createDirectory(at: SessionStore.directory, withIntermediateDirectories: true)
+    // Where a jump lands is read in the same turn that asked for it.
+    DocumentController.animatesJumps = false
 
     // Buffer round trip.
     let buffer = CoreBuffer()
@@ -1927,6 +1929,46 @@ func runSmokeTest() -> Int32 {
         findingsBench.window?.orderOut(nil)
     }
     print("next finding ok (round the document both ways, says so when there is nothing)")
+
+    // A jump out of sight lands a third of the way down the view, never
+    // at an edge; one to a line already on screen leaves the view where
+    // it is (7.3).
+    do {
+        let landingCore = CoreDocument()
+        let landingBench = Workbench(sidebar: nil)
+        let landing = DocumentController(document: landingCore)
+        landingBench.add(landing)
+        landingBench.window?.makeKeyAndOrderFront(nil)
+        guard let landingView = landing.primaryView, let clip = landingView.enclosingScrollView?.contentView
+        else {
+            print("FAIL: no view to land in")
+            return 1
+        }
+        let lines = (0..<400).map { "line \($0)" }.joined(separator: "\n")
+        landingView.insertText(lines, replacementRange: NSRange(location: 0, length: 0))
+        landing.reveal(line: 0, character: 0)
+        landing.reveal(line: 300, character: 0)
+        let height = clip.bounds.height
+        let caretRect = landingView.firstRect(forCharacterRange: landingView.selectedRange(), actualRange: nil)
+        guard let window = landingView.window else {
+            print("FAIL: the landing view has no window")
+            return 1
+        }
+        let caretY = landingView.convert(window.convertFromScreen(caretRect), from: nil).minY
+        let fromTop = caretY - clip.bounds.origin.y
+        guard height > 0, abs(fromTop - height / 3) < 40 else {
+            print("FAIL: a far jump landed \(fromTop) from the top of a \(height) view, not a third down")
+            return 1
+        }
+        let before = clip.bounds.origin
+        landing.reveal(line: 302, character: 0)
+        guard clip.bounds.origin == before else {
+            print("FAIL: a jump to a line on screen moved the view")
+            return 1
+        }
+        landingBench.window?.orderOut(nil)
+    }
+    print("jumps land ok (a third of the way down, the view left alone when the target is in sight)")
 
     // A balloon's content can be selected, and one longer than a
     // balloon should be scrolls from its top instead of being cut.

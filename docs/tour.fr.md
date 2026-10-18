@@ -186,8 +186,8 @@ texte, range la barre et ses marques et laisse le clavier au texte.
 
 **Aller à la ligne** (⌘L, Ctrl+L sous Linux) accepte un numéro, ou le
 `src/main.rs:412:8` entier collé depuis un journal de compilation — le
-nom du fichier et le bruit qui suit sont ignorés, la ligne est centrée,
-et Retour revient là où la lecture s'est interrompue.
+nom du fichier et le bruit qui suit sont ignorés, la ligne arrive au
+tiers de la hauteur de la vue, et Retour revient là où la lecture s'est interrompue.
 
 Une **barre de changements** descend à gauche de la gouttière et dit
 quelles lignes diffèrent du fichier tel qu'il est dans git : une bande

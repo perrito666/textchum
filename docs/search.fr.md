@@ -102,12 +102,23 @@ nom, et le mot a été sélectionné en tant que mot.
 ## La pile de sauts
 
 Chaque saut — un résultat de recherche, Aller à la Définition, une
-référence, une entrée du plan, un `chum` — retient d'où il est parti.
-**Go Back** (⌃⌘←) remonte ces origines ; **Go Forward** (⌃⌘→) les
+référence, une entrée du plan, un `chum`, Aller à la ligne, la
+découverte suivante — retient d'où il est parti. Find Next et Aller au
+début/à la fin du bloc aussi, quand leur destination est hors de vue ;
+un pas vers une correspondance déjà à l'écran n'est pas un saut. **Go
+Back** (⌃⌘←) remonte ces origines ; **Go Forward** (⌃⌘→) les
 redescend. L'histoire se réécrit depuis le point courant : sauter vers
-un nouvel endroit jette la piste avant, exactement comme la jumplist de
-vim. Les positions survivent aux éditions en ligne/colonne : revenir
-après un changement atterrit près, pas perdu.
+un nouvel endroit jette la piste avant. Les positions survivent aux
+éditions en ligne/colonne : revenir après un changement atterrit près,
+pas perdu.
+
+Un saut vers une ligne déjà à l'écran laisse la vue où elle est. Un
+saut hors de vue la déplace, en une brève animation, pour que la ligne
+se trouve au tiers de la hauteur, avec ce qui la précède en vue ; un
+saut lointain commence le mouvement un écran avant la cible, pour
+montrer de quel côté il est allé sans balayer tout le fichier. Quand
+le mouvement réduit est demandé dans les réglages du système, la vue se
+déplace d'un coup.
 
 ## Pas encore là
 

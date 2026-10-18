@@ -1310,12 +1310,65 @@ pub fn reveal(handles: &PageHandles, line: i32, character_utf16: usize) {
         return;
     };
     buffer.place_cursor(&target);
-    handles
-        .view
-        .scroll_to_iter(&mut target.clone(), 0.1, false, 0.0, 0.0);
+    land(&handles.view);
     handles.tab_view.set_selected_page(&handles.tab_page);
     handles.window.present();
     handles.view.grab_focus();
+}
+
+// MARK: Landing
+
+/// Brings the caret into sight the way a jump lands (7.3). When its line
+/// is on screen the view stays where it is: the eye is already there.
+/// Otherwise the view moves, in a short animation, so the line sits a
+/// third of the way down — with context above it, never at an edge. A
+/// far jump starts the motion a screen short of the target, so it says
+/// which way it went without sweeping through everything between. The
+/// animation follows the desktop's setting, and never holds up a key.
+pub fn land(view: &sourceview5::View) {
+    let buffer = view.buffer();
+    let caret = buffer.iter_at_mark(&buffer.get_insert());
+    if is_on_screen(view, &caret) {
+        return;
+    }
+    let visible = view.visible_rect();
+    let Some(adjustment) = view.vadjustment().filter(|_| visible.height() > 0) else {
+        // Not laid out yet: GTK puts it there once it is.
+        view.scroll_to_mark(&buffer.get_insert(), 0.0, true, 0.0, 1.0 / 3.0);
+        return;
+    };
+    let (line_top, _) = view.line_yrange(&caret);
+    let height = visible.height() as f64;
+    let from = adjustment.value();
+    let lowest = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+    let to = (from + (line_top - visible.y()) as f64 - height / 3.0).clamp(adjustment.lower(), lowest);
+    let start = if (to - from).abs() > height * 2.0 { to - height * (to - from).signum() } else { from };
+    let target = {
+        let adjustment = adjustment.clone();
+        adw::CallbackAnimationTarget::new(move |value| adjustment.set_value(value))
+    };
+    let animation = adw::TimedAnimation::new(view, start, to, 150, target);
+    animation.set_easing(adw::Easing::EaseOutCubic);
+    // The heights of lines not laid out yet are estimates; once there,
+    // the view settles on the exact place, which is no move at all when
+    // the estimate was right.
+    let view = view.clone();
+    animation.connect_done(move |_| {
+        let buffer = view.buffer();
+        let caret = buffer.iter_at_mark(&buffer.get_insert());
+        if !is_on_screen(&view, &caret) {
+            view.scroll_to_mark(&buffer.get_insert(), 0.0, true, 0.0, 1.0 / 3.0);
+        }
+    });
+    animation.play();
+}
+
+/// Whether the line `at` is on lies wholly inside the visible part of
+/// the view.
+pub fn is_on_screen(view: &sourceview5::View, at: &gtk::TextIter) -> bool {
+    let visible = view.visible_rect();
+    let (top, height) = view.line_yrange(at);
+    visible.height() > 0 && top >= visible.y() && top + height <= visible.y() + visible.height()
 }
 
 // MARK: Highlighting
