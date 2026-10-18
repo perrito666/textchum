@@ -813,6 +813,10 @@ msgid "Tests"
 msgstr "Pruebas"
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "Filter tests"
+msgstr "Filtrar pruebas"
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "A line for its input — ⏎ sends it"
 msgstr "Una línea para su entrada — ⏎ la envía"
 
@@ -1410,7 +1414,9 @@ msgstr "No se está depurando nada."
 msgid ""
 "The program is not stopped in the debugger: set a breakpoint and debug a "
 "test or a main."
-msgstr "El programa no está detenido en el depurador: pon un punto de interrupción y depura una prueba o un main."
+msgstr ""
+"El programa no está detenido en el depurador: pon un punto de interrupción y "
+"depura una prueba o un main."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "The run's output names no place in a file."

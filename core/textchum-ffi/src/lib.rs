@@ -268,15 +268,18 @@ pub unsafe extern "C" fn tc_run_read(app: *mut TcApp, id: u64) -> *mut c_char {
 
 /// The tests a run's output reported: `{suites: [{name, tests: [{name,
 /// outcome, line, duration}]}], passed, failed, skipped, running,
-/// rerun, summary}` — see [`textchum_core::run::Runs::tests`]. Null for an id
-/// there is no run for. Free with [`tc_string_free`].
+/// rerun, summary}` — see [`textchum_core::run::Runs::tests`] — with only
+/// the tests `query` matches listed, all of them for an empty one. Null
+/// for an id there is no run for. Free with [`tc_string_free`].
 ///
 /// # Safety
-/// `app` must be a live pointer from [`tc_app_new`].
+/// `app` must be a live pointer from [`tc_app_new`]; `query` must point to
+/// `query_len` readable bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tc_run_tests(app: *mut TcApp, id: u64) -> *mut c_char {
+pub unsafe extern "C" fn tc_run_tests(app: *mut TcApp, id: u64, query: *const c_char, query_len: usize) -> *mut c_char {
     let Some(app) = (unsafe { app.as_ref() }) else { return std::ptr::null_mut() };
-    catch_unwind(AssertUnwindSafe(|| app.runs.tests(id).map(owned_c_string).unwrap_or(std::ptr::null_mut())))
+    let query = unsafe { str_from_raw(query, query_len) }.unwrap_or_default();
+    catch_unwind(AssertUnwindSafe(|| app.runs.tests(id, query).map(owned_c_string).unwrap_or(std::ptr::null_mut())))
         .unwrap_or(std::ptr::null_mut())
 }
 

@@ -3144,6 +3144,12 @@ func runSmokeTest() -> Int32 {
             print("FAIL: choosing a test selected \(panel.selectedOutputText)")
             return 1
         }
+        panel.filterTests("two")
+        guard panel.listedTestNames == ["a::two"], panel.summaryText == "1 failed, 1 passed" else {
+            print("FAIL: filtering the tests listed \(panel.listedTestNames), \(panel.summaryText)")
+            return 1
+        }
+        panel.filterTests("")
         panel.chooseTest(named: "a::one")
         guard panel.runChosenTest(), let alone = rerun,
             alone == ("sh harness.sh cargo test -- a::one --exact", testRoot)
@@ -3159,7 +3165,7 @@ func runSmokeTest() -> Int32 {
         }
         testCore.runForget(id: id)
     }
-    print("test results ok (listed by suite, counted, a test shows its line, run alone, the failed run again)")
+    print("test results ok (listed by suite, counted, filtered by typing, a test shows its line, run alone, the failed run again)")
 
     // What can be run is marked in the gutter: the main and the test of
     // a file in a cargo package, and Run at Caret finds the test the

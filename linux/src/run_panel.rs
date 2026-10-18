@@ -52,8 +52,10 @@ pub struct RunPanel {
     summary: gtk::Label,
     rerun: gtk::Button,
     paned: gtk::Paned,
-    tests_scroll: gtk::ScrolledWindow,
     tests_list: gtk::ListBox,
+    /// Typing filters the tests (3.3); the entry and the list go together.
+    tests_filter: gtk::SearchEntry,
+    tests_side: gtk::Box,
     /// The tests as last read, to leave the list alone when unchanged.
     tests_json: RefCell<String>,
     rerun_command: RefCell<Option<String>>,
@@ -112,11 +114,17 @@ impl RunPanel {
         let tests_scroll = gtk::ScrolledWindow::builder()
             .child(&tests_list)
             .hscrollbar_policy(gtk::PolicyType::Never)
-            .width_request(160)
-            .visible(false)
+            .vexpand(true)
             .build();
+        let tests_filter = gtk::SearchEntry::new();
+        tests_filter.set_placeholder_text(Some(&tr("Filter tests")));
+        let tests_side = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        tests_side.append(&tests_filter);
+        tests_side.append(&tests_scroll);
+        tests_side.set_width_request(160);
+        tests_side.set_visible(false);
         let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
-        paned.set_start_child(Some(&tests_scroll));
+        paned.set_start_child(Some(&tests_side));
         paned.set_end_child(Some(&scroll));
         paned.set_shrink_start_child(false);
         paned.set_resize_start_child(false);
@@ -152,8 +160,9 @@ impl RunPanel {
             summary,
             rerun: rerun.clone(),
             paned,
-            tests_scroll,
             tests_list: tests_list.clone(),
+            tests_filter: tests_filter.clone(),
+            tests_side,
             tests_json: RefCell::new(String::new()),
             rerun_command: RefCell::new(None),
             test_rows: RefCell::new(Vec::new()),
@@ -179,6 +188,16 @@ impl RunPanel {
                     .and_then(|test| test.as_ref().and_then(|test| test.line));
                 if let Some(line) = line {
                     panel.show_output_line(line);
+                }
+            });
+        }
+        {
+            let weak = Rc::downgrade(&panel);
+            tests_filter.connect_search_changed(move |_| {
+                if let Some(panel) = weak.upgrade() {
+                    if let Some(id) = panel.run_id.get() {
+                        panel.refresh_tests(id);
+                    }
                 }
             });
         }
@@ -281,7 +300,8 @@ impl RunPanel {
         *self.rerun_command.borrow_mut() = None;
         self.test_rows.borrow_mut().clear();
         self.tests_list.remove_all();
-        self.tests_scroll.set_visible(false);
+        self.tests_side.set_visible(false);
+        self.tests_filter.set_text("");
         self.summary.set_text("");
         self.rerun.set_visible(false);
         self.status.set_text(&tr("running"));
@@ -389,14 +409,15 @@ impl RunPanel {
 
     /// Lists the tests the output reported, when they changed.
     fn refresh_tests(&self, id: u64) {
-        let Some(json) = Shell::instance().runs.borrow().tests(id) else { return };
+        let query = self.tests_filter.text().to_string();
+        let Some(json) = Shell::instance().runs.borrow().tests(id, &query) else { return };
         if *self.tests_json.borrow() == json {
             return;
         }
         let Ok(tests) = serde_json::from_str::<serde_json::Value>(&json) else { return };
         *self.tests_json.borrow_mut() = json;
         let suites = tests["suites"].as_array().cloned().unwrap_or_default();
-        let first = !self.tests_scroll.is_visible();
+        let reported = ["passed", "failed", "skipped", "running"].iter().any(|count| tests[*count].as_u64().unwrap_or(0) > 0);
         self.tests_list.remove_all();
         let mut rows = Vec::new();
         for suite in &suites {
@@ -418,8 +439,8 @@ impl RunPanel {
             }
         }
         *self.test_rows.borrow_mut() = rows;
-        if !suites.is_empty() && first {
-            self.tests_scroll.set_visible(true);
+        if reported && !self.tests_side.is_visible() {
+            self.tests_side.set_visible(true);
             let width = self.root.width();
             self.paned.set_position(if width > 0 { (width * 3 / 10).clamp(200, 320) } else { 240 });
         }
@@ -534,7 +555,20 @@ impl RunPanel {
     }
 
     pub(crate) fn shows_tests(&self) -> bool {
-        self.tests_scroll.is_visible()
+        self.tests_side.is_visible()
+    }
+
+    /// Types `query` into the tests' filter, for the smoke test.
+    pub(crate) fn filter_tests(&self, query: &str) {
+        self.tests_filter.set_text(query);
+        if let Some(id) = self.run_id.get() {
+            self.refresh_tests(id);
+        }
+    }
+
+    /// The tests listed, as the filter leaves them, for the smoke test.
+    pub(crate) fn listed_test_names(&self) -> Vec<String> {
+        self.test_rows.borrow().iter().flatten().map(|test| test.name.clone()).collect()
     }
 
     pub(crate) fn summary_text(&self) -> String {
