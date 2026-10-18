@@ -58,6 +58,10 @@ pub enum Event {
         request: String,
         params: String,
     },
+    /// A debug session has news; see the `textchum-dap` crate. `kind`
+    /// says what (`stopped`, `output`, `variables`, `ended`, …) and
+    /// `json` carries it.
+    Debug { session: u64, kind: String, json: String },
 }
 
 /// A handle for pushing events into the app's delivery channel from

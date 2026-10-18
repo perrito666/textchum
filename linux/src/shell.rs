@@ -842,6 +842,8 @@ impl Shell {
                         callback(&json);
                     }
                 }
+                // This shell starts no debug session yet, so none has news.
+                Event::Debug { .. } => {}
                 Event::ApplyEdit { server, root, request, params } => {
                     // A code action that runs a command makes its edit
                     // this way: one refactoring, as if the action had

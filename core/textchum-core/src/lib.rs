@@ -27,6 +27,7 @@ pub mod everywhere;
 pub mod diagnostics;
 mod config;
 mod document;
+pub mod framing;
 mod fsutil;
 pub mod goto;
 pub mod grammar;

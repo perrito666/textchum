@@ -43,6 +43,10 @@ pub const TC_EVENT_RUN: u32 = 5;
 /// request's id as JSON and `payload` its `{label?, edit}`; answer with
 /// [`tc_lsp_answer_apply_edit`].
 pub const TC_EVENT_APPLY_EDIT: u32 = 6;
+/// Event kind: a debug session has news. `seq` is the session's id,
+/// `status` what kind of news (`stopped`, `output`, `variables`,
+/// `ended`, …) and `payload` the news as JSON — see `textchum_dap`.
+pub const TC_EVENT_DEBUG: u32 = 7;
 
 /// An event delivered from the core to the shell.
 ///
@@ -98,6 +102,8 @@ pub struct TcApp {
     /// Before `inner`, which waits for every sender of its channel to go
     /// when it is dropped; the runs hold one.
     runs: textchum_core::run::Runs,
+    /// Before `inner` for the same reason: each session holds a sender.
+    debuggers: textchum_dap::Debuggers,
     inner: App,
 }
 
@@ -187,6 +193,14 @@ pub extern "C" fn tc_app_new(callback: TcEventCallback, userdata: *mut c_void) -
                     out.status = status.as_ptr();
                     callback(&out, userdata.get());
                 }
+                Event::Debug { session, kind, json } => {
+                    let (kind, json) = (callback_cstring(kind), callback_cstring(json));
+                    let mut out = TcEvent::new(TC_EVENT_DEBUG);
+                    out.seq = session;
+                    out.status = kind.as_ptr();
+                    out.payload = json.as_ptr();
+                    callback(&out, userdata.get());
+                }
                 Event::ApplyEdit { server, root, request, params } => {
                     let (server, root) = (callback_cstring(server), callback_cstring(root));
                     let (request, params) = (callback_cstring(request), callback_cstring(params));
@@ -201,7 +215,8 @@ pub extern "C" fn tc_app_new(callback: TcEventCallback, userdata: *mut c_void) -
         });
         let pool = textchum_lsp::Pool::new(app.sender());
         let runs = textchum_core::run::Runs::new(app.sender());
-        Box::into_raw(Box::new(TcApp { inner: app, pool, runs }))
+        let debuggers = textchum_dap::Debuggers::new(app.sender());
+        Box::into_raw(Box::new(TcApp { inner: app, pool, runs, debuggers }))
     })
     .unwrap_or(std::ptr::null_mut())
 }
@@ -289,6 +304,125 @@ pub unsafe extern "C" fn tc_run_rerun_test(
     catch_unwind(AssertUnwindSafe(|| app.runs.rerun_test(id, suite, name).map(owned_c_string)))
         .ok()
         .flatten()
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Debugs a runnable: `launch` is its launch description (a runnable's
+/// `launch`), `cwd` its directory, `breakpoints` `{path: [line]}` with
+/// zero-based lines. Answers `{"id": n}`, whose `TC_EVENT_DEBUG` events
+/// say what happens, or `{"error": why}`. Free with [`tc_string_free`].
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; the strings must
+/// point to as many readable bytes as their lengths say.
+#[no_mangle]
+pub unsafe extern "C" fn tc_debug_start(
+    app: *mut TcApp,
+    launch: *const c_char,
+    launch_len: usize,
+    cwd: *const c_char,
+    cwd_len: usize,
+    breakpoints: *const c_char,
+    breakpoints_len: usize,
+) -> *mut c_char {
+    let Some(app) = (unsafe { app.as_mut() }) else { return std::ptr::null_mut() };
+    let (Some(launch), Some(cwd), Some(breakpoints)) = (
+        unsafe { str_from_raw(launch, launch_len) },
+        unsafe { str_from_raw(cwd, cwd_len) },
+        unsafe { str_from_raw(breakpoints, breakpoints_len) },
+    ) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let launch: serde_json::Value = serde_json::from_str(launch).unwrap_or_default();
+        let breakpoints: Vec<(std::path::PathBuf, Vec<usize>)> = serde_json::from_str::<serde_json::Value>(breakpoints)
+            .ok()
+            .and_then(|value| value.as_object().cloned())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(path, lines)| {
+                let lines = lines.as_array().into_iter().flatten().filter_map(|line| line.as_u64()).map(|line| line as usize);
+                (std::path::PathBuf::from(path), lines.collect())
+            })
+            .collect();
+        let answer = match app.debuggers.start(&launch, std::path::Path::new(cwd), breakpoints) {
+            Ok(id) => serde_json::json!({"id": id}),
+            Err(why) => serde_json::json!({"error": why}),
+        };
+        owned_c_string(answer.to_string())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Sends a debug session a command, as JSON — see
+/// `textchum_dap::Command::from_json`. False when the session is over or
+/// the command is not one.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; `command` must point
+/// to `command_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_debug_send(app: *mut TcApp, id: u64, command: *const c_char, command_len: usize) -> bool {
+    let Some(app) = (unsafe { app.as_ref() }) else { return false };
+    let Some(command) = (unsafe { str_from_raw(command, command_len) }).and_then(textchum_dap::Command::from_json) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| app.debuggers.send(id, command))).unwrap_or(false)
+}
+
+/// A file's breakpoints changed: every debug session is told. `lines` is
+/// a JSON array of zero-based lines.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; the strings must
+/// point to as many readable bytes as their lengths say.
+#[no_mangle]
+pub unsafe extern "C" fn tc_debug_set_breakpoints(
+    app: *mut TcApp,
+    path: *const c_char,
+    path_len: usize,
+    lines: *const c_char,
+    lines_len: usize,
+) {
+    let Some(app) = (unsafe { app.as_ref() }) else { return };
+    let (Some(path), Some(lines)) = (unsafe { str_from_raw(path, path_len) }, unsafe { str_from_raw(lines, lines_len) })
+    else {
+        return;
+    };
+    let lines: Vec<usize> = serde_json::from_str(lines).unwrap_or_default();
+    let _ = catch_unwind(AssertUnwindSafe(|| app.debuggers.set_breakpoints(std::path::Path::new(path), &lines)));
+}
+
+/// Ends a debug session and lets go of it.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_debug_forget(app: *mut TcApp, id: u64) {
+    let Some(app) = (unsafe { app.as_mut() }) else { return };
+    let _ = catch_unwind(AssertUnwindSafe(|| app.debuggers.forget(id)));
+}
+
+/// Puts a breakpoint on zero-based `line` of the document, or takes away
+/// the one there; true when there is one now.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_toggle_breakpoint(document: *mut TcDocument, line: usize) -> bool {
+    let Some(document) = (unsafe { document.as_mut() }) else { return false };
+    catch_unwind(AssertUnwindSafe(|| document.inner.toggle_breakpoint(line))).unwrap_or(false)
+}
+
+/// The document's breakpoints, a JSON array of zero-based lines. Free
+/// with [`tc_string_free`].
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_breakpoints(document: *const TcDocument) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(serde_json::json!(document.inner.breakpoints()).to_string())))
         .unwrap_or(std::ptr::null_mut())
 }
 

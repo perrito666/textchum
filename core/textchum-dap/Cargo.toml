@@ -1,0 +1,10 @@
+[package]
+name = "textchum-dap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Debug Adapter Protocol client: one session per debugged program."
+
+[dependencies]
+textchum-core = { path = "../textchum-core" }
+serde_json = "1"

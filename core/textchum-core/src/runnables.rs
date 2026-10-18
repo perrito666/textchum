@@ -26,6 +26,11 @@ pub struct Runnable {
     pub name: String,
     pub command: String,
     pub cwd: PathBuf,
+    /// How a debugger runs it: `{adapter, …}` with what that adapter's
+    /// launch needs — a program or a module and its arguments, or the
+    /// cargo build that makes the program — or null when it cannot be
+    /// debugged (a benchmark). Read by the debug-adapter client.
+    pub launch: serde_json::Value,
 }
 
 /// The runnables of a file in `language` at `path`, from its syntax
@@ -72,12 +77,12 @@ fn rust(path: &Path, root: Node<'_>, text: &dyn Fn(Node<'_>) -> String) -> Vec<R
     let stem = |name: &str| name.trim_end_matches(".rs").to_owned();
     // What the file is to cargo: the target it belongs to, and the
     // module path of its top level within that target.
-    let (target, module): (Option<String>, Vec<String>) = match parts.iter().map(String::as_str).collect::<Vec<_>>()[..] {
+    let (target_parts, module): (Option<(&str, String)>, Vec<String>) = match parts.iter().map(String::as_str).collect::<Vec<_>>()[..] {
         ["src", "main.rs"] | ["src", "lib.rs"] => (None, vec![]),
-        ["src", "bin", file] => (Some(format!("--bin {}", quote(&stem(file)))), vec![]),
-        ["src", "bin", name, "main.rs"] => (Some(format!("--bin {}", quote(name))), vec![]),
-        ["examples", file] => (Some(format!("--example {}", quote(&stem(file)))), vec![]),
-        ["tests", file] => (Some(format!("--test {}", quote(&stem(file)))), vec![]),
+        ["src", "bin", file] => (Some(("--bin", stem(file))), vec![]),
+        ["src", "bin", name, "main.rs"] => (Some(("--bin", name.to_owned())), vec![]),
+        ["examples", file] => (Some(("--example", stem(file))), vec![]),
+        ["tests", file] => (Some(("--test", stem(file))), vec![]),
         ["src", ref inner @ ..] => {
             let mut module: Vec<String> = inner.iter().map(|part| stem(part)).collect();
             if module.last().map(String::as_str) == Some("mod") {
@@ -87,6 +92,20 @@ fn rust(path: &Path, root: Node<'_>, text: &dyn Fn(Node<'_>) -> String) -> Vec<R
         }
         _ => return Vec::new(),
     };
+    let target = target_parts.as_ref().map(|(flag, name)| format!("{flag} {}", quote(name)));
+    // Which artifact of the build is the program: by the target's kind,
+    // and its name when the file names one. Tests of a file under src/
+    // are in the library's test program when there is a library.
+    let has_lib = package.join("src/lib.rs").is_file();
+    let pick = |test: bool| match &target_parts {
+        Some((flag, name)) => serde_json::json!({"kind": flag.trim_start_matches("--"), "name": name}),
+        None if test && has_lib && parts.first().map(String::as_str) == Some("src") && parts.get(1).map(String::as_str) != Some("main.rs") => {
+            serde_json::json!({"kind": "lib"})
+        }
+        None => serde_json::json!({"kind": "bin"}),
+    };
+    let target_args: Vec<String> =
+        target_parts.iter().flat_map(|(flag, name)| [flag.to_string(), name.clone()]).collect();
     let mut found = Vec::new();
     collect_rust(root, &module, root, text, &mut |node, kind, path_name| {
         let (line, end_line) = span(node);
@@ -104,7 +123,25 @@ fn rust(path: &Path, root: Node<'_>, text: &dyn Fn(Node<'_>) -> String) -> Vec<R
                 None => format!("cargo test -- {} --exact", quote(&path_name)),
             },
         };
-        found.push(Runnable { line, end_line, kind, name: path_name, command, cwd: package.clone() });
+        let cargo = |words: &[&str]| -> Vec<String> {
+            words.iter().map(|word| word.to_string()).chain(target_args.iter().cloned()).collect()
+        };
+        let launch = match kind {
+            "main" => serde_json::json!({
+                "adapter": "lldb",
+                "cargo": cargo(&["build", "--message-format=json"]),
+                "pick": pick(false),
+                "args": [],
+            }),
+            "test" => serde_json::json!({
+                "adapter": "lldb",
+                "cargo": cargo(&["test", "--no-run", "--message-format=json"]),
+                "pick": pick(true),
+                "args": [path_name, "--exact"],
+            }),
+            _ => serde_json::Value::Null,
+        };
+        found.push(Runnable { line, end_line, kind, name: path_name, command, cwd: package.clone(), launch });
     });
     found
 }
@@ -180,20 +217,28 @@ fn go(path: &Path, root: Node<'_>, text: &dyn Fn(Node<'_>) -> String) -> Vec<Run
         }
         let Some(name) = node.child_by_field_name("name").map(|name| text(name)) else { continue };
         let (line, end_line) = span(node);
-        let runnable = |kind: &'static str, command: String| Runnable {
+        let runnable = |kind: &'static str, command: String, launch: serde_json::Value| Runnable {
             line,
             end_line,
             kind,
             name: name.clone(),
             command,
             cwd: dir.to_path_buf(),
+            launch,
         };
+        let program = dir.to_string_lossy().into_owned();
         if is_test_file && named(&name, "Test") {
-            found.push(runnable("test", format!("go test -v -run {} .", quote(&format!("^{name}$")))));
+            let launch = serde_json::json!({
+                "adapter": "dlv", "mode": "test", "program": program,
+                "args": ["-test.run", format!("^{name}$"), "-test.v"],
+            });
+            found.push(runnable("test", format!("go test -v -run {} .", quote(&format!("^{name}$"))), launch));
         } else if is_test_file && named(&name, "Benchmark") {
-            found.push(runnable("bench", format!("go test -run '^$' -bench {} .", quote(&format!("^{name}$")))));
+            let command = format!("go test -run '^$' -bench {} .", quote(&format!("^{name}$")));
+            found.push(runnable("bench", command, serde_json::Value::Null));
         } else if !is_test_file && is_main_package && name == "main" {
-            found.push(runnable("main", "go run .".to_owned()));
+            let launch = serde_json::json!({"adapter": "dlv", "mode": "debug", "program": program, "args": []});
+            found.push(runnable("main", "go run .".to_owned(), launch));
         }
     }
     found
@@ -221,7 +266,8 @@ fn python(path: &Path, root: Node<'_>, text: &dyn Fn(Node<'_>) -> String) -> Vec
         let (line, end_line) = span(outer);
         let id = format!("{relative}::{id}");
         let command = format!("python3 -m pytest -v {}", quote(&id));
-        found.push(Runnable { line, end_line, kind: "test", name: id, command, cwd: cwd.clone() });
+        let launch = serde_json::json!({"adapter": "debugpy", "module": "pytest", "args": ["-v", id]});
+        found.push(Runnable { line, end_line, kind: "test", name: id, command, cwd: cwd.clone(), launch });
     };
     for node in children(root) {
         if is_test_file {
@@ -255,6 +301,7 @@ fn python(path: &Path, root: Node<'_>, text: &dyn Fn(Node<'_>) -> String) -> Vec
                     name: relative.clone(),
                     command: format!("python3 {}", quote(&relative)),
                     cwd: cwd.clone(),
+                    launch: serde_json::json!({"adapter": "debugpy", "program": relative, "args": []}),
                 });
             }
         }
@@ -296,11 +343,15 @@ mod tests {
             ]
         );
         assert_eq!(found[0].cwd, package);
+        assert_eq!(found[1].launch["cargo"], serde_json::json!(["test", "--no-run", "--message-format=json"]));
+        assert_eq!(found[1].launch["pick"], serde_json::json!({"kind": "bin"}));
+        assert_eq!(found[1].launch["args"], serde_json::json!(["tests::adds", "--exact"]));
         // A module file, and an integration test.
         let module = runnables("rust", &package.join("src/net/mod.rs"), "#[test]\nfn binds() {}\n");
         assert_eq!(module[0].command, "cargo test -- net::binds --exact");
         let integration = runnables("rust", &package.join("tests/api.rs"), "#[test]\nfn serves() {}\n");
         assert_eq!(integration[0].command, "cargo test --test api -- serves --exact");
+        assert_eq!(integration[0].launch["pick"], serde_json::json!({"kind": "test", "name": "api"}));
         let _ = std::fs::remove_dir_all(&package);
     }
 

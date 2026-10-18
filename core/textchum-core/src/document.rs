@@ -136,6 +136,9 @@ pub struct Document {
     /// it grew to: Shrink Selection walks back down them while the
     /// selection is still the one it left. Any edit forgets them.
     selection_steps: Vec<(usize, usize)>,
+    /// The zero-based lines with a breakpoint, moved with the text as it
+    /// is edited above them.
+    breakpoints: std::collections::BTreeSet<usize>,
     selection_grown: Option<(usize, usize)>,
     /// Where the text was changed, for Go to Last Edit; see
     /// [`crate::trail`].
@@ -167,6 +170,7 @@ impl Document {
             inlay_hints: Vec::new(),
             semantic_tokens: Vec::new(),
             selection_steps: Vec::new(),
+            breakpoints: std::collections::BTreeSet::new(),
             selection_grown: None,
             edit_trail: crate::trail::Trail::default(),
         }
@@ -192,6 +196,7 @@ impl Document {
             inlay_hints: Vec::new(),
             semantic_tokens: Vec::new(),
             selection_steps: Vec::new(),
+            breakpoints: std::collections::BTreeSet::new(),
             selection_grown: None,
             edit_trail: crate::trail::Trail::default(),
         };
@@ -521,7 +526,36 @@ impl Document {
         // Loading a file, reloading it or replacing all of it is not a
         // place anything was edited.
         let whole = start == 0 && end == self.buffer.len_utf16();
+        // Where the edit falls in lines, before it, for the breakpoints.
+        let lines_before = (!self.breakpoints.is_empty() && !whole).then(|| {
+            let first = self.buffer.line_at_utf16(start);
+            let at_line_start = start == end && start == self.buffer.utf16_line_start(first);
+            (first, self.buffer.line_at_utf16(end), at_line_start)
+        });
         self.buffer.replace_utf16(start, end, text)?;
+        if let Some((first, last, at_line_start)) = lines_before {
+            let added = text.matches('\n').count();
+            let removed = last - first;
+            self.breakpoints = self
+                .breakpoints
+                .iter()
+                .map(|&line| {
+                    // A line typed in at the start of a breakpoint's line
+                    // pushes its text, and the breakpoint, down.
+                    if line > last || (line == first && at_line_start) {
+                        line + added - removed
+                    } else if line > first {
+                        // Its line was joined into the edit's first.
+                        first
+                    } else {
+                        line
+                    }
+                })
+                .collect();
+        } else if whole {
+            let lines = self.buffer.len_lines();
+            self.breakpoints.retain(|line| *line < lines);
+        }
 
         // Fold the edit into the snippet's live regions. One that the
         // edit cut across cannot be shifted into meaning anything, so
@@ -734,7 +768,7 @@ impl Document {
                 serde_json::json!({
                     "line": runnable.line, "endLine": runnable.end_line, "kind": runnable.kind,
                     "name": runnable.name, "command": runnable.command,
-                    "cwd": runnable.cwd.to_string_lossy(),
+                    "cwd": runnable.cwd.to_string_lossy(), "launch": runnable.launch,
                 })
             })
             .collect();
@@ -743,6 +777,25 @@ impl Document {
 
     /// [`Self::runnable_at`] as one row of [`Self::runnables_json`], or
     /// `null`.
+    /// Puts a breakpoint on zero-based `line`, or takes away the one
+    /// there; true when there is one now.
+    pub fn toggle_breakpoint(&mut self, line: usize) -> bool {
+        if !self.breakpoints.remove(&line) {
+            self.breakpoints.insert(line);
+            return true;
+        }
+        false
+    }
+
+    /// The zero-based lines with a breakpoint, in order.
+    pub fn breakpoints(&self) -> Vec<usize> {
+        self.breakpoints.iter().copied().collect()
+    }
+
+    pub fn set_breakpoints(&mut self, lines: &[usize]) {
+        self.breakpoints = lines.iter().copied().collect();
+    }
+
     /// Several carets: what a caret command or a keystroke does to the
     /// selections in `request` — see [`crate::carets::request_json`].
     pub fn carets_json(&self, request: &str) -> String {
@@ -774,7 +827,7 @@ impl Document {
             Some(runnable) => serde_json::json!({
                 "line": runnable.line, "endLine": runnable.end_line, "kind": runnable.kind,
                 "name": runnable.name, "command": runnable.command,
-                "cwd": runnable.cwd.to_string_lossy(),
+                "cwd": runnable.cwd.to_string_lossy(), "launch": runnable.launch,
             })
             .to_string(),
             None => "null".to_owned(),
@@ -1578,6 +1631,28 @@ use d;
         assert_eq!(crumbs[0].0, "main");
         assert_eq!(crumbs[0].1, 5, "after a two-byte character that is one UTF-16 unit");
         assert!(document.breadcrumbs_json(caret).contains("\"label\":\"main\""));
+    }
+
+    #[test]
+    fn breakpoints_ride_the_text_and_undo_brings_them_back() {
+        let mut document = Document::new();
+        document.replace_utf16(0, 0, "a\nb\nc\nd\n").unwrap();
+        assert!(document.toggle_breakpoint(2));
+        assert!(document.toggle_breakpoint(3));
+        // Two lines typed above move both down.
+        document.replace_utf16(0, 0, "x\ny\n").unwrap();
+        assert_eq!(document.breakpoints(), [4, 5]);
+        // Joining a breakpoint's line into the one before puts it on the
+        // joined line, where the two become one.
+        let at = document.offset_for_line(6, 1);
+        document.replace_utf16(at - 1, at, "").unwrap();
+        assert_eq!(document.breakpoints(), [4]);
+        // Undoing the lines typed above moves it back up with its text.
+        document.undo();
+        document.undo();
+        assert_eq!(document.breakpoints(), [2]);
+        assert!(!document.toggle_breakpoint(2));
+        assert!(document.breakpoints().is_empty());
     }
 
     #[test]

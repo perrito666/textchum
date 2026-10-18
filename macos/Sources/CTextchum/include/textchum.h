@@ -52,6 +52,13 @@
 #define TC_EVENT_APPLY_EDIT 6
 
 /**
+ * Event kind: a debug session has news. `seq` is the session's id,
+ * `status` what kind of news (`stopped`, `output`, `variables`,
+ * `ended`, …) and `payload` the news as JSON — see `textchum_dap`.
+ */
+#define TC_EVENT_DEBUG 7
+
+/**
  * Appearance choice: follow the system.
  */
 #define TC_APPEARANCE_SYSTEM 0
@@ -293,6 +300,75 @@ char *tc_run_rerun_test(struct TcApp *app,
                         uintptr_t suite_len,
                         const char *name,
                         uintptr_t name_len);
+
+/**
+ * Debugs a runnable: `launch` is its launch description (a runnable's
+ * `launch`), `cwd` its directory, `breakpoints` `{path: [line]}` with
+ * zero-based lines. Answers `{"id": n}`, whose `TC_EVENT_DEBUG` events
+ * say what happens, or `{"error": why}`. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; the strings must
+ * point to as many readable bytes as their lengths say.
+ */
+char *tc_debug_start(struct TcApp *app,
+                     const char *launch,
+                     uintptr_t launch_len,
+                     const char *cwd,
+                     uintptr_t cwd_len,
+                     const char *breakpoints,
+                     uintptr_t breakpoints_len);
+
+/**
+ * Sends a debug session a command, as JSON — see
+ * `textchum_dap::Command::from_json`. False when the session is over or
+ * the command is not one.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; `command` must point
+ * to `command_len` readable bytes.
+ */
+bool tc_debug_send(struct TcApp *app, uint64_t id, const char *command, uintptr_t command_len);
+
+/**
+ * A file's breakpoints changed: every debug session is told. `lines` is
+ * a JSON array of zero-based lines.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; the strings must
+ * point to as many readable bytes as their lengths say.
+ */
+void tc_debug_set_breakpoints(struct TcApp *app,
+                              const char *path,
+                              uintptr_t path_len,
+                              const char *lines,
+                              uintptr_t lines_len);
+
+/**
+ * Ends a debug session and lets go of it.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`].
+ */
+void tc_debug_forget(struct TcApp *app, uint64_t id);
+
+/**
+ * Puts a breakpoint on zero-based `line` of the document, or takes away
+ * the one there; true when there is one now.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+bool tc_document_toggle_breakpoint(struct TcDocument *document, uintptr_t line);
+
+/**
+ * The document's breakpoints, a JSON array of zero-based lines. Free
+ * with [`tc_string_free`].
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_breakpoints(const struct TcDocument *document);
 
 /**
  * Answers a server's `workspace/applyEdit` request, as a

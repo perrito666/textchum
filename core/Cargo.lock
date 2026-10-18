@@ -748,12 +748,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "textchum-dap"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "textchum-core",
+]
+
+[[package]]
 name = "textchum-ffi"
 version = "0.1.0"
 dependencies = [
  "cbindgen",
  "serde_json",
  "textchum-core",
+ "textchum-dap",
  "textchum-lsp",
 ]
 

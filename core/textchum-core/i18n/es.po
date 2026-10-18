@@ -227,6 +227,39 @@ msgstr "Servidor de lenguaje"
 msgid "Formats with the server's own formatter"
 msgstr "Formatea con el formateador propio del servidor"
 
+#: core/textchum-dap/src/lib.rs
+msgid "Nothing here can be debugged: put the caret in a test or a main."
+msgstr "Aquí no hay nada que depurar: pon el cursor en una prueba o en un main."
+
+#: core/textchum-dap/src/lib.rs
+msgid "The build made no program to debug."
+msgstr "La compilación no produjo ningún programa que depurar."
+
+#: core/textchum-dap/src/lib.rs
+msgid "{} is not installed (install with: {})"
+msgstr "{} no está instalado (instálalo con: {})"
+
+#: core/textchum-dap/src/lib.rs
+msgid "The build failed; its messages are in the console."
+msgstr "La compilación falló; sus mensajes están en la consola."
+
+#: core/textchum-dap/src/session.rs
+msgid "The {} adapter stopped before it answered; if it is not installed: {}"
+msgstr "El adaptador {} se detuvo antes de responder; si no está instalado: {}"
+
+#: core/textchum-dap/src/session.rs
+msgid ""
+"The program has not started after 15 seconds. macOS may be asking whether a "
+"debugger can take control of it: approve the request, or turn on developer "
+"mode with DevToolsSecurity -enable."
+msgstr "El programa no ha arrancado tras 15 segundos. Puede que macOS esté preguntando si un depurador puede tomar el control: aprueba la petición, o activa el modo de desarrollador con DevToolsSecurity -enable."
+
+#: core/textchum-dap/src/session.rs
+msgid ""
+"The program has not started after 15 seconds; the adapter may be waiting for "
+"something it cannot ask for here."
+msgstr "El programa no ha arrancado tras 15 segundos; puede que el adaptador espere algo que aquí no puede pedir."
+
 #: linux/src/chords.rs macos/Sources/Textchum/ChordPanel.swift
 msgid "esc closes"
 msgstr "esc cierra"

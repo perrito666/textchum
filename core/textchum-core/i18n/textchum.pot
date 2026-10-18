@@ -225,6 +225,39 @@ msgstr ""
 msgid "Formats with the server's own formatter"
 msgstr ""
 
+#: core/textchum-dap/src/lib.rs
+msgid "Nothing here can be debugged: put the caret in a test or a main."
+msgstr ""
+
+#: core/textchum-dap/src/lib.rs
+msgid "The build made no program to debug."
+msgstr ""
+
+#: core/textchum-dap/src/lib.rs
+msgid "{} is not installed (install with: {})"
+msgstr ""
+
+#: core/textchum-dap/src/lib.rs
+msgid "The build failed; its messages are in the console."
+msgstr ""
+
+#: core/textchum-dap/src/session.rs
+msgid "The {} adapter stopped before it answered; if it is not installed: {}"
+msgstr ""
+
+#: core/textchum-dap/src/session.rs
+msgid ""
+"The program has not started after 15 seconds. macOS may be asking whether a "
+"debugger can take control of it: approve the request, or turn on developer "
+"mode with DevToolsSecurity -enable."
+msgstr ""
+
+#: core/textchum-dap/src/session.rs
+msgid ""
+"The program has not started after 15 seconds; the adapter may be waiting for "
+"something it cannot ask for here."
+msgstr ""
+
 #: linux/src/chords.rs macos/Sources/Textchum/ChordPanel.swift
 msgid "esc closes"
 msgstr ""
