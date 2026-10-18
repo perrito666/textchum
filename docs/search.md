@@ -18,8 +18,7 @@ courtesy of ripgrep's own engine embedded in the core — not a subprocess.
 ## Open Quickly (⌘T)
 
 Type fragments of a file name — `editwc` finds
-`EditorWindowController.swift` — with fzf-style fuzzy matching and
-ranking. ↑/↓ move the selection, ⏎ opens (fronting the window if the
+`EditorWindowController.swift` — with fuzzy matching and ranking. ↑/↓ move the selection, ⏎ opens (fronting the window if the
 file is already open), ⎋ closes. An empty query browses the scope
 alphabetically. The same stacked filters as Find in Project apply
 here too — every filter kind refines the matched paths — and the
@@ -32,6 +31,12 @@ instead, so refining a query never opens a file by accident. ⌘⏎
 and a double-click opens too. The status strip spells this out. The
 panel can be widened, and keeps its size; in a row the directory gives
 way first, losing its head, so the file name is always readable.
+
+Under the list, the selected row's place is shown: a file's first
+lines in Open Quickly, a match's line among the lines around it in
+Find in Project, a symbol's declaration in Go to Symbol — read from
+the open document when the file is open, which may be ahead of the
+disk. The divider between the two can be dragged.
 
 The scope is walked once when the panel opens, then matched in memory
 — typing stays instant on a real repository, and the file count in the

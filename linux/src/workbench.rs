@@ -5107,6 +5107,63 @@ fn picker_places(labels: Vec<String>, places: Vec<Option<(String, i32)>>) -> Vec
         .collect()
 }
 
+/// The view a list of places shows the selected one in (3.5).
+pub(crate) fn place_preview() -> gtk::TextView {
+    let preview = gtk::TextView::new();
+    preview.set_editable(false);
+    preview.set_cursor_visible(false);
+    preview.set_monospace(true);
+    preview.set_left_margin(8);
+    preview.set_top_margin(8);
+    let mark = gtk::TextTag::builder().name("place").paragraph_background("rgba(53,132,228,0.25)").build();
+    preview.buffer().tag_table().add(&mark);
+    preview
+}
+
+/// Shows the zero-based `line` of a file among the lines around it,
+/// with the line marked; None clears it. The open document as it is in
+/// the editor, which may be ahead of the disk; else the file.
+pub(crate) fn show_place(preview: &gtk::TextView, place: Option<(&str, i32)>) {
+    let buffer = preview.buffer();
+    let Some((path, line)) = place else {
+        buffer.set_text("");
+        return;
+    };
+    let open = Shell::instance()
+        .pages
+        .borrow()
+        .get(path)
+        .map(|handles| handles.document.state.borrow().document.text());
+    let text = open.or_else(|| std::fs::read_to_string(path).ok()).unwrap_or_default();
+    let (first, lines) = references::place_preview(&text, line.max(0) as usize);
+    let width = (first + lines.len()).to_string().len();
+    let shown: String = lines
+        .iter()
+        .enumerate()
+        .map(|(at, text)| format!("{:>width$}  {text}\n", first + at + 1))
+        .collect();
+    buffer.set_text(&shown);
+    let target = (line.max(0) as usize).saturating_sub(first) as i32;
+    if let (Some(start), Some(mut end)) = (buffer.iter_at_line(target), buffer.iter_at_line(target)) {
+        end.forward_to_line_end();
+        buffer.apply_tag_by_name("place", &start, &end);
+    }
+}
+
+/// A picker's list over the preview of its selected row, the list
+/// taking the larger share.
+fn list_over_preview(list: &gtk::ScrolledWindow, preview: &gtk::TextView) -> gtk::Paned {
+    let preview_scroll = gtk::ScrolledWindow::builder().child(preview).vexpand(true).build();
+    let paned = gtk::Paned::new(gtk::Orientation::Vertical);
+    paned.set_start_child(Some(list));
+    paned.set_end_child(Some(&preview_scroll));
+    paned.set_resize_start_child(true);
+    paned.set_shrink_end_child(false);
+    paned.set_position(240);
+    paned.set_vexpand(true);
+    paned
+}
+
 fn present_picker(
     workbench: &Rc<Workbench>,
     title: &str,
@@ -5206,48 +5263,16 @@ fn present_picker(
         .build();
     // A list of places shows the selected one beside it (3.5).
     let has_places = rows.iter().any(|row| row.place.is_some());
-    let preview = gtk::TextView::new();
-    preview.set_editable(false);
-    preview.set_cursor_visible(false);
-    preview.set_monospace(true);
-    preview.set_left_margin(8);
-    preview.set_top_margin(8);
-    let mark = gtk::TextTag::builder().name("place").paragraph_background("rgba(53,132,228,0.25)").build();
-    preview.buffer().tag_table().add(&mark);
+    let preview = place_preview();
     if has_places {
         let rows = Rc::clone(&rows);
         let visible = Rc::clone(&visible);
         let preview = preview.clone();
         list.connect_row_selected(move |_, row| {
-            let buffer = preview.buffer();
             let place = row
                 .and_then(|row| visible.borrow().get(row.index().max(0) as usize).copied())
                 .and_then(|at| rows[at].place.clone());
-            let Some((path, line)) = place else {
-                buffer.set_text("");
-                return;
-            };
-            // The open document as it is in the editor, which may be
-            // ahead of the disk; else the file.
-            let open = Shell::instance()
-                .pages
-                .borrow()
-                .get(&path)
-                .map(|handles| handles.document.state.borrow().document.text());
-            let text = open.or_else(|| std::fs::read_to_string(&path).ok()).unwrap_or_default();
-            let (first, lines) = references::place_preview(&text, line.max(0) as usize);
-            let width = (first + lines.len()).to_string().len();
-            let shown: String = lines
-                .iter()
-                .enumerate()
-                .map(|(at, text)| format!("{:>width$}  {text}\n", first + at + 1))
-                .collect();
-            buffer.set_text(&shown);
-            let target = (line.max(0) as usize).saturating_sub(first) as i32;
-            if let (Some(start), Some(mut end)) = (buffer.iter_at_line(target), buffer.iter_at_line(target)) {
-                end.forward_to_line_end();
-                buffer.apply_tag_by_name("place", &start, &end);
-            }
+            show_place(&preview, place.as_ref().map(|(path, line)| (path.as_str(), *line)));
         });
     }
     let dialog = adw::Window::builder()
@@ -5470,15 +5495,27 @@ fn show_file_picker(workbench: &Rc<Workbench>, root: PathBuf, index: Vec<String>
     content.set_margin_bottom(10);
     content.set_margin_start(10);
     content.set_margin_end(10);
+    // The selected file's top under the list (3.5).
+    let preview = place_preview();
+    {
+        let preview = preview.clone();
+        let root = root.clone();
+        list.connect_row_selected(move |_, row| {
+            let path = row
+                .and_then(|row| row.child().and_downcast::<gtk::Label>())
+                .map(|label| root.join(label.text().as_str()).to_string_lossy().into_owned());
+            show_place(&preview, path.as_deref().map(|path| (path, 0)));
+        });
+    }
     content.append(&entry);
-    content.append(&scrolled);
+    content.append(&list_over_preview(&scrolled, &preview));
     content.append(&status);
 
     let dialog = adw::Window::builder()
         .transient_for(&workbench.window)
         .modal(true)
         .default_width(560)
-        .default_height(380)
+        .default_height(560)
         .title(&*root.to_string_lossy())
         .content(&content)
         .build();
@@ -5670,15 +5707,16 @@ fn show_symbol_picker(workbench: &Rc<Workbench>, path: String) {
     content.set_margin_bottom(10);
     content.set_margin_start(10);
     content.set_margin_end(10);
+    let preview = place_preview();
     content.append(&entry);
-    content.append(&scrolled);
+    content.append(&list_over_preview(&scrolled, &preview));
     content.append(&status);
 
     let dialog = adw::Window::builder()
         .transient_for(&workbench.window)
         .modal(true)
         .default_width(620)
-        .default_height(380)
+        .default_height(560)
         .title(tr("Go to Symbol in Project"))
         .content(&content)
         .build();
@@ -5686,6 +5724,22 @@ fn show_symbol_picker(workbench: &Rc<Workbench>, path: String) {
     // The rows on show, by list index; and a count of the questions
     // asked, so an answer to an earlier query is dropped.
     let found: Rc<RefCell<Vec<textchum_core::symbols::Symbol>>> = Rc::new(RefCell::new(Vec::new()));
+    // The selected symbol's declaration among the lines around it
+    // (3.5). Read once the list has settled: the rows are filled and
+    // the first selected before the symbols they stand for are stored.
+    {
+        let preview = preview.clone();
+        let found = Rc::clone(&found);
+        list.connect_row_selected(move |_, row| {
+            let index = row.map(|row| row.index().max(0) as usize);
+            let preview = preview.clone();
+            let found = Rc::clone(&found);
+            glib::idle_add_local_once(move || {
+                let symbol = index.and_then(|at| found.borrow().get(at).cloned());
+                show_place(&preview, symbol.as_ref().map(|symbol| (symbol.path.as_str(), symbol.line as i32)));
+            });
+        });
+    }
     let asked = Rc::new(Cell::new(0u64));
     let root = workspace::project_root_for(Path::new(&path));
     {
@@ -5912,23 +5966,35 @@ fn show_grep(workbench: &Rc<Workbench>, root: PathBuf) {
     content.set_margin_bottom(10);
     content.set_margin_start(10);
     content.set_margin_end(10);
+    let preview = place_preview();
     content.append(&query_row);
     content.append(&filters_box);
     content.append(&add_row);
-    content.append(&scrolled);
+    content.append(&list_over_preview(&scrolled, &preview));
     content.append(&status);
 
     let dialog = adw::Window::builder()
         .transient_for(&workbench.window)
         .modal(true)
         .default_width(680)
-        .default_height(440)
+        .default_height(600)
         .title(&*root.to_string_lossy())
         .content(&content)
         .build();
 
     // (relative path, one-based line) per row, aligned with the list.
     let hits: Rc<RefCell<Vec<(String, usize)>>> = Rc::new(RefCell::new(Vec::new()));
+    // The selected match's line among the lines around it (3.5).
+    {
+        let preview = preview.clone();
+        let hits = Rc::clone(&hits);
+        let root = root.clone();
+        list.connect_row_selected(move |_, row| {
+            let hit = row.and_then(|row| hits.borrow().get(row.index().max(0) as usize).cloned());
+            let place = hit.map(|(relative, line)| (root.join(relative).to_string_lossy().into_owned(), line));
+            show_place(&preview, place.as_ref().map(|(path, line)| (path.as_str(), line.saturating_sub(1) as i32)));
+        });
+    }
     let run = {
         let list = list.clone();
         let status = status.clone();

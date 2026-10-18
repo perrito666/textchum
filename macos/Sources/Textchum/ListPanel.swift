@@ -60,8 +60,8 @@ final class ListPanel: NSObject {
     /// Where an item goes, for the lists of places: the place is shown
     /// beside the list, so the right one can be told before going.
     private var placeOf: ((Int) -> (path: String, line: Int)?)?
-    private let previewScroll = NSScrollView()
-    private let previewText = NSTextView()
+    private let preview = PlacePreview()
+    private var previewScroll: NSScrollView { preview.scroll }
 
     /// Shows `rows`. `placeholder` gives the list a filter field;
     /// nil leaves it out, which is right when the list is short enough
@@ -119,7 +119,7 @@ final class ListPanel: NSObject {
     /// filter field is up, and the preview's text.
     var debugShownTexts: [String] { shown.map { Self.text(of: $0.row) } }
     var debugFiltering: Bool { filtering && !queryField.isHidden }
-    var debugPreview: String { previewText.string }
+    var debugPreview: String { preview.shown }
 
     /// Debug hook: a key pressed in the panel, sent the way the window
     /// server sends one, so it takes the path a real key takes — to the
@@ -220,18 +220,6 @@ final class ListPanel: NSObject {
         table.addTableColumn(NSTableColumn(identifier: .init("row")))
         table.onReturn = { [weak self] in self?.chooseSelection() }
         table.onType = { [weak self] typed in self?.startFiltering(with: typed) }
-        previewText.isEditable = false
-        previewText.isSelectable = true
-        previewText.drawsBackground = false
-        previewText.textContainerInset = NSSize(width: 8, height: 8)
-        previewText.textContainer?.widthTracksTextView = false
-        previewText.isHorizontallyResizable = true
-        previewText.textContainer?.containerSize = NSSize(
-            width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        previewScroll.documentView = previewText
-        previewScroll.hasVerticalScroller = true
-        previewScroll.hasHorizontalScroller = true
-        previewScroll.borderType = .noBorder
         table.headerView = nil
         table.dataSource = self
         table.delegate = self
@@ -263,40 +251,16 @@ final class ListPanel: NSObject {
     }
 
     /// The selected item's place, around its line, with the line
-    /// marked: read from the open document when there is one, which
-    /// may differ from the disk, else from the file.
+    /// marked.
     private func refreshPreview() {
         guard let placeOf else { return }
         let row = table.selectedRow
         guard shown.indices.contains(row), let item = shown[row].item, let place = placeOf(item)
         else {
-            previewText.string = ""
+            preview.show(path: nil, line: 0)
             return
         }
-        let text =
-            (NSApp.delegate as? AppDelegate)?.openText(ofPath: place.path)
-            ?? (try? String(contentsOfFile: place.path, encoding: .utf8)) ?? ""
-        let (first, lines) = CoreReferences.preview(of: text, line: place.line)
-        let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
-        let numberWidth = String(first + lines.count).count
-        let shownText = NSMutableAttributedString()
-        for (offset, line) in lines.enumerated() {
-            let number = String(first + offset + 1)
-            let gutter = String(repeating: " ", count: numberWidth - number.count) + number + "  "
-            let piece = NSMutableAttributedString(
-                string: gutter, attributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor])
-            piece.append(
-                NSAttributedString(
-                    string: line + "\n", attributes: [.font: font, .foregroundColor: NSColor.labelColor]))
-            if first + offset == place.line {
-                piece.addAttribute(
-                    .backgroundColor, value: NSColor.selectedTextBackgroundColor.withAlphaComponent(0.6),
-                    range: NSRange(location: 0, length: piece.length))
-            }
-            shownText.append(piece)
-        }
-        previewText.textStorage?.setAttributedString(shownText)
-        previewText.scroll(.zero)
+        preview.show(path: place.path, line: place.line)
     }
 
     /// The field is there or it is not, the list fills what is left,

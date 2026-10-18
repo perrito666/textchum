@@ -1877,6 +1877,26 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
         }
         println!("implementation ok (one answer is a jump; a request no server answers says so)");
+        // A picker's preview shows the selected place among the lines
+        // around it, the place's own line marked (3.5).
+        {
+            let file = std::env::temp_dir().join(format!("textchum-gtk-preview-{}.txt", std::process::id()));
+            let _ = std::fs::write(&file, "zero\none\ntwo\nthree\n");
+            let preview = workbench::place_preview();
+            workbench::show_place(&preview, Some((&file.to_string_lossy(), 2)));
+            let buffer = preview.buffer();
+            let shown = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false).to_string();
+            let marked = buffer
+                .iter_at_line(2)
+                .map(|at| at.has_tag(&buffer.tag_table().lookup("place").expect("the place tag")))
+                .unwrap_or(false);
+            let _ = std::fs::remove_file(&file);
+            if !shown.contains("3  two") || !marked {
+                eprintln!("FAIL: the place preview showed {shown:?}, marked: {marked}");
+                return 1;
+            }
+        }
+        println!("place preview ok (the lines around it, its own line marked)");
 
         // The shell holds documents; the UI holds views of them. What
         // is checked here is that the table behaves like a registry: a

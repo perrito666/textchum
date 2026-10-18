@@ -92,6 +92,10 @@ final class QuickFinderPanel: NSObject {
     private let addFilterButton = NSButton(
         title: t("＋ Add Filter"), target: nil, action: nil)
     private let table = NSTableView()
+    /// The selected row's place, under the list (3.5).
+    private let preview = PlacePreview()
+    /// What the preview shows, for the smoke test.
+    var debugPreview: String { preview.shown }
     /// Says what the last search did, so an empty list is never mute.
     private let statusLabel = NSTextField(labelWithString: "")
     /// One result: `display` is the row as one string (what the smoke
@@ -197,6 +201,7 @@ final class QuickFinderPanel: NSObject {
             : []
         rows = []
         table.reloadData()
+        refreshPreview()
         clearFilters()
         for filter in (saved?["filters"] as? [[String: Any]]) ?? [] {
             guard let pattern = filter["pattern"] as? String,
@@ -359,14 +364,25 @@ final class QuickFinderPanel: NSObject {
         // remembers its size.
         statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
+        // The list over the code its selected row goes to, the list
+        // taking the larger share.
+        let split = NSSplitView()
+        split.isVertical = false
+        split.dividerStyle = .thin
+        split.addArrangedSubview(scroll)
+        split.addArrangedSubview(preview.scroll)
+        split.setHoldingPriority(.defaultLow + 1, forSubviewAt: 0)
+        split.translatesAutoresizingMaskIntoConstraints = false
+        preview.scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
+        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
         let stack = NSStackView(views: [
-            scopeField, queryRow, filtersStack, addRow, scroll, statusLabel,
+            scopeField, queryRow, filtersStack, addRow, split, statusLabel,
         ])
         stack.orientation = .vertical
         stack.spacing = 6
         stack.edgeInsets = NSEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         stack.distribution = .fill
-        scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        split.setContentHuggingPriority(.defaultLow, for: .vertical)
         panel.contentView = stack
         return panel
     }
@@ -617,6 +633,7 @@ final class QuickFinderPanel: NSObject {
                     if !results.isEmpty {
                         self.table.selectRowIndexes([0], byExtendingSelection: false)
                     }
+                    self.refreshPreview()
                 }
             }
         }
@@ -634,6 +651,7 @@ final class QuickFinderPanel: NSObject {
             if !found.isEmpty {
                 self.table.selectRowIndexes([0], byExtendingSelection: false)
             }
+            self.refreshPreview()
         }
         guard !query.isEmpty else {
             // Nothing typed: the symbols gone to lately, most recent
@@ -818,6 +836,22 @@ extension QuickFinderPanel: NSTextFieldDelegate {
 extension QuickFinderPanel: NSTableViewDataSource, NSTableViewDelegate {
     func numberOfRows(in tableView: NSTableView) -> Int {
         rows.count
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        refreshPreview()
+    }
+
+    /// Shows the selected row's place under the list: a match's or a
+    /// symbol's line, a file's top.
+    func refreshPreview() {
+        let row = table.selectedRow
+        guard rows.indices.contains(row) else {
+            preview.show(path: nil, line: 0)
+            return
+        }
+        // Rows count lines from one; a file's row has none.
+        preview.show(path: rows[row].path, line: max(0, rows[row].line - 1))
     }
 
     func tableView(

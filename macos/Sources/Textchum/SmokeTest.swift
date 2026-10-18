@@ -2197,6 +2197,11 @@ func runSmokeTest() -> Int32 {
             print("FAIL: the finder never answered the query (rows \(finder.rowCount))")
             return 1
         }
+        // The selected row's file shows under the list (3.5).
+        guard finder.debugPreview.contains("1  a") else {
+            print("FAIL: the finder did not preview the selected file: \(finder.debugPreview)")
+            return 1
+        }
         finder.debugReturn()
         guard opened.count == 1, opened.first?.hasSuffix("alpha.txt") == true else {
             print("FAIL: Enter on a current result did not open it: \(opened)")

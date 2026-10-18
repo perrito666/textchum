@@ -21,8 +21,7 @@ embarqué dans le noyau — pas un sous-processus.
 ## Ouvrir rapidement (⌘T)
 
 Tapez des fragments du nom de fichier — `editwc` trouve
-`EditorWindowController.swift` — avec correspondance floue et classement
-à la fzf. ↑/↓ déplacent la sélection, ⏎ ouvre (en ramenant la fenêtre au
+`EditorWindowController.swift` — avec correspondance floue et classement. ↑/↓ déplacent la sélection, ⏎ ouvre (en ramenant la fenêtre au
 premier plan si le fichier est déjà ouvert), ⎋ ferme. Une requête vide
 liste la portée par ordre alphabétique. Les mêmes filtres empilés que
 Chercher dans le projet s'appliquent ici — chaque type de filtre
@@ -37,6 +36,13 @@ les cas. ↑/↓ déplacent la sélection, ⎋ ferme, et le double-clic ouvre
 aussi. La ligne d'état le rappelle. Le panneau peut être élargi et garde
 sa taille ; dans une ligne, le répertoire cède en premier, perdant son
 début, de sorte que le nom du fichier reste toujours lisible.
+
+Sous la liste, l'endroit de la ligne sélectionnée est affiché : les
+premières lignes d'un fichier dans Ouvrir rapidement, la ligne d'une
+correspondance parmi celles qui l'entourent dans Chercher dans le
+projet, la déclaration d'un symbole dans Aller au symbole — lues dans
+le document ouvert quand le fichier l'est, qui peut être en avance sur
+le disque. Le séparateur entre les deux se déplace.
 
 La portée est parcourue une fois à l'ouverture du panneau, puis
 filtrée en mémoire — la frappe reste instantanée sur un vrai dépôt, et

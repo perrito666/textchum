@@ -253,8 +253,6 @@ What breaks these rules today, each to be fixed under its own issue:
   installing a grammar and of importing a theme, and the note that
   Universal Ctags is missing. They wait for a notice that can carry
   details.
-- **3.5** Open Quickly, Find in Project and Go to Symbol show no
-  preview of the place a row goes to.
 - **7.1** Go Back returns to the caret, not to the selection and the
   scroll that went with it.
 - **12.3** Completion ranked by the server's order alone and without

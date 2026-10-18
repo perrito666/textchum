@@ -20,8 +20,7 @@ el núcleo — no un subproceso.
 ## Abrir rápidamente (⌘T)
 
 Escriba fragmentos del nombre de archivo — `editwc` encuentra
-`EditorWindowController.swift` — con coincidencia difusa y ranking al
-estilo fzf. ↑/↓ mueven la selección, ⏎ abre (trayendo al frente la
+`EditorWindowController.swift` — con coincidencia difusa y ranking. ↑/↓ mueven la selección, ⏎ abre (trayendo al frente la
 ventana si el archivo ya está abierto), ⎋ cierra. Una consulta vacía
 lista el ámbito alfabéticamente. Los mismos filtros apilados de Buscar
 en el proyecto aplican aquí — cada tipo de filtro refina las rutas
@@ -36,6 +35,13 @@ mueven la selección, ⎋ cierra, y el doble clic también abre. La línea
 de estado lo explica. El panel se puede ensanchar y recuerda su tamaño;
 en una fila el directorio cede primero, perdiendo su inicio, de modo que
 el nombre del archivo siempre se lee.
+
+Bajo la lista se muestra el sitio de la fila seleccionada: las primeras
+líneas de un archivo en Abrir rápidamente, la línea de una coincidencia
+entre las de alrededor en Buscar en el proyecto, la declaración de un
+símbolo en Ir al símbolo — leídas del documento abierto cuando el
+archivo lo está, que puede ir por delante del disco. El divisor entre
+ambos se puede arrastrar.
 
 El ámbito se recorre una vez al abrir el panel y luego se filtra en
 memoria — escribir es instantáneo en un repositorio real, y el número
