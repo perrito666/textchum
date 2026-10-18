@@ -79,7 +79,7 @@ one opens it as well.
 The tree follows the file: switching tabs expands the path to the
 current document, highlights it and scrolls it into view (turn it off in Settings ▸ General ▸
 "Reveal the current file in the tree"), and **View ▸ Reveal in Tree**
-(⇧⌘J, action name `revealInTree`, also in a buffer row's right-click
+(⇧⌘J, Ctrl+Shift+J on Linux, action name `revealInTree`, also in a buffer row's right-click
 menu) does it on demand — uncollapsing the navigator if needed.
 
 What the tree hides is configuration: glob patterns over file names,

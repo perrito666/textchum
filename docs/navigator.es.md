@@ -91,7 +91,7 @@ cualquier carpeta, y revelar un archivo de su interior también.
 El árbol sigue al archivo: cambiar de pestaña expande la ruta del
 documento actual, lo resalta y lo trae a la vista (se apaga en Ajustes ▸ General ▸ «Reveal
 the current file in the tree»), y **Vista ▸ Revelar en el árbol**
-(⇧⌘J, nombre de acción `revealInTree`, también en el menú contextual
+(⇧⌘J, Ctrl+Shift+J en Linux, nombre de acción `revealInTree`, también en el menú contextual
 de las filas de búferes) lo hace a demanda — desplegando el navegador
 si hace falta.
 

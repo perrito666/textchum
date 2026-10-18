@@ -193,7 +193,7 @@ against the commit the branch grew from instead, and the bar shows
 everything the branch touches. When git does not name a default branch,
 `editor.merge_base_branches` lists the names to try, most likely first;
 both settings can be overridden per project. **Go → Changed in Branch**
-(⌃⌘T, Ctrl+Alt+P on Linux) lists the branch's files — the pull
+(⌃⌘T, Ctrl+Alt+G on Linux) lists the branch's files — the pull
 request's files, read from git alone — behind the same fuzzy filter as
 Open Quickly.
 

@@ -89,7 +89,7 @@ l'ouvre aussi.
 L'arbre suit le fichier : changer d'onglet déplie le chemin du
 document courant, le met en évidence et le fait défiler à la vue (désactivable dans Réglages ▸
 Général ▸ « Reveal the current file in the tree »), et
-**Présentation ▸ Révéler dans l'arbre** (⇧⌘J, nom d'action
+**Présentation ▸ Révéler dans l'arbre** (⇧⌘J, Ctrl+Shift+J sous Linux, nom d'action
 `revealInTree`, aussi dans le menu contextuel des lignes de tampons)
 le fait à la demande — en rouvrant le navigateur au besoin.
 
