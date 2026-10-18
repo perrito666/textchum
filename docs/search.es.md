@@ -128,6 +128,8 @@ siguiente hallazgo — recuerda de dónde partió. También Find Next e Ir
 al inicio/fin de bloque cuando adonde van está fuera de la vista; un
 paso a una coincidencia que ya está en pantalla no es un salto. **Go
 Back** (⌃⌘←) recorre esos orígenes; **Go Forward** (⌃⌘→) los desanda.
+Cada uno devuelve lo que había al dejar el sitio: el cursor, lo
+seleccionado y cuánto estaba desplazada la vista.
 La historia se reescribe desde el punto actual: saltar a un sitio
 nuevo descarta el rastro hacia adelante. Las posiciones sobreviven a
 las ediciones como línea/columna, así que volver tras un cambio

@@ -1508,6 +1508,32 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         }
         println!("last edit ok (the newest change, then the one before)");
     }
+    // Go Back puts the selection back as it was, not just the caret
+    // (7.1).
+    {
+        let page = workbench.selected().expect("a selected page");
+        let buffer = page.buffer.clone();
+        let before = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+        let text: String = (0..20).map(|n| format!("line {n}\n")).collect();
+        buffer.set_text(&text);
+        let from = buffer.iter_at_line(3).expect("line 3");
+        let mut to = from;
+        to.forward_chars(4);
+        buffer.select_range(&from, &to);
+        workbench.note_jump();
+        buffer.place_cursor(&buffer.iter_at_line(15).expect("line 15"));
+        fire("win.back");
+        let selected = buffer
+            .selection_bounds()
+            .map(|(start, end)| buffer.text(&start, &end, true).to_string())
+            .unwrap_or_default();
+        buffer.set_text(&before);
+        if selected != "line" {
+            eprintln!("FAIL: Go Back left {selected:?} selected, not what was");
+            return 1;
+        }
+        println!("go back ok (the selection put back with the caret)");
+    }
 
     // Snippets: the core expands the body, the buffer inserts what comes
     // back through the ordinary typing path, and the session it starts

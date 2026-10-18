@@ -2101,7 +2101,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // be placed in it — Go Back to a background tab did nothing.
             existing.window?.makeKeyAndOrderFront(nil)
             existing.workbench?.showInFocusedPane(ObjectIdentifier(existing))
-            existing.reveal(line: location.line, character: location.character)
+            if let scroll = location.scroll {
+                existing.returnTo(
+                    line: location.line, character: location.character,
+                    selectionLength: location.selectionLength, scroll: scroll)
+            } else {
+                existing.reveal(line: location.line, character: location.character)
+            }
         } else {
             // Through open itself: it standardises the path, so looking
             // the editor up again by the path as given — a symlinked
@@ -2128,7 +2134,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ?? editors.first { $0.window?.isKeyWindow == true } ?? editors.first
         guard let editor, let path = editor.coreDocument.path else { return nil }
         let caret = editor.caretLSPPosition
-        return JumpLocation(path: path, line: caret.line, character: caret.character)
+        let view = editor.jumpView
+        return JumpLocation(
+            path: path, line: caret.line, character: caret.character,
+            selectionLength: view?.selectionLength ?? 0, scroll: view?.scroll)
     }
 
     /// Called by everything that jumps, before it navigates.

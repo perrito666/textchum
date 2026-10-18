@@ -131,7 +131,8 @@ découverte suivante — retient d'où il est parti. Find Next et Aller au
 début/à la fin du bloc aussi, quand leur destination est hors de vue ;
 un pas vers une correspondance déjà à l'écran n'est pas un saut. **Go
 Back** (⌃⌘←) remonte ces origines ; **Go Forward** (⌃⌘→) les
-redescend. L'histoire se réécrit depuis le point courant : sauter vers
+redescend. Chacun remet ce qu'il y avait quand l'endroit a été quitté :
+le curseur, ce qui était sélectionné, et le défilement de la vue. L'histoire se réécrit depuis le point courant : sauter vers
 un nouvel endroit jette la piste avant. Les positions survivent aux
 éditions en ligne/colonne : revenir après un changement atterrit près,
 pas perdu.

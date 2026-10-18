@@ -5,6 +5,15 @@ struct JumpLocation: Equatable {
     let path: String
     let line: Int
     let character: Int
+    /// How much was selected from the caret, in UTF-16 units, and how far
+    /// the view was scrolled: what Go Back puts back as they were (7.1).
+    /// Not part of what makes two places the same one.
+    var selectionLength = 0
+    var scroll: Double? = nil
+
+    static func == (left: JumpLocation, right: JumpLocation) -> Bool {
+        left.path == right.path && left.line == right.line && left.character == right.character
+    }
 }
 
 /// The jump stack. Every jump (go to
