@@ -7,6 +7,8 @@
 //! two vocabularies meet, and where each command gets the title it
 //! wears in Preferences.
 
+use std::collections::BTreeMap;
+
 use textchum_core::i18n::n_;
 
 
@@ -82,11 +84,29 @@ pub fn gtk_action(name: &str) -> Option<&'static str> {
         .map(|(_, _, action)| *action)
 }
 
-/// The shortcut a command comes with, as a spec — what the field shows
-/// when no profile and no override has anything to say about it.
-pub fn default_spec(name: &str) -> Option<String> {
-    let action = gtk_action(name)?;
-    crate::default_accel(action).and_then(spec_from_accel)
+/// Every GTK action a command drives.
+pub fn actions() -> impl Iterator<Item = &'static str> {
+    COMMANDS.iter().map(|(_, _, action)| *action)
+}
+
+/// What a command's field in the Keyboard settings shows: the shortcut
+/// it answers to, spelled the way its binding spells it when that
+/// binding is the one in force, and nothing when it gave its key to
+/// another command.
+pub fn shown_spec(
+    name: &str,
+    bindings: &BTreeMap<String, String>,
+    in_force: &crate::AccelsInForce,
+) -> String {
+    let Some(accel) = gtk_action(name).and_then(|action| in_force.accels.get(action)) else {
+        return String::new();
+    };
+    bindings
+        .get(name)
+        .filter(|spec| crate::accel_from_spec(spec).as_ref() == Some(accel))
+        .cloned()
+        .or_else(|| spec_from_accel(accel))
+        .unwrap_or_default()
 }
 
 /// `"<Ctrl><Shift>f"` → `"cmd+shift+f"`: the inverse of the parser the

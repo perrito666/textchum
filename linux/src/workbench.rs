@@ -8368,18 +8368,12 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
             &config.keys_json(),
         )
     };
+    let in_force = crate::accels_in_force(&bindings);
     let mut rows: Vec<(&'static str, adw::EntryRow)> = Vec::new();
     for (action, title) in crate::keyboard::commands() {
         let row = adw::EntryRow::new();
         row.set_title(&tr(title));
-        row.set_text(
-            bindings
-                .get(action)
-                .cloned()
-                .or_else(|| crate::keyboard::default_spec(action))
-                .unwrap_or_default()
-                .as_str(),
-        );
+        row.set_text(&crate::keyboard::shown_spec(action, &bindings, &in_force));
         row.set_show_apply_button(true);
         let shell = Rc::clone(shell);
         row.connect_apply(move |row| {
@@ -8407,15 +8401,9 @@ fn keyboard_page(shell: &Rc<Shell>) -> adw::PreferencesPage {
                     &config.keys_json(),
                 )
             };
+            let in_force = crate::accels_in_force(&bindings);
             for (action, row) in &rows {
-                row.set_text(
-                    bindings
-                        .get(*action)
-                        .cloned()
-                        .or_else(|| crate::keyboard::default_spec(action))
-                        .unwrap_or_default()
-                        .as_str(),
-                );
+                row.set_text(&crate::keyboard::shown_spec(action, &bindings, &in_force));
             }
         })
     };

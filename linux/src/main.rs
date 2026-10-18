@@ -420,25 +420,6 @@ mod tests {
         assert_eq!(request.wait, None);
     }
 
-    /// An accelerator as GTK matches it: modifiers in any order and
-    /// under any of their names, a letter in either case. The table
-    /// spells the same key both `<Alt><Ctrl>` and `<Ctrl><Alt>`, so
-    /// comparing the strings would miss a clash.
-    fn accel_key(accel: &str) -> (Vec<String>, String) {
-        let mut modifiers = Vec::new();
-        let mut rest = accel;
-        while let Some(inner) = rest.strip_prefix('<') {
-            let end = inner.find('>').expect("an unclosed modifier");
-            modifiers.push(match inner[..end].to_lowercase().as_str() {
-                "primary" | "control" => "ctrl".to_owned(),
-                other => other.to_owned(),
-            });
-            rest = &inner[end + 1..];
-        }
-        modifiers.sort();
-        (modifiers, rest.to_lowercase())
-    }
-
     #[test]
     fn no_two_actions_share_a_default_accelerator() {
         // GTK hands a shortcut to one action only; the other is left
@@ -452,6 +433,87 @@ mod tests {
     }
 
     #[test]
+    fn no_bundled_profile_puts_two_actions_on_one_key() {
+        for profile in textchum_core::keys::bundled() {
+            let bindings: std::collections::BTreeMap<String, String> = profile
+                .bindings
+                .iter()
+                .map(|(name, spec)| ((*name).to_owned(), (*spec).to_owned()))
+                .collect();
+            let in_force = accels_in_force(&bindings);
+            let mut seen = std::collections::HashMap::new();
+            for (action, accel) in &in_force.accels {
+                if let Some(other) = seen.insert(accel_key(accel), *action) {
+                    panic!("under {}, {action} and {other} are both {accel}", profile.id);
+                }
+            }
+            // Giving way is for the defaults. A binding of the profile
+            // that is not in force lost its key to another binding of
+            // the same profile, and the one way that is allowed is the
+            // `ctrl` and `cmd` spelling of one key here.
+            let mut lost = 0;
+            for (name, spec) in profile.bindings {
+                let action = crate::keyboard::gtk_action(name).expect("a command of this platform");
+                let accel = accel_from_spec(spec).expect("a shortcut this shell reads");
+                if in_force.accels.get(action) == Some(&accel) {
+                    continue;
+                }
+                let lost_to_cmd = !names_primary(spec)
+                    && profile.bindings.iter().any(|(other, other_spec)| {
+                        other != name
+                            && names_primary(other_spec)
+                            && accel_from_spec(other_spec).map(|other| accel_key(&other))
+                                == Some(accel_key(&accel))
+                    });
+                assert!(lost_to_cmd, "under {}, {name}'s {spec} is not in force", profile.id);
+                lost += 1;
+            }
+            assert_eq!(in_force.notes.len(), lost, "under {}: {:?}", profile.id, in_force.notes);
+        }
+    }
+
+    fn bindings(pairs: &[(&str, &str)]) -> std::collections::BTreeMap<String, String> {
+        pairs.iter().map(|(name, spec)| ((*name).to_owned(), (*spec).to_owned())).collect()
+    }
+
+    #[test]
+    fn a_binding_takes_its_key_from_the_action_that_has_it_by_default() {
+        let in_force = accels_in_force(&bindings(&[("new", "cmd+n")]));
+        assert_eq!(in_force.accels.get("win.new-tab").map(String::as_str), Some("<Ctrl>n"));
+        assert_eq!(in_force.accels.get("win.new"), None);
+        assert!(in_force.notes.is_empty(), "{:?}", in_force.notes);
+    }
+
+    #[test]
+    fn an_action_that_moves_away_is_no_one_to_take_a_key_from() {
+        // Document Outline's default is the key Open Quickly moves to,
+        // and Document Outline moves too: nothing is left without one.
+        let in_force = accels_in_force(&bindings(&[
+            ("openQuickly", "cmd+shift+o"),
+            ("documentOutline", "cmd+f12"),
+        ]));
+        assert_eq!(in_force.accels.get("win.quick-open").map(String::as_str), Some("<Ctrl><Shift>o"));
+        assert_eq!(in_force.accels.get("win.outline").map(String::as_str), Some("<Ctrl>F12"));
+        assert!(in_force.notes.is_empty(), "{:?}", in_force.notes);
+    }
+
+    #[test]
+    fn cmd_keeps_a_key_ctrl_also_names() {
+        let in_force =
+            accels_in_force(&bindings(&[("goToLine", "ctrl+g"), ("findNext", "cmd+g")]));
+        assert_eq!(in_force.accels.get("win.find-next").map(String::as_str), Some("<Ctrl>g"));
+        assert_eq!(in_force.accels.get("win.goto-line").map(String::as_str), Some("<Ctrl>l"));
+        assert_eq!(in_force.notes.len(), 1, "{:?}", in_force.notes);
+    }
+
+    #[test]
+    fn an_action_without_a_default_gets_only_what_it_is_given() {
+        let in_force = accels_in_force(&bindings(&[("showCallers", "cmd+alt+k")]));
+        assert_eq!(in_force.accels.get("win.callers").map(String::as_str), Some("<Ctrl><Alt>k"));
+        assert_eq!(accels_in_force(&bindings(&[])).accels.get("win.callers"), None);
+    }
+
+    #[test]
     fn accelerators_compare_as_gtk_reads_them() {
         assert_eq!(accel_key("<Alt><Ctrl>backslash"), accel_key("<Ctrl><Alt>backslash"));
         assert_eq!(accel_key("<Primary>E"), accel_key("<Ctrl>e"));
@@ -459,10 +521,6 @@ mod tests {
     }
 }
 
-/// Applies the configuration's `keys` section — the same action names
-/// and `modifiers+key` specs the macOS shell understands, mapped onto
-/// this shell's actions (`cmd` means the primary modifier, so it lands
-/// on Ctrl here).
 /// Every action with a shortcut, and the one it comes with.
 ///
 /// A keyboard profile names the shortcuts it moves and nothing else, so
@@ -548,11 +606,94 @@ fn install_default_accels(app: &adw::Application) {
     }
 }
 
+/// An accelerator as GTK matches it: modifiers in any order and under
+/// any of their names, a letter in either case. The table spells the
+/// same key both `<Alt><Ctrl>` and `<Ctrl><Alt>`, and GTK reads back
+/// `<Control>`, so comparing the strings would miss a clash.
+fn accel_key(accel: &str) -> (Vec<String>, String) {
+    let mut modifiers = Vec::new();
+    let mut rest = accel;
+    while let Some(inner) = rest.strip_prefix('<') {
+        let Some(end) = inner.find('>') else { break };
+        modifiers.push(match inner[..end].to_lowercase().as_str() {
+            "primary" | "control" => "ctrl".to_owned(),
+            other => other.to_owned(),
+        });
+        rest = &inner[end + 1..];
+    }
+    modifiers.sort();
+    (modifiers, rest.to_lowercase())
+}
+
+/// Whether a spec names the primary modifier.
+fn names_primary(spec: &str) -> bool {
+    spec.split('+').any(|part| part.trim().eq_ignore_ascii_case("cmd"))
+}
+
+/// What a set of bindings — a profile's, with `keys` on top — comes to
+/// once it is laid over the defaults.
+pub struct AccelsInForce {
+    /// Every action that has a shortcut, and the shortcut.
+    pub accels: std::collections::BTreeMap<&'static str, String>,
+    /// The bindings that could not be honoured, and why.
+    pub notes: Vec<String>,
+}
+
+/// The shortcut every action answers to under `bindings`.
+///
+/// GTK hands a key to one action only and leaves the other with a
+/// shortcut that does nothing, so every key here ends up with one:
+///
+/// - A binding takes its key from the action that has it by default,
+///   which is left without one. A profile that puts New Tab on Ctrl+N
+///   means Ctrl+N to open a tab, not a window.
+/// - `cmd` and `ctrl` are both Ctrl here. A profile written where they
+///   are two keys can name both for one letter; the `cmd` binding,
+///   the primary modifier, keeps the key, and the other action keeps
+///   the shortcut it comes with. Two bindings that land on one key any
+///   other way leave it to the first by name.
+pub fn accels_in_force(bindings: &std::collections::BTreeMap<String, String>) -> AccelsInForce {
+    let mut notes = Vec::new();
+    let mut parsed = Vec::new();
+    for (name, spec) in bindings {
+        let Some(action) = crate::keyboard::gtk_action(name) else {
+            notes.push(format!("no such action on this platform: {name}"));
+            continue;
+        };
+        let Some(accel) = accel_from_spec(spec) else {
+            notes.push(format!("could not parse {spec:?} for {name}"));
+            continue;
+        };
+        parsed.push((name.as_str(), action, spec.as_str(), accel));
+    }
+    // Stable, so that among equals the order by name stands.
+    parsed.sort_by_key(|(_, _, spec, _)| !names_primary(spec));
+    let mut accels = std::collections::BTreeMap::new();
+    let mut taken = std::collections::HashMap::new();
+    for (name, action, spec, accel) in parsed {
+        let key = accel_key(&accel);
+        if let Some((other, other_spec)) = taken.get(&key) {
+            notes.push(format!(
+                "{name}'s {spec} is the same key here as {other}'s {other_spec}; {other} keeps it"
+            ));
+            continue;
+        }
+        taken.insert(key, (name, spec));
+        accels.insert(action, accel);
+    }
+    for (action, accel) in DEFAULT_ACCELS {
+        if !accels.contains_key(action) && !taken.contains_key(&accel_key(accel)) {
+            accels.insert(*action, (*accel).to_owned());
+        }
+    }
+    AccelsInForce { accels, notes }
+}
+
+/// Applies the configuration's `keys` section and keyboard profile —
+/// the same action names and `modifiers+key` specs the macOS shell
+/// understands, mapped onto this shell's actions (`cmd` means the
+/// primary modifier, so it lands on Ctrl here).
 pub fn apply_key_overrides(app: &adw::Application) {
-    // Back to what everything comes with first: a profile that stops
-    // naming an action, or an override that is removed, has to give the
-    // original shortcut back, and nothing else says what it was.
-    install_default_accels(app);
     let shell = shell::Shell::instance();
     let bindings = {
         let config = shell.config.borrow();
@@ -562,16 +703,20 @@ pub fn apply_key_overrides(app: &adw::Application) {
             &config.keys_json(),
         )
     };
-    for (name, spec) in &bindings {
-        let Some(action) = crate::keyboard::gtk_action(name) else {
-            eprintln!("textchum: keys: no such action on this platform: {name}");
-            continue;
-        };
-        let Some(accel) = accel_from_spec(spec) else {
-            eprintln!("textchum: keys: could not parse {spec:?} for {name}");
-            continue;
-        };
-        app.set_accels_for_action(action, &[&accel]);
+    let in_force = accels_in_force(&bindings);
+    for note in &in_force.notes {
+        eprintln!("textchum: keys: {note}");
+    }
+    // Every action is set, the ones without a shortcut to none: a
+    // profile that stops naming an action, or an override that is
+    // removed, has to take back what it gave — a command that comes
+    // without a shortcut included — and has to give the original back.
+    let actions = DEFAULT_ACCELS.iter().map(|(action, _)| *action).chain(crate::keyboard::actions());
+    for action in actions {
+        match in_force.accels.get(action) {
+            Some(accel) => app.set_accels_for_action(action, &[accel]),
+            None => app.set_accels_for_action(action, &[]),
+        }
     }
 }
 
@@ -2091,6 +2236,58 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                         );
                         return 1;
                     }
+                    // A profile that moves a command onto a key another
+                    // command has by default takes the key from it,
+                    // instead of leaving two commands on one key and
+                    // GTK to pick (#287). Leaving gives it back.
+                    let holds = |action: &str, accel: &str| {
+                        app.accels_for_action(action)
+                            .iter()
+                            .any(|held| accel_key(held) == accel_key(accel))
+                    };
+                    shell.config.borrow_mut().set_keys_profile(Some("vscode"));
+                    apply_key_overrides(app);
+                    if !holds("win.find-replace", "<Ctrl><Alt>f")
+                        || !app.accels_for_action("win.preprocess").is_empty()
+                    {
+                        eprintln!(
+                            "FAIL: the profile left two commands on Ctrl+Alt+F: {:?} and {:?}",
+                            app.accels_for_action("win.find-replace"),
+                            app.accels_for_action("win.preprocess")
+                        );
+                        return 1;
+                    }
+                    if !holds("win.find-next", "<Ctrl>g") || !holds("win.goto-line", "<Ctrl>l") {
+                        eprintln!(
+                            "FAIL: cmd+g and ctrl+g did not settle on Find Next: {:?} and {:?}",
+                            app.accels_for_action("win.find-next"),
+                            app.accels_for_action("win.goto-line")
+                        );
+                        return 1;
+                    }
+                    // A shortcut given to a command that comes without
+                    // one goes when the profile does.
+                    shell.config.borrow_mut().set_key_binding("showCallers", Some("cmd+alt+k"));
+                    apply_key_overrides(app);
+                    if !holds("win.callers", "<Ctrl><Alt>k") {
+                        eprintln!("FAIL: the override did not reach Show Callers");
+                        return 1;
+                    }
+                    shell.config.borrow_mut().clear_key_bindings();
+                    shell.config.borrow_mut().set_keys_profile(None);
+                    apply_key_overrides(app);
+                    if !holds("win.preprocess", "<Ctrl><Alt>f")
+                        || !holds("win.find-replace", "<Ctrl>h")
+                        || !app.accels_for_action("win.callers").is_empty()
+                    {
+                        eprintln!(
+                            "FAIL: leaving the profile did not put the shortcuts back: {:?}, {:?}, {:?}",
+                            app.accels_for_action("win.preprocess"),
+                            app.accels_for_action("win.find-replace"),
+                            app.accels_for_action("win.callers")
+                        );
+                        return 1;
+                    }
                     // Every profile names commands this platform has,
                     // and moves shortcuts the editor's own defaults do
                     // not already give: a profile that changes nothing
@@ -2121,7 +2318,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                             return 1;
                         }
                     }
-                    println!("keyboard profiles ok (applied, left alone, given back)");
+                    println!("keyboard profiles ok (applied, left alone, keys taken, given back)");
                 }
             }
 
