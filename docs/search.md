@@ -103,7 +103,8 @@ outline entry, a `chum` open, Go to Line, the next finding — records
 where it left from. So do Find Next and Go to Block Start/End when
 where they go is out of sight; a step to a match already on screen is
 not a jump. **Go Back** (⌃⌘←) walks those origins; **Go Forward**
-(⌃⌘→) retraces. The history is rewritten from the current point:
+(⌃⌘→) retraces. Each puts back what was there when the place was left:
+the caret, what was selected, and how far the view was scrolled. The history is rewritten from the current point:
 jumping somewhere new discards the forward trail. Positions survive
 edits as line/column, so going back after a change lands close, not
 lost.

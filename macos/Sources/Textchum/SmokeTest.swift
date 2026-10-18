@@ -2020,6 +2020,29 @@ func runSmokeTest() -> Int32 {
         landingBench.window?.orderOut(nil)
     }
     print("jumps land ok (a third of the way down, the view left alone when the target is in sight)")
+
+    // Go Back puts the selection and the scroll back as they were, not
+    // a landing (7.1).
+    do {
+        let backCore = CoreDocument()
+        let backBench = Workbench(sidebar: nil)
+        let backing = DocumentController(document: backCore)
+        backBench.add(backing)
+        backBench.window?.makeKeyAndOrderFront(nil)
+        guard let backView = backing.primaryView, let clip = backView.enclosingScrollView?.contentView else {
+            print("FAIL: no view to go back in")
+            return 1
+        }
+        backView.insertText((0..<300).map { "line \($0)" }.joined(separator: "\n"), replacementRange: NSRange(location: 0, length: 0))
+        backing.returnTo(line: 200, character: 0, selectionLength: 4, scroll: 1234)
+        let selected = (backView.string as NSString).substring(with: backView.selectedRange())
+        guard selected == "line", abs(clip.bounds.origin.y - 1234) < 1 else {
+            print("FAIL: Go Back left \(selected) selected and the view at \(clip.bounds.origin.y)")
+            return 1
+        }
+        backBench.window?.orderOut(nil)
+    }
+    print("go back ok (the selection and the scroll put back as they were)")
     // Expand Selection grows by the code's structure and Shrink Selection
     // walks back down the same steps; a selection made otherwise has no
     // steps to give back, and the hint says so (10.3).

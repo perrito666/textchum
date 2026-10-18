@@ -255,7 +255,5 @@ What breaks these rules today, each to be fixed under its own issue:
   installing a grammar and of importing a theme, and the note that
   Universal Ctags is missing. They wait for a notice that can carry
   details.
-- **7.1** Go Back returns to the caret, not to the selection and the
-  scroll that went with it.
 - **Linux** Inlay hints are gathered after the line, not inside it
   (see `PLAN_linux.md`).

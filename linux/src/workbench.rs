@@ -193,23 +193,35 @@ pub struct Workbench {
 /// recent mistakes rather than a second history.
 const CLOSED_TAB_MEMORY: usize = 20;
 
-/// (path, line, UTF-16 column) positions with a cursor into them.
+/// A place a jump left from: the file, the caret as an LSP position,
+/// and what Go Back puts back with it (7.1) — the other end of the
+/// selection, as characters from the caret, and the view's scroll.
+#[derive(Clone, Debug)]
+pub struct JumpPlace {
+    pub path: String,
+    pub line: i32,
+    pub character: usize,
+    pub selection: i32,
+    pub scroll: f64,
+}
+
+/// Places with a cursor into them.
 #[derive(Default)]
 pub struct JumpStack {
-    entries: Vec<(String, i32, usize)>,
+    entries: Vec<JumpPlace>,
     cursor: usize,
 }
 
 impl JumpStack {
     /// Records where a jump started; anything forward of the cursor is
     /// no longer reachable (same contract as the macOS stack).
-    fn note(&mut self, origin: (String, i32, usize)) {
+    fn note(&mut self, origin: JumpPlace) {
         self.entries.truncate(self.cursor);
         self.entries.push(origin);
         self.cursor = self.entries.len();
     }
 
-    fn back(&mut self, current: Option<(String, i32, usize)>) -> Option<(String, i32, usize)> {
+    fn back(&mut self, current: Option<JumpPlace>) -> Option<JumpPlace> {
         if self.cursor == 0 {
             return None;
         }
@@ -224,7 +236,7 @@ impl JumpStack {
         self.entries.get(self.cursor).cloned()
     }
 
-    fn forward(&mut self) -> Option<(String, i32, usize)> {
+    fn forward(&mut self) -> Option<JumpPlace> {
         if self.cursor + 1 >= self.entries.len() {
             return None;
         }
@@ -747,18 +759,22 @@ impl Workbench {
     }
 
     /// The selected page's position, for the jump stack.
-    fn current_position(&self) -> Option<(String, i32, usize)> {
+    fn current_position(&self) -> Option<JumpPlace> {
         let page = self.selected()?;
         let path = page.path().borrow().clone()?;
         let (line, character) = page::lsp_caret(&page.buffer);
-        Some((path, line as i32, character as usize))
+        let buffer = &page.buffer;
+        let selection = buffer.iter_at_mark(&buffer.selection_bound()).offset()
+            - buffer.iter_at_mark(&buffer.get_insert()).offset();
+        let scroll = page.view.vadjustment().map(|adjustment| adjustment.value()).unwrap_or(0.0);
+        Some(JumpPlace { path, line: line as i32, character: character as usize, selection, scroll })
     }
 
     /// Records the current position as a jump origin (called before any
     /// navigation that deserves a Go Back).
     pub fn note_jump(&self) {
         if let Some(position) = self.current_position() {
-            textchum_core::trail::note_visit(&position.0, position.1.max(0) as usize);
+            textchum_core::trail::note_visit(&position.path, position.line.max(0) as usize);
             self.jumps.borrow_mut().note(position);
         }
     }
@@ -3210,18 +3226,14 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.jumps.borrow_mut().back(current)
         };
         match target {
-            Some((path, line, character)) => {
-                jump_without_trail(workbench, &path, line, character);
-            }
+            Some(place) => jump_without_trail(workbench, &place),
             None => workbench.hint(&tr("Nowhere to go back to.")),
         }
     });
     add("forward", workbench, |workbench, _| {
         let target = workbench.jumps.borrow_mut().forward();
         match target {
-            Some((path, line, character)) => {
-                jump_without_trail(workbench, &path, line, character);
-            }
+            Some(place) => jump_without_trail(workbench, &place),
             None => workbench.hint(&tr("Nowhere to go forward to.")),
         }
     });
@@ -4905,10 +4917,27 @@ fn preprocess_gate(
 }
 
 /// Navigates for Go Back/Forward: same as a jump, minus the trail.
-fn jump_without_trail(workbench: &Rc<Workbench>, path: &str, line: i32, character: usize) {
+/// Go Back and Go Forward: the caret, the selection and the scroll as
+/// they were when the place was left (7.1) — not a landing, which would
+/// move the view somewhere it never was — and not a jump of its own.
+fn jump_without_trail(workbench: &Rc<Workbench>, place: &JumpPlace) {
     workbench.retracing.set(true);
-    workbench.open(Some(PathBuf::from(path)), Some((line, character)));
+    workbench.open(Some(PathBuf::from(&place.path)), None);
     workbench.retracing.set(false);
+    let Some(page) = workbench.selected() else { return };
+    let buffer = &page.buffer;
+    let line = place.line.min(buffer.line_count() - 1).max(0);
+    let Some(caret) = page::iter_at_lsp(buffer, line, place.character) else { return };
+    let mut other = caret;
+    other.set_offset((caret.offset() + place.selection).clamp(0, buffer.end_iter().offset()));
+    buffer.select_range(&caret, &other);
+    page.view.grab_focus();
+    let Some(adjustment) = page.view.vadjustment() else { return };
+    let scroll = place.scroll;
+    adjustment.set_value(scroll);
+    // A page just opened is laid out after this; the scroll is put back
+    // once it has its height.
+    glib::idle_add_local_once(move || adjustment.set_value(scroll));
 }
 
 /// A floating list of locations (references); activating a row jumps.

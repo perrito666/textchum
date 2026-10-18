@@ -2491,8 +2491,9 @@ final class DocumentController: NSResponder {
         timed("reveal") { revealInner(line: line, character: character) }
     }
 
-    private func revealInner(line: Int, character: Int) {
-        guard let textView else { return }
+    /// The UTF-16 offset of an LSP position in the text as it is.
+    private func offset(line: Int, character: Int) -> Int {
+        guard let textView else { return 0 }
         let text = textView.string as NSString
         var index = 0
         var currentLine = 0
@@ -2500,7 +2501,31 @@ final class DocumentController: NSResponder {
             index = NSMaxRange(text.lineRange(for: NSRange(location: index, length: 0)))
             currentLine += 1
         }
-        let target = min(index + max(0, character), text.length)
+        return min(index + max(0, character), text.length)
+    }
+
+    /// The selection and the scroll a jump leaves from, for Go Back to
+    /// put back (7.1).
+    var jumpView: (selectionLength: Int, scroll: Double)? {
+        guard let textView, let scrollView = textView.enclosingScrollView else { return nil }
+        return (textView.selectedRange().length, Double(scrollView.contentView.bounds.origin.y))
+    }
+
+    /// Go Back and Go Forward: the caret, the selection and the scroll as
+    /// they were when the place was left — not a landing, which would
+    /// move the view somewhere it never was.
+    func returnTo(line: Int, character: Int, selectionLength: Int, scroll: Double) {
+        guard let textView else { return }
+        let start = offset(line: line, character: character)
+        let length = min(max(0, selectionLength), (textView.string as NSString).length - start)
+        restoreSessionPosition(caret: start, scroll: scroll)
+        textView.setSelectedRange(NSRange(location: start, length: length))
+        window?.makeFirstResponder(textView)
+    }
+
+    private func revealInner(line: Int, character: Int) {
+        guard let textView else { return }
+        let target = offset(line: line, character: character)
         land(on: NSRange(location: target, length: 0))
         window?.makeFirstResponder(textView)
         // A file opened for this jump has a view with no height yet, and
