@@ -206,7 +206,7 @@ compare avec le commit d'où la branche est née, et la barre montre tout
 ce que la branche touche. Quand git ne nomme pas de branche par défaut,
 `editor.merge_base_branches` liste les noms à essayer, le plus probable
 d'abord ; les deux réglages peuvent être remplacés par projet.
-**Aller → Modifié dans la branche** (⌃⌘T, Ctrl+Alt+P sous Linux) liste
+**Aller → Modifié dans la branche** (⌃⌘T, Ctrl+Alt+G sous Linux) liste
 les fichiers de la branche — ceux de la pull request, lus depuis git
 seul — derrière le même filtre flou qu'Ouvrir rapidement.
 

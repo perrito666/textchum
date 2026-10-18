@@ -203,7 +203,7 @@ compara con el commit del que nació la rama, y la barra muestra todo lo
 que la rama toca. Cuando git no nombra una rama por defecto,
 `editor.merge_base_branches` lista los nombres que probar, el más
 probable primero; ambos ajustes se pueden anular por proyecto.
-**Ir → Cambiado en la rama** (⌃⌘T, Ctrl+Alt+P en Linux) lista los
+**Ir → Cambiado en la rama** (⌃⌘T, Ctrl+Alt+G en Linux) lista los
 archivos de la rama —los del pull request, leídos solo de git— tras el
 mismo filtro difuso que Abrir rápido.
 

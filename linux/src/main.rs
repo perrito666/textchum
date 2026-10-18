@@ -419,6 +419,44 @@ mod tests {
         assert_eq!(request.target.as_deref(), Some("window"));
         assert_eq!(request.wait, None);
     }
+
+    /// An accelerator as GTK matches it: modifiers in any order and
+    /// under any of their names, a letter in either case. The table
+    /// spells the same key both `<Alt><Ctrl>` and `<Ctrl><Alt>`, so
+    /// comparing the strings would miss a clash.
+    fn accel_key(accel: &str) -> (Vec<String>, String) {
+        let mut modifiers = Vec::new();
+        let mut rest = accel;
+        while let Some(inner) = rest.strip_prefix('<') {
+            let end = inner.find('>').expect("an unclosed modifier");
+            modifiers.push(match inner[..end].to_lowercase().as_str() {
+                "primary" | "control" => "ctrl".to_owned(),
+                other => other.to_owned(),
+            });
+            rest = &inner[end + 1..];
+        }
+        modifiers.sort();
+        (modifiers, rest.to_lowercase())
+    }
+
+    #[test]
+    fn no_two_actions_share_a_default_accelerator() {
+        // GTK hands a shortcut to one action only; the other is left
+        // with no key and nothing says so.
+        let mut seen = std::collections::HashMap::new();
+        for (action, accel) in DEFAULT_ACCELS {
+            if let Some(other) = seen.insert(accel_key(accel), *action) {
+                panic!("{action} and {other} both default to {accel}");
+            }
+        }
+    }
+
+    #[test]
+    fn accelerators_compare_as_gtk_reads_them() {
+        assert_eq!(accel_key("<Alt><Ctrl>backslash"), accel_key("<Ctrl><Alt>backslash"));
+        assert_eq!(accel_key("<Primary>E"), accel_key("<Ctrl>e"));
+        assert_ne!(accel_key("<Ctrl>e"), accel_key("<Ctrl><Shift>e"));
+    }
 }
 
 /// Applies the configuration's `keys` section — the same action names
@@ -440,10 +478,12 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.find-next", "<Ctrl>g"),
     ("win.find-previous", "<Ctrl><Shift>g"),
     ("win.find-replace", "<Ctrl>h"),
-    ("win.reveal-in-tree", "<Ctrl><Shift>e"),
+    ("win.reveal-in-tree", "<Ctrl><Shift>j"),
     ("win.complete", "<Ctrl>space"),
     ("win.quick-open", "<Ctrl>p"),
-    ("win.changed-files", "<Ctrl><Alt>p"),
+    // ⌃⌘T on macOS, but Ctrl+Alt+T is Toggle Full Paths here (⌥⌘T
+    // there): both macOS modifiers land on Alt.
+    ("win.changed-files", "<Ctrl><Alt>g"),
     ("win.project-symbols", "<Ctrl><Alt>o"),
     ("win.definition", "F12"),
     ("win.sidebar", "F9"),
