@@ -1486,9 +1486,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let warning = config.reload() {
             notify(t("Settings file could not be read") + ": " + warning)
         }
-        // Same pipeline as a Settings change — plus re-publishing the
-        // Settings window's own fields, and the grammars, which no
-        // Settings tab edits.
+        reapplyConfiguration()
+    }
+
+    /// Puts the configuration as it now is into effect everywhere: the
+    /// same pipeline as a Settings change — plus re-publishing the
+    /// Settings window's own fields, and the grammars, which no Settings
+    /// tab edits. For a change made somewhere other than the Settings
+    /// window: on disk, or a switch flipped from Search Everywhere.
+    func reapplyConfiguration() {
+        guard config != nil else { return }
         reloadGrammars()
         settingsModel?.reloadFromConfig()
         applyKeyOverrides()
@@ -1762,6 +1769,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.triggerCompletion(_:)): "complete",
             #selector(findInProject(_:)): "findInProject",
             #selector(goToSymbolInProject(_:)): "projectSymbols",
+            #selector(showSearchEverywhere(_:)): "searchEverywhere",
             #selector(NSSplitViewController.toggleSidebar(_:)): "toggleNavigator",
             #selector(DocumentController.togglePreview(_:)): "togglePreview",
             #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
@@ -2551,6 +2559,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let quickFinder = QuickFinderPanel()
     private let commandPalette = CommandPalettePanel()
+    let searchEverywhere = SearchEverywhere()
+
+    /// Search Everywhere (⇧⌘A): files, symbols, commands and settings in
+    /// one box, grouped, the best match first.
+    @objc func showSearchEverywhere(_ sender: Any?) {
+        let key = NSApp.keyWindow?.windowController as? Workbench
+        let focused = key?.focusedDocument
+        let path = focused?.coreDocument.path
+        searchEverywhere.config = config
+        searchEverywhere.symbolSearch = { [weak self] query, deliver in
+            guard let coreApp = self?.coreApp, let path else {
+                deliver(nil)
+                return
+            }
+            let asked = coreApp.lspWorkspaceSymbol(path: path, query: query) { json in
+                deliver(CoreSymbols.rows(fromResultJSON: json))
+            }
+            if !asked { deliver(nil) }
+        }
+        searchEverywhere.onOpen = { [weak self] path, line in
+            self?.recordJumpOrigin()
+            self?.open(path: path, revealLine: line + 1)
+        }
+        searchEverywhere.onSettingChanged = { [weak self] in
+            self?.saveConfigAsOwn()
+            self?.reapplyConfiguration()
+        }
+        searchEverywhere.show(root: currentScope, projectRoot: focused?.projectRoot, over: NSApp.keyWindow)
+    }
 
     /// ⇧⌘P: the fuzzy-searchable menu.
     @objc func showCommandPalette(_ sender: Any?) {
@@ -3504,6 +3541,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         projectSymbols.keyEquivalentModifierMask = [.command, .option]
         findMenu.addItem(projectSymbols)
+        let everywhere = NSMenuItem(
+            title: t("Search Everywhere…"), action: #selector(showSearchEverywhere(_:)), keyEquivalent: "a")
+        everywhere.keyEquivalentModifierMask = [.command, .shift]
+        findMenu.addItem(everywhere)
         let findMenuItem = NSMenuItem(title: t("Find"), action: nil, keyEquivalent: "")
         findMenuItem.submenu = findMenu
         editMenu.addItem(findMenuItem)

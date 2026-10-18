@@ -108,6 +108,7 @@ pub fn menu() -> Vec<Entry> {
             n_("Search"),
             vec![
                 action('p', "Find in Project", "findInProject"),
+                action('e', "Search Everywhere", "searchEverywhere"),
                 action('r', "Find and Replace", "findAndReplace"),
             ],
         ),

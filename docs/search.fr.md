@@ -18,7 +18,25 @@ Les deux parcours respectent `.gitignore`, sautent les fichiers cachés et
 plafonnent la taille des fichiers, grâce au moteur de ripgrep lui-même
 embarqué dans le noyau — pas un sous-processus.
 
-## Ouvrir rapidement (⌘T)
+## Chercher partout (⇧⌘A)
+
+Une boîte pour les fichiers, les symboles, les commandes et les
+réglages (Ctrl+Maj+A sous Linux). Ce qui est tapé est comparé aux
+quatre à la fois, et chaque sorte de réponse vient dans un groupe à
+elle, le groupe à la meilleure correspondance d'abord : taper `save`
+place les commandes Save au-dessus d'un `save.md`, taper `main` place
+`main.rs` au-dessus d'une commande qui le mentionne. Un groupe montre
+quelques lignes, assez pour choisir avec le groupe suivant encore en
+vue. Les fichiers sont ceux du projet, cherchés d'abord par leur nom ;
+les symboles sont ceux du serveur de langage, et arrivent quand il
+répond ; les commandes sont celles des menus ; les réglages sont les
+interrupteurs de l'éditeur, chacun avec son état. Sans rien de tapé,
+elle liste les fichiers ouverts et les commandes lancées récemment. Le
+fichier ou le symbole sélectionné montre son code à côté de la liste.
+⏎ ouvre un fichier ou un symbole, lance une commande, et bascule un
+réglage — enregistré, et en vigueur aussitôt, comme s'il était changé
+dans les Réglages.
+
 
 Tapez des fragments du nom de fichier — `editwc` trouve
 `EditorWindowController.swift` — avec correspondance floue et classement. ↑/↓ déplacent la sélection, ⏎ ouvre (en ramenant la fenêtre au
@@ -147,6 +165,9 @@ déplace d'un coup.
 
 ## Pas encore là
 
+- Chercher partout ne liste que les réglages qui s'activent ou se
+  désactivent ; une largeur de tabulation ou un thème se choisissent
+  dans les Réglages. Deux appuis sur Maj ne l'ouvrent pas.
 - Le remplacement entre fichiers.
 - Les bascules casse/mot entier dans le panneau (le motif lui-même peut
   exprimer les deux).

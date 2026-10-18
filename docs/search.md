@@ -15,7 +15,22 @@ Blanks around a pasted path are ignored.
 Both walks are gitignore-aware, skip hidden files, and cap file sizes,
 courtesy of ripgrep's own engine embedded in the core — not a subprocess.
 
-## Open Quickly (⌘T)
+## Search Everywhere (⇧⌘A)
+
+One box for files, symbols, commands and settings (Ctrl+Shift+A on
+Linux). What is typed is matched against all four at once, and each
+kind of answer comes in a group of its own, the group with the best
+match first: typing `save` puts the Save commands above a `save.md`,
+typing `main` puts `main.rs` above a command that mentions it. A
+group shows a few rows, enough to choose from with the next group still
+in view. Files are the project's, matched by name first; symbols are
+the language server's, and arrive when it answers; commands are the
+menus'; settings are the editor's on/off switches, each listed with
+whether it is on. With nothing typed it lists the files opened lately
+and the commands run lately. The selected file or symbol shows its code
+beside the list. ⏎ opens a file or a symbol, runs a command, and flips a
+setting — saved, and in effect at once, as if changed in Settings.
+
 
 Type fragments of a file name — `editwc` finds
 `EditorWindowController.swift` — with fuzzy matching and ranking. ↑/↓ move the selection, ⏎ opens (fronting the window if the
@@ -133,6 +148,9 @@ asked for in the system settings, the view moves at once.
 
 ## Not there yet
 
+- Search Everywhere lists only the settings that are on or off; a tab
+  width or a theme is chosen in Settings. Two taps of Shift do not open
+  it.
 - Replace across files.
 - Explicit case/whole-word toggles in the panel (smart case covers the
   common case, and the pattern itself can express both).

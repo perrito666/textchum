@@ -131,6 +131,36 @@ impl FileOverride {
 /// set drops out.
 pub const FILE_OVERRIDE_MEMORY: usize = 200;
 
+/// One setting that is on or off, as Search Everywhere lists it and
+/// flips it: an id for the shells, the words it goes by, and how it is
+/// read and written. The table is the core's so both shells offer the
+/// same switches under the same names.
+pub struct Switch {
+    pub id: &'static str,
+    /// Untranslated; [`crate::i18n::tr`] gives it in the user's language.
+    pub label: &'static str,
+    get: fn(&Config) -> bool,
+    set: fn(&mut Config, bool),
+}
+
+/// Every switch, in the order a list shows them with nothing typed.
+pub fn switches() -> &'static [Switch] {
+    use crate::i18n::n_;
+    static SWITCHES: &[Switch] = &[
+        Switch { id: "lineNumbers", label: n_("Show line numbers"), get: Config::line_numbers, set: Config::set_line_numbers },
+        Switch { id: "inlayHints", label: n_("Show the types the language server inferred"), get: Config::inlay_hints, set: Config::set_inlay_hints },
+        Switch { id: "hoverDocs", label: n_("Show documentation when the mouse rests on a symbol"), get: Config::hover_docs, set: Config::set_hover_docs },
+        Switch { id: "contextLines", label: n_("Pin enclosing context lines"), get: Config::context_lines, set: Config::set_context_lines },
+        Switch { id: "rainbowBrackets", label: n_("Colour bracket pairs by depth"), get: Config::rainbow_brackets, set: Config::set_rainbow_brackets },
+        Switch { id: "autoClosePairs", label: n_("Close brackets and quotes as they are typed"), get: Config::auto_close_pairs, set: Config::set_auto_close_pairs },
+        Switch { id: "markOccurrences", label: n_("Mark the selected word elsewhere on screen"), get: Config::mark_occurrences, set: Config::set_mark_occurrences },
+        Switch { id: "followFile", label: n_("Reveal the current file in the tree"), get: Config::follow_file, set: Config::set_follow_file },
+        Switch { id: "keepBuffers", label: n_("Keep files open when their window closes"), get: Config::keep_buffers, set: Config::set_keep_buffers },
+        Switch { id: "preprocessorFailureSaves", label: n_("Save anyway when a save preprocessor fails"), get: Config::preprocessor_failure_saves, set: Config::set_preprocessor_failure_saves },
+    ];
+    SWITCHES
+}
+
 impl Config {
     /// Loads the configuration at `path`.
     ///
@@ -1397,6 +1427,36 @@ impl Config {
     /// Whether the first line of each enclosing construct is pinned at
     /// the top of the view — the breadcrumb that answers "where am I?"
     /// in a long method. On unless turned off; it costs rows.
+    /// Whether the switch `id` (see [`switches`]) is on; None for an id
+    /// there is no switch for.
+    pub fn switch(&self, id: &str) -> Option<bool> {
+        switches().iter().find(|switch| switch.id == id).map(|switch| (switch.get)(self))
+    }
+
+    /// Turns the switch `id` on or off; false for an id there is no
+    /// switch for.
+    pub fn set_switch(&mut self, id: &str, on: bool) -> bool {
+        let Some(switch) = switches().iter().find(|switch| switch.id == id) else { return false };
+        (switch.set)(self, on);
+        true
+    }
+
+    /// The switches as JSON — `[{id, label, on}]`, labels in the user's
+    /// language — for a shell across the C boundary.
+    pub fn switches_json(&self) -> String {
+        let rows: Vec<Value> = switches()
+            .iter()
+            .map(|switch| {
+                serde_json::json!({
+                    "id": switch.id,
+                    "label": crate::i18n::tr(switch.label),
+                    "on": (switch.get)(self),
+                })
+            })
+            .collect();
+        Value::Array(rows).to_string()
+    }
+
     pub fn context_lines(&self) -> bool {
         self.editor()
             .get("context_lines")
@@ -1892,6 +1952,25 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("textchum-config-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join(name)
+    }
+
+    #[test]
+    fn a_switch_is_read_and_flipped_by_its_id() {
+        let (mut config, _) = Config::load(&temp_path("switches.json"));
+        let before = config.switch("lineNumbers").unwrap();
+        assert!(config.set_switch("lineNumbers", !before));
+        assert_eq!(config.line_numbers(), !before);
+        assert_eq!(config.switch("lineNumbers"), Some(!before));
+        assert!(!config.set_switch("noSuchSwitch", true));
+        assert_eq!(config.switch("noSuchSwitch"), None);
+        let json: Value = serde_json::from_str(&config.switches_json()).unwrap();
+        assert_eq!(json.as_array().unwrap().len(), switches().len());
+        assert!(json.as_array().unwrap().iter().any(|row| row["id"] == "inlayHints"));
+        // Every id is one switch.
+        let mut ids: Vec<&str> = switches().iter().map(|switch| switch.id).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), switches().len());
     }
 
     #[test]

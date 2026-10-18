@@ -306,6 +306,7 @@ impl Workbench {
             Some(&tr("Go to Symbol in Project…")),
             Some("win.project-symbols"),
         );
+        file_section.append(Some(&tr("Search Everywhere…")), Some("win.search-everywhere"));
         file_section.append(Some(&tr("Save")), Some("win.save"));
         file_section.append(Some(&tr("Save As…")), Some("win.save-as"));
         file_section.append(Some(&tr("Revert to Saved")), Some("win.revert"));
@@ -2616,6 +2617,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             }
         });
     });
+    add("search-everywhere", workbench, |workbench, _| show_everywhere(workbench));
     add("implementation", workbench, |workbench, _| locate(workbench, false));
     add("type-definition", workbench, |workbench, _| locate(workbench, true));
     add("usages", workbench, |workbench, _| {
@@ -3825,6 +3827,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Open Quickly…", "win.quick-open"),
     ("Changed in Branch…", "win.changed-files"),
     ("Go to Symbol in Project…", "win.project-symbols"),
+    ("Search Everywhere…", "win.search-everywhere"),
     ("Save", "win.save"),
     ("Save As…", "win.save-as"),
     ("Revert to Saved", "win.revert"),
@@ -5854,6 +5857,300 @@ fn show_recent_symbols(
         tr("Symbols gone to lately.")
     });
     *found.borrow_mut() = recent;
+}
+
+/// What a Search Everywhere row stands for.
+#[derive(Clone)]
+enum EverywhereTarget {
+    File(PathBuf),
+    Symbol(textchum_core::symbols::Symbol),
+    /// An index into [`PALETTE`].
+    Command(usize),
+    /// A switch's id and whether it is on.
+    Setting(String, bool),
+}
+
+/// Search Everywhere: files, symbols, commands and settings in one box,
+/// each in a group of its own, the group with the best match first.
+/// The order is the core's; this gathers the candidates and shows them
+/// with the selected place's code under the list.
+fn show_everywhere(workbench: &Rc<Workbench>) {
+    let page = workbench.selected();
+    let path = page.as_ref().and_then(|page| page.path().borrow().clone());
+    let root: PathBuf = path
+        .as_deref()
+        .map(Path::new)
+        .and_then(|path| workspace::project_root_for(path).or_else(|| path.parent().map(Path::to_owned)))
+        .unwrap_or_else(glib::home_dir);
+    let project_root = page.as_ref().and_then(|page| page.document.project_root.borrow().clone());
+    let files: Rc<Vec<String>> = Rc::new(textchum_core::search::list_files(&root));
+    let recent_files: Rc<Vec<String>> = Rc::new({
+        let indexed: std::collections::HashSet<&String> = files.iter().collect();
+        crate::shell::recent("files", project_root.as_deref())
+            .into_iter()
+            .filter_map(|path| Path::new(&path).strip_prefix(&root).ok().map(|p| p.to_string_lossy().into_owned()))
+            .filter(|relative| indexed.contains(relative))
+            .collect()
+    });
+    let recent_commands: Rc<Vec<String>> = Rc::new(crate::shell::recent("commands", project_root.as_deref()));
+
+    let entry = gtk::SearchEntry::new();
+    entry.set_placeholder_text(Some(&tr("file, symbol, command or setting…")));
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::Browse);
+    let scrolled = gtk::ScrolledWindow::builder().child(&list).vexpand(true).build();
+    let preview = place_preview();
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    content.set_margin_top(10);
+    content.set_margin_bottom(10);
+    content.set_margin_start(10);
+    content.set_margin_end(10);
+    content.append(&entry);
+    content.append(&list_over_preview(&scrolled, &preview));
+    let dialog = adw::Window::builder()
+        .transient_for(&workbench.window)
+        .modal(true)
+        .default_width(640)
+        .default_height(600)
+        .title(tr("Search Everywhere"))
+        .content(&content)
+        .build();
+
+    // The rows on show: what each stands for, and the heading over the
+    // first of each group.
+    let targets: Rc<RefCell<Vec<EverywhereTarget>>> = Rc::new(RefCell::new(Vec::new()));
+    let headings: Rc<RefCell<Vec<Option<String>>>> = Rc::new(RefCell::new(Vec::new()));
+    let symbols: Rc<RefCell<Vec<textchum_core::symbols::Symbol>>> = Rc::new(RefCell::new(Vec::new()));
+    let asked = Rc::new(Cell::new(0u64));
+    {
+        let headings = Rc::clone(&headings);
+        list.set_header_func(move |row, _| {
+            let heading = headings.borrow().get(row.index().max(0) as usize).cloned().flatten();
+            let Some(heading) = heading else {
+                row.set_header(gtk::Widget::NONE);
+                return;
+            };
+            let label = gtk::Label::new(Some(&heading));
+            label.set_xalign(0.0);
+            label.set_margin_start(10);
+            label.set_margin_top(8);
+            label.set_margin_bottom(2);
+            label.add_css_class("dim-label");
+            label.add_css_class("heading");
+            row.set_header(Some(&label));
+        });
+    }
+    let fill: Rc<dyn Fn()> = {
+        let entry = entry.clone();
+        let list = list.clone();
+        let root = root.clone();
+        let files = Rc::clone(&files);
+        let recent_files = Rc::clone(&recent_files);
+        let recent_commands = Rc::clone(&recent_commands);
+        let targets = Rc::clone(&targets);
+        let headings = Rc::clone(&headings);
+        let symbols = Rc::clone(&symbols);
+        Rc::new(move || {
+            let typed = entry.text().trim().to_owned();
+            let file_labels: Vec<String> = if typed.is_empty() {
+                recent_files.to_vec()
+            } else {
+                textchum_core::search::match_files(&files, &typed, 60)
+            };
+            let palette: Vec<String> = PALETTE.iter().map(|(label, _)| label.to_string()).collect();
+            let command_order: Vec<usize> = if typed.is_empty() {
+                textchum_core::project_state::recent_first(&palette, &recent_commands)
+            } else {
+                (0..PALETTE.len()).collect()
+            };
+            let switches: Vec<(String, String, bool)> = {
+                let shell = Shell::instance();
+                let config = shell.config.borrow();
+                textchum_core::switches()
+                    .iter()
+                    .map(|switch| {
+                        (switch.id.to_owned(), tr(switch.label), config.switch(switch.id).unwrap_or(false))
+                    })
+                    .collect()
+            };
+            let found = symbols.borrow().clone();
+            use textchum_core::everywhere::Kind;
+            let groups = vec![
+                (Kind::File, file_labels.clone()),
+                (Kind::Symbol, found.iter().map(|symbol| symbol.name.clone()).collect()),
+                (Kind::Command, command_order.iter().map(|at| palette[*at].clone()).collect()),
+                (Kind::Setting, switches.iter().map(|(_, label, _)| label.clone()).collect()),
+            ];
+            while let Some(child) = list.first_child() {
+                list.remove(&child);
+            }
+            let mut shown_targets = Vec::new();
+            let mut shown_headings = Vec::new();
+            for (kind, rows) in textchum_core::everywhere::arrange(&typed, &groups) {
+                for (place, at) in rows.into_iter().enumerate() {
+                    let (text, target) = match kind {
+                        Kind::File => (file_labels[at].clone(), EverywhereTarget::File(root.join(&file_labels[at]))),
+                        Kind::Symbol => {
+                            let symbol = &found[at];
+                            let relative = Path::new(&symbol.path)
+                                .strip_prefix(&root)
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .unwrap_or_else(|_| symbol.path.clone());
+                            (
+                                format!("{}   {} — {}:{}", symbol.name, symbol.kind, relative, symbol.line + 1),
+                                EverywhereTarget::Symbol(symbol.clone()),
+                            )
+                        }
+                        Kind::Command => {
+                            let index = command_order[at];
+                            (PALETTE[index].0.to_owned(), EverywhereTarget::Command(index))
+                        }
+                        Kind::Setting => {
+                            let (id, label, on) = &switches[at];
+                            let state = if *on { tr("on") } else { tr("off") };
+                            (format!("{label}   {state}"), EverywhereTarget::Setting(id.clone(), *on))
+                        }
+                    };
+                    let label = gtk::Label::new(Some(&text));
+                    label.set_xalign(0.0);
+                    label.set_margin_start(10);
+                    label.set_margin_end(10);
+                    label.set_margin_top(3);
+                    label.set_margin_bottom(3);
+                    label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+                    shown_targets.push(target);
+                    shown_headings.push((place == 0).then(|| kind.title()));
+                    list.append(&label);
+                }
+            }
+            *targets.borrow_mut() = shown_targets;
+            *headings.borrow_mut() = shown_headings;
+            list.invalidate_headers();
+            if let Some(first) = list.row_at_index(0) {
+                list.select_row(Some(&first));
+            }
+        })
+    };
+    {
+        let preview = preview.clone();
+        let targets = Rc::clone(&targets);
+        list.connect_row_selected(move |_, row| {
+            let target = row.and_then(|row| targets.borrow().get(row.index().max(0) as usize).cloned());
+            match target {
+                Some(EverywhereTarget::File(path)) => {
+                    show_place(&preview, Some((path.to_string_lossy().as_ref(), 0)))
+                }
+                Some(EverywhereTarget::Symbol(symbol)) => {
+                    show_place(&preview, Some((symbol.path.as_str(), symbol.line as i32)))
+                }
+                _ => show_place(&preview, None),
+            }
+        });
+    }
+    {
+        // Typing asks the language server too; its answer, when it comes
+        // for the query still typed, fills the symbols group in.
+        let fill = Rc::clone(&fill);
+        let symbols = Rc::clone(&symbols);
+        let asked = Rc::clone(&asked);
+        entry.connect_search_changed(move |entry| {
+            symbols.borrow_mut().clear();
+            fill();
+            let question = asked.get().wrapping_add(1);
+            asked.set(question);
+            let typed = entry.text().trim().to_owned();
+            let Some(path) = path.clone().filter(|_| !typed.is_empty()) else { return };
+            let shell = Shell::instance();
+            let id = shell.pool.borrow_mut().workspace_symbol(Path::new(&path), &typed);
+            let fill = Rc::clone(&fill);
+            let symbols = Rc::clone(&symbols);
+            let asked = Rc::clone(&asked);
+            shell.expect_response(id, move |json| {
+                if asked.get() != question {
+                    return;
+                }
+                *symbols.borrow_mut() = textchum_core::symbols::rows(json);
+                fill();
+            });
+        });
+    }
+    let choose = {
+        let workbench = Rc::clone(workbench);
+        let dialog = dialog.clone();
+        let targets = Rc::clone(&targets);
+        let project_root = project_root.clone();
+        Rc::new(move |row: i32| {
+            let Some(target) = targets.borrow().get(row.max(0) as usize).cloned() else { return };
+            dialog.close();
+            match target {
+                EverywhereTarget::File(path) => workbench.open(Some(path), None),
+                EverywhereTarget::Symbol(symbol) => workbench.open(
+                    Some(PathBuf::from(&symbol.path)),
+                    Some((symbol.line as i32, symbol.character as usize)),
+                ),
+                EverywhereTarget::Command(index) => {
+                    crate::shell::note_recent("commands", PALETTE[index].0, project_root.as_deref());
+                    let _ = gtk::prelude::WidgetExt::activate_action(&workbench.window, PALETTE[index].1, None);
+                }
+                EverywhereTarget::Setting(id, on) => flip_switch(&id, !on),
+            }
+        })
+    };
+    {
+        let choose = Rc::clone(&choose);
+        list.connect_row_activated(move |_, row| choose(row.index()));
+    }
+    {
+        let choose = Rc::clone(&choose);
+        let list = list.clone();
+        entry.connect_activate(move |_| {
+            choose(list.selected_row().map(|row| row.index()).unwrap_or(0));
+        });
+    }
+    {
+        let list = list.clone();
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if key == gtk::gdk::Key::Down || key == gtk::gdk::Key::Up {
+                let delta = if key == gtk::gdk::Key::Down { 1 } else { -1 };
+                let next = list.selected_row().map(|row| row.index() + delta).unwrap_or(0);
+                if let Some(row) = list.row_at_index(next.max(0)) {
+                    page::select_in_view(&list, &row);
+                }
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        dialog.add_controller(keys);
+    }
+    fill();
+    wire_escape(&dialog, &entry);
+    remember_query(&dialog, &entry, "everywhere");
+    dialog.present();
+    entry.grab_focus();
+    entry.select_region(0, -1);
+}
+
+/// Turns a switch on or off from Search Everywhere: saved, and put into
+/// effect the way a Preferences change is, the pages redrawing what it
+/// governs.
+pub(crate) fn flip_switch(id: &str, on: bool) {
+    let shell = Shell::instance();
+    if !shell.config.borrow_mut().set_switch(id, on) {
+        return;
+    }
+    shell.save_config();
+    shell.reapply_config();
+    Workbench::for_each(|workbench| {
+        for page in workbench.all_pages() {
+            page::refresh_inlay_labels(&page);
+            page::request_inlay_hints(&page);
+            page::apply_highlights(&page.buffer, &page.state.borrow().document);
+            page::refresh_context_strip(&page);
+        }
+        workbench.refresh_chrome();
+    });
 }
 
 /// The project's symbols by name, as the language server of the

@@ -300,6 +300,27 @@ public final class CoreConfig {
 
     /// Whether a server's inlay hints — the types it inferred — are
     /// shown, dimmed, after the line they are about.
+    /// One on/off setting Search Everywhere offers.
+    public struct Switch: Decodable, Sendable {
+        public let id: String
+        public let label: String
+        public let on: Bool
+    }
+
+    /// Every on/off setting Search Everywhere offers, labels in the
+    /// user's language.
+    public var switches: [Switch] {
+        guard let json = tc_config_switches_json(handle) else { return [] }
+        defer { tc_string_free(json) }
+        return (try? JSONDecoder().decode([Switch].self, from: Data(String(cString: json).utf8))) ?? []
+    }
+
+    /// Turns the switch `id` on or off; false for an id there is none for.
+    @discardableResult
+    public func setSwitch(_ id: String, on: Bool) -> Bool {
+        id.withCString { pointer in tc_config_set_switch(handle, pointer, UInt(strlen(pointer)), on) }
+    }
+
     public var inlayHints: Bool {
         get { tc_config_inlay_hints(handle) }
         set { tc_config_set_inlay_hints(handle, newValue) }

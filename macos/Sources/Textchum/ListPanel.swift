@@ -78,8 +78,10 @@ final class ListPanel: NSObject {
         monospaced: Bool = false,
         place: ((Int) -> (path: String, line: Int)?)? = nil,
         near anchor: NSRect? = nil,
+        search: ((String) -> Void)? = nil,
         onChoose: @escaping (Int) -> Void
     ) {
+        self.search = search
         self.allRows = rows
         self.monospaced = monospaced
         self.onChoose = onChoose
@@ -143,8 +145,21 @@ final class ListPanel: NSObject {
 
     // MARK: Rows
 
+    /// Asked for the rows as the query changes, instead of the list
+    /// filtering what it was given: the owner answers with
+    /// ``replace(rows:)``, as soon as it has them or as they arrive.
+    private var search: ((String) -> Void)?
+
+    /// The rows a searching list shows now. The first item is selected.
+    func replace(rows: [Row]) {
+        allRows = rows
+        applyFilter()
+        refreshPreview()
+    }
+
     private func applyFilter() {
-        let query = filtering ? queryField.stringValue : ""
+        // A searching list shows what its owner found, as it was given.
+        let query = filtering && search == nil ? queryField.stringValue : ""
         var built: [(row: Row, item: Int?)] = []
         var item = 0
         for row in allRows {
@@ -370,7 +385,11 @@ extension ListPanel: NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDele
     }
 
     func controlTextDidChange(_ notification: Notification) {
-        applyFilter()
+        if let search {
+            search(queryField.stringValue)
+        } else {
+            applyFilter()
+        }
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {

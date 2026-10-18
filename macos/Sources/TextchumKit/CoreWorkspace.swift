@@ -752,3 +752,34 @@ public enum CoreCompletion {
         return String(cString: json)
     }
 }
+
+/// Search Everywhere's order: the group with the best match first, each
+/// group's best rows first.
+public enum CoreEverywhere {
+    public struct Group: Decodable, Sendable {
+        /// `files`, `symbols`, `commands` or `settings`.
+        public let kind: String
+        /// The heading, in the user's language.
+        public let title: String
+        /// Indices into the labels given for this kind.
+        public let rows: [Int]
+    }
+
+    /// `groups` maps a kind to its candidates' labels, as each source
+    /// ranked them.
+    public static func arrange(query: String, groups: [(kind: String, labels: [String])]) -> [Group] {
+        let input = groups.map { ["kind": $0.kind, "labels": $0.labels] as [String: Any] }
+        guard let data = try? JSONSerialization.data(withJSONObject: input),
+            let json = String(data: data, encoding: .utf8)
+        else { return [] }
+        let answer = query.withCString { queryPointer in
+            json.withCString { jsonPointer in
+                tc_everywhere_arrange_json(
+                    queryPointer, UInt(strlen(queryPointer)), jsonPointer, UInt(strlen(jsonPointer)))
+            }
+        }
+        guard let answer else { return [] }
+        defer { tc_string_free(answer) }
+        return (try? JSONDecoder().decode([Group].self, from: Data(String(cString: answer).utf8))) ?? []
+    }
+}

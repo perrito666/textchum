@@ -22,6 +22,7 @@ pub mod code_action;
 pub mod completion;
 pub mod definition;
 pub mod edits;
+pub mod everywhere;
 pub mod diagnostics;
 mod config;
 mod document;
@@ -59,8 +60,8 @@ pub mod workspace;
 pub use app::{App, Event, EventSender};
 pub use buffer::{Buffer, BufferError};
 pub use config::{
-    Appearance, Config, FileOverride, OpenTarget, ProjectParts, DEFAULT_FONT_SIZE,
-    DEFAULT_TAB_WIDTH, FILE_OVERRIDE_MEMORY,
+    switches, Appearance, Config, FileOverride, OpenTarget, ProjectParts, Switch,
+    DEFAULT_FONT_SIZE, DEFAULT_TAB_WIDTH, FILE_OVERRIDE_MEMORY,
 };
 pub use document::{AppliedEdit, Document, DocumentError, Encoding};
 pub use syntax::{theme, HighlightSpan};
