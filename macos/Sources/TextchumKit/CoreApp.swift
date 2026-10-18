@@ -324,8 +324,10 @@ public final class CoreApp {
         public let summary: String
     }
 
-    public func runTests(id: UInt64) -> RunTests? {
-        guard let answer = tc_run_tests(handle, id) else { return nil }
+    /// The tests a run reported; with a `query`, only those it matches.
+    public func runTests(id: UInt64, query: String = "") -> RunTests? {
+        let answer = withUTF8(query) { query, queryLen in tc_run_tests(handle, id, query, queryLen) }
+        guard let answer else { return nil }
         defer { tc_string_free(answer) }
         return try? JSONDecoder().decode(RunTests.self, from: Data(String(cString: answer).utf8))
     }

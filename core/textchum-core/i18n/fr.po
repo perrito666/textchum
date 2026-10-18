@@ -814,6 +814,10 @@ msgid "Tests"
 msgstr "Tests"
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "Filter tests"
+msgstr "Filtrer les tests"
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "A line for its input — ⏎ sends it"
 msgstr "Une ligne pour son entrée — ⏎ l'envoie"
 
@@ -1416,7 +1420,9 @@ msgstr "Rien n'est en cours de débogage."
 msgid ""
 "The program is not stopped in the debugger: set a breakpoint and debug a "
 "test or a main."
-msgstr "Le programme n'est pas arrêté dans le débogueur : posez un point d'arrêt et déboguez un test ou un main."
+msgstr ""
+"Le programme n'est pas arrêté dans le débogueur : posez un point d'arrêt et "
+"déboguez un test ou un main."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "The run's output names no place in a file."

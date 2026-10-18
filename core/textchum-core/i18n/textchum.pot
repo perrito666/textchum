@@ -805,6 +805,10 @@ msgid "Tests"
 msgstr ""
 
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "Filter tests"
+msgstr ""
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "A line for its input — ⏎ sends it"
 msgstr ""
 

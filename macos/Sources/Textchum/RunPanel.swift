@@ -37,6 +37,9 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
     private let summary = NSTextField(labelWithString: "")
     private let split = NSSplitView()
     private let testsScroll = NSScrollView()
+    /// Typing filters the tests (3.3); the field and the list go together.
+    private let testsFilter = NSSearchField()
+    private let testsSide = NSStackView()
     private let testsOutline = TestOutline()
     /// The tests as last listed, and the rows standing for them.
     private(set) var tests: CoreApp.RunTests?
@@ -54,7 +57,9 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
 
     var isShown: Bool { (heightConstraint?.constant ?? 0) > 0 }
     /// Whether the tests are listed beside the output, for the smoke test.
-    var showsTests: Bool { !testsScroll.isHidden }
+    var showsTests: Bool { !testsSide.isHidden }
+    /// The tests listed, as the filter leaves them, for the smoke test.
+    var listedTestNames: [String] { suiteRows.flatMap { $0.children.map(\.name) } }
     var summaryText: String { summary.stringValue }
     /// The command Rerun Failed would run, when there is one.
     var rerunCommand: String? { tests?.rerun }
@@ -118,13 +123,22 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
         testsScroll.documentView = testsOutline
         testsScroll.hasVerticalScroller = true
         testsScroll.borderType = .noBorder
-        testsScroll.isHidden = true
+        testsFilter.placeholderString = t("Filter tests")
+        testsFilter.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        testsFilter.sendsSearchStringImmediately = true
+        testsFilter.target = self
+        testsFilter.action = #selector(filterChanged(_:))
+        testsSide.orientation = .vertical
+        testsSide.spacing = 2
+        testsSide.addArrangedSubview(testsFilter)
+        testsSide.addArrangedSubview(testsScroll)
+        testsSide.isHidden = true
         split.isVertical = true
         split.dividerStyle = .thin
-        split.addArrangedSubview(testsScroll)
+        split.addArrangedSubview(testsSide)
         split.addArrangedSubview(scroll)
         split.setHoldingPriority(.defaultHigh, forSubviewAt: 0)
-        testsScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
+        testsSide.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
 
         input.placeholderString = t("A line for its input — ⏎ sends it")
         input.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
@@ -173,7 +187,8 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
         tests = nil
         suiteRows = []
         testsOutline.reloadData()
-        testsScroll.isHidden = true
+        testsSide.isHidden = true
+        testsFilter.stringValue = ""
         summary.stringValue = ""
         rerunButton.isHidden = true
         status.stringValue = t("running")
@@ -341,17 +356,18 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
 
     /// Lists the tests the output reported, when they changed.
     private func refreshTests() {
-        guard let id = runID, let core, let found = core.runTests(id: id), found != tests else { return }
-        let first = tests == nil || tests?.suites.isEmpty == true
+        guard let id = runID, let core, let found = core.runTests(id: id, query: testsFilter.stringValue),
+            found != tests
+        else { return }
         tests = found
         suiteRows = found.suites.map { suite in
             TestRow(
                 name: suite.name.isEmpty ? t("package not reported yet") : suite.name, suite: suite.name, test: nil,
                 children: suite.tests.map { TestRow(name: $0.name, suite: suite.name, test: $0) })
         }
-        let hasTests = !found.suites.isEmpty
-        if hasTests && first {
-            testsScroll.isHidden = false
+        let reported = found.passed + found.failed + found.skipped + found.running > 0
+        if reported && testsSide.isHidden {
+            testsSide.isHidden = false
             split.adjustSubviews()
             split.setPosition(min(320, max(200, bounds.width * 0.3)), ofDividerAt: 0)
         }
@@ -359,6 +375,16 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
         testsOutline.expandItem(nil, expandChildren: true)
         summary.stringValue = found.summary
         rerunButton.isHidden = found.rerun == nil
+    }
+
+    @objc private func filterChanged(_ sender: Any?) {
+        refreshTests()
+    }
+
+    /// Types `query` into the tests' filter, for the smoke test.
+    func filterTests(_ query: String) {
+        testsFilter.stringValue = query
+        refreshTests()
     }
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {

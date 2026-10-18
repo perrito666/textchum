@@ -226,6 +226,56 @@ impl TestLog {
     }
 }
 
+/// How well `query` matches `text` as a subsequence, ignoring case:
+/// higher is better, a tight and early match best; None when it does
+/// not match.
+fn subsequence_score(text: &str, query: &str) -> Option<i64> {
+    let text: Vec<char> = text.to_lowercase().chars().collect();
+    let mut position = 0;
+    let (mut first, mut last) = (None, 0);
+    for wanted in query.to_lowercase().chars().filter(|c| !c.is_whitespace()) {
+        while position < text.len() && text[position] != wanted {
+            position += 1;
+        }
+        if position == text.len() {
+            return None;
+        }
+        first.get_or_insert(position);
+        last = position;
+        position += 1;
+    }
+    let first = first.unwrap_or(0);
+    Some(-((last - first) as i64) * 4 - first as i64)
+}
+
+/// The suites with only the tests whose suite and name match `query`,
+/// as typing filters any list (INTERACTION.md 3.3): the best match first
+/// in each suite, and the suite with the best match first. Everything,
+/// in order, for an empty query.
+pub fn filtered(suites: Vec<Suite>, query: &str) -> Vec<Suite> {
+    if query.trim().is_empty() {
+        return suites;
+    }
+    let mut kept: Vec<(i64, Suite)> = suites
+        .into_iter()
+        .filter_map(|suite| {
+            let mut tests: Vec<(i64, TestResult)> = suite
+                .tests
+                .into_iter()
+                .filter_map(|test| {
+                    let score = subsequence_score(&format!("{} {}", suite.name, test.name), query)?;
+                    Some((score, test))
+                })
+                .collect();
+            tests.sort_by(|a, b| b.0.cmp(&a.0));
+            let best = tests.first()?.0;
+            Some((best, Suite { name: suite.name, tests: tests.into_iter().map(|(_, test)| test).collect() }))
+        })
+        .collect();
+    kept.sort_by(|a, b| b.0.cmp(&a.0));
+    kept.into_iter().map(|(_, suite)| suite).collect()
+}
+
 /// Splits a command line into words the way the shell would, for the
 /// plain command lines tests are run with; None for anything with a
 /// pipe, a list, a redirection or a substitution, which is not taken
@@ -492,6 +542,19 @@ mod tests {
             rerun("python3 -m pytest -v -k shop tests", log.runner, &log.failed()).as_deref(),
             Some("python3 -m pytest -v tests/test_shop.py::TestShop::test_sells tests/test_cart.py::test_total")
         );
+    }
+
+    #[test]
+    fn typing_keeps_the_tests_that_match_best_first() {
+        let log = log("     Running unittests src/lib.rs\ntest shop::sells ... ok\ntest shop::buys ... FAILED\ntest cart::totals ... ok\n     Running tests/api.rs\ntest serves ... ok\n");
+        let names = |suites: Vec<Suite>| -> Vec<String> {
+            suites.into_iter().flat_map(|suite| suite.tests.into_iter().map(|test| test.name)).collect()
+        };
+        assert_eq!(names(filtered(log.suites(), "buys")), ["shop::buys"]);
+        assert_eq!(names(filtered(log.suites(), "api")), ["serves"], "the suite's name counts");
+        assert_eq!(names(filtered(log.suites(), "s")).len(), 4);
+        assert_eq!(names(filtered(log.suites(), "")).len(), 4);
+        assert!(filtered(log.suites(), "zzz").is_empty());
     }
 
     #[test]

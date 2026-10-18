@@ -218,9 +218,10 @@ impl Runs {
     /// the test, null once it is no longer kept; `outcome` is passed,
     /// failed, skipped, running, or unfinished for one still running
     /// when the run ended; `rerun` runs only the failed ones again, null
-    /// when there are none or the command cannot be narrowed. None for
-    /// an id there is no run for.
-    pub fn tests(&self, id: u64) -> Option<String> {
+    /// when there are none or the command cannot be narrowed. With a
+    /// `query`, only the tests it matches are listed; the counts are the
+    /// whole run's. None for an id there is no run for.
+    pub fn tests(&self, id: u64, query: &str) -> Option<String> {
         let state = self.runs.get(&id)?;
         let mut state = state.lock().ok()?;
         let state = &mut *state;
@@ -234,16 +235,19 @@ impl Runs {
         }
         state.tests_read = state.tests_read.max(end);
         let mut counts = [0usize; 4];
-        let suites: Vec<serde_json::Value> = state
-            .tests
-            .suites()
+        // The counts are the run's; what typing filters is only the list.
+        for suite in state.tests.suites() {
+            for test in &suite.tests {
+                counts[test.outcome as usize] += 1;
+            }
+        }
+        let suites: Vec<serde_json::Value> = crate::test_results::filtered(state.tests.suites(), query)
             .into_iter()
             .map(|suite| {
                 let tests: Vec<serde_json::Value> = suite
                     .tests
                     .iter()
                     .map(|test| {
-                        counts[test.outcome as usize] += 1;
                         let outcome = if finished && test.outcome == Outcome::Running {
                             "unfinished"
                         } else {
@@ -439,7 +443,7 @@ mod tests {
             .start("printf 'test a::one ... ok\\ntest a::two ... FAILED\\n'; exit 101 # cargo test", Path::new("/"))
             .unwrap();
         assert!(wait_for(&receiver, "exited"));
-        let tests: serde_json::Value = serde_json::from_str(&runs.tests(id).unwrap()).unwrap();
+        let tests: serde_json::Value = serde_json::from_str(&runs.tests(id, "").unwrap()).unwrap();
         assert_eq!((tests["passed"].as_u64(), tests["failed"].as_u64()), (Some(1), Some(1)));
         assert_eq!(tests["suites"][0]["tests"][1]["name"], "a::two");
         assert_eq!(tests["suites"][0]["tests"][1]["line"], 1);
@@ -448,7 +452,7 @@ mod tests {
         assert_eq!(tests["rerun"], serde_json::Value::Null);
         assert_eq!(runs.rerun_test(id, "", "a::one"), None, "not a cargo test command line");
         // Asked again, nothing is read twice.
-        let again: serde_json::Value = serde_json::from_str(&runs.tests(id).unwrap()).unwrap();
+        let again: serde_json::Value = serde_json::from_str(&runs.tests(id, "").unwrap()).unwrap();
         assert_eq!(again["passed"].as_u64(), Some(1));
     }
 

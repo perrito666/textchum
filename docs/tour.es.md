@@ -431,7 +431,8 @@ test -v`, pytest — el panel las lista a su lado por suite, cada una
 marcada como aprobada, fallida, omitida o aún en marcha, con los
 recuentos en su cabecera. Una prueba elegida en la lista muestra la
 línea de la salida que informó de ella, tras la que viene su fallo;
-Retorno o un doble clic ejecuta esa prueba sola. **Repetir fallidas**
+Retorno o un doble clic ejecuta esa prueba sola, y el campo sobre la
+lista la filtra por nombre mientras escribes. **Repetir fallidas**
 en el panel, o **Run → Repetir pruebas fallidas**,
 vuelve a ejecutar solo las que fallaron, desde la misma carpeta: la
 orden es la que las ejecutó, con sus propios filtros sustituidos por
@@ -447,8 +448,7 @@ Las pruebas solo se leen de la salida de cargo, `go test` y pytest; sin
 `-v`, `go test` y pytest solo nombran lo que falló, así que solo eso se
 lista. Una línea de órdenes con una tubería o `&&` no se acota para
 Repetir fallidas, y una prueba de la lista todavía no abre su código —
-el sitio de su fallo en la salida sí. Escribir todavía no filtra la
-lista.
+el sitio de su fallo en la salida sí.
 
 ## Depuración
 

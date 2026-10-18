@@ -277,13 +277,15 @@ char *tc_run_read(struct TcApp *app, uint64_t id);
 /**
  * The tests a run's output reported: `{suites: [{name, tests: [{name,
  * outcome, line, duration}]}], passed, failed, skipped, running,
- * rerun, summary}` — see [`textchum_core::run::Runs::tests`]. Null for an id
- * there is no run for. Free with [`tc_string_free`].
+ * rerun, summary}` — see [`textchum_core::run::Runs::tests`] — with only
+ * the tests `query` matches listed, all of them for an empty one. Null
+ * for an id there is no run for. Free with [`tc_string_free`].
  *
  * # Safety
- * `app` must be a live pointer from [`tc_app_new`].
+ * `app` must be a live pointer from [`tc_app_new`]; `query` must point to
+ * `query_len` readable bytes.
  */
-char *tc_run_tests(struct TcApp *app, uint64_t id);
+char *tc_run_tests(struct TcApp *app, uint64_t id, const char *query, uintptr_t query_len);
 
 /**
  * The command that runs only the test `name` of `suite` again, from

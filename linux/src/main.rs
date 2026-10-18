@@ -2126,6 +2126,9 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             let listed = (workbench.run_panel.shows_tests(), workbench.run_panel.summary_text());
             workbench.run_panel.choose_test("a::two");
             let selected = workbench.run_panel.selected_output_text();
+            workbench.run_panel.filter_tests("two");
+            let filtered = (workbench.run_panel.listed_test_names(), workbench.run_panel.summary_text());
+            workbench.run_panel.filter_tests("");
             workbench.run_panel.choose_test("a::one");
             let alone_ran = workbench.run_panel.run_chosen_test();
             let alone = rerun.borrow().clone();
@@ -2135,6 +2138,10 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             let _ = std::fs::remove_dir_all(&dir);
             if listed != (true, "1 failed, 1 passed".to_owned()) {
                 eprintln!("FAIL: the tests listed: {listed:?}");
+                return 1;
+            }
+            if filtered != (vec!["a::two".to_owned()], "1 failed, 1 passed".to_owned()) {
+                eprintln!("FAIL: filtering the tests listed {filtered:?}");
                 return 1;
             }
             if selected != "test a::two ... FAILED" {
@@ -2150,7 +2157,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 return 1;
             }
         }
-        println!("test results ok (listed by suite, counted, a test shows its line, run alone, the failed run again)");
+        println!("test results ok (listed by suite, counted, filtered by typing, a test shows its line, run alone, the failed run again)");
 
         // The notification area shows a notice's first line; the whole
         // of it is a click away.
