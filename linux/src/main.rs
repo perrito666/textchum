@@ -2108,7 +2108,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             // The checks after this one work on the page that was in
             // front, a file's, which closing this one does not bring back.
             if let Some(path) = before {
-                workbench.open(Some(path), None);
+                workbench.open(Some(std::path::PathBuf::from(path)), None);
             }
             let _ = std::fs::remove_dir_all(&dir);
             if command.as_deref() != Some("cargo test -- adds --exact") {
