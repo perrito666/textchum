@@ -592,6 +592,24 @@ impl Workbench {
                 glib::Propagation::Proceed
             });
         }
+        // The matches are marked while the bar is up and go with it,
+        // however it closes: its own Escape, or Escape in the text (2.1).
+        // The text keeps the keyboard, or takes it back from the bar.
+        {
+            let weak = Rc::downgrade(&workbench);
+            workbench.search_bar.connect_search_mode_enabled_notify(move |bar| {
+                let Some(workbench) = weak.upgrade() else { return };
+                let up = bar.is_search_mode();
+                for page in workbench.all_pages() {
+                    page.search_context.set_highlight(up);
+                }
+                if !up {
+                    if let Some(page) = workbench.selected() {
+                        page.view.grab_focus();
+                    }
+                }
+            });
+        }
         // Search acts on the selected page's context.
         {
             let workbench = Rc::downgrade(&workbench);
@@ -1325,6 +1343,31 @@ impl Workbench {
             workbench.window.close();
         });
         dialog.present(Some(&self.window));
+        true
+    }
+
+    /// Whether the find bar is up, for the smoke test.
+    pub(crate) fn find_bar_up(&self) -> bool {
+        self.search_bar.is_search_mode()
+    }
+
+    /// Puts the find bar away when it is up in the window showing
+    /// `page`. False when it was not up, so Escape goes on to the next
+    /// thing (2.1).
+    pub fn close_find_bar_for(page: &Rc<page::Page>) -> bool {
+        // Found first and closed after: closing runs the bar's handlers,
+        // which are not to run inside the walk over the windows.
+        let mut holding: Option<Rc<Workbench>> = None;
+        Self::for_each(|workbench| {
+            if holding.is_none()
+                && workbench.search_bar.is_search_mode()
+                && workbench.all_pages().iter().any(|shown| Rc::ptr_eq(shown, page))
+            {
+                holding = Some(Rc::clone(workbench));
+            }
+        });
+        let Some(workbench) = holding else { return false };
+        workbench.search_bar.set_search_mode(false);
         true
     }
 

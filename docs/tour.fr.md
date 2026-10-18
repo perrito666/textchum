@@ -181,7 +181,8 @@ et `\V`, `\c` — et le remplacement accepte `\1`…`\9`, `&` ou `\0` pour
 la correspondance, `\n`, et `\u` `\l` `\U` `\L` `\E` pour la casse. ⏎
 dans le motif va à la correspondance suivante, ⇧⏎ à la précédente, ⏎
 dans le remplacement remplace la courante et continue ; Tout remplace
-toutes en une seule étape d'annulation.
+toutes en une seule étape d'annulation. ⎋, dans la barre ou dans le
+texte, range la barre et ses marques et laisse le clavier au texte.
 
 **Aller à la ligne** (⌘L, Ctrl+L sous Linux) accepte un numéro, ou le
 `src/main.rs:412:8` entier collé depuis un journal de compilation — le

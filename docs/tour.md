@@ -169,7 +169,9 @@ match case, whole word. The expressions are Vim's — `\(` `\)` groups,
 replacement takes `\1`…`\9`, `&` or `\0` for the match, `\n`, and
 `\u` `\l` `\U` `\L` `\E` for case. ⏎ in the pattern goes to the next
 match, ⇧⏎ to the previous, ⏎ in the replacement replaces the current
-one and moves on; All replaces every match as one undo step.
+one and moves on; All replaces every match as one undo step. ⎋, in
+the bar or in the text, puts the bar and its marks away and leaves the
+keyboard in the text.
 
 **Go to Line** (⌘L, Ctrl+L on Linux) takes a number, or the whole
 `src/main.rs:412:8` pasted straight out of a build log — the file name

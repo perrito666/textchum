@@ -1189,6 +1189,24 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             eprintln!("FAIL: Escape did not put the hint away");
             return 1;
         }
+        // The find bar belongs to the window, and Escape in the text puts
+        // it away too, with its marks, leaving the keyboard in the text.
+        fire("win.find");
+        if !workbench.find_bar_up() {
+            eprintln!("FAIL: the find bar did not open");
+            return 1;
+        }
+        page.view.grab_focus();
+        while workbench.find_bar_up() {
+            if !page::back_out_one_level(&page) {
+                eprintln!("FAIL: Escape in the text left the find bar up");
+                return 1;
+            }
+        }
+        if page.search_context.is_highlight() {
+            eprintln!("FAIL: the find bar went and left its matches marked");
+            return 1;
+        }
         // Whatever else is up — a mark of uses, say — goes one per press.
         let mut presses = 0;
         while page::back_out_one_level(&page) {
