@@ -1464,6 +1464,56 @@ pub unsafe extern "C" fn tc_document_diagnostics_json(document: *const TcDocumen
         .unwrap_or(std::ptr::null_mut())
 }
 
+/// Every place this document was changed, as a JSON array of
+/// `[line, stamp]` pairs, for Recent Places. Free with
+/// [`tc_string_free`]; null on a bad pointer.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_edit_places_json(document: *const TcDocument) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(serde_json::json!(document.inner.edit_places()).to_string())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Notes that the caret was at the zero-based `line` of `path` when a
+/// jump left it, for Recent Places.
+///
+/// # Safety
+/// `path` must point to `path_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_trail_note_visit(path: *const c_char, path_len: usize, line: usize) {
+    let Some(path) = (unsafe { str_from_raw(path, path_len) }) else { return };
+    let _ = catch_unwind(AssertUnwindSafe(|| textchum_core::trail::note_visit(path, line)));
+}
+
+/// Recent Places: where the user has been lately, most recent first,
+/// as a JSON array of `{path, line}`. `edits_json` is every open
+/// document's edit places as `[path, line, stamp]` triples; the places
+/// jumped away from are the core's own. Free with [`tc_string_free`].
+///
+/// # Safety
+/// `edits_json` must point to `edits_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_trail_recent_places(edits_json: *const c_char, edits_len: usize) -> *mut c_char {
+    let edits: Vec<(String, usize, u64)> = unsafe { str_from_raw(edits_json, edits_len) }
+        .and_then(|json| serde_json::from_str(json).ok())
+        .unwrap_or_default();
+    catch_unwind(AssertUnwindSafe(|| {
+        let places: Vec<serde_json::Value> = textchum_core::trail::recent_places(&edits)
+            .into_iter()
+            .map(|(path, line)| serde_json::json!({"path": path, "line": line}))
+            .collect();
+        owned_c_string(serde_json::Value::Array(places).to_string())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Go to Last Edit: the newest place this document was changed that is
 /// older than the stamp `before` — 0 for the newest of all. Writes its
 /// UTF-16 offset and its stamp; false when there is none or a pointer

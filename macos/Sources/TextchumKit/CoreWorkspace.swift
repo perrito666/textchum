@@ -679,3 +679,32 @@ public enum CoreBlame {
         )
     }
 }
+
+/// Where the user has been: the places jumps left from, kept by the
+/// core, and the places edited, kept by each document.
+public enum CoreTrail {
+    /// Notes that the caret was at the zero-based `line` of `path` when
+    /// a jump left it.
+    public static func noteVisit(path: String, line: Int) {
+        path.withCString { pointer in
+            tc_trail_note_visit(pointer, UInt(strlen(pointer)), UInt(max(0, line)))
+        }
+    }
+
+    /// Recent Places, most recent first: `edits` is every open
+    /// document's edit places as (path, line, stamp).
+    public static func recentPlaces(edits: [(path: String, line: Int, stamp: UInt64)]) -> [(path: String, line: Int)] {
+        let triples: [[Any]] = edits.map { [$0.path, $0.line, $0.stamp] }
+        guard let data = try? JSONSerialization.data(withJSONObject: triples),
+            let json = String(data: data, encoding: .utf8)
+        else { return [] }
+        let answer = json.withCString { pointer in tc_trail_recent_places(pointer, UInt(strlen(pointer))) }
+        guard let answer else { return [] }
+        defer { tc_string_free(answer) }
+        let rows = (try? JSONSerialization.jsonObject(with: Data(String(cString: answer).utf8))) as? [[String: Any]] ?? []
+        return rows.compactMap { row in
+            guard let path = row["path"] as? String, let line = row["line"] as? Int else { return nil }
+            return (path, line)
+        }
+    }
+}

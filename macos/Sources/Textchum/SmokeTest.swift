@@ -2043,11 +2043,21 @@ func runSmokeTest() -> Int32 {
             print("FAIL: edit places: \(String(describing: first.lastEdit(before: nil))) \(String(describing: second.lastEdit(before: nil)))")
             return 1
         }
+        // Recent Places mixes the places jumps left from with the edits,
+        // newest first, one entry per place (7.4).
+        CoreTrail.noteVisit(path: "/smoke/visited.rs", line: 3)
+        let edits = first.editPlaces.map { (path: "/smoke/first.rs", line: $0.line, stamp: $0.stamp) }
+            + second.editPlaces.map { (path: "/smoke/second.rs", line: $0.line, stamp: $0.stamp) }
+        let recent = CoreTrail.recentPlaces(edits: edits).filter { $0.path.hasPrefix("/smoke/") }.map(\.path)
+        guard recent == ["/smoke/visited.rs", "/smoke/second.rs", "/smoke/first.rs"] else {
+            print("FAIL: recent places: \(recent)")
+            return 1
+        }
     } catch {
         print("FAIL: an edit for the trail was refused: \(error)")
         return 1
     }
-    print("edit trail ok (loading is no edit, a burst is one place, the newest across documents)")
+    print("edit trail ok (loading is no edit, a burst is one place, the newest across documents, recent places mixed with visits)")
 
     // A balloon's content can be selected, and one longer than a
     // balloon should be scrolls from its top instead of being cut.

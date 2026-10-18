@@ -584,6 +584,8 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.diagnostic", "<Ctrl><Alt>e"),
     // F2 is Rename here; the finding keys take the next free pair.
     ("win.last-edit", "<Ctrl><Shift>BackSpace"),
+    ("win.recent-files", "<Ctrl>e"),
+    ("win.recent-places", "<Ctrl><Alt><Shift>e"),
     ("win.next-finding", "F8"),
     ("win.previous-finding", "<Shift>F8"),
     ("win.diagnostic-list", "<Ctrl><Shift>e"),
@@ -1483,7 +1485,19 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         let newest = caret_line(&buffer);
         fire("win.last-edit");
         let older = caret_line(&buffer);
+        // Recent Places lists both, newest first, beside the places the
+        // jumps left from (7.4).
+        let path = page.path().borrow().clone().unwrap_or_default();
+        let lines: Vec<usize> = workbench::recent_places()
+            .into_iter()
+            .filter(|(place, _)| *place == path)
+            .map(|(_, line)| line)
+            .collect();
         buffer.set_text(&before);
+        if !lines.contains(&30) || !lines.contains(&5) {
+            eprintln!("FAIL: Recent Places did not list the edits: {lines:?}");
+            return 1;
+        }
         if (newest, older) != (30, 5) {
             eprintln!("FAIL: Go to Last Edit went to lines {newest} then {older}, not 30 then 5");
             return 1;

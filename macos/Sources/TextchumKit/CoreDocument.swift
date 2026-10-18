@@ -295,6 +295,14 @@ public final class CoreDocument {
         return Self.range(region)
     }
 
+    /// Every place this document was changed, as (line, stamp).
+    public var editPlaces: [(line: Int, stamp: UInt64)] {
+        guard let json = tc_document_edit_places_json(handle) else { return [] }
+        defer { tc_string_free(json) }
+        let pairs = (try? JSONDecoder().decode([[UInt64]].self, from: Data(String(cString: json).utf8))) ?? []
+        return pairs.compactMap { pair in pair.count == 2 ? (Int(pair[0]), pair[1]) : nil }
+    }
+
     /// Go to Last Edit: the newest place this document was changed
     /// older than the stamp `before` (nil for the newest of all), with
     /// its stamp; nil when there is none. Stamps come from one clock

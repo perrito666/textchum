@@ -345,6 +345,8 @@ impl Workbench {
         go_section.append(Some(&tr("Go Back")), Some("win.back"));
         go_section.append(Some(&tr("Go Forward")), Some("win.forward"));
         go_section.append(Some(&tr("Go to Last Edit")), Some("win.last-edit"));
+        go_section.append(Some(&tr("Recent Files…")), Some("win.recent-files"));
+        go_section.append(Some(&tr("Recent Places…")), Some("win.recent-places"));
         go_section.append(Some(&tr("Find References")), Some("win.references"));
         go_section.append(Some(&tr("Show Callers")), Some("win.callers"));
         go_section.append(Some(&tr("Code Actions…")), Some("win.code-actions"));
@@ -744,6 +746,7 @@ impl Workbench {
     /// navigation that deserves a Go Back).
     pub fn note_jump(&self) {
         if let Some(position) = self.current_position() {
+            textchum_core::trail::note_visit(&position.0, position.1.max(0) as usize);
             self.jumps.borrow_mut().note(position);
         }
     }
@@ -2754,6 +2757,8 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         }
     });
     add("last-edit", workbench, |workbench, _| go_to_last_edit(workbench));
+    add("recent-files", workbench, |workbench, _| show_recent_files(workbench));
+    add("recent-places", workbench, |workbench, _| show_recent_places(workbench));
     add("next-finding", workbench, |workbench, _| go_to_finding(workbench, true));
     add("previous-finding", workbench, |workbench, _| go_to_finding(workbench, false));
     add("diagnostic-list", workbench, |workbench, _| {
@@ -3756,6 +3761,8 @@ const PALETTE: &[(&str, &str)] = &[
     ("Blame Line…", "win.blame"),
     ("Show Diagnostic for Line", "win.diagnostic"),
     ("Go to Last Edit", "win.last-edit"),
+    ("Recent Files…", "win.recent-files"),
+    ("Recent Places…", "win.recent-places"),
     ("Next Finding", "win.next-finding"),
     ("Previous Finding", "win.previous-finding"),
     ("Diagnostics…", "win.diagnostic-list"),
@@ -6140,6 +6147,78 @@ fn add_filter_row(filters_box: &gtk::Box, rerun: &Rc<dyn Fn()>) {
     }
     filters_box.append(&row);
     pattern.grab_focus();
+}
+
+/// Recent Files: the files opened lately in the project in front, most
+/// recent first, the one in front left out so Return goes back to the
+/// one before it (7.4).
+fn show_recent_files(workbench: &Rc<Workbench>) {
+    let focused = workbench.selected();
+    let current = focused.as_ref().and_then(|page| page.path().borrow().clone());
+    let root = focused.as_ref().and_then(|page| page.document.project_root.borrow().clone());
+    let files: Vec<String> = crate::shell::recent("files", root.as_deref())
+        .into_iter()
+        .filter(|path| Some(path) != current.as_ref() && Path::new(path).exists())
+        .collect();
+    if files.is_empty() {
+        workbench.hint(&tr("No other file has been opened lately."));
+        return;
+    }
+    let labels = files
+        .iter()
+        .map(|path| {
+            root.as_deref()
+                .and_then(|root| Path::new(path).strip_prefix(root).ok())
+                .map(|relative| relative.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.clone())
+        })
+        .collect();
+    let places = files.iter().map(|path| Some((path.clone(), 0))).collect();
+    present_picker(workbench, &tr("Recent Files"), picker_places(labels, places), move |workbench, index| {
+        workbench.open(Some(PathBuf::from(&files[index])), None);
+    });
+}
+
+/// Where the caret has been lately, most recent first: the places jumps
+/// left from, which the core keeps, and every open file's edit places.
+pub(crate) fn recent_places() -> Vec<(String, usize)> {
+    let edits: Vec<(String, usize, u64)> = Shell::instance()
+        .open_documents()
+        .into_iter()
+        .filter_map(|document| {
+            let path = document.path.borrow().clone()?;
+            let places = document.state.borrow().document.edit_places();
+            Some(places.into_iter().map(move |(line, stamp)| (path.clone(), line, stamp)))
+        })
+        .flatten()
+        .collect();
+    textchum_core::trail::recent_places(&edits)
+}
+
+/// Recent Places: where the caret has been lately — the places jumps
+/// left from and the places edited, in any file — most recent first,
+/// each with the code around it (7.4).
+fn show_recent_places(workbench: &Rc<Workbench>) {
+    let places = recent_places();
+    if places.is_empty() {
+        workbench.hint(&tr("Nowhere has been visited or edited yet."));
+        return;
+    }
+    let labels = places
+        .iter()
+        .map(|(path, line)| {
+            let name = Path::new(path)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.clone());
+            format!("{name}:{}", line + 1)
+        })
+        .collect();
+    let rows = places.iter().map(|(path, line)| Some((path.clone(), *line as i32))).collect();
+    present_picker(workbench, &tr("Recent Places"), picker_places(labels, rows), move |workbench, index| {
+        let (path, line) = places[index].clone();
+        workbench.open(Some(PathBuf::from(path)), Some((line as i32, 0)));
+    });
 }
 
 thread_local! {

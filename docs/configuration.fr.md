@@ -646,7 +646,7 @@ Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `goToBlockStart`, `goToBlockEnd`, `expandSelection`, `shrinkSelection`,
 `toggleNavigator`, `togglePreview`, `toggleLineNumbers`,
 `toggleHover`, `showHover`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
-`goToLastEdit`, `nextFinding`, `previousFinding`, `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
+`goToLastEdit`, `recentFiles`, `recentPlaces`, `nextFinding`, `previousFinding`, `togglePathDisplay`, `redraw`, `commandPalette`, `settings` —
 un nom inconnu est journalisé avec la liste complète. Aller au début/à
 la fin du bloc (⌃⌥↑/⌃⌥↓ par défaut) saute par-dessus le bloc syntaxique
 multiligne le plus interne autour du curseur, grâce à l'arbre qui

@@ -119,6 +119,16 @@ mueven con el texto al editarse a su alrededor. Cada uno es un salto,
 así que Go Back vuelve. El rastro dura la sesión: un archivo cerrado se
 lleva sus sitios.
 
+**Archivos recientes** (⌘E, Ctrl+E en Linux) lista los archivos
+abiertos últimamente en el proyecto en primer plano, el más reciente
+primero, sin el que está delante: ⌘E y Intro vuelve al archivo
+anterior. **Sitios recientes** (⌥⌘E, Ctrl+Alt+Mayús+E en Linux) lista
+dónde ha estado el cursor — los sitios de los que partieron los saltos
+y los sitios editados, en cualquier archivo — el más reciente primero,
+una entrada por sitio, cada una con el código de alrededor junto a la
+lista. Ambas filtran al escribir. Los sitios, como el rastro de
+ediciones, duran la sesión.
+
 Un salto a una línea que ya está en pantalla deja la vista donde está.
 Uno fuera de la vista la mueve, en una animación breve, para que la
 línea quede a un tercio de la altura, con lo que la precede a la

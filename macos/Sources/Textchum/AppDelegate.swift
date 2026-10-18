@@ -1723,6 +1723,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.jumpToDefinition(_:)): "jumpToDefinition",
             #selector(goBack(_:)): "goBack",
             #selector(goToLastEdit(_:)): "goToLastEdit",
+            #selector(showRecentFiles(_:)): "recentFiles",
+            #selector(showRecentPlaces(_:)): "recentPlaces",
             #selector(goForward(_:)): "goForward",
             #selector(DocumentController.findReferences(_:)): "findReferences",
             #selector(DocumentController.showCallers(_:)): "showCallers",
@@ -2122,6 +2124,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func recordJumpOrigin() {
         if let origin = currentJumpLocation() {
             jumpStack.noteJump(from: origin)
+            CoreTrail.noteVisit(path: origin.path, line: origin.line)
+        }
+    }
+
+    private let recentFilesPanel = ListPanel()
+    private let recentPlacesPanel = ListPanel()
+
+    /// Go → Recent Files… (⌘E): the files opened lately in the project
+    /// in front, most recent first, the one in front left out so Return
+    /// goes back to the one before it (7.4).
+    @objc func showRecentFiles(_ sender: Any?) {
+        let focused = (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument
+        let current = focused?.coreDocument.path
+        let files = ProjectState.recent("files", projectRoot: focused?.projectRoot)
+            .filter { $0 != current && FileManager.default.fileExists(atPath: $0) }
+        guard !files.isEmpty else {
+            focused?.showHint(t("No other file has been opened lately."))
+            return
+        }
+        let root = focused?.projectRoot
+        let rows: [ListPanel.Row] = files.map { path in
+            let shown = root.flatMap { path.hasPrefix($0 + "/") ? String(path.dropFirst($0.count + 1)) : nil } ?? path
+            return .item(shown)
+        }
+        recentFilesPanel.show(
+            rows: rows, over: NSApp.keyWindow, title: t("Recent Files"),
+            placeholder: t("file…"), monospaced: true,
+            place: { index in files.indices.contains(index) ? (files[index], 0) : nil }
+        ) { [weak self] index in
+            guard let self, files.indices.contains(index) else { return }
+            self.open(path: files[index])
+        }
+    }
+
+    /// Go → Recent Places… (⌥⌘E): where the caret has been lately — the
+    /// places jumps left from and the places edited, in any file — most
+    /// recent first, each with the code around it (7.4).
+    @objc func showRecentPlaces(_ sender: Any?) {
+        let edits = editors.flatMap { editor -> [(path: String, line: Int, stamp: UInt64)] in
+            guard let path = editor.coreDocument.path else { return [] }
+            return editor.coreDocument.editPlaces.map { (path, $0.line, $0.stamp) }
+        }
+        let places = CoreTrail.recentPlaces(edits: edits)
+        guard !places.isEmpty else {
+            (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument?
+                .showHint(t("Nowhere has been visited or edited yet."))
+            return
+        }
+        let lines = SnippetRows()
+        recentPlacesPanel.show(
+            rows: places.map { lines.row(path: $0.path, line: $0.line) }, over: NSApp.keyWindow,
+            title: t("Recent Places"), placeholder: t("file or line…"), monospaced: true,
+            place: { index in places.indices.contains(index) ? (places[index].path, places[index].line) : nil }
+        ) { [weak self] index in
+            guard let self, places.indices.contains(index) else { return }
+            self.recordJumpOrigin()
+            self.navigate(to: JumpLocation(path: places[index].path, line: places[index].line, character: 0))
         }
     }
 
@@ -3284,6 +3343,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyEquivalent: "\u{8}")
         lastEditItem.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(lastEditItem)
+        let recentFilesItem = NSMenuItem(
+            title: t("Recent Files…"), action: #selector(showRecentFiles(_:)), keyEquivalent: "e")
+        recentFilesItem.keyEquivalentModifierMask = [.command]
+        editMenu.addItem(recentFilesItem)
+        let recentPlacesItem = NSMenuItem(
+            title: t("Recent Places…"), action: #selector(showRecentPlaces(_:)), keyEquivalent: "e")
+        recentPlacesItem.keyEquivalentModifierMask = [.command, .option]
+        editMenu.addItem(recentPlacesItem)
         let worktreesItem = NSMenuItem(
             title: t("Worktrees…"),
             action: #selector(showWorktrees(_:)),

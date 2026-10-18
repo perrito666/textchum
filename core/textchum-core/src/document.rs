@@ -666,6 +666,16 @@ impl Document {
         self.edit_trail.latest_before(before)
     }
 
+    /// Every place this document was changed, as (line, stamp), for
+    /// Recent Places.
+    pub fn edit_places(&self) -> Vec<(usize, u64)> {
+        self.edit_trail
+            .places()
+            .iter()
+            .map(|place| (self.buffer.line_at_utf16(place.offset), place.stamp))
+            .collect()
+    }
+
     /// Where Next Finding (or, with `forward` false, Previous Finding)
     /// goes from the UTF-16 `offset`: a finding's start, wrapping round
     /// the document. None with nothing reported.

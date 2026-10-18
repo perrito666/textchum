@@ -93,6 +93,8 @@ pub fn menu() -> Vec<Entry> {
                 action('b', "Go Back", "goBack"),
                 action('f', "Go Forward", "goForward"),
                 action('e', "Go to Last Edit", "goToLastEdit"),
+                action('r', "Recent Files", "recentFiles"),
+                action('p', "Recent Places", "recentPlaces"),
                 action('[', "Go to Block Start", "goToBlockStart"),
                 action(']', "Go to Block End", "goToBlockEnd"),
                 action('t', "Reveal in Tree", "revealInTree"),

@@ -121,6 +121,16 @@ fichier n'en est aucun, et les endroits suivent le texte quand on
 l'édite autour d'eux. Chacun est un saut, donc Go Back revient. La
 piste dure la session : un fichier fermé emporte ses endroits.
 
+**Fichiers récents** (⌘E, Ctrl+E sous Linux) liste les fichiers ouverts
+récemment dans le projet au premier plan, le plus récent d'abord, sans
+celui qui est devant : ⌘E puis Entrée revient au fichier d'avant.
+**Endroits récents** (⌥⌘E, Ctrl+Alt+Maj+E sous Linux) liste où le
+curseur est passé — les endroits que les sauts ont quittés et les
+endroits modifiés, dans n'importe quel fichier — le plus récent
+d'abord, une entrée par endroit, chacune avec le code autour à côté de
+la liste. Les deux filtrent pendant la frappe. Les endroits, comme la
+piste des modifications, durent la session.
+
 Un saut vers une ligne déjà à l'écran laisse la vue où elle est. Un
 saut hors de vue la déplace, en une brève animation, pour que la ligne
 se trouve au tiers de la hauteur, avec ce qui la précède en vue ; un

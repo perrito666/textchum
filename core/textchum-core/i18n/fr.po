@@ -325,6 +325,16 @@ msgstr "Aller à la dernière modification"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Recent Files"
+msgstr "Fichiers récents"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Recent Places"
+msgstr "Endroits récents"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Next Finding"
 msgstr "Diagnostic suivant"
 
@@ -483,6 +493,14 @@ msgstr "Redessiner"
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Transform"
 msgstr "Transformer"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Recent Files…"
+msgstr "Fichiers récents…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Recent Places…"
+msgstr "Endroits récents…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Code Actions…"
@@ -941,6 +959,14 @@ msgstr "texte à chercher…"
 #: linux/src/workbench.rs
 msgid "filter text…"
 msgstr "texte à filtrer…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "No other file has been opened lately."
+msgstr "Aucun autre fichier n'a été ouvert récemment."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Nowhere has been visited or edited yet."
+msgstr "Aucun endroit n'a encore été visité ni modifié."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Nothing has been edited yet."
@@ -1443,6 +1469,14 @@ msgid "The icon pack could not be used"
 msgstr "Le jeu d'icônes n'a pas pu être utilisé"
 
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "file…"
+msgstr "fichier…"
+
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "file or line…"
+msgstr "fichier ou ligne…"
+
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "This repository has one working tree."
 msgstr "Ce dépôt n'a qu'un arbre de travail."
 
@@ -1495,10 +1529,6 @@ msgstr "Basculer"
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Jump History"
 msgstr "Historique des sauts"
-
-#: macos/Sources/Textchum/AppDelegate.swift
-msgid "file or line…"
-msgstr "fichier ou ligne…"
 
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Back ({})"

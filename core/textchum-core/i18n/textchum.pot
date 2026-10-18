@@ -324,6 +324,16 @@ msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Recent Files"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Recent Places"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Next Finding"
 msgstr ""
 
@@ -481,6 +491,14 @@ msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "Transform"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Recent Files…"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Recent Places…"
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
@@ -935,6 +953,14 @@ msgstr ""
 
 #: linux/src/workbench.rs
 msgid "filter text…"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "No other file has been opened lately."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Nowhere has been visited or edited yet."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
@@ -1415,6 +1441,14 @@ msgid "The icon pack could not be used"
 msgstr ""
 
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "file…"
+msgstr ""
+
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "file or line…"
+msgstr ""
+
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "This repository has one working tree."
 msgstr ""
 
@@ -1462,10 +1496,6 @@ msgstr ""
 
 #: macos/Sources/Textchum/AppDelegate.swift
 msgid "Jump History"
-msgstr ""
-
-#: macos/Sources/Textchum/AppDelegate.swift
-msgid "file or line…"
 msgstr ""
 
 #: macos/Sources/Textchum/AppDelegate.swift

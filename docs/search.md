@@ -111,6 +111,14 @@ reloading a file is none, and the places move with the text as it is
 edited around them. Each is a jump, so Go Back returns. The trail is
 kept for the session: a file closed takes its places with it.
 
+**Recent Files** (⌘E, Ctrl+E on Linux) lists the files opened lately in
+the project in front, most recent first, without the one in front: ⌘E
+and Return goes back to the file before. **Recent Places** (⌥⌘E,
+Ctrl+Alt+Shift+E on Linux) lists where the caret has been — the places
+jumps left from and the places edited, in any file — most recent first,
+one entry per place, each with the code around it beside the list.
+Both filter as you type. Places, like the edit trail, last the session.
+
 A jump to a line already on screen leaves the view where it is. One
 out of sight moves the view, in a short animation, so the line sits a
 third of the way down, with what comes before it in view; a far jump

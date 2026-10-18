@@ -942,6 +942,36 @@ bool tc_document_set_semantic_tokens(struct TcDocument *document,
 char *tc_document_diagnostics_json(const struct TcDocument *document);
 
 /**
+ * Every place this document was changed, as a JSON array of
+ * `[line, stamp]` pairs, for Recent Places. Free with
+ * [`tc_string_free`]; null on a bad pointer.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_edit_places_json(const struct TcDocument *document);
+
+/**
+ * Notes that the caret was at the zero-based `line` of `path` when a
+ * jump left it, for Recent Places.
+ *
+ * # Safety
+ * `path` must point to `path_len` readable bytes.
+ */
+void tc_trail_note_visit(const char *path, uintptr_t path_len, uintptr_t line);
+
+/**
+ * Recent Places: where the user has been lately, most recent first,
+ * as a JSON array of `{path, line}`. `edits_json` is every open
+ * document's edit places as `[path, line, stamp]` triples; the places
+ * jumped away from are the core's own. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * `edits_json` must point to `edits_len` readable bytes.
+ */
+char *tc_trail_recent_places(const char *edits_json, uintptr_t edits_len);
+
+/**
  * Go to Last Edit: the newest place this document was changed that is
  * older than the stamp `before` — 0 for the newest of all. Writes its
  * UTF-16 offset and its stamp; false when there is none or a pointer
