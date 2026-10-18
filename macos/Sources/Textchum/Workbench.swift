@@ -130,6 +130,11 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         statusBar.onProperties = { [weak self] in
             self?.focusedDocument?.showFileProperties(nil)
         }
+        // A breadcrumb's sibling chosen is a jump in the document in front.
+        statusBar.onCrumb = { [weak self] offset in
+            (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
+            self?.focusedDocument?.goToCrumb(offset: offset)
+        }
         // One session log for every window's bar.
         statusBar.log = (NSApp.delegate as? AppDelegate)?.notices ?? CoreNotices()
         NSLayoutConstraint.activate([

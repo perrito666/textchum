@@ -314,6 +314,26 @@ public final class CoreDocument {
         return (Int(offset), stamp)
     }
 
+    /// One breadcrumb: a named construct around the caret, where it
+    /// starts, and the named constructs beside it with where each starts
+    /// — UTF-16 offsets.
+    public struct Crumb: Decodable, Equatable, Sendable {
+        public struct Sibling: Decodable, Equatable, Sendable {
+            public let label: String
+            public let offset: Int
+        }
+        public let label: String
+        public let offset: Int
+        public let siblings: [Sibling]
+    }
+
+    /// The breadcrumbs at the UTF-16 `offset`, outermost first.
+    public func breadcrumbs(at offset: Int) -> [Crumb] {
+        guard let json = tc_document_breadcrumbs_json(handle, UInt(max(0, offset))) else { return [] }
+        defer { tc_string_free(json) }
+        return (try? JSONDecoder().decode([Crumb].self, from: Data(String(cString: json).utf8))) ?? []
+    }
+
     public func setInlayHints(_ resultJSON: String) {
         _ = Self.withUTF8Pointer(resultJSON) { pointer, length in
             tc_document_set_inlay_hints(handle, pointer, length)

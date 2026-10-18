@@ -650,6 +650,10 @@ msgstr "Espaces : {}"
 msgid "Plain Text"
 msgstr "Texte brut"
 
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "What is beside it — click to go to one"
+msgstr "Ce qui est à côté — cliquer pour y aller"
+
 #: linux/src/workbench.rs macos/Sources/Textchum/Sidebar.swift
 msgid "Open Files"
 msgstr "Fichiers ouverts"

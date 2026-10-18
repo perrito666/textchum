@@ -151,7 +151,14 @@ abre una ventana nueva con el proyecto en su árbol y sin archivo aún, y
 sigue abierta cuando se cierra su última pestaña. La barra de estado
 dice la **rama de git** del proyecto, leída al mostrar el archivo y de
 nuevo cuando git reescribe HEAD — el editor vigila ese archivo en vez
-de preguntar con un temporizador. Su extremo derecho es el **área de
+de preguntar con un temporizador. Tras ella vienen las **migas de
+pan**: las construcciones con nombre en las que está el cursor, la más
+externa primero — el *impl* y la función, la clase y el método —,
+leídas del árbol sintáctico, así que no necesitan servidor de
+lenguaje. Cada una es un menú de lo que tiene al lado, con la que
+nombra marcada; elegir una va allí, como un salto del que Go Back
+vuelve. Un texto que ninguna gramática lee no tiene. Su extremo
+derecho es el **área de
 notificaciones**: lo último que el editor tuvo que decir — un servidor
 de lenguaje que no encontró, y qué lo instalaría; una gramática que no
 pudo cargar; un guardado que siguió adelante sin sus preprocesadores —

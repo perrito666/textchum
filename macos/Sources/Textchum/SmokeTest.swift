@@ -2977,6 +2977,15 @@ func runSmokeTest() -> Int32 {
         return 1
     }
     pinBench.statusBar.show(status)
+    // The bar names the class and the method the caret is in, each a
+    // menu of what is beside it.
+    guard status.crumbs.count == 2, pinBench.statusBar.shownCrumbs == status.crumbs.map(\.label),
+        status.crumbs.allSatisfy({ crumb in crumb.siblings.contains { $0.offset == crumb.offset } })
+    else {
+        print("FAIL: the breadcrumbs say \(pinBench.statusBar.shownCrumbs) for \(status.crumbs)")
+        return 1
+    }
+    print("breadcrumbs ok (the class and the method around the caret, each among its siblings)")
     pinBench.window?.close()
 
     // With the find bar open, the pins move below it: a search field

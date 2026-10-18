@@ -153,7 +153,14 @@ nouvelle fenêtre s'ouvre avec le projet dans son arbre et sans fichier
 encore, et elle reste ouverte quand son dernier onglet se ferme. La
 barre d'état dit la **branche git** du projet, lue quand le fichier est
 montré et de nouveau quand git réécrit HEAD — l'éditeur surveille ce
-fichier plutôt que d'interroger git à intervalle. Son extrémité droite
+fichier plutôt que d'interroger git à intervalle. Ensuite viennent les
+**miettes de pain** : les constructions nommées où se trouve le
+curseur, la plus extérieure d'abord — l'*impl* et la fonction, la
+classe et la méthode —, lues dans l'arbre syntaxique, sans besoin de
+serveur de langage. Chacune est un menu de ce qui est à côté, celle
+qu'elle nomme marquée ; en choisir une y va, comme un saut dont Go Back
+revient. Un texte qu'aucune grammaire ne lit n'en a pas. Son extrémité
+droite
 est la **zone de notifications** : la dernière chose que l'éditeur a eu
 à dire — un serveur de langage introuvable, et ce qui l'installerait ;
 une grammaire qu'il n'a pas pu charger ; un enregistrement qui s'est

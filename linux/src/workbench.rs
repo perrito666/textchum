@@ -153,6 +153,11 @@ pub struct Workbench {
     status_indent: gtk::Button,
     status_language: gtk::Button,
     status_encoding: gtk::Label,
+    /// The breadcrumbs: one menu button per construct around the caret,
+    /// each a menu of the constructs beside it; and what they show, so
+    /// a caret move inside the same function rebuilds nothing.
+    status_crumbs: gtk::Box,
+    shown_crumbs: RefCell<Vec<(String, usize, Vec<(String, usize)>)>>,
     /// The notification area at the bar's right end: the last thing the
     /// editor had to say, as much as fits; a click lists the session's.
     status_notice: gtk::Button,
@@ -465,6 +470,8 @@ impl Workbench {
         status_bar.append(&status_indent);
         status_bar.append(&status_language);
         status_bar.append(&status_encoding);
+        let status_crumbs = gtk::Box::new(gtk::Orientation::Horizontal, 2);
+        status_bar.append(&status_crumbs);
         // The last word, at the right end: one ellipsized line, the
         // whole of it as a tooltip, the session's list on a click.
         let status_notice = gtk::Button::with_label("");
@@ -558,6 +565,8 @@ impl Workbench {
             status_indent: status_indent.clone(),
             status_language: status_language.clone(),
             status_encoding: status_encoding.clone(),
+            status_crumbs: status_crumbs.clone(),
+            shown_crumbs: RefCell::new(Vec::new()),
             status_notice: status_notice.clone(),
             search_bar,
             search_entry: search_entry.clone(),
@@ -1782,6 +1791,43 @@ impl Workbench {
             .unwrap_or_else(|| tr("Plain Text"));
         self.status_language.set_label(&language);
         self.status_encoding.set_text(state.document.encoding().name());
+        let crumbs = state.document.breadcrumbs(page::utf16_offset(buffer, at.offset()));
+        drop(state);
+        self.show_crumbs(crumbs);
+    }
+
+    /// The breadcrumb buttons, `›` between them, each opening a menu of
+    /// the constructs beside it with the one it names marked.
+    fn show_crumbs(&self, crumbs: Vec<(String, usize, Vec<(String, usize)>)>) {
+        if *self.shown_crumbs.borrow() == crumbs {
+            return;
+        }
+        while let Some(child) = self.status_crumbs.first_child() {
+            self.status_crumbs.remove(&child);
+        }
+        for (index, (label, offset, siblings)) in crumbs.iter().enumerate() {
+            if index > 0 {
+                self.status_crumbs.append(&gtk::Label::new(Some("›")));
+            }
+            let menu = gtk::gio::Menu::new();
+            for (sibling, at) in siblings {
+                let marked = if at == offset { format!("• {sibling}") } else { sibling.clone() };
+                let item = gtk::gio::MenuItem::new(Some(&marked), None);
+                item.set_action_and_target_value(Some("win.go-to-offset"), Some(&(*at as u64).to_variant()));
+                menu.append_item(&item);
+            }
+            let button = gtk::MenuButton::builder().label(label).menu_model(&menu).build();
+            button.add_css_class("flat");
+            button.set_always_show_arrow(false);
+            button.set_tooltip_text(Some(&tr("What is beside it — click to go to one")));
+            self.status_crumbs.append(&button);
+        }
+        *self.shown_crumbs.borrow_mut() = crumbs;
+    }
+
+    /// The breadcrumbs on show, for the smoke test.
+    pub(crate) fn crumb_labels(&self) -> Vec<String> {
+        self.shown_crumbs.borrow().iter().map(|(label, _, _)| label.clone()).collect()
     }
 
     /// The bar's four parts as one line, for the smoke test to read.
@@ -2882,6 +2928,24 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         workbench.refresh_chrome();
         workbench.rebuild_buffer_list();
     });
+    // A breadcrumb's sibling chosen: a jump to a UTF-16 offset in the
+    // page in front.
+    {
+        let action = gtk::gio::SimpleAction::new("go-to-offset", Some(glib::VariantTy::UINT64));
+        let weak = Rc::downgrade(workbench);
+        action.connect_activate(move |_, parameter| {
+            let Some(workbench) = weak.upgrade() else { return };
+            let Some(offset) = parameter.and_then(|p| p.get::<u64>()) else { return };
+            let Some(page) = workbench.selected() else { return };
+            workbench.note_jump();
+            let text = page.buffer.text(&page.buffer.start_iter(), &page.buffer.end_iter(), true);
+            let mut at = page.buffer.iter_at_offset(page::char_offset(&text, offset as usize));
+            page.buffer.place_cursor(&at);
+            page.view.scroll_to_iter(&mut at, 0.1, false, 0.0, 0.0);
+            page.view.grab_focus();
+        });
+        workbench.window.add_action(&action);
+    }
     // Parameterized actions: the language for a fresh tab, and a
     // recent file's path.
     {

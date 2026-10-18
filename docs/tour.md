@@ -143,7 +143,13 @@ somewhere, that tab comes to the front; otherwise a new window opens
 with the project in its tree and no file yet, and it stays open when
 its last tab closes. The status bar says the project's **git branch**,
 read when the file is shown and again when git rewrites HEAD — the
-editor watches that file rather than asking on a timer. Its right end
+editor watches that file rather than asking on a timer. After it come
+the **breadcrumbs**: the named constructs the caret is in, outermost
+first — the impl and the function, the class and the method — read
+from the syntax tree, so they need no language server. Each is a menu
+of what is beside it, the one it names marked; choosing one goes
+there, as a jump Go Back returns from. Text no grammar reads has none.
+Its right end
 is the **notification area**: the last thing the editor had to say —
 a language server it could not find, and what would install it; a
 grammar it could not load; a save that went ahead without its

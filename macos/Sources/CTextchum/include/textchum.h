@@ -1016,6 +1016,16 @@ bool tc_document_last_edit_before(const struct TcDocument *document,
                                   uint64_t *stamp_out);
 
 /**
+ * The breadcrumbs at the UTF-16 `offset`: a JSON array of `{label,
+ * offset, siblings: [{label, offset}]}`, outermost first, offsets in
+ * UTF-16. Free with [`tc_string_free`]; null on a bad pointer.
+ *
+ * # Safety
+ * `document` must be a live document pointer.
+ */
+char *tc_document_breadcrumbs_json(const struct TcDocument *document, uintptr_t offset);
+
+/**
  * Where Next Finding (or, with `forward` false, Previous Finding) goes
  * from the UTF-16 `offset`: the start of a finding, wrapping round the
  * document; -1 with nothing reported or a bad pointer.

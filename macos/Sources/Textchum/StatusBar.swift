@@ -25,6 +25,8 @@ final class StatusBar: NSView {
         var encoding = ""
         /// The git branch of the file's project, when it has one.
         var branch: String?
+        /// The named constructs around the caret, outermost first.
+        var crumbs: [CoreDocument.Crumb] = []
     }
 
     private let position = NSTextField(labelWithString: "")
@@ -32,6 +34,9 @@ final class StatusBar: NSView {
     private let language = makeButton()
     private let encoding = NSTextField(labelWithString: "")
     private let branch = NSTextField(labelWithString: "")
+    /// The breadcrumbs: one button per construct around the caret, each
+    /// a menu of the constructs beside it.
+    private let crumbBar = NSStackView()
     /// The last word, at the right end. Truncated to what the bar has
     /// room for; the whole of it is the tooltip, and the list is a
     /// click away.
@@ -48,6 +53,9 @@ final class StatusBar: NSView {
     var shownInfo: Info { shown }
     /// Opens File Properties for the focused document.
     var onProperties: (() -> Void)?
+    /// Goes to a UTF-16 offset of the focused document: a breadcrumb's
+    /// menu item was chosen.
+    var onCrumb: ((Int) -> Void)?
 
     static let height: CGFloat = 24
 
@@ -75,7 +83,10 @@ final class StatusBar: NSView {
         notice.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         notice.setContentHuggingPriority(.defaultLow, for: .horizontal)
         notice.translatesAutoresizingMaskIntoConstraints = false
-        let row = NSStackView(views: [position, indent, language, encoding, branch])
+        crumbBar.orientation = .horizontal
+        crumbBar.spacing = 2
+        crumbBar.setContentCompressionResistancePriority(.defaultLow + 1, for: .horizontal)
+        let row = NSStackView(views: [position, indent, language, encoding, branch, crumbBar])
         row.orientation = .horizontal
         row.spacing = 14
         row.translatesAutoresizingMaskIntoConstraints = false
@@ -118,6 +129,57 @@ final class StatusBar: NSView {
         branch.isHidden = info.branch == nil
         indent.toolTip = t("How this file is indented — click to change it")
         language.toolTip = t("What this file is treated as — click to change it")
+        showCrumbs(info.crumbs)
+    }
+
+    /// The breadcrumb buttons, `›` between them.
+    private func showCrumbs(_ crumbs: [CoreDocument.Crumb]) {
+        for view in crumbBar.arrangedSubviews {
+            crumbBar.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        for (index, crumb) in crumbs.enumerated() {
+            if index > 0 {
+                let separator = NSTextField(labelWithString: "›")
+                separator.font = font
+                separator.textColor = .tertiaryLabelColor
+                crumbBar.addArrangedSubview(separator)
+            }
+            let button = Self.makeButton()
+            button.font = font
+            button.title = crumb.label
+            button.lineBreakMode = .byTruncatingTail
+            button.tag = index
+            button.target = self
+            button.action = #selector(openCrumb(_:))
+            button.toolTip = t("What is beside it — click to go to one")
+            crumbBar.addArrangedSubview(button)
+        }
+    }
+
+    /// A breadcrumb's menu: the constructs beside it, itself checked.
+    @objc private func openCrumb(_ sender: NSButton) {
+        guard shown.crumbs.indices.contains(sender.tag) else { return }
+        let crumb = shown.crumbs[sender.tag]
+        let menu = NSMenu()
+        for sibling in crumb.siblings {
+            let item = NSMenuItem(title: sibling.label, action: #selector(chooseCrumb(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = sibling.offset
+            item.state = sibling.offset == crumb.offset ? .on : .off
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
+    }
+
+    @objc private func chooseCrumb(_ sender: NSMenuItem) {
+        onCrumb?(sender.tag)
+    }
+
+    /// For the smoke test: the breadcrumbs on show.
+    var shownCrumbs: [String] {
+        crumbBar.arrangedSubviews.compactMap { ($0 as? NSButton)?.title }
     }
 
     @objc private func openProperties(_ sender: Any?) {

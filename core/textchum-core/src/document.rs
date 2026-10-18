@@ -676,6 +676,44 @@ impl Document {
             .collect()
     }
 
+    /// The breadcrumbs at the UTF-16 `offset`: each named construct
+    /// around it, outermost first, as (label, where it starts, and the
+    /// constructs beside it as (label, where each starts)). Offsets in
+    /// UTF-16. Empty for text no grammar reads.
+    pub fn breadcrumbs(&self, offset: usize) -> Vec<(String, usize, Vec<(String, usize)>)> {
+        let Some(syntax) = &self.syntax else { return Vec::new() };
+        let Ok((byte, _)) = self.buffer.utf16_range_to_bytes(offset, offset) else { return Vec::new() };
+        let to_utf16 = |byte: usize| self.buffer.byte_to_utf16(byte).unwrap_or(0);
+        syntax
+            .breadcrumbs(self.buffer.rope(), byte)
+            .into_iter()
+            .map(|crumb| {
+                let siblings = crumb.siblings.into_iter().map(|(label, at)| (label, to_utf16(at))).collect();
+                (crumb.label, to_utf16(crumb.start), siblings)
+            })
+            .collect()
+    }
+
+    /// [`Self::breadcrumbs`] as JSON: `[{label, offset, siblings:
+    /// [{label, offset}]}]`.
+    pub fn breadcrumbs_json(&self, offset: usize) -> String {
+        let crumbs: Vec<serde_json::Value> = self
+            .breadcrumbs(offset)
+            .into_iter()
+            .map(|(label, at, siblings)| {
+                serde_json::json!({
+                    "label": label,
+                    "offset": at,
+                    "siblings": siblings
+                        .into_iter()
+                        .map(|(label, at)| serde_json::json!({"label": label, "offset": at}))
+                        .collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        serde_json::Value::Array(crumbs).to_string()
+    }
+
     /// Where Next Finding (or, with `forward` false, Previous Finding)
     /// goes from the UTF-16 `offset`: a finding's start, wrapping round
     /// the document. None with nothing reported.
@@ -1427,6 +1465,20 @@ use d;
         );
         let then = document.last_edit_before(Some(newest.stamp)).unwrap();
         assert_eq!(document.buffer.line_at_utf16(then.offset), 31);
+    }
+
+    #[test]
+    fn breadcrumbs_are_in_utf16_offsets() {
+        let mut document = Document::new();
+        document.set_language(Some("rust"));
+        let text = "// é\nfn main() {\n    let x = 1;\n}\n";
+        document.replace_utf16(0, 0, text).unwrap();
+        let caret = text.encode_utf16().count() - 4;
+        let crumbs = document.breadcrumbs(caret);
+        assert_eq!(crumbs.len(), 1);
+        assert_eq!(crumbs[0].0, "main");
+        assert_eq!(crumbs[0].1, 5, "after a two-byte character that is one UTF-16 unit");
+        assert!(document.breadcrumbs_json(caret).contains("\"label\":\"main\""));
     }
 
     #[test]

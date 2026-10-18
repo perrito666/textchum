@@ -2276,7 +2276,14 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                     eprintln!("FAIL: the status bar says {status:?}");
                     return 1;
                 }
-                println!("context ok (pins stack the enclosing constructs, the bar knows the caret)");
+                // The bar names the impl and the function around the
+                // caret, each a menu of what is beside it.
+                let crumbs = workbench.crumb_labels();
+                if crumbs != ["impl Item", "label"] {
+                    eprintln!("FAIL: the breadcrumbs say {crumbs:?}, not the impl and the fn");
+                    return 1;
+                }
+                println!("context ok (pins stack the enclosing constructs, the bar knows the caret and its breadcrumbs)");
 
                 // A jump to a line on screen leaves the view where it is;
                 // one out of sight brings its line into view (7.3).

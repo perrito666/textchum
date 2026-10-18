@@ -124,6 +124,33 @@ impl SyntaxState {
         }
     }
 
+    /// The named constructs around byte `byte`, outermost first — the
+    /// impl and the function, the class and the method — each with the
+    /// named constructs beside it: what the breadcrumbs show, and what
+    /// each of them offers to go to.
+    pub fn breadcrumbs(&self, rope: &Rope, byte: usize) -> Vec<Crumb> {
+        let root = self.tree.root_node();
+        let Some(mut node) = root.named_descendant_for_byte_range(byte, byte) else {
+            return Vec::new();
+        };
+        let mut crumbs = Vec::new();
+        loop {
+            if let Some(label) = crumb_label(node, rope) {
+                let parent = node.parent().unwrap_or(root);
+                let mut cursor = parent.walk();
+                let siblings = parent
+                    .named_children(&mut cursor)
+                    .flat_map(|sibling| labelled_within(sibling, rope))
+                    .collect();
+                crumbs.push(Crumb { label, start: node.start_byte(), siblings });
+            }
+            let Some(parent) = node.parent() else { break };
+            node = parent;
+        }
+        crumbs.reverse();
+        crumbs
+    }
+
     /// The lines that answer "where am I?" for `line`: the first line
     /// of each enclosing multi-line construct, outermost first. The
     /// `class` line and the `def` line for a statement inside a Python
@@ -277,6 +304,57 @@ fn inside_of_pair(node: Node<'_>, rope: &Rope) -> Option<Range<usize>> {
         to -= 1;
     }
     (from < to).then_some(from..to)
+}
+
+/// One breadcrumb: a named construct around the caret, where it starts
+/// in bytes, and the named constructs beside it, itself included, with
+/// where each starts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Crumb {
+    pub label: String,
+    pub start: usize,
+    pub siblings: Vec<(String, usize)>,
+}
+
+/// A sibling as a breadcrumb menu lists it: itself when it is named,
+/// else the named constructs one level in — Go's `type (…)` holds its
+/// type specs, a decorated Python function holds the function.
+fn labelled_within(node: Node<'_>, rope: &Rope) -> Vec<(String, usize)> {
+    if let Some(label) = crumb_label(node, rope) {
+        return vec![(label, node.start_byte())];
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .filter_map(|child| Some((crumb_label(child, rope)?, child.start_byte())))
+        .collect()
+}
+
+/// What a node is called, when it is a construct a breadcrumb names:
+/// one with a name of its own that is a declaration — a function, a
+/// type, a class, a module — or that spans lines, which a passing
+/// expression with a named argument does not. An impl block is named
+/// by what it is for. None for the rest.
+fn crumb_label(node: Node<'_>, rope: &Rope) -> Option<String> {
+    let text = |node: Node<'_>| -> String {
+        let piece: String = rope.byte_slice(node.start_byte()..node.end_byte()).chars().take(80).collect();
+        piece.split_whitespace().collect::<Vec<_>>().join(" ")
+    };
+    let kind = node.kind();
+    if kind.contains("impl") {
+        let target = node.child_by_field_name("type")?;
+        return Some(match node.child_by_field_name("trait") {
+            Some(implemented) => format!("impl {} for {}", text(implemented), text(target)),
+            None => format!("impl {}", text(target)),
+        });
+    }
+    let name = node.child_by_field_name("name")?;
+    const DECLARATIONS: [&str; 12] = [
+        "function", "method", "class", "struct", "enum", "trait", "interface", "module", "mod_",
+        "namespace", "type", "macro",
+    ];
+    let multi_line = node.start_position().row < node.end_position().row;
+    let declares = DECLARATIONS.iter().any(|word| kind.contains(word));
+    (declares || multi_line).then(|| text(name)).filter(|label| !label.is_empty())
 }
 
 /// One resolved injection site: a language name and the byte ranges of its
@@ -441,6 +519,57 @@ pub fn snippet_highlights(language: &str, code: &str) -> Vec<HighlightSpan> {
         return Vec::new();
     };
     syntax.highlights(&rope, 0..code.len())
+}
+
+#[cfg(test)]
+mod breadcrumb_tests {
+    use super::*;
+
+    fn state(language: &str, text: &str) -> (SyntaxState, Rope) {
+        let rope = Rope::from_str(text);
+        let state = SyntaxState::new(languages::by_name(language).unwrap(), &rope).unwrap();
+        (state, rope)
+    }
+
+    #[test]
+    fn a_method_in_an_impl_is_the_impl_then_the_method_with_its_siblings() {
+        let text = "struct Server;\n\nimpl Server {\n    fn start(&self) {\n        let x = 1;\n    }\n    fn stop(&self) {}\n}\n";
+        let (state, rope) = state("rust", text);
+        let crumbs = state.breadcrumbs(&rope, text.find("let x").unwrap());
+        let labels: Vec<&str> = crumbs.iter().map(|crumb| crumb.label.as_str()).collect();
+        assert_eq!(labels, ["impl Server", "start"]);
+        let beside: Vec<&str> = crumbs[1].siblings.iter().map(|(label, _)| label.as_str()).collect();
+        assert_eq!(beside, ["start", "stop"]);
+        let top: Vec<&str> = crumbs[0].siblings.iter().map(|(label, _)| label.as_str()).collect();
+        assert_eq!(top, ["Server", "impl Server"]);
+        assert_eq!(crumbs[1].start, text.find("fn start").unwrap());
+    }
+
+    #[test]
+    fn a_python_method_and_a_call_with_a_named_argument() {
+        let text = "class Shop:\n    def sell(self):\n        pay(amount=3)\n";
+        let (state, rope) = state("python", text);
+        let crumbs = state.breadcrumbs(&rope, text.find("amount").unwrap());
+        let labels: Vec<&str> = crumbs.iter().map(|crumb| crumb.label.as_str()).collect();
+        assert_eq!(labels, ["Shop", "sell"], "a named argument is not a place");
+    }
+
+    #[test]
+    fn a_go_method_lists_the_types_beside_it() {
+        let text = "package main\n\ntype Server struct{}\n\nfunc (s *Server) Start() {\n\tx := 1\n}\n";
+        let (state, rope) = state("go", text);
+        let crumbs = state.breadcrumbs(&rope, text.find("x :=").unwrap());
+        let labels: Vec<&str> = crumbs.iter().map(|crumb| crumb.label.as_str()).collect();
+        assert_eq!(labels, ["Start"]);
+        let beside: Vec<&str> = crumbs[0].siblings.iter().map(|(label, _)| label.as_str()).collect();
+        assert_eq!(beside, ["Server", "Start"]);
+    }
+
+    #[test]
+    fn top_level_code_has_no_crumbs() {
+        let (state, rope) = state("rust", "use std::io;\n");
+        assert!(state.breadcrumbs(&rope, 4).is_empty());
+    }
 }
 
 /// The same colouring as `spans` painted in order, as stretches that do

@@ -1584,6 +1584,21 @@ pub unsafe extern "C" fn tc_document_last_edit_before(
     true
 }
 
+/// The breadcrumbs at the UTF-16 `offset`: a JSON array of `{label,
+/// offset, siblings: [{label, offset}]}`, outermost first, offsets in
+/// UTF-16. Free with [`tc_string_free`]; null on a bad pointer.
+///
+/// # Safety
+/// `document` must be a live document pointer.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_breadcrumbs_json(document: *const TcDocument, offset: usize) -> *mut c_char {
+    let Some(document) = (unsafe { document.as_ref() }) else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| owned_c_string(document.inner.breadcrumbs_json(offset))))
+        .unwrap_or(std::ptr::null_mut())
+}
+
 /// Where Next Finding (or, with `forward` false, Previous Finding) goes
 /// from the UTF-16 `offset`: the start of a finding, wrapping round the
 /// document; -1 with nothing reported or a bad pointer.

@@ -5089,6 +5089,17 @@ final class DocumentController: NSResponder {
         return value
     }
 
+    /// Goes to a breadcrumb's construct: its first character, in view,
+    /// with the text holding the keyboard.
+    func goToCrumb(offset: Int) {
+        guard let textView else { return }
+        let target = NSRange(location: min(max(0, offset), (textView.string as NSString).length), length: 0)
+        selectionChangeIsFromEditing = false
+        textView.setSelectedRange(target)
+        textView.scrollRangeToVisible(target)
+        window?.makeFirstResponder(textView)
+    }
+
     /// What the status bar says about this document right now.
     var statusInfo: StatusBar.Info {
         var info = StatusBar.Info()
@@ -5112,6 +5123,9 @@ final class DocumentController: NSResponder {
         info.encoding = coreDocument.encodingName
         if let root = projectRoot {
             info.branch = GitBranchMonitor.shared.branch(forRoot: root)
+        }
+        if let caret = focusedView?.textView.selectedRange().location {
+            info.crumbs = coreDocument.breadcrumbs(at: caret)
         }
         return info
     }
