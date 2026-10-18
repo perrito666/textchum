@@ -71,6 +71,7 @@ pub fn menu() -> Vec<Entry> {
                 action('i', "Go to Implementation", "goToImplementation"),
                 action('t', "Go to Type Definition", "goToTypeDefinition"),
                 action('r', "Find References", "findReferences"),
+                action('u', "Show Usages", "showUsages"),
                 action('c', "Show Callers", "showCallers"),
                 action('a', "Code Actions", "codeActions"),
                 action('n', "Rename Symbol", "renameSymbol"),

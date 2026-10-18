@@ -639,7 +639,7 @@ deux côtés. Touches : un caractère, de `f1` à `f20`, ou
 Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
 `findPrevious`, `useSelectionForFind`, `findInProject`,
-`jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`, `findReferences`, `codeActions`, `renameSymbol`, `formatDocument`,
+`jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`, `findReferences`, `showUsages`, `codeActions`, `renameSymbol`, `formatDocument`,
 `runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,
 `blameLine`, `goToLine`,

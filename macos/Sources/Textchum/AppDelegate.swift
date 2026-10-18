@@ -1723,6 +1723,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.jumpToDefinition(_:)): "jumpToDefinition",
             #selector(DocumentController.goToImplementation(_:)): "goToImplementation",
             #selector(DocumentController.goToTypeDefinition(_:)): "goToTypeDefinition",
+            #selector(DocumentController.showUsages(_:)): "showUsages",
             #selector(goBack(_:)): "goBack",
             #selector(goToLastEdit(_:)): "goToLastEdit",
             #selector(showRecentFiles(_:)): "recentFiles",
@@ -3331,6 +3332,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyEquivalent: "b")
         typeDefinition.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(typeDefinition)
+        let usages = NSMenuItem(
+            title: t("Show Usages"),
+            action: #selector(DocumentController.showUsages(_:)),
+            keyEquivalent: String(UnicodeScalar(NSF7FunctionKey)!))
+        usages.keyEquivalentModifierMask = [.command, .option]
+        editMenu.addItem(usages)
         let backItem = NSMenuItem(
             title: t("Go Back"),
             action: #selector(goBack(_:)),

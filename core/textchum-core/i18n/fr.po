@@ -258,6 +258,11 @@ msgstr "Rechercher les références"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Show Usages"
+msgstr "Afficher les usages"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Show Callers"
 msgstr "Afficher les appelants"
 
@@ -804,6 +809,10 @@ msgstr "Le serveur n'a proposé aucun plan."
 #: linux/src/workbench.rs
 msgid "Nothing else refers to this symbol."
 msgstr "Rien d'autre ne fait référence à ce symbole."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Usages ({})"
+msgstr "Usages ({})"
 
 #: linux/src/workbench.rs
 msgid "Copy Name"

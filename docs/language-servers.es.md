@@ -142,6 +142,13 @@ proyecto en Settings ▸ Language Servers; véase
   `#[cfg(test)] mod tests` de Rust dentro de un archivo corriente
   aparece como código, que es lo que dice su ruta. Si todo cae de un
   lado, no hay encabezados.
+- **Mostrar usos** (⌥⌘F7, Ctrl+Alt+F7 en Linux) es el vistazo rápido:
+  los usos del símbolo bajo el cursor, salvo aquel en el que está el
+  cursor, en una lista junto al cursor con el código del uso
+  seleccionado al lado en macOS y debajo en Linux. Un uso es un salto,
+  y ninguno lo dice. Saltar a la definición sobre una definición
+  muestra la misma lista, en el mismo sitio. Buscar referencias es la
+  lista completa, con la declaración.
 - **Formatear documento** (⌥⇧⌘F) pregunta primero al servidor y cae a
   la cadena de preprocesadores de guardado — así el formateo funciona
   en documentos sin título y en lenguajes sin servidor, siempre que

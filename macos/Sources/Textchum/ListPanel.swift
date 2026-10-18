@@ -77,6 +77,7 @@ final class ListPanel: NSObject {
         placeholder: String? = nil,
         monospaced: Bool = false,
         place: ((Int) -> (path: String, line: Int)?)? = nil,
+        near anchor: NSRect? = nil,
         onChoose: @escaping (Int) -> Void
     ) {
         self.allRows = rows
@@ -99,7 +100,13 @@ final class ListPanel: NSObject {
         applyFilter()
         refreshPreview()
 
-        if let window {
+        if let anchor {
+            // By the caret, under it or over it as there is room: a quick
+            // look, not a trip to the top of the window.
+            let visible = (window?.screen ?? NSScreen.main)?.visibleFrame ?? .infinite
+            panel.setFrame(
+                Balloon.frame(size: panel.frame.size, anchor: anchor, visible: visible), display: false)
+        } else if let window {
             var frame = panel.frame
             frame.origin.x = window.frame.midX - frame.width / 2
             frame.origin.y = window.frame.maxY - frame.height - 120

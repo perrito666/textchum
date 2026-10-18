@@ -569,6 +569,7 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.back", "<Alt>Left"),
     ("win.forward", "<Alt>Right"),
     ("win.references", "<Shift>F12"),
+    ("win.usages", "<Ctrl><Alt>F7"),
     ("win.code-actions", "<Ctrl>period"),
     ("win.rename", "F2"),
     ("win.format", "<Ctrl><Shift>i"),
@@ -1897,6 +1898,47 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
         }
         println!("place preview ok (the lines around it, its own line marked)");
+
+        // Show Usages lists the uses by the caret, in a popover on the
+        // text rather than in a window of its own.
+        {
+            let page = workbench.selected().expect("a selected page");
+            page.buffer.place_cursor(&page.buffer.start_iter());
+            fire("win.usages");
+            let usages_popover = |page: &Rc<page::Page>| {
+                let mut child = page.view.first_child();
+                while let Some(widget) = child {
+                    if let Some(popover) = widget.downcast_ref::<gtk::Popover>() {
+                        let heading = popover
+                            .child()
+                            .and_then(|content| content.first_child())
+                            .and_downcast::<gtk::Label>()
+                            .map(|label| label.text().to_string());
+                        if popover.is_visible() && heading.as_deref().is_some_and(|text| text.starts_with("Usages")) {
+                            return Some(popover.clone());
+                        }
+                    }
+                    child = widget.next_sibling();
+                }
+                None
+            };
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+            let popover = loop {
+                if let Some(popover) = usages_popover(&page) {
+                    break popover;
+                }
+                context.iteration(true);
+                if std::time::Instant::now() > deadline {
+                    eprintln!("FAIL: Show Usages put no list by the caret");
+                    return 1;
+                }
+            };
+            popover.popdown();
+            for _ in 0..20 {
+                context.iteration(false);
+            }
+        }
+        println!("usages ok (listed by the caret, in a popover on the text)");
 
         // The shell holds documents; the UI holds views of them. What
         // is checked here is that the table behaves like a registry: a

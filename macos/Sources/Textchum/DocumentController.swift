@@ -1529,6 +1529,20 @@ final class DocumentController: NSResponder {
     /// single row asks for a keystroke that decides nothing. Several
     /// open the panel. None says so: a beep here reads as a failure,
     /// and the answer is that nothing refers to it.
+    /// Show Usages (⌥⌘F7): the uses of the symbol under the caret in a
+    /// list by the caret, with the code of the selected one beside it —
+    /// a look before the full list. One use is a jump; none says so.
+    @objc func showUsages(_ sender: Any?) {
+        guard let textView else { return }
+        guard lspApp != nil, let path = lspOpenPath else {
+            showHint(noServerHint)
+            return
+        }
+        let text = textView.string as NSString
+        let (line, character) = Self.lspPosition(ofIndex: anchorIndex, in: text)
+        usesOfDefinition(path: path, line: line, character: character)
+    }
+
     private func usesOfDefinition(path: String, line: Int, character: Int) {
         guard let lspApp else { return }
         flushLSPChange()
@@ -1542,11 +1556,15 @@ final class DocumentController: NSResponder {
             case 1:
                 self.openLocation?(uses[0].path, uses[0].line, uses[0].character)
             default:
+                // By the caret: a look before the full list.
+                let caret = self.textView.map {
+                    $0.firstRect(forCharacterRange: $0.selectedRange(), actualRange: nil)
+                }
                 self.showReferences(
                     uses.map {
                         ReferenceLocation(path: $0.path, line: $0.line, character: $0.character)
                     },
-                    title: "Uses (\(uses.count))")
+                    title: t("Usages ({})", String(uses.count)), near: caret)
             }
         }
     }
@@ -1742,7 +1760,9 @@ final class DocumentController: NSResponder {
     /// heading with a count. What calls this is the question; what
     /// checks it is the follow-up. All of one or the other gets no
     /// headings — a heading over every row there is says nothing.
-    private func showReferences(_ locations: [ReferenceLocation], title: String? = nil) {
+    private func showReferences(
+        _ locations: [ReferenceLocation], title: String? = nil, near anchor: NSRect? = nil
+    ) {
         // Each row is the line the way the editor would show it, in the
         // colours of its file's language.
         let lines = SnippetRows()
@@ -1770,7 +1790,8 @@ final class DocumentController: NSResponder {
             monospaced: true,
             place: { index in
                 ordered.indices.contains(index) ? (ordered[index].path, ordered[index].line) : nil
-            }
+            },
+            near: anchor
         ) { [weak self] index in
             guard ordered.indices.contains(index) else { return }
             let location = ordered[index]

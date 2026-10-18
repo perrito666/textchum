@@ -257,6 +257,11 @@ msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Show Usages"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Show Callers"
 msgstr ""
 
@@ -798,6 +803,10 @@ msgstr ""
 
 #: linux/src/workbench.rs
 msgid "Nothing else refers to this symbol."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "Usages ({})"
 msgstr ""
 
 #: linux/src/workbench.rs

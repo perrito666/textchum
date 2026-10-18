@@ -129,6 +129,12 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   is not a test. A Rust `#[cfg(test)] mod tests` inside an ordinary
   file is listed as code, which is what its path says. A result that
   is all one or all the other gets no headings.
+- **Show Usages** (⌥⌘F7, Ctrl+Alt+F7 on Linux) is the quick look: the
+  uses of the symbol under the caret, other than the one the caret is
+  on, in a list by the caret with the selected use's code beside it on
+  macOS and under it on Linux. One use is a jump, and none says so.
+  Jump to Definition on a definition shows the same list, in the same
+  place. Find References is the full list, declaration included.
 - **A marked line can be read.** Resting the pointer on an underlined
   stretch shows what the server said, and **Show Diagnostic for Line**
   (⌃⌘E, Ctrl+Alt+E on Linux) says the same for the caret's line — the

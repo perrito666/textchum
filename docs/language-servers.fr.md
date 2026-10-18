@@ -145,6 +145,13 @@ Language Servers ; voir [configuration](configuration.md#projets).
   `#[cfg(test)] mod tests` de Rust dans un fichier ordinaire est
   listé comme du code, ce que dit son chemin. Si tout tombe du même
   côté, il n'y a pas de titres.
+- **Afficher les usages** (⌥⌘F7, Ctrl+Alt+F7 sous Linux) est le coup
+  d'œil rapide : les usages du symbole sous le curseur, sauf celui où
+  se trouve le curseur, dans une liste près du curseur avec le code de
+  l'usage sélectionné à côté sur macOS et dessous sous Linux. Un usage
+  est un saut, et aucun le dit. Aller à la définition sur une
+  définition montre la même liste, au même endroit. Chercher les
+  références est la liste complète, déclaration comprise.
 - **Formater le document** (⌥⇧⌘F) demande d'abord au serveur puis
   retombe sur la chaîne de préprocesseurs de sauvegarde — le formatage
   marche donc sur les documents sans titre et les langages sans

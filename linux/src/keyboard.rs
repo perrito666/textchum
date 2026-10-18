@@ -48,6 +48,7 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("goToImplementation", n_("Go to Implementation"), "win.implementation"),
     ("goToTypeDefinition", n_("Go to Type Definition"), "win.type-definition"),
     ("findReferences", n_("Find References"), "win.references"),
+    ("showUsages", n_("Show Usages"), "win.usages"),
     ("showCallers", n_("Show Callers"), "win.callers"),
     ("codeActions", n_("Code Actions"), "win.code-actions"),
     ("renameSymbol", n_("Rename Symbol"), "win.rename"),

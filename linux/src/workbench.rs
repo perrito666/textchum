@@ -350,6 +350,7 @@ impl Workbench {
         go_section.append(Some(&tr("Recent Files…")), Some("win.recent-files"));
         go_section.append(Some(&tr("Recent Places…")), Some("win.recent-places"));
         go_section.append(Some(&tr("Find References")), Some("win.references"));
+        go_section.append(Some(&tr("Show Usages")), Some("win.usages"));
         go_section.append(Some(&tr("Show Callers")), Some("win.callers"));
         go_section.append(Some(&tr("Code Actions…")), Some("win.code-actions"));
         go_section.append(Some(&tr("Rename Symbol")), Some("win.rename"));
@@ -2571,6 +2572,17 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("implementation", workbench, |workbench, _| locate(workbench, false));
     add("type-definition", workbench, |workbench, _| locate(workbench, true));
+    add("usages", workbench, |workbench, _| {
+        let Some(page) = workbench.selected() else { return };
+        let Some(path) = page.path().borrow().clone() else {
+            workbench.hint(&tr("Save the file first — untitled documents have no server."));
+            return;
+        };
+        let (line, character) = page::lsp_anchor(&page);
+        if !uses_of_definition(workbench, &path, line, character) {
+            workbench.hint(&tr("No language server is running for this document."));
+        }
+    });
     add("find-next", workbench, |workbench, _| {
         workbench.step_match(true);
     });
@@ -3464,14 +3476,14 @@ fn replay(workbench: &Rc<Workbench>, is_undo: bool) {
 /// One use is a jump — a panel offering a single row asks for a
 /// keystroke that decides nothing. Several open the panel. None says
 /// so, since the answer is that nothing refers to the symbol.
-fn uses_of_definition(workbench: &Rc<Workbench>, path: &str, line: u32, character: u32) {
+fn uses_of_definition(workbench: &Rc<Workbench>, path: &str, line: u32, character: u32) -> bool {
     let shell = Shell::instance();
     let id = shell
         .pool
         .borrow_mut()
         .references(Path::new(path), line, character);
     if id == 0 {
-        return;
+        return false;
     }
     let weak = Rc::downgrade(workbench);
     let path = path.to_owned();
@@ -3484,9 +3496,15 @@ fn uses_of_definition(workbench: &Rc<Workbench>, path: &str, line: u32, characte
                 Some(PathBuf::from(uses[0].path.clone())),
                 Some((uses[0].line as i32, uses[0].character as usize)),
             ),
-            _ => show_places(&workbench, "Uses", places(&uses)),
+            // By the caret: a look before the full list.
+            count => {
+                let title = fill(&tr("Usages ({})"), &[&count.to_string()]);
+                let page = workbench.selected();
+                show_places_at(&workbench, &title, places(&uses), page.as_ref());
+            }
         }
     });
+    true
 }
 
 /// Core targets in the shape the picker takes.
@@ -3758,6 +3776,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Go Back", "win.back"),
     ("Go Forward", "win.forward"),
     ("Find References", "win.references"),
+    ("Show Usages", "win.usages"),
     ("Show Callers", "win.callers"),
     ("Rename Symbol", "win.rename"),
     ("Format Document", "win.format"),
@@ -4943,6 +4962,16 @@ fn run_code_action(
 
 /// The same panel over places already parsed.
 fn show_places(workbench: &Rc<Workbench>, title: &str, rows: Vec<(String, i32, usize)>) {
+    show_places_at(workbench, title, rows, None);
+}
+
+/// [`show_places`], by the caret of `by_caret` when given.
+fn show_places_at(
+    workbench: &Rc<Workbench>,
+    title: &str,
+    rows: Vec<(String, i32, usize)>,
+    by_caret: Option<&Rc<Page>>,
+) {
     // Code first, tests after. Ask where a function is used and the
     // answer is usually dominated by its test file; what calls this is
     // the question, and what checks it is the follow-up. All of one or
@@ -4986,10 +5015,10 @@ fn show_places(workbench: &Rc<Workbench>, title: &str, rows: Vec<(String, i32, u
         // The order the labels are in is the order the rows must be in.
         (labels, code.into_iter().chain(tests).collect())
     };
-    present_picker(workbench, title, picker_rows, move |workbench, index| {
+    present_picker_at(workbench, title, picker_rows, move |workbench, index| {
         let (path, line, character) = rows[index].clone();
         workbench.open(Some(PathBuf::from(path)), Some((line, character)));
-    });
+    }, by_caret);
 }
 
 /// The document's symbols, flattened; activating a row jumps.
@@ -5170,6 +5199,43 @@ fn present_picker(
     rows: Vec<PickerRow>,
     choose: impl Fn(&Rc<Workbench>, usize) + 'static,
 ) {
+    present_picker_at(workbench, title, rows, choose, None);
+}
+
+/// Where a picker is shown: a window of its own over the editor, or a
+/// popover by the caret of a page.
+#[derive(Clone)]
+enum PickerHost {
+    Window(adw::Window),
+    Popover(gtk::Popover),
+}
+
+impl PickerHost {
+    fn widget(&self) -> gtk::Widget {
+        match self {
+            PickerHost::Window(window) => window.clone().upcast(),
+            PickerHost::Popover(popover) => popover.clone().upcast(),
+        }
+    }
+
+    fn close(&self) {
+        match self {
+            PickerHost::Window(window) => window.close(),
+            PickerHost::Popover(popover) => popover.popdown(),
+        }
+    }
+}
+
+/// A picker; with `by_caret`, in a popover pointing at that page's
+/// caret — a quick look, its list over the preview — rather than in a
+/// window of its own.
+fn present_picker_at(
+    workbench: &Rc<Workbench>,
+    title: &str,
+    rows: Vec<PickerRow>,
+    choose: impl Fn(&Rc<Workbench>, usize) + 'static,
+    by_caret: Option<&Rc<Page>>,
+) {
     let rows = Rc::new(rows);
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Browse);
@@ -5275,19 +5341,49 @@ fn present_picker(
             show_place(&preview, place.as_ref().map(|(path, line)| (path.as_str(), *line)));
         });
     }
-    let dialog = adw::Window::builder()
-        .transient_for(&workbench.window)
-        .modal(true)
-        .title(title)
-        .default_width(if has_places { 1000 } else { 460 })
-        .default_height(if has_places { 420 } else { 340 })
-        .build();
-    search_bar.set_key_capture_widget(Some(&dialog));
-    let header = adw::HeaderBar::new();
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    content.append(&header);
+    let dialog = match by_caret {
+        Some(page) => {
+            let popover = gtk::Popover::new();
+            popover.set_parent(&page.view);
+            let buffer = &page.buffer;
+            let caret = page.view.iter_location(&buffer.iter_at_mark(&buffer.get_insert()));
+            let (x, y) = page.view.buffer_to_window_coords(gtk::TextWindowType::Widget, caret.x(), caret.y());
+            popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x, y, 1, caret.height())));
+            popover.set_position(gtk::PositionType::Bottom);
+            // Gone for good once closed: the next look builds its own.
+            popover.connect_closed(|popover| {
+                let popover = popover.clone();
+                glib::idle_add_local_once(move || popover.unparent());
+            });
+            content.set_size_request(if has_places { 720 } else { 420 }, if has_places { 460 } else { 300 });
+            let heading = gtk::Label::new(Some(title));
+            heading.add_css_class("heading");
+            heading.set_xalign(0.0);
+            heading.set_margin_start(10);
+            heading.set_margin_top(6);
+            heading.set_margin_bottom(4);
+            content.append(&heading);
+            popover.set_child(Some(&content));
+            PickerHost::Popover(popover)
+        }
+        None => {
+            let window = adw::Window::builder()
+                .transient_for(&workbench.window)
+                .modal(true)
+                .title(title)
+                .default_width(if has_places { 1000 } else { 460 })
+                .default_height(if has_places { 420 } else { 340 })
+                .build();
+            content.append(&adw::HeaderBar::new());
+            PickerHost::Window(window)
+        }
+    };
+    search_bar.set_key_capture_widget(Some(&dialog.widget()));
     content.append(&search_bar);
-    if has_places {
+    if has_places && by_caret.is_some() {
+        content.append(&list_over_preview(&scrolled, &preview));
+    } else if has_places {
         let preview_scroll = gtk::ScrolledWindow::builder().child(&preview).hexpand(true).build();
         let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
         paned.set_start_child(Some(&scrolled));
@@ -5298,7 +5394,9 @@ fn present_picker(
     } else {
         content.append(&scrolled);
     }
-    dialog.set_content(Some(&content));
+    if let PickerHost::Window(window) = &dialog {
+        window.set_content(Some(&content));
+    }
     let choose = Rc::new(choose);
     let pick = {
         let workbench = Rc::clone(workbench);
@@ -5351,8 +5449,16 @@ fn present_picker(
             glib::Propagation::Proceed
         });
     }
-    dialog.add_controller(keys);
-    dialog.present();
+    dialog.widget().add_controller(keys);
+    match &dialog {
+        PickerHost::Window(window) => window.present(),
+        PickerHost::Popover(popover) => {
+            popover.popup();
+            // The list has the keys: the arrows move it, Return takes the
+            // row, and typing brings the filter in.
+            list.grab_focus();
+        }
+    }
     if let Some(first) = list.row_at_index(0) {
         list.select_row(Some(&first));
     }
