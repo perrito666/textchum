@@ -399,6 +399,32 @@ en flou, avec son raccourci à côté.
 </figure>
 </div>
 
+## Lancer des commandes
+
+**Run → Lancer une commande…** (⌃⌥R, Maj+F10 sous Linux) lance une
+ligne de commande par le shell dans le projet du fichier au premier
+plan — `cargo test`, `go build ./...`, `pytest -x` — et montre sa
+sortie au fur et à mesure dans un panneau sous l'éditeur. La ligne
+proposée est la dernière lancée dans ce projet ; **Relancer** (⌘R,
+Ctrl+F5 sous Linux) relance la commande du panneau, et **Arrêter**
+(⌘F2, Ctrl+F2 sous Linux) l'arrête avec tout ce qu'elle a lancé. La
+sortie garde ses couleurs — on les demande à l'outil qui écrit dans un
+panneau, comme on les lui demanderait dans un terminal — et une ligne
+de progression redessinée sur place reste une seule ligne.
+
+Les endroits que la sortie nomme — `src/main.rs:12:5`, le `File
+"app.py", line 3` d'une trace Python, `ui.ts(4,7)` — sont soulignés et
+s'ouvrent d'un clic ; **Endroit suivant de la sortie** (F4) et
+**Endroit précédent** (⇧F4) les parcourent comme les problèmes signalés.
+Une commande qui ne dit rien depuis un moment tout en tournant attend
+peut-être une entrée : le panneau le dit, et une ligne tapée dans son
+champ part vers l'entrée de la commande.
+
+Pas encore là : le panneau n'est pas un terminal. Un programme qui
+dessine tout l'écran — un éditeur, `top`, un REPL qui édite sa propre
+ligne — n'y a pas sa place. Les marques dans la marge qui lancent un
+test ou un `main`, et un arbre des résultats de tests, viendront après.
+
 ## Markdown et prose
 
 Les documents Markdown s'ouvrent avec un aperçu vivant à côté du

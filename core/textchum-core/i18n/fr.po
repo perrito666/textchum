@@ -68,6 +68,24 @@ msgstr "Enregistrer quand même si un préprocesseur d'enregistrement échoue"
 msgid "document has no file path"
 msgstr "le document n'a pas de chemin de fichier"
 
+#: core/textchum-core/src/everywhere.rs macos/Sources/Textchum/SmokeTest.swift
+msgid "Files"
+msgstr "Fichiers"
+
+#: core/textchum-core/src/everywhere.rs
+msgid "Symbols"
+msgstr "Symboles"
+
+#: core/textchum-core/src/everywhere.rs linux/src/chords.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/ChordPanel.swift
+msgid "Commands"
+msgstr "Commandes"
+
+#: core/textchum-core/src/everywhere.rs macos/Sources/Textchum/Settings.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Settings"
+msgstr "Réglages"
+
 #: core/textchum-core/src/i18n.rs
 msgid "Not a phrase anybody has translated"
 msgstr ""
@@ -123,6 +141,14 @@ msgstr "C et C++"
 msgid "clangd, and clang-format before every save."
 msgstr "clangd, et clang-format avant chaque enregistrement."
 
+#: core/textchum-core/src/run.rs
+msgid "exited with {}"
+msgstr "terminé avec {}"
+
+#: core/textchum-core/src/run.rs
+msgid "stopped"
+msgstr "arrêté"
+
 #: core/textchum-core/src/tools.rs
 msgid "Formats the document"
 msgstr "Formate le document"
@@ -142,11 +168,6 @@ msgstr "Serveur de langage"
 #: core/textchum-core/src/tools.rs
 msgid "Formats with the server's own formatter"
 msgstr "Formate avec le formateur propre au serveur"
-
-#: linux/src/chords.rs linux/src/workbench.rs
-#: macos/Sources/Textchum/ChordPanel.swift
-msgid "Commands"
-msgstr "Commandes"
 
 #: linux/src/chords.rs macos/Sources/Textchum/ChordPanel.swift
 msgid "esc closes"
@@ -179,8 +200,40 @@ msgid "Go to Symbol in Project"
 msgstr "Aller à un symbole du projet"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/SearchEverywhere.swift
 msgid "Search Everywhere"
 msgstr "Chercher partout"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Run Command"
+msgstr "Lancer une commande"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Run Again"
+msgstr "Relancer"
+
+#: linux/src/keyboard.rs linux/src/run_panel.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+#: macos/Sources/Textchum/RunPanel.swift
+msgid "Stop"
+msgstr "Arrêter"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Next Output Place"
+msgstr "Endroit suivant de la sortie"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Previous Output Place"
+msgstr "Endroit précédent de la sortie"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Show Run Output"
+msgstr "Afficher la sortie"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
@@ -470,6 +523,11 @@ msgstr "Quitter sans enregistrer"
 msgid "Save All"
 msgstr "Tout enregistrer"
 
+#: linux/src/main.rs linux/src/run_panel.rs
+#: macos/Sources/Textchum/RunPanel.swift macos/Sources/Textchum/SmokeTest.swift
+msgid "finished"
+msgstr "terminé"
+
 #: linux/src/main.rs macos/Sources/Textchum/SmokeTest.swift
 msgid "A phrase nobody has translated"
 msgstr ""
@@ -508,6 +566,23 @@ msgstr "Copier le chemin et la ligne"
 #: linux/src/page.rs macos/Sources/Textchum/DocumentController.swift
 msgid "Copy Forge URL for Line"
 msgstr "Copier l'URL de la forge pour la ligne"
+
+#: linux/src/run_panel.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/RunPanel.swift
+msgid "Close"
+msgstr "Fermer"
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "A line for its input — ⏎ sends it"
+msgstr "Une ligne pour son entrée — ⏎ l'envoie"
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "running"
+msgstr "en cours"
+
+#: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
+msgid "no output for a while — it may be waiting for input"
+msgstr "aucune sortie depuis un moment — elle attend peut-être une entrée"
 
 #: linux/src/shell.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "A configured grammar could not be loaded"
@@ -633,6 +708,14 @@ msgstr "Fermer la fenêtre"
 #: linux/src/workbench.rs
 msgid "Quit"
 msgstr "Quitter"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Run Command…"
+msgstr "Lancer une commande…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Run"
+msgstr "Lancer"
 
 #: linux/src/workbench.rs
 msgid "Find in file…"
@@ -1006,7 +1089,15 @@ msgstr "Tapez une partie du nom d'un symbole."
 msgid "Symbols gone to lately."
 msgstr "Symboles visités récemment."
 
-#: linux/src/workbench.rs
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Run through the shell in {}."
+msgstr "Lancée par le shell dans {}."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "The run's output names no place in a file."
+msgstr "La sortie ne nomme aucun endroit d'un fichier."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/SearchEverywhere.swift
 msgid "file, symbol, command or setting…"
 msgstr "fichier, symbole, commande ou réglage…"
 
@@ -1092,10 +1183,6 @@ msgstr "Aucune implémentation trouvée."
 #: macos/Sources/Textchum/SmokeTest.swift
 msgid "Nothing is reported in this document."
 msgstr "Rien n'est signalé dans ce document."
-
-#: linux/src/workbench.rs
-msgid "Close"
-msgstr "Fermer"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/BlamePanel.swift
 msgid "Copy Commit"
@@ -2365,10 +2452,6 @@ msgstr "Nomme un serveur que l'éditeur sait démarrer"
 msgid "commands, one per line"
 msgstr "commandes, une par ligne"
 
-#: macos/Sources/Textchum/Settings.swift macos/Sources/Textchum/SmokeTest.swift
-msgid "Settings"
-msgstr "Réglages"
-
 #: macos/Sources/Textchum/Settings.swift
 msgid ""
 "A file remembers how it is split, where each view was looking, what is "
@@ -2419,10 +2502,6 @@ msgstr "Propriétés du fichier…"
 #: macos/Sources/Textchum/Sidebar.swift
 msgid "No project"
 msgstr "Aucun projet"
-
-#: macos/Sources/Textchum/SmokeTest.swift
-msgid "Files"
-msgstr "Fichiers"
 
 #: macos/Sources/Textchum/StatusBar.swift
 msgid "The git branch checked out in this file's project"

@@ -34,6 +34,10 @@ pub const TC_EVENT_SERVER_STATUS: u32 = 3;
 /// Event kind: a language server answered a request. `seq` is the id the
 /// request call returned; `payload` is the response's `result` as JSON.
 pub const TC_EVENT_LSP_RESPONSE: u32 = 4;
+/// Event kind: a command run from the editor has news. `seq` is the run's
+/// id; `status` is `output`, `quiet` or `exited` — see
+/// [`textchum_core::run`].
+pub const TC_EVENT_RUN: u32 = 5;
 
 /// An event delivered from the core to the shell.
 ///
@@ -86,6 +90,9 @@ pub type TcEventCallback = Option<extern "C" fn(event: *const TcEvent, userdata:
 /// sender is gone — so the pool must drop first.
 pub struct TcApp {
     pool: textchum_lsp::Pool,
+    /// Before `inner`, which waits for every sender of its channel to go
+    /// when it is dropped; the runs hold one.
+    runs: textchum_core::run::Runs,
     inner: App,
 }
 
@@ -168,11 +175,129 @@ pub extern "C" fn tc_app_new(callback: TcEventCallback, userdata: *mut c_void) -
                     out.payload = json.as_ptr();
                     callback(&out, userdata.get());
                 }
+                Event::Run { id, status } => {
+                    let status = callback_cstring(status);
+                    let mut out = TcEvent::new(TC_EVENT_RUN);
+                    out.seq = id;
+                    out.status = status.as_ptr();
+                    callback(&out, userdata.get());
+                }
             }
         });
         let pool = textchum_lsp::Pool::new(app.sender());
-        Box::into_raw(Box::new(TcApp { inner: app, pool }))
+        let runs = textchum_core::run::Runs::new(app.sender());
+        Box::into_raw(Box::new(TcApp { inner: app, pool, runs }))
     })
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Runs `command` through the shell in `cwd`, its output piped to the
+/// run panel. Answers `{"id": n}`, or `{"error": "why"}` when it could not
+/// start. Free with [`tc_string_free`].
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; each string must
+/// point to its length of readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_run_start(
+    app: *mut TcApp,
+    command: *const c_char,
+    command_len: usize,
+    cwd: *const c_char,
+    cwd_len: usize,
+) -> *mut c_char {
+    let Some(app) = (unsafe { app.as_mut() }) else { return std::ptr::null_mut() };
+    let (Some(command), Some(cwd)) =
+        (unsafe { str_from_raw(command, command_len) }, unsafe { str_from_raw(cwd, cwd_len) })
+    else {
+        return std::ptr::null_mut();
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let answer = match app.runs.start(command, std::path::Path::new(cwd)) {
+            Ok(id) => serde_json::json!({"id": id}),
+            Err(error) => serde_json::json!({"error": error}),
+        };
+        owned_c_string(answer.to_string())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// What changed in a run's output since it was last read: `{first,
+/// reset, running, command, lines: [{text, spans, places}]}` — see
+/// [`textchum_core::output::changes_json`]. Null for an id there is no
+/// run for. Free with [`tc_string_free`].
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_run_read(app: *mut TcApp, id: u64) -> *mut c_char {
+    let Some(app) = (unsafe { app.as_ref() }) else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| app.runs.read(id).map(owned_c_string).unwrap_or(std::ptr::null_mut())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Sends a line to a run's input. False when it is over.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; `line` must point to
+/// `line_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_run_write(app: *mut TcApp, id: u64, line: *const c_char, line_len: usize) -> bool {
+    let Some(app) = (unsafe { app.as_ref() }) else { return false };
+    let Some(line) = (unsafe { str_from_raw(line, line_len) }) else { return false };
+    catch_unwind(AssertUnwindSafe(|| app.runs.write(id, line))).unwrap_or(false)
+}
+
+/// Stops a run and everything it started. False when it is over.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_run_stop(app: *mut TcApp, id: u64) -> bool {
+    let Some(app) = (unsafe { app.as_ref() }) else { return false };
+    catch_unwind(AssertUnwindSafe(|| app.runs.stop(id))).unwrap_or(false)
+}
+
+/// Lets go of a run, stopping it first if it is still going.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_run_forget(app: *mut TcApp, id: u64) {
+    let Some(app) = (unsafe { app.as_mut() }) else { return };
+    let _ = catch_unwind(AssertUnwindSafe(|| app.runs.forget(id)));
+}
+
+/// The place after (`forward`) or before line `line`, character
+/// `character` of a run's output — from nowhere when `from` is false —
+/// round the end: `{line, start, end, path, placeLine, column}`, or null
+/// when its output names none. Free with [`tc_string_free`].
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`].
+#[no_mangle]
+pub unsafe extern "C" fn tc_run_neighbouring_place(
+    app: *mut TcApp,
+    id: u64,
+    from: bool,
+    line: usize,
+    character: usize,
+    forward: bool,
+) -> *mut c_char {
+    let Some(app) = (unsafe { app.as_ref() }) else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| {
+        let at = from.then_some((line, character));
+        match app.runs.neighbouring_place(id, at, forward) {
+            Some((index, place)) => owned_c_string(
+                serde_json::json!({
+                    "line": index, "start": place.start, "end": place.end,
+                    "path": place.path.to_string_lossy(), "placeLine": place.line, "column": place.column,
+                })
+                .to_string(),
+            ),
+            None => std::ptr::null_mut(),
+        }
+    }))
     .unwrap_or(std::ptr::null_mut())
 }
 

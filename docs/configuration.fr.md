@@ -640,7 +640,7 @@ deux côtés. Touches : un caractère, de `f1` à `f20`, ou
 `up`/`down`/`left`/`right`/`return`/`escape`/`space`/`tab`/`delete`.
 Parmi les actions : `new`, `open`, `openQuickly`, `save`, `saveAs`,
 `close`, `undo`, `redo`, `find`, `findAndReplace`, `findNext`,
-`findPrevious`, `useSelectionForFind`, `findInProject`, `searchEverywhere`,
+`findPrevious`, `useSelectionForFind`, `findInProject`, `searchEverywhere`, `runCommand`, `runAgain`, `stopRun`, `nextOutputPlace`, `previousOutputPlace`, `toggleRunPanel`,
 `jumpToDefinition`, `goToImplementation`, `goToTypeDefinition`, `findReferences`, `showUsages`, `codeActions`, `renameSymbol`, `formatDocument`,
 `runPreprocessors`,
 `documentOutline`, `goBack`, `goForward`,

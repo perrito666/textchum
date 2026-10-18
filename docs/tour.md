@@ -381,6 +381,30 @@ with its shortcut alongside.
 </figure>
 </div>
 
+## Running commands
+
+**Run → Run Command…** (⌃⌥R, Shift+F10 on Linux) runs a command line
+through the shell in the project of the file in front — `cargo test`,
+`go build ./...`, `pytest -x` — and shows its output in a panel under
+the editor as it comes. The line offered is the last one run in that
+project; **Run Again** (⌘R, Ctrl+F5 on Linux) runs the panel's command
+once more, and **Stop** (⌘F2, Ctrl+F2 on Linux) stops it and whatever
+it started. The output keeps its colours — a tool writing into a panel
+is asked for them, as it would be in a terminal — and a progress line
+redrawn in place stays one line.
+
+Places the output names — `src/main.rs:12:5`, a Python traceback's
+`File "app.py", line 3`, `ui.ts(4,7)` — are underlined and open with a
+click; **Next Output Place** (F4) and **Previous Output Place** (⇧F4)
+walk them like findings. A command that has said nothing for a while
+while still running may be waiting for input: the panel says so, and a
+line typed in its field goes to the command's input.
+
+Not there yet: the panel is not a terminal. A program that draws the
+whole screen — an editor, `top`, a REPL that edits its own line — does
+not belong in it. Marks in the gutter that run a test or a `main`, and
+a tree of test results, come later.
+
 ## Markdown and prose
 
 Markdown documents open with a live preview beside the text, and the

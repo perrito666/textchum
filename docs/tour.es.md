@@ -393,6 +393,32 @@ forma difusa, con su atajo al lado.
 </figure>
 </div>
 
+## Ejecutar comandos
+
+**Run → Ejecutar un comando…** (⌃⌥R, Mayús+F10 en Linux) ejecuta una
+línea de comandos con el shell en el proyecto del archivo en primer
+plano — `cargo test`, `go build ./...`, `pytest -x` — y muestra su
+salida a medida que llega en un panel bajo el editor. La línea
+ofrecida es la última ejecutada en ese proyecto; **Ejecutar de nuevo**
+(⌘R, Ctrl+F5 en Linux) ejecuta otra vez la orden del panel, y
+**Detener** (⌘F2, Ctrl+F2 en Linux) la detiene junto con lo que haya
+lanzado. La salida conserva sus colores — a la herramienta que escribe
+en un panel se le piden, como se le pedirían en una terminal — y una
+línea de progreso que se redibuja en su sitio sigue siendo una línea.
+
+Los sitios que la salida nombra — `src/main.rs:12:5`, el `File
+"app.py", line 3` de un *traceback* de Python, `ui.ts(4,7)` — aparecen
+subrayados y se abren con un clic; **Siguiente sitio de la salida**
+(F4) y **Sitio anterior** (⇧F4) los recorren como los hallazgos. Una
+orden que lleva un rato sin decir nada mientras sigue en marcha puede
+estar esperando una entrada: el panel lo dice, y una línea escrita en
+su campo va a la entrada de la orden.
+
+Todavía no: el panel no es una terminal. Un programa que dibuja la
+pantalla entera — un editor, `top`, un REPL que edita su propia línea —
+no cabe en él. Las marcas en el margen que ejecutan una prueba o un
+`main`, y un árbol de resultados de pruebas, vendrán después.
+
 ## Markdown y prosa
 
 Los documentos Markdown abren con una vista previa viva junto al

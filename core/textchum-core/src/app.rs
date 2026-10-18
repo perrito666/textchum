@@ -44,6 +44,10 @@ pub enum Event {
     /// definitions, …). `id` is the value the request call returned;
     /// `json` is the response's `result` serialized ("null" on errors).
     LspResponse { id: u64, json: String },
+    /// A command run from the editor has news; see [`crate::run`].
+    /// `status` is `output` (something new to read), `quiet` (nothing
+    /// said for a while, perhaps waiting for input) or `exited`.
+    Run { id: u64, status: String },
 }
 
 /// A handle for pushing events into the app's delivery channel from

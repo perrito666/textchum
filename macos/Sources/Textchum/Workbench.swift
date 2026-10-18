@@ -127,6 +127,9 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         editorSide.addSubview(tabHost)
         editorSide.addSubview(previewSplit)
         editorSide.addSubview(statusBar)
+        editorSide.addSubview(runPanel)
+        let runHeight = runPanel.heightAnchor.constraint(equalToConstant: 0)
+        runPanel.heightConstraint = runHeight
         statusBar.onProperties = { [weak self] in
             self?.focusedDocument?.showFileProperties(nil)
         }
@@ -145,7 +148,11 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
             previewSplit.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
             previewSplit.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
             previewSplit.topAnchor.constraint(equalTo: tabHost.bottomAnchor),
-            previewSplit.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
+            previewSplit.bottomAnchor.constraint(equalTo: runPanel.topAnchor),
+            runPanel.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
+            runPanel.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
+            runPanel.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
+            runHeight,
             statusBar.leadingAnchor.constraint(equalTo: editorSide.leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: editorSide.trailingAnchor),
             statusBar.bottomAnchor.constraint(equalTo: editorSide.bottomAnchor),
@@ -890,6 +897,8 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
     /// its name and dirty mark.
     /// The bar under the editor: caret, indentation, language.
     let statusBar = StatusBar()
+    /// The output of a command run from this window, under the editor.
+    let runPanel = RunPanel()
     /// Columns on the left, the focused document's Markdown preview —
     /// when it has one — on the right, all of it under the tab bar.
     let previewSplit = NSSplitView()
