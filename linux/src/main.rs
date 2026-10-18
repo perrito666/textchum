@@ -2089,6 +2089,7 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             let _ = std::fs::write(dir.join("Cargo.toml"), "[package]\nname = \"marks\"\n");
             let file = dir.join("src/main.rs");
             let _ = std::fs::write(&file, "fn main() {}\n\n#[test]\nfn adds() {}\n");
+            let before = workbench.selected().and_then(|page| page.path().borrow().clone());
             workbench.open(Some(file.clone()), None);
             let page = workbench.selected().expect("a selected page");
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -2104,9 +2105,10 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             workbench.forget(&tab);
             workbench.active_view().close_page_finish(&tab, true);
             context.iteration(false);
-            // The checks after this one work on the page in front.
-            if workbench.selected().is_none() {
-                workbench.open(None, None);
+            // The checks after this one work on the page that was in
+            // front, a file's, which closing this one does not bring back.
+            if let Some(path) = before {
+                workbench.open(Some(path), None);
             }
             let _ = std::fs::remove_dir_all(&dir);
             if command.as_deref() != Some("cargo test -- adds --exact") {
