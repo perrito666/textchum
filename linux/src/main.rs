@@ -1743,6 +1743,35 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             buffer.set_text(&before);
         }
 
+        // A symbol gone to is listed again with nothing typed (13.2),
+        // where its name stands now, once however often it was chosen.
+        {
+            let dir = std::env::temp_dir().join(format!("textchum-gtk-symbols-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            let file = dir.join("lib.rs");
+            let _ = std::fs::write(&file, "// moved\nstruct Server;\n");
+            let server = textchum_core::symbols::Symbol {
+                name: "Server".into(),
+                kind: "struct",
+                container: String::new(),
+                path: file.to_string_lossy().into_owned(),
+                line: 0,
+                character: 0,
+            };
+            shell::note_recent_symbol(&server, None);
+            shell::note_recent_symbol(&server, None);
+            let recent: Vec<(String, u32, u32)> = shell::recent_symbols(None)
+                .into_iter()
+                .map(|symbol| (symbol.name, symbol.line, symbol.character))
+                .collect();
+            let _ = std::fs::remove_dir_all(&dir);
+            if recent != [("Server".to_owned(), 1, 7)] {
+                eprintln!("FAIL: recent symbols: {recent:?}");
+                return 1;
+            }
+        }
+        println!("recent symbols ok (listed with nothing typed, found where they moved, once each)");
+
         // The shell holds documents; the UI holds views of them. What
         // is checked here is that the table behaves like a registry: a
         // path opens once however many times it is asked for, and a

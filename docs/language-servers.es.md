@@ -69,7 +69,11 @@ proyecto en Settings ▸ Language Servers; véase
   `projectSymbols`) encuentra una función, un tipo o una constante en
   cualquier parte del proyecto por parte de su nombre, tal como los
   conoce el servidor del documento en primer plano, y salta a su
-  declaración.
+  declaración. Sin nada escrito, lista los símbolos visitados hace poco
+  en el proyecto, el más reciente primero, sin preguntar al servidor;
+  cada uno se busca por su nombre donde está ahora en su archivo, así
+  que las líneas escritas encima después no lo mandan a otro sitio. Un
+  símbolo renombrado desde entonces aparece en la línea donde estaba.
 - **Se muestran los tipos inferidos y los nombres de los parámetros.**
   Los tipos que un servidor deduce — de un `let` sin anotación, del
   argumento de una clausura — y los nombres de los parámetros a los que

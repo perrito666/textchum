@@ -50,7 +50,9 @@ msgstr ""
 msgid ""
 "gopls with staticcheck, its colouring and its type and parameter hints on, "
 "and goimports before every save."
-msgstr "gopls con staticcheck, su coloreado y sus pistas de tipos y de parámetros activados, y goimports antes de cada guardado."
+msgstr ""
+"gopls con staticcheck, su coloreado y sus pistas de tipos y de parámetros "
+"activados, y goimports antes de cada guardado."
 
 #: core/textchum-core/src/presets.rs
 msgid "TypeScript and JavaScript"
@@ -249,7 +251,7 @@ msgstr "Buscar referencias"
 msgid "Show Callers"
 msgstr "Mostrar quién llama"
 
-#: linux/src/keyboard.rs
+#: linux/src/keyboard.rs macos/Sources/Textchum/LineNumberRulerView.swift
 msgid "Code Actions"
 msgstr "Acciones de código"
 
@@ -875,12 +877,16 @@ msgid "fuzzy file name…"
 msgstr "nombre de archivo aproximado…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
-msgid "symbol name…"
-msgstr "nombre de símbolo…"
-
-#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
 msgid "Type part of a symbol's name."
 msgstr "Escribe parte del nombre de un símbolo."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "Symbols gone to lately."
+msgstr "Símbolos visitados hace poco."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
+msgid "symbol name…"
+msgstr "nombre de símbolo…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/QuickFinderPanel.swift
 msgid "No symbol matches."

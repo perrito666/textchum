@@ -61,7 +61,12 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
 - **Go to Symbol in Project…** (⌥⌘T, Ctrl+Alt+O on Linux; action
   `projectSymbols`) finds a function, type or constant anywhere in the
   project by part of its name, as the server of the document in front
-  knows them, and jumps to its declaration.
+  knows them, and jumps to its declaration. With nothing typed it
+  lists the symbols gone to lately in the project, most recent first,
+  without asking the server; each is found by its name where it stands
+  in its file now, so lines written above it since do not send it to
+  the wrong place. A symbol renamed since is listed at the line it was
+  on.
 - **Inferred types and parameter names are shown.** The types a
   server works out — of a `let` with no annotation, of a closure's
   argument — and the names of the parameters an argument is passed to

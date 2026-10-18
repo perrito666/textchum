@@ -105,6 +105,8 @@ final class QuickFinderPanel: NSObject {
         let directory: String
         let name: String
         let tail: String
+        /// The symbol a symbol row stands for, remembered when opened.
+        var symbol: CoreSymbol? = nil
 
         /// A file's relative path split into what may shrink and what
         /// may not: `src/a/b/thing.rs` → (`src/a/b/`, `thing.rs`).
@@ -131,7 +133,8 @@ final class QuickFinderPanel: NSObject {
                 display: "\(symbol.name) \(symbol.container) \(relative)",
                 path: symbol.path, line: symbol.line + 1,
                 directory: "", name: symbol.name,
-                tail: "\(symbol.kind)\(inside) — \(relative):\(symbol.line + 1)")
+                tail: "\(symbol.kind)\(inside) — \(relative):\(symbol.line + 1)",
+                symbol: symbol)
         }
 
         static func hit(_ relative: String, path: String, line: Int, text: String) -> Row {
@@ -633,7 +636,11 @@ final class QuickFinderPanel: NSObject {
             }
         }
         guard !query.isEmpty else {
-            show([], t("Type part of a symbol's name."))
+            // Nothing typed: the symbols gone to lately, most recent
+            // first (13.2), read from the record rather than the server.
+            let recent = ProjectState.recentSymbols(projectRoot: memoryProject)
+                .map { Row.symbol($0, scope: scopePath) }
+            show(recent, recent.isEmpty ? t("Type part of a symbol's name.") : t("Symbols gone to lately."))
             return
         }
         guard let symbolSearch else {
@@ -733,6 +740,9 @@ final class QuickFinderPanel: NSObject {
         Self.lastQueries[mode.title] = queryField.stringValue
         rememberOptions()
         panel?.orderOut(nil)
+        if let symbol = row.symbol {
+            ProjectState.noteRecentSymbol(symbol, projectRoot: memoryProject)
+        }
         onOpen?(row.path, row.line)
     }
 

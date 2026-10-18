@@ -262,6 +262,5 @@ What breaks these rules today, each to be fixed under its own issue:
 - **10.3** Selection does not grow or shrink by structure.
 - **12.3** Completion ranked by the server's order alone and without
   documentation beside it.
-- **13.2** Go to Symbol lists no recent symbols with nothing typed.
 - **Linux** Inlay hints are gathered after the line, not inside it
   (see `PLAN_linux.md`).

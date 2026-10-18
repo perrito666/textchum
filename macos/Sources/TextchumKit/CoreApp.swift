@@ -688,7 +688,7 @@ public struct CoreSignature: Decodable, Equatable, Sendable {
 
 /// One symbol of a project, as a row to pick: reduced by the core from
 /// a server's answer.
-public struct CoreSymbol: Decodable, Equatable, Sendable {
+public struct CoreSymbol: Codable, Equatable, Sendable {
     public let name: String
     /// The kind in a word: `function`, `struct`, `constant`…
     public let kind: String
@@ -697,6 +697,15 @@ public struct CoreSymbol: Decodable, Equatable, Sendable {
     /// Zero-based.
     public let line: Int
     public let character: Int
+
+    public init(name: String, kind: String, container: String, path: String, line: Int, character: Int) {
+        self.name = name
+        self.kind = kind
+        self.container = container
+        self.path = path
+        self.line = line
+        self.character = character
+    }
 }
 
 public enum CoreSymbols {
@@ -714,6 +723,41 @@ public enum CoreSymbols {
         defer { tc_string_free(reduced) }
         return (try? JSONDecoder().decode(
             [CoreSymbol].self, from: Data(String(cString: reduced).utf8))) ?? []
+    }
+
+    /// A project's recent symbols, most recent first, each where its
+    /// name stands in its file now.
+    public static func recent(root: String, directory: String, inProject: Bool) -> [CoreSymbol] {
+        let reduced = root.withCString { rootPointer in
+            directory.withCString { dirPointer in
+                tc_symbols_recent_json(
+                    rootPointer, UInt(strlen(rootPointer)), dirPointer, UInt(strlen(dirPointer)),
+                    inProject)
+            }
+        }
+        guard let reduced else { return [] }
+        defer { tc_string_free(reduced) }
+        return (try? JSONDecoder().decode(
+            [CoreSymbol].self, from: Data(String(cString: reduced).utf8))) ?? []
+    }
+
+    /// Puts `symbol` first among a project's recent symbols, once.
+    @discardableResult
+    public static func noteRecent(
+        _ symbol: CoreSymbol, root: String, directory: String, inProject: Bool
+    ) -> Bool {
+        guard let data = try? JSONEncoder().encode(symbol),
+            let json = String(data: data, encoding: .utf8)
+        else { return false }
+        return root.withCString { rootPointer in
+            directory.withCString { dirPointer in
+                json.withCString { jsonPointer in
+                    tc_symbols_note_recent(
+                        rootPointer, UInt(strlen(rootPointer)), dirPointer,
+                        UInt(strlen(dirPointer)), inProject, jsonPointer, UInt(strlen(jsonPointer)))
+                }
+            }
+        }
     }
 }
 

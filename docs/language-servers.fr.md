@@ -70,7 +70,12 @@ Language Servers ; voir [configuration](configuration.md#projets).
   `projectSymbols`) trouve une fonction, un type ou une constante
   n'importe où dans le projet par une partie de son nom, tels que les
   connaît le serveur du document au premier plan, et saute à sa
-  déclaration.
+  déclaration. Sans rien de tapé, elle liste les symboles visités
+  récemment dans le projet, le plus récent d'abord, sans interroger le
+  serveur ; chacun est cherché par son nom là où il se trouve
+  maintenant dans son fichier, si bien que des lignes écrites au-dessus
+  depuis ne l'envoient pas au mauvais endroit. Un symbole renommé
+  depuis apparaît à la ligne où il était.
 - **Les types inférés et les noms des paramètres sont affichés.** Les
   types qu'un serveur déduit — d'un `let` sans annotation, de
   l'argument d'une fermeture — et les noms des paramètres auxquels

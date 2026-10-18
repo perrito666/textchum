@@ -2193,6 +2193,79 @@ pub unsafe extern "C" fn tc_memory_recent(
     owned_c_string(serde_json::json!(state.memory.recent(kind)).to_string())
 }
 
+/// A project's recent symbols, most recent first, each where its name
+/// stands in its file now: the JSON array [`tc_workspace_symbols_json`]
+/// gives. Release with [`tc_string_free`].
+///
+/// # Safety
+/// Each pointer and length must describe valid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn tc_symbols_recent_json(
+    root: *const c_char,
+    root_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+    in_project: bool,
+) -> *mut c_char {
+    let (Some(root), Some(dir)) =
+        (unsafe { (str_from_raw(root, root_len), str_from_raw(dir, dir_len)) })
+    else {
+        return owned_c_string("[]".into());
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        owned_c_string(textchum_core::symbols::recent_json(
+            std::path::Path::new(root),
+            std::path::Path::new(dir),
+            in_project,
+        ))
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Puts a symbol first among a project's recent symbols. `symbol_json`
+/// is one row as [`tc_workspace_symbols_json`] gives it. False when it
+/// is not one, or the record could not be written.
+///
+/// # Safety
+/// Each pointer and length must describe valid UTF-8.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn tc_symbols_note_recent(
+    root: *const c_char,
+    root_len: usize,
+    dir: *const c_char,
+    dir_len: usize,
+    in_project: bool,
+    symbol_json: *const c_char,
+    symbol_len: usize,
+) -> bool {
+    let (Some(root), Some(dir), Some(symbol)) = (unsafe {
+        (
+            str_from_raw(root, root_len),
+            str_from_raw(dir, dir_len),
+            str_from_raw(symbol_json, symbol_len),
+        )
+    }) else {
+        return false;
+    };
+    catch_unwind(AssertUnwindSafe(|| {
+        let Some(symbol) = serde_json::from_str(symbol)
+            .ok()
+            .and_then(|value| textchum_core::symbols::from_json(&value))
+        else {
+            return false;
+        };
+        textchum_core::symbols::remember(
+            std::path::Path::new(root),
+            std::path::Path::new(dir),
+            in_project,
+            &symbol,
+        )
+        .is_ok()
+    }))
+    .unwrap_or(false)
+}
+
 /// Puts `item` first among a project's recent choices of `kind`.
 ///
 /// # Safety

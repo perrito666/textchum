@@ -1374,6 +1374,36 @@ char *tc_memory_recent(const char *root,
                        uintptr_t kind_len);
 
 /**
+ * A project's recent symbols, most recent first, each where its name
+ * stands in its file now: the JSON array [`tc_workspace_symbols_json`]
+ * gives. Release with [`tc_string_free`].
+ *
+ * # Safety
+ * Each pointer and length must describe valid UTF-8.
+ */
+char *tc_symbols_recent_json(const char *root,
+                             uintptr_t root_len,
+                             const char *dir,
+                             uintptr_t dir_len,
+                             bool in_project);
+
+/**
+ * Puts a symbol first among a project's recent symbols. `symbol_json`
+ * is one row as [`tc_workspace_symbols_json`] gives it. False when it
+ * is not one, or the record could not be written.
+ *
+ * # Safety
+ * Each pointer and length must describe valid UTF-8.
+ */
+bool tc_symbols_note_recent(const char *root,
+                            uintptr_t root_len,
+                            const char *dir,
+                            uintptr_t dir_len,
+                            bool in_project,
+                            const char *symbol_json,
+                            uintptr_t symbol_len);
+
+/**
  * Puts `item` first among a project's recent choices of `kind`.
  *
  * # Safety

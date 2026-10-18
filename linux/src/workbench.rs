@@ -5533,6 +5533,62 @@ fn show_file_picker(workbench: &Rc<Workbench>, root: PathBuf, index: Vec<String>
     entry.select_region(0, -1);
 }
 
+/// Lists `symbols` in a symbol picker: the name, then what it is, what
+/// it sits in and where, relative to the project.
+fn fill_symbol_rows(list: &gtk::ListBox, symbols: &[textchum_core::symbols::Symbol], root: Option<&Path>) {
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+    for symbol in symbols {
+        let place = root
+            .and_then(|root| Path::new(&symbol.path).strip_prefix(root).ok())
+            .map(|relative| relative.to_string_lossy().into_owned())
+            .unwrap_or_else(|| symbol.path.clone());
+        let inside = if symbol.container.is_empty() {
+            String::new()
+        } else {
+            format!(" in {}", symbol.container)
+        };
+        let label = gtk::Label::new(Some(&format!(
+            "{}   {}{} — {}:{}",
+            symbol.name,
+            symbol.kind,
+            inside,
+            place,
+            symbol.line + 1
+        )));
+        label.set_xalign(0.0);
+        label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+        label.set_margin_start(6);
+        label.set_margin_top(3);
+        label.set_margin_bottom(3);
+        list.append(&label);
+    }
+    if let Some(first) = list.row_at_index(0) {
+        list.select_row(Some(&first));
+    }
+}
+
+/// With nothing typed, a symbol picker lists the symbols gone to lately
+/// in the project, most recent first (13.2), read from its record
+/// rather than asked of the server.
+fn show_recent_symbols(
+    list: &gtk::ListBox,
+    status: &gtk::Label,
+    found: &Rc<RefCell<Vec<textchum_core::symbols::Symbol>>>,
+    root: Option<&Path>,
+) {
+    let memory = root.map(|root| root.to_string_lossy().into_owned());
+    let recent = crate::shell::recent_symbols(memory.as_deref());
+    fill_symbol_rows(list, &recent, root);
+    status.set_text(&if recent.is_empty() {
+        tr("Type part of a symbol's name.")
+    } else {
+        tr("Symbols gone to lately.")
+    });
+    *found.borrow_mut() = recent;
+}
+
 /// The project's symbols by name, as the language server of the
 /// document at `path` knows them: type part of a name, pick a row,
 /// land on its declaration.
@@ -5578,6 +5634,7 @@ fn show_symbol_picker(workbench: &Rc<Workbench>, path: String) {
         let found = Rc::clone(&found);
         let asked = Rc::clone(&asked);
         let path = path.clone();
+        let root = root.clone();
         entry.connect_search_changed(move |entry| {
             let question = asked.get().wrapping_add(1);
             asked.set(question);
@@ -5588,9 +5645,7 @@ fn show_symbol_picker(workbench: &Rc<Workbench>, path: String) {
                 }
             };
             if query.is_empty() {
-                clear(&list);
-                found.borrow_mut().clear();
-                status.set_text(&tr("Type part of a symbol's name."));
+                show_recent_symbols(&list, &status, &found, root.as_deref());
                 return;
             }
             let shell = Shell::instance();
@@ -5614,35 +5669,7 @@ fn show_symbol_picker(workbench: &Rc<Workbench>, path: String) {
                     return;
                 }
                 let symbols = textchum_core::symbols::rows(json);
-                while let Some(child) = list.first_child() {
-                    list.remove(&child);
-                }
-                for symbol in &symbols {
-                    let place = root
-                        .as_deref()
-                        .and_then(|root| Path::new(&symbol.path).strip_prefix(root).ok())
-                        .map(|relative| relative.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| symbol.path.clone());
-                    let inside = if symbol.container.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" in {}", symbol.container)
-                    };
-                    let label = gtk::Label::new(Some(&format!(
-                        "{}   {}{} — {}:{}",
-                        symbol.name,
-                        symbol.kind,
-                        inside,
-                        place,
-                        symbol.line + 1
-                    )));
-                    label.set_xalign(0.0);
-                    label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
-                    label.set_margin_start(6);
-                    label.set_margin_top(3);
-                    label.set_margin_bottom(3);
-                    list.append(&label);
-                }
+                fill_symbol_rows(&list, &symbols, root.as_deref());
                 status.set_text(&if symbols.is_empty() {
                     tr("No symbol matches.")
                 } else {
@@ -5658,14 +5685,20 @@ fn show_symbol_picker(workbench: &Rc<Workbench>, path: String) {
             });
         });
     }
+    // Nothing typed yet: the symbols gone to lately. A query kept from
+    // last time replaces them as soon as it is searched.
+    show_recent_symbols(&list, &status, &found, root.as_deref());
 
     let open_row = {
         let workbench = Rc::clone(workbench);
         let dialog = dialog.clone();
         let found = Rc::clone(&found);
+        let root = root.clone();
         move |row: &gtk::ListBoxRow| {
             let chosen = found.borrow().get(row.index().max(0) as usize).cloned();
             if let Some(symbol) = chosen {
+                let memory = root.as_deref().map(|root| root.to_string_lossy().into_owned());
+                crate::shell::note_recent_symbol(&symbol, memory.as_deref());
                 dialog.close();
                 workbench.open(
                     Some(PathBuf::from(symbol.path)),
