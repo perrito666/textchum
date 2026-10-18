@@ -336,6 +336,8 @@ impl Workbench {
                 section.append(Some(label), Some(&format!("win.transform('{kind}')")));
             }
             transforms.append_section(None, &section);
+            edit_section.append(Some(&tr("Expand Selection")), Some("win.expand-selection"));
+            edit_section.append(Some(&tr("Shrink Selection")), Some("win.shrink-selection"));
             edit_section.append_submenu(Some(&tr("Transform")), &transforms);
         }
         let go_section = gtk::gio::Menu::new();
@@ -2845,6 +2847,8 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
     });
     add("block-start", workbench, |workbench, _| move_to_block_edge(workbench, true));
     add("block-end", workbench, |workbench, _| move_to_block_edge(workbench, false));
+    add("expand-selection", workbench, |workbench, _| step_selection(workbench, true));
+    add("shrink-selection", workbench, |workbench, _| step_selection(workbench, false));
     add("palette", workbench, |workbench, _| show_palette(workbench));
     add("new-format-picker", workbench, |workbench, _| show_format_picker(workbench));
     add("server-status", workbench, |workbench, _| show_server_status(workbench));
@@ -3681,6 +3685,44 @@ fn move_to_block_edge(workbench: &Rc<Workbench>, to_start: bool) {
     page::land(&page.view);
 }
 
+/// Expand Selection and Shrink Selection: the selection grows by one
+/// step of the code's structure — a name, the inside of its brackets,
+/// the brackets, the expression, the statement, the block — and shrinks
+/// back down the same steps (10.3). The steps are the core's.
+fn step_selection(workbench: &Rc<Workbench>, grow: bool) {
+    let Some(page) = workbench.selected() else { return };
+    let buffer = &page.buffer;
+    let (from, to) = buffer
+        .selection_bounds()
+        .map(|(from, to)| (from.offset(), to.offset()))
+        .unwrap_or_else(|| {
+            let caret = buffer.iter_at_mark(&buffer.get_insert()).offset();
+            (caret, caret)
+        });
+    let (start, end) = (page::utf16_offset(buffer, from), page::utf16_offset(buffer, to));
+    let stepped = {
+        let mut state = page.state.borrow_mut();
+        if grow {
+            state.document.grow_selection(start, end)
+        } else {
+            state.document.shrink_selection(start, end)
+        }
+    };
+    let Some((start, end)) = stepped else {
+        workbench.hint(&if grow {
+            tr("The whole document is selected already.")
+        } else {
+            tr("Nothing to shrink back to: the selection was not grown.")
+        });
+        return;
+    };
+    let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
+    let from = buffer.iter_at_offset(page::char_offset(&text, start));
+    let mut to = buffer.iter_at_offset(page::char_offset(&text, end));
+    buffer.select_range(&to, &from);
+    page.view.scroll_to_iter(&mut to, 0.1, false, 0.0, 0.0);
+}
+
 /// Every palette entry: what the menus can do, searchable by name.
 const PALETTE: &[(&str, &str)] = &[
     ("New Tab", "win.new-tab"),
@@ -3716,6 +3758,8 @@ const PALETTE: &[(&str, &str)] = &[
     ("Diagnostics…", "win.diagnostic-list"),
     ("Go to Block Start", "win.block-start"),
     ("Go to Block End", "win.block-end"),
+    ("Expand Selection", "win.expand-selection"),
+    ("Shrink Selection", "win.shrink-selection"),
     ("Language Server Status", "win.server-status"),
     ("Toggle File Tree", "win.sidebar"),
     ("Toggle Markdown Preview", "win.preview"),

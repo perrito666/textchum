@@ -284,6 +284,17 @@ public final class CoreDocument {
         }
     }
 
+    /// Expand Selection, or with `grow` false Shrink Selection, from
+    /// `selection`; nil when there is no step to take.
+    public func stepSelection(_ selection: NSRange, grow: Bool) -> NSRange? {
+        var region = TcRegion(start: 0, end: 0)
+        guard
+            tc_document_step_selection(
+                handle, UInt(selection.location), UInt(NSMaxRange(selection)), grow, &region)
+        else { return nil }
+        return Self.range(region)
+    }
+
     public func setInlayHints(_ resultJSON: String) {
         _ = Self.withUTF8Pointer(resultJSON) { pointer, length in
             tc_document_set_inlay_hints(handle, pointer, length)

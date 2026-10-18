@@ -1746,6 +1746,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.blameLine(_:)): "blameLine",
             #selector(DocumentController.showDiagnosticAtCaret(_:)): "showDiagnostic",
             #selector(DocumentController.goToNextFinding(_:)): "nextFinding",
+            #selector(DocumentController.expandSelection(_:)): "expandSelection",
+            #selector(DocumentController.shrinkSelection(_:)): "shrinkSelection",
             #selector(DocumentController.goToPreviousFinding(_:)): "previousFinding",
             #selector(DocumentController.showDiagnosticList(_:)): "diagnosticList",
             #selector(DocumentController.goToLine(_:)): "goToLine",
@@ -3305,6 +3307,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         blockEnd.keyEquivalentModifierMask = [.control, .option]
         editMenu.addItem(blockEnd)
+        // ⌥↑ and ⌥↓ move by paragraph in a plain text view; in code the
+        // structure is the paragraph that matters.
+        let expand = NSMenuItem(
+            title: t("Expand Selection"),
+            action: #selector(DocumentController.expandSelection(_:)),
+            keyEquivalent: String(UnicodeScalar(NSUpArrowFunctionKey)!)
+        )
+        expand.keyEquivalentModifierMask = [.option]
+        editMenu.addItem(expand)
+        let shrink = NSMenuItem(
+            title: t("Shrink Selection"),
+            action: #selector(DocumentController.shrinkSelection(_:)),
+            keyEquivalent: String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        )
+        shrink.keyEquivalentModifierMask = [.option]
+        editMenu.addItem(shrink)
         let complete = NSMenuItem(
             title: t("Complete"),
             action: #selector(DocumentController.triggerCompletion(_:)),

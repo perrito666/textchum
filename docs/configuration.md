@@ -605,7 +605,7 @@ Actions include `new`, `open`, `openQuickly`, `save`, `saveAs`, `close`,
 `documentOutline`,
 `goBack`, `goForward`,
 `blameLine`, `goToLine`,
-`goToBlockStart`, `goToBlockEnd`, `toggleNavigator`, `togglePreview`,
+`goToBlockStart`, `goToBlockEnd`, `expandSelection`, `shrinkSelection`, `toggleNavigator`, `togglePreview`,
 `toggleLineNumbers`, `toggleHover`, `showHover`, `nextFinding`, `previousFinding`, `togglePathDisplay`,
 `redraw`, `commandPalette`, `serverStatus`, `newWithFormat`, `revealInTree`, `reopenClosed`,
 `settings` — an unknown name is
@@ -613,7 +613,15 @@ logged with the full list. And when a shortcut escapes memory entirely,
 the **Command Palette** (⇧⌘P) fuzzy-searches every menu action by name
 and runs the selection. Go to Block Start/End (⌃⌥↑/⌃⌥↓ by default) jump over the
 innermost multi-line syntax block around the caret, courtesy of the
-same tree that powers highlighting.
+same tree that powers highlighting. The same tree is behind **Expand
+Selection** (⌥↑, Alt+Up on Linux): each press grows the selection by
+one step of the code — the name, the inside of its brackets or quotes,
+the brackets with them, the expression, the statement, the block, up to
+the whole file — and **Shrink Selection** (⌥↓, Alt+Down on Linux) walks
+back down the same steps. A file no grammar reads grows by word, then
+by line, then to the whole. Shrinking only gives back what expanding
+took; a selection made with the mouse or the arrows has no steps to
+undo.
 
 ### The chord window
 

@@ -1199,6 +1199,27 @@ final class DocumentController: NSResponder {
         showDiagnosticAtCaret(nil)
     }
 
+    /// Expand Selection (⌥↑) and Shrink Selection (⌥↓): the selection
+    /// grows by one step of the code's structure — a name, the inside of
+    /// its brackets, the brackets, the expression, the statement, the
+    /// block — and shrinks back down the same steps (10.3).
+    @objc func expandSelection(_ sender: Any?) { stepSelection(grow: true) }
+    @objc func shrinkSelection(_ sender: Any?) { stepSelection(grow: false) }
+
+    private func stepSelection(grow: Bool) {
+        guard let textView else { return }
+        guard let stepped = coreDocument.stepSelection(textView.selectedRange(), grow: grow) else {
+            showHint(
+                grow
+                    ? t("The whole document is selected already.")
+                    : t("Nothing to shrink back to: the selection was not grown."))
+            return
+        }
+        selectionChangeIsFromEditing = false
+        textView.setSelectedRange(stepped)
+        textView.scrollRangeToVisible(stepped)
+    }
+
     @objc func showDiagnosticAtCaret(_ sender: Any?) {
         guard let textView else { return }
         // Asked again while it is up: the keyboard goes inside (1.3).

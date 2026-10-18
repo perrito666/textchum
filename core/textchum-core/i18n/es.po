@@ -296,6 +296,16 @@ msgstr "Ir al inicio del bloque"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Expand Selection"
+msgstr "Expandir selección"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "Shrink Selection"
+msgstr "Reducir selección"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Go to Block End"
 msgstr "Ir al final del bloque"
 
@@ -791,6 +801,15 @@ msgstr "Mover a una ventana nueva"
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 msgid "No enclosing block here."
 msgstr "Aquí no hay ningún bloque que lo contenga."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+msgid "The whole document is selected already."
+msgstr "El documento entero ya está seleccionado."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "Nothing to shrink back to: the selection was not grown."
+msgstr "No hay a qué reducir: la selección no se expandió."
 
 #: linux/src/workbench.rs
 msgid "Language"

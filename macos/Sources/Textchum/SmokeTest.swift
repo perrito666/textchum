@@ -1982,6 +1982,43 @@ func runSmokeTest() -> Int32 {
         landingBench.window?.orderOut(nil)
     }
     print("jumps land ok (a third of the way down, the view left alone when the target is in sight)")
+    // Expand Selection grows by the code's structure and Shrink Selection
+    // walks back down the same steps; a selection made otherwise has no
+    // steps to give back, and the hint says so (10.3).
+    do {
+        let stepCore = CoreDocument()
+        _ = stepCore.setLanguage("rust")
+        let stepBench = Workbench(sidebar: nil)
+        let stepping = DocumentController(document: stepCore)
+        stepBench.add(stepping)
+        stepBench.window?.makeKeyAndOrderFront(nil)
+        guard let stepView = stepping.primaryView else {
+            print("FAIL: no view to grow a selection in")
+            return 1
+        }
+        let code = "fn main() {\n    let total = add(first, 2);\n}\n"
+        stepView.insertText(code, replacementRange: NSRange(location: 0, length: 0))
+        let caret = (code as NSString).range(of: "first").location + 2
+        stepView.setSelectedRange(NSRange(location: caret, length: 0))
+        stepping.shrinkSelection(nil)
+        let refused = stepping.shownHint
+        var grown: [String] = []
+        for _ in 0..<4 {
+            stepping.expandSelection(nil)
+            grown.append((code as NSString).substring(with: stepView.selectedRange()))
+        }
+        stepping.shrinkSelection(nil)
+        stepping.shrinkSelection(nil)
+        let shrunk = (code as NSString).substring(with: stepView.selectedRange())
+        guard refused == t("Nothing to shrink back to: the selection was not grown."),
+            grown == ["first", "first, 2", "(first, 2)", "add(first, 2)"], shrunk == "first, 2"
+        else {
+            print("FAIL: selection steps: \(grown) back to \(shrunk), hint \(String(describing: refused))")
+            return 1
+        }
+        stepBench.window?.orderOut(nil)
+    }
+    print("selection steps ok (name, inside the brackets, the brackets, the call; back down the same way)")
 
     // A balloon's content can be selected, and one longer than a
     // balloon should be scrolls from its top instead of being cut.
