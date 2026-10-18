@@ -559,11 +559,6 @@ impl Shell {
         self.documents.borrow().get(&id).cloned()
     }
 
-    /// Every document with a view open, for what acts on all of them.
-    pub fn open_documents(&self) -> Vec<Rc<OpenDocument>> {
-        self.documents.borrow().values().cloned().collect()
-    }
-
     /// The document a path names, while it is open.
     pub fn document_for_path(&self, path: &str) -> Option<Rc<OpenDocument>> {
         let id = *self.documents_by_path.borrow().get(path)?;
