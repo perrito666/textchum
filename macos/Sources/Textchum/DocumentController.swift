@@ -2387,6 +2387,16 @@ final class DocumentController: NSResponder {
         }
     }
 
+    /// Where the caret is, for the commands that walk places.
+    var caretOffset: Int? { textView?.selectedRange().location }
+
+    /// Lands on a UTF-16 offset and gives the text the keyboard.
+    func reveal(offset: Int) {
+        guard let textView else { return }
+        land(on: NSRange(location: min(max(0, offset), (textView.string as NSString).length), length: 0))
+        window?.makeFirstResponder(textView)
+    }
+
     /// Whether the line `range` starts on is wholly inside the visible
     /// part of the view.
     private func isOnScreen(_ range: NSRange) -> Bool {

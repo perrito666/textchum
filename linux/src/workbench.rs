@@ -344,6 +344,7 @@ impl Workbench {
         go_section.append(Some(&tr("Jump to Definition")), Some("win.definition"));
         go_section.append(Some(&tr("Go Back")), Some("win.back"));
         go_section.append(Some(&tr("Go Forward")), Some("win.forward"));
+        go_section.append(Some(&tr("Go to Last Edit")), Some("win.last-edit"));
         go_section.append(Some(&tr("Find References")), Some("win.references"));
         go_section.append(Some(&tr("Show Callers")), Some("win.callers"));
         go_section.append(Some(&tr("Code Actions…")), Some("win.code-actions"));
@@ -2752,6 +2753,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
             workbench.hint(&tr("Nothing reported on this line."));
         }
     });
+    add("last-edit", workbench, |workbench, _| go_to_last_edit(workbench));
     add("next-finding", workbench, |workbench, _| go_to_finding(workbench, true));
     add("previous-finding", workbench, |workbench, _| go_to_finding(workbench, false));
     add("diagnostic-list", workbench, |workbench, _| {
@@ -3753,6 +3755,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Go to Line…", "win.goto-line"),
     ("Blame Line…", "win.blame"),
     ("Show Diagnostic for Line", "win.diagnostic"),
+    ("Go to Last Edit", "win.last-edit"),
     ("Next Finding", "win.next-finding"),
     ("Previous Finding", "win.previous-finding"),
     ("Diagnostics…", "win.diagnostic-list"),
@@ -6137,6 +6140,76 @@ fn add_filter_row(filters_box: &gtk::Box, rerun: &Rc<dyn Fn()>) {
     }
     filters_box.append(&row);
     pattern.grab_focus();
+}
+
+thread_local! {
+    /// Go to Last Edit's walk: the stamp of the place it went to last,
+    /// the document, and the caret's character offset there. Pressed
+    /// again with the caret still there, it goes one edit older;
+    /// anything else starts again from the newest.
+    static LAST_EDIT_WALK: Cell<Option<(u64, crate::shell::DocumentId, i32)>> = const { Cell::new(None) };
+}
+
+/// Go to Last Edit: to where something was last changed, in any open
+/// document, and pressed again to the change before (7.2). Each is a
+/// jump, so Go Back returns.
+fn go_to_last_edit(workbench: &Rc<Workbench>) {
+    let caret_of = |page: &Rc<Page>| page.buffer.iter_at_mark(&page.buffer.get_insert()).offset();
+    let focused = workbench.selected();
+    let before = LAST_EDIT_WALK
+        .with(Cell::get)
+        .filter(|(_, document, offset)| {
+            focused.as_ref().is_some_and(|page| page.document.id == *document && caret_of(page) == *offset)
+        })
+        .map(|(stamp, _, _)| stamp);
+    let found = Shell::instance()
+        .open_documents()
+        .into_iter()
+        .filter_map(|document| {
+            let place = document.state.borrow().document.last_edit_before(before)?;
+            Some((document, place))
+        })
+        .max_by_key(|(_, place)| place.stamp);
+    let Some((document, place)) = found else {
+        workbench.hint(&if before.is_none() {
+            tr("Nothing has been edited yet.")
+        } else {
+            tr("No earlier edit.")
+        });
+        return;
+    };
+    // A view of it: one in this window if there is one.
+    let views = document.views();
+    let mine = workbench.all_pages();
+    let Some(page) = views
+        .iter()
+        .find(|view| mine.iter().any(|page| Rc::ptr_eq(page, view)))
+        .or_else(|| views.first())
+        .cloned()
+    else {
+        return;
+    };
+    workbench.note_jump();
+    let mut holder = None;
+    Workbench::for_each(|candidate| {
+        if holder.is_none() && candidate.all_pages().iter().any(|shown| Rc::ptr_eq(shown, &page)) {
+            holder = Some(Rc::clone(candidate));
+        }
+    });
+    if let Some(holder) = holder {
+        if let Some(view) = holder.view_holding(&page) {
+            if let Some(tab_page) = tab_page_of(&view, &page) {
+                view.set_selected_page(&tab_page);
+            }
+        }
+        holder.window.present();
+    }
+    let text = page.buffer.text(&page.buffer.start_iter(), &page.buffer.end_iter(), true);
+    let at = page.buffer.iter_at_offset(page::char_offset(&text, place.offset));
+    page.buffer.place_cursor(&at);
+    page::land(&page.view);
+    page.view.grab_focus();
+    LAST_EDIT_WALK.with(|walk| walk.set(Some((place.stamp, document.id, caret_of(&page)))));
 }
 
 /// Next Finding and Previous Finding: the caret goes to the start of the

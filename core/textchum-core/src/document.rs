@@ -137,6 +137,9 @@ pub struct Document {
     /// selection is still the one it left. Any edit forgets them.
     selection_steps: Vec<(usize, usize)>,
     selection_grown: Option<(usize, usize)>,
+    /// Where the text was changed, for Go to Last Edit; see
+    /// [`crate::trail`].
+    edit_trail: crate::trail::Trail,
 }
 
 impl Default for Document {
@@ -165,6 +168,7 @@ impl Document {
             semantic_tokens: Vec::new(),
             selection_steps: Vec::new(),
             selection_grown: None,
+            edit_trail: crate::trail::Trail::default(),
         }
     }
 
@@ -189,6 +193,7 @@ impl Document {
             semantic_tokens: Vec::new(),
             selection_steps: Vec::new(),
             selection_grown: None,
+            edit_trail: crate::trail::Trail::default(),
         };
         doc.history.mark_saved();
         doc.detect_language();
@@ -513,12 +518,20 @@ impl Document {
             None
         };
 
+        // Loading a file, reloading it or replacing all of it is not a
+        // place anything was edited.
+        let whole = start == 0 && end == self.buffer.len_utf16();
         self.buffer.replace_utf16(start, end, text)?;
 
         // Fold the edit into the snippet's live regions. One that the
         // edit cut across cannot be shifted into meaning anything, so
         // the session ends here rather than pointing at the wrong text.
         let new_len = text.encode_utf16().count();
+        self.edit_trail.shift(start, end, new_len);
+        if !whole {
+            let buffer = &self.buffer;
+            self.edit_trail.note(start + new_len, |offset| buffer.line_at_utf16(offset));
+        }
         if let Some(session) = self.snippet.as_mut() {
             if !session.adjust(start, end, new_len) {
                 self.snippet = None;
@@ -643,6 +656,14 @@ impl Document {
         let previous = self.selection_steps.pop()?;
         self.selection_grown = Some(previous);
         Some(previous)
+    }
+
+    /// Go to Last Edit: the newest place this document was changed
+    /// that is older than `before`, a stamp on the clock every document
+    /// shares — with `before` None, the newest of all. The shell asks
+    /// each document it holds and goes to the newest answer.
+    pub fn last_edit_before(&self, before: Option<u64>) -> Option<crate::trail::Place> {
+        self.edit_trail.latest_before(before)
     }
 
     /// Where Next Finding (or, with `forward` false, Previous Finding)
@@ -1370,6 +1391,32 @@ use d;
             ["four", "three four", text]
         );
         assert_eq!(document.grow_selection(all.0, all.1), None);
+    }
+
+    #[test]
+    fn edits_leave_a_trail_and_loading_does_not() {
+        let mut document = Document::new();
+        let text = (0..40).map(|n| format!("line {n}\n")).collect::<String>();
+        document.replace_utf16(0, 0, &text).unwrap();
+        assert_eq!(document.last_edit_before(None), None, "loading the text is no edit place");
+        let at = document.buffer.utf16_line_start(5);
+        document.replace_utf16(at, at, "x").unwrap();
+        let far = document.buffer.utf16_line_start(30);
+        document.replace_utf16(far, far, "y").unwrap();
+        let newest = document.last_edit_before(None).unwrap();
+        assert_eq!(document.buffer.line_at_utf16(newest.offset), 30);
+        let older = document.last_edit_before(Some(newest.stamp)).unwrap();
+        assert_eq!(document.buffer.line_at_utf16(older.offset), 5);
+        // A line typed above moves both with their code.
+        document.replace_utf16(0, 0, "new\n").unwrap();
+        let newest = document.last_edit_before(None).unwrap();
+        assert_eq!(
+            document.buffer.line_at_utf16(newest.offset),
+            1,
+            "the newest place is where the typing left the caret, after the line"
+        );
+        let then = document.last_edit_before(Some(newest.stamp)).unwrap();
+        assert_eq!(document.buffer.line_at_utf16(then.offset), 31);
     }
 
     #[test]

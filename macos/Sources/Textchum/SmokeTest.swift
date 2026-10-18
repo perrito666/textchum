@@ -2020,6 +2020,35 @@ func runSmokeTest() -> Int32 {
     }
     print("selection steps ok (name, inside the brackets, the brackets, the call; back down the same way)")
 
+    // Edits leave a trail Go to Last Edit walks: loading the text is not
+    // an edit, a burst of typing is one place, and the clock is shared,
+    // so the newest place among documents is the one edited last (7.2).
+    do {
+        let first = CoreDocument()
+        let second = CoreDocument()
+        let text = (0..<40).map { "line \($0)\n" }.joined()
+        try first.replace(utf16Range: NSRange(location: 0, length: 0), with: text)
+        try second.replace(utf16Range: NSRange(location: 0, length: 0), with: text)
+        guard first.lastEdit(before: nil) == nil else {
+            print("FAIL: loading the text left an edit place")
+            return 1
+        }
+        try first.replace(utf16Range: NSRange(location: 7, length: 0), with: "ab")
+        try first.replace(utf16Range: NSRange(location: 9, length: 0), with: "c")
+        try second.replace(utf16Range: NSRange(location: 100, length: 0), with: "z")
+        guard let newestFirst = first.lastEdit(before: nil), let newestSecond = second.lastEdit(before: nil),
+            newestFirst.offset == 10, newestSecond.stamp > newestFirst.stamp,
+            first.lastEdit(before: newestFirst.stamp) == nil
+        else {
+            print("FAIL: edit places: \(String(describing: first.lastEdit(before: nil))) \(String(describing: second.lastEdit(before: nil)))")
+            return 1
+        }
+    } catch {
+        print("FAIL: an edit for the trail was refused: \(error)")
+        return 1
+    }
+    print("edit trail ok (loading is no edit, a burst is one place, the newest across documents)")
+
     // A balloon's content can be selected, and one longer than a
     // balloon should be scrolls from its top instead of being cut.
     do {

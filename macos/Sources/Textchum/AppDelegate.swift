@@ -1722,6 +1722,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(DocumentController.performRedo(_:)): "redo",
             #selector(DocumentController.jumpToDefinition(_:)): "jumpToDefinition",
             #selector(goBack(_:)): "goBack",
+            #selector(goToLastEdit(_:)): "goToLastEdit",
             #selector(goForward(_:)): "goForward",
             #selector(DocumentController.findReferences(_:)): "findReferences",
             #selector(DocumentController.showCallers(_:)): "showCallers",
@@ -2122,6 +2123,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let origin = currentJumpLocation() {
             jumpStack.noteJump(from: origin)
         }
+    }
+
+    /// Go to Last Edit's walk: the stamp of the place it went to last,
+    /// and where that was. Pressed again with the caret still there, it
+    /// goes one edit older; anything else starts again from the newest.
+    private var lastEditWalk: (stamp: UInt64, editor: ObjectIdentifier, offset: Int)?
+
+    /// Go to Last Edit (⇧⌘⌫): to where something was last changed, in
+    /// any open document, and pressed again to the change before (7.2).
+    /// Each is a jump, so Go Back returns.
+    @objc func goToLastEdit(_ sender: Any?) {
+        let focused = (NSApp.keyWindow?.windowController as? Workbench)?.focusedDocument
+        var before: UInt64?
+        if let walk = lastEditWalk, let focused, ObjectIdentifier(focused) == walk.editor,
+            focused.caretOffset == walk.offset
+        {
+            before = walk.stamp
+        }
+        let found = editors
+            .compactMap { editor in editor.coreDocument.lastEdit(before: before).map { (editor, $0) } }
+            .max { $0.1.stamp < $1.1.stamp }
+        guard let (editor, place) = found else {
+            focused?.showHint(before == nil ? t("Nothing has been edited yet.") : t("No earlier edit."))
+            return
+        }
+        recordJumpOrigin()
+        editor.window?.makeKeyAndOrderFront(nil)
+        editor.workbench?.showInFocusedPane(ObjectIdentifier(editor))
+        editor.reveal(offset: place.offset)
+        lastEditWalk = (place.stamp, ObjectIdentifier(editor), editor.caretOffset ?? place.offset)
     }
 
     @objc func goBack(_ sender: Any?) {
@@ -3247,6 +3278,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyEquivalent: "h")
         historyItem.keyEquivalentModifierMask = [.command, .control, .shift]
         editMenu.addItem(historyItem)
+        let lastEditItem = NSMenuItem(
+            title: t("Go to Last Edit"),
+            action: #selector(goToLastEdit(_:)),
+            keyEquivalent: "\u{8}")
+        lastEditItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(lastEditItem)
         let worktreesItem = NSMenuItem(
             title: t("Worktrees…"),
             action: #selector(showWorktrees(_:)),

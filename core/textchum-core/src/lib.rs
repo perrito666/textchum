@@ -51,6 +51,7 @@ pub mod symbols;
 pub mod syntax;
 pub mod theme_import;
 pub mod tools;
+pub mod trail;
 pub mod transform;
 pub mod workspace;
 

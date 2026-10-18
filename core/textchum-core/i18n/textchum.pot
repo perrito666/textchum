@@ -319,6 +319,11 @@ msgstr ""
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Go to Last Edit"
+msgstr ""
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Next Finding"
 msgstr ""
 
@@ -930,6 +935,14 @@ msgstr ""
 
 #: linux/src/workbench.rs
 msgid "filter text…"
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Nothing has been edited yet."
+msgstr ""
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "No earlier edit."
 msgstr ""
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift

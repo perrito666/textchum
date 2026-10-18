@@ -257,8 +257,7 @@ What breaks these rules today, each to be fixed under its own issue:
   preview of the place a row goes to.
 - **7.1** Go Back returns to the caret, not to the selection and the
   scroll that went with it.
-- **7.2, 7.4** There is no last-edit command and no recent places
-  list.
+- **7.4** There is no recent places list.
 - **12.3** Completion ranked by the server's order alone and without
   documentation beside it.
 - **Linux** Inlay hints are gathered after the line, not inside it

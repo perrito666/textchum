@@ -1464,6 +1464,36 @@ pub unsafe extern "C" fn tc_document_diagnostics_json(document: *const TcDocumen
         .unwrap_or(std::ptr::null_mut())
 }
 
+/// Go to Last Edit: the newest place this document was changed that is
+/// older than the stamp `before` — 0 for the newest of all. Writes its
+/// UTF-16 offset and its stamp; false when there is none or a pointer
+/// is bad. Stamps come from one clock every document shares, so the
+/// newest answer among a shell's documents is the place to go.
+///
+/// # Safety
+/// `document` must be a live document pointer; `offset_out` and
+/// `stamp_out` must point to writable slots.
+#[no_mangle]
+pub unsafe extern "C" fn tc_document_last_edit_before(
+    document: *const TcDocument,
+    before: u64,
+    offset_out: *mut usize,
+    stamp_out: *mut u64,
+) -> bool {
+    if offset_out.is_null() || stamp_out.is_null() {
+        return false;
+    }
+    let Some(document) = (unsafe { document.as_ref() }) else { return false };
+    let Some(place) = document.inner.last_edit_before((before != 0).then_some(before)) else {
+        return false;
+    };
+    unsafe {
+        *offset_out = place.offset;
+        *stamp_out = place.stamp;
+    }
+    true
+}
+
 /// Where Next Finding (or, with `forward` false, Previous Finding) goes
 /// from the UTF-16 `offset`: the start of a finding, wrapping round the
 /// document; -1 with nothing reported or a bad pointer.

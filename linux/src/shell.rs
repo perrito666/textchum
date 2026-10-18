@@ -621,6 +621,11 @@ impl Shell {
     }
 
     /// How many documents are open, for the tests.
+    /// Every document open now, in no particular order.
+    pub fn open_documents(&self) -> Vec<Rc<OpenDocument>> {
+        self.documents.borrow().values().cloned().collect()
+    }
+
     pub fn document_count(&self) -> usize {
         self.documents.borrow().len()
     }

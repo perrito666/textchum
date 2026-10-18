@@ -103,6 +103,14 @@ jumping somewhere new discards the forward trail. Positions survive
 edits as line/column, so going back after a change lands close, not
 lost.
 
+**Go to Last Edit** (⇧⌘⌫, Ctrl+Shift+Backspace on Linux) goes to where
+something was last changed, in whichever open file that was; pressed
+again with the caret still there, it goes to the change before, and so
+back. A burst of typing on a few lines is one place, loading or
+reloading a file is none, and the places move with the text as it is
+edited around them. Each is a jump, so Go Back returns. The trail is
+kept for the session: a file closed takes its places with it.
+
 A jump to a line already on screen leaves the view where it is. One
 out of sight moves the view, in a short animation, so the line sits a
 third of the way down, with what comes before it in view; a far jump

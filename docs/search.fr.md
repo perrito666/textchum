@@ -112,6 +112,15 @@ un nouvel endroit jette la piste avant. Les positions survivent aux
 éditions en ligne/colonne : revenir après un changement atterrit près,
 pas perdu.
 
+**Aller à la dernière modification** (⇧⌘⌫, Ctrl+Maj+Retour arrière
+sous Linux) va là où quelque chose a été changé en dernier, dans le
+fichier ouvert où c'était ; appuyé à nouveau avec le curseur encore là,
+il va au changement d'avant, et ainsi de suite. Une rafale de frappe
+sur quelques lignes est un seul endroit, charger ou recharger un
+fichier n'en est aucun, et les endroits suivent le texte quand on
+l'édite autour d'eux. Chacun est un saut, donc Go Back revient. La
+piste dure la session : un fichier fermé emporte ses endroits.
+
 Un saut vers une ligne déjà à l'écran laisse la vue où elle est. Un
 saut hors de vue la déplace, en une brève animation, pour que la ligne
 se trouve au tiers de la hauteur, avec ce qui la précède en vue ; un

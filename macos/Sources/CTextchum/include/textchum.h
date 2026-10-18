@@ -942,6 +942,22 @@ bool tc_document_set_semantic_tokens(struct TcDocument *document,
 char *tc_document_diagnostics_json(const struct TcDocument *document);
 
 /**
+ * Go to Last Edit: the newest place this document was changed that is
+ * older than the stamp `before` — 0 for the newest of all. Writes its
+ * UTF-16 offset and its stamp; false when there is none or a pointer
+ * is bad. Stamps come from one clock every document shares, so the
+ * newest answer among a shell's documents is the place to go.
+ *
+ * # Safety
+ * `document` must be a live document pointer; `offset_out` and
+ * `stamp_out` must point to writable slots.
+ */
+bool tc_document_last_edit_before(const struct TcDocument *document,
+                                  uint64_t before,
+                                  uintptr_t *offset_out,
+                                  uint64_t *stamp_out);
+
+/**
  * Where Next Finding (or, with `forward` false, Previous Finding) goes
  * from the UTF-16 `offset`: the start of a finding, wrapping round the
  * document; -1 with nothing reported or a bad pointer.

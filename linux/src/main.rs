@@ -583,6 +583,7 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.blame", "<Ctrl><Alt>b"),
     ("win.diagnostic", "<Ctrl><Alt>e"),
     // F2 is Rename here; the finding keys take the next free pair.
+    ("win.last-edit", "<Ctrl><Shift>BackSpace"),
     ("win.next-finding", "F8"),
     ("win.previous-finding", "<Shift>F8"),
     ("win.diagnostic-list", "<Ctrl><Shift>e"),
@@ -1462,6 +1463,32 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             return 1;
         }
         println!("selection steps ok (name, inside the brackets, the brackets, the call; back down the same way)");
+    }
+
+    // Go to Last Edit goes to where something was last changed, and
+    // pressed again with the caret still there, to the change before
+    // (7.2).
+    {
+        let page = workbench.selected().expect("a selected page");
+        let buffer = page.buffer.clone();
+        let before = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true).to_string();
+        let text: String = (0..40).map(|n| format!("line {n}\n")).collect();
+        buffer.set_text(&text);
+        let line_start = |line: i32| buffer.iter_at_line(line).expect("a line").offset();
+        buffer.insert(&mut buffer.iter_at_offset(line_start(5)), "x");
+        buffer.insert(&mut buffer.iter_at_offset(line_start(30)), "y");
+        buffer.place_cursor(&buffer.start_iter());
+        let caret_line = |buffer: &sourceview5::Buffer| buffer.iter_at_mark(&buffer.get_insert()).line();
+        fire("win.last-edit");
+        let newest = caret_line(&buffer);
+        fire("win.last-edit");
+        let older = caret_line(&buffer);
+        buffer.set_text(&before);
+        if (newest, older) != (30, 5) {
+            eprintln!("FAIL: Go to Last Edit went to lines {newest} then {older}, not 30 then 5");
+            return 1;
+        }
+        println!("last edit ok (the newest change, then the one before)");
     }
 
     // Snippets: the core expands the body, the buffer inserts what comes

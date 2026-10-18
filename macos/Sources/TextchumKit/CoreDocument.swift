@@ -295,6 +295,17 @@ public final class CoreDocument {
         return Self.range(region)
     }
 
+    /// Go to Last Edit: the newest place this document was changed
+    /// older than the stamp `before` (nil for the newest of all), with
+    /// its stamp; nil when there is none. Stamps come from one clock
+    /// shared by every document.
+    public func lastEdit(before: UInt64?) -> (offset: Int, stamp: UInt64)? {
+        var offset: UInt = 0
+        var stamp: UInt64 = 0
+        guard tc_document_last_edit_before(handle, before ?? 0, &offset, &stamp) else { return nil }
+        return (Int(offset), stamp)
+    }
+
     public func setInlayHints(_ resultJSON: String) {
         _ = Self.withUTF8Pointer(resultJSON) { pointer, length in
             tc_document_set_inlay_hints(handle, pointer, length)

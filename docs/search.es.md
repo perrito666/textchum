@@ -110,6 +110,15 @@ nuevo descarta el rastro hacia adelante. Las posiciones sobreviven a
 las ediciones como línea/columna, así que volver tras un cambio
 aterriza cerca, no perdido.
 
+**Ir a la última edición** (⇧⌘⌫, Ctrl+Mayús+Retroceso en Linux) va a
+donde se cambió algo por última vez, en el archivo abierto que sea;
+pulsado otra vez con el cursor aún allí, va al cambio anterior, y así
+hacia atrás. Una ráfaga de escritura en unas pocas líneas es un solo
+sitio, cargar o recargar un archivo no es ninguno, y los sitios se
+mueven con el texto al editarse a su alrededor. Cada uno es un salto,
+así que Go Back vuelve. El rastro dura la sesión: un archivo cerrado se
+lleva sus sitios.
+
 Un salto a una línea que ya está en pantalla deja la vista donde está.
 Uno fuera de la vista la mueve, en una animación breve, para que la
 línea quede a un tercio de la altura, con lo que la precede a la

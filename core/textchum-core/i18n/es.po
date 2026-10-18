@@ -320,6 +320,11 @@ msgstr "Ver el diagnóstico de la línea"
 
 #: linux/src/keyboard.rs linux/src/workbench.rs
 #: macos/Sources/Textchum/AppDelegate.swift
+msgid "Go to Last Edit"
+msgstr "Ir a la última edición"
+
+#: linux/src/keyboard.rs linux/src/workbench.rs
+#: macos/Sources/Textchum/AppDelegate.swift
 msgid "Next Finding"
 msgstr "Siguiente hallazgo"
 
@@ -932,6 +937,14 @@ msgstr "texto a buscar…"
 #: linux/src/workbench.rs
 msgid "filter text…"
 msgstr "texto para filtrar…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Nothing has been edited yet."
+msgstr "Todavía no se ha editado nada."
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "No earlier edit."
+msgstr "No hay una edición anterior."
 
 #: linux/src/workbench.rs macos/Sources/Textchum/DocumentController.swift
 #: macos/Sources/Textchum/SmokeTest.swift

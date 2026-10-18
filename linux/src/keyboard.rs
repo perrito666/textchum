@@ -61,6 +61,7 @@ static COMMANDS: &[(&str, &str, &str)] = &[
     ("goToBlockEnd", n_("Go to Block End"), "win.block-end"),
     ("blameLine", n_("Blame Line"), "win.blame"),
     ("showDiagnostic", n_("Show Diagnostic for Line"), "win.diagnostic"),
+    ("goToLastEdit", n_("Go to Last Edit"), "win.last-edit"),
     ("nextFinding", n_("Next Finding"), "win.next-finding"),
     ("previousFinding", n_("Previous Finding"), "win.previous-finding"),
     ("diagnosticList", n_("Diagnostics"), "win.diagnostic-list"),
