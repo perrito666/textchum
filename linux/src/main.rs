@@ -2104,6 +2104,10 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             workbench.forget(&tab);
             workbench.active_view().close_page_finish(&tab, true);
             context.iteration(false);
+            // The checks after this one work on the page in front.
+            if workbench.selected().is_none() {
+                workbench.open(None, None);
+            }
             let _ = std::fs::remove_dir_all(&dir);
             if command.as_deref() != Some("cargo test -- adds --exact") {
                 eprintln!("FAIL: the test's run mark runs {command:?}");
