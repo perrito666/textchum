@@ -3071,6 +3071,44 @@ func runSmokeTest() -> Int32 {
         try? FileManager.default.removeItem(atPath: scratch)
     }
     print("search everywhere ok (files and settings grouped, a switch listed with its state)")
+
+    // A command run from the editor: its output in the panel under the
+    // editor as it comes, the place it names walked and opened, and the
+    // end said.
+    do {
+        let runRoot = NSTemporaryDirectory() + "textchum-run-\(getpid())"
+        try? FileManager.default.createDirectory(atPath: runRoot + "/src", withIntermediateDirectories: true)
+        try? "fn main() {}\n".write(toFile: runRoot + "/src/main.rs", atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(atPath: runRoot) }
+        let panel = RunPanel()
+        let runCore = CoreApp { event in
+            if case let .run(_, status) = event { panel.handle(status: status) }
+        }
+        panel.core = runCore
+        var opened: (String, Int, Int)?
+        panel.onOpenPlace = { path, line, column in opened = (path, line, column) }
+        guard case .success(let id) = runCore.runStart(
+            command: "printf '\\033[31merror\\033[0m: here\\n  --> src/main.rs:1:4\\n'", cwd: runRoot)
+        else {
+            print("FAIL: the run did not start")
+            return 1
+        }
+        panel.begin(id: id, command: "the test command")
+        spin(untilTrue: { panel.statusText == t("finished") }, seconds: 10)
+        guard panel.shownText.contains("error: here"), panel.shownText.contains("src/main.rs:1:4"),
+            panel.statusText == t("finished")
+        else {
+            print("FAIL: the run panel shows \(panel.shownText) / \(panel.statusText)")
+            return 1
+        }
+        guard panel.step(forward: true), let place = opened, place.0.hasSuffix("src/main.rs"), place.1 == 0,
+            place.2 == 3
+        else {
+            print("FAIL: Next Output Place opened \(String(describing: opened))")
+            return 1
+        }
+    }
+    print("run panel ok (output as it comes, its place walked and opened, the end said)")
     pinBench.window?.close()
 
     // With the find bar open, the pins move below it: a search field

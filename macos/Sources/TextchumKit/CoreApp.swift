@@ -67,6 +67,9 @@ public final class CoreApp {
         /// A request response (internal: routed to its completion handler,
         /// never delivered to the app's event closure).
         case lspResponse(id: UInt64, json: String)
+        /// A command run from the editor has news: `output` (something
+        /// new to read), `quiet` (nothing said for a while) or `exited`.
+        case run(id: UInt64, status: String)
     }
 
     /// Retained context handed to the C callback as its `userdata`.
@@ -152,6 +155,8 @@ public final class CoreApp {
                     ))
             case UInt32(TC_EVENT_LSP_RESPONSE):
                 sink.deliver(.lspResponse(id: event.seq, json: payload ?? "null"))
+            case UInt32(TC_EVENT_RUN):
+                sink.deliver(.run(id: event.seq, status: event.status.map { String(cString: $0) } ?? ""))
             default:
                 // Unknown kinds are forward-compatibility, not errors: a
                 // newer core may emit events this shell does not know yet.
@@ -170,6 +175,102 @@ public final class CoreApp {
     /// number. Exists to verify the async event path end to end.
     public func ping(sequence: UInt64) {
         tc_app_ping(handle, sequence)
+    }
+
+    // MARK: Runs
+
+    /// What changed in a run's output since it was last read.
+    public struct RunUpdate: Decodable, Sendable {
+        public struct Line: Decodable, Sendable {
+            public let text: String
+            /// [start, end, "#RRGGBB" or null, bold], in characters.
+            public let spans: [[RunValue]]
+            /// [start, end, path, line, column], in characters; line and
+            /// column zero-based.
+            public let places: [[RunValue]]
+        }
+        /// The index of the first line in `lines`.
+        public let first: Int
+        /// Everything is drawn again from line 0.
+        public let reset: Bool
+        public let running: Bool
+        public let command: String
+        public let lines: [Line]
+    }
+
+    /// A number, a string, a flag or nothing, in a run's JSON rows.
+    public enum RunValue: Decodable, Sendable {
+        case number(Int), text(String), flag(Bool), none
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if container.decodeNil() { self = .none }
+            else if let number = try? container.decode(Int.self) { self = .number(number) }
+            else if let flag = try? container.decode(Bool.self) { self = .flag(flag) }
+            else { self = .text(try container.decode(String.self)) }
+        }
+
+        public var number: Int? { if case .number(let value) = self { return value } else { return nil } }
+        public var text: String? { if case .text(let value) = self { return value } else { return nil } }
+        public var flag: Bool { if case .flag(let value) = self { return value } else { return false } }
+    }
+
+    /// Runs `command` through the shell in `cwd`; the id, or why it could
+    /// not start.
+    public func runStart(command: String, cwd: String) -> Result<UInt64, RunError> {
+        let answer = withUTF8(command) { command, commandLen in
+            withUTF8(cwd) { cwd, cwdLen in tc_run_start(handle, command, commandLen, cwd, cwdLen) }
+        }
+        guard let answer else { return .failure(RunError(message: "the run could not be started")) }
+        defer { tc_string_free(answer) }
+        let parsed = (try? JSONSerialization.jsonObject(with: Data(String(cString: answer).utf8))) as? [String: Any]
+        if let id = parsed?["id"] as? Int { return .success(UInt64(id)) }
+        return .failure(RunError(message: parsed?["error"] as? String ?? "the run could not be started"))
+    }
+
+    public struct RunError: Error, Sendable { public let message: String }
+
+    /// What changed in a run's output since it was last read.
+    public func runRead(id: UInt64) -> RunUpdate? {
+        guard let answer = tc_run_read(handle, id) else { return nil }
+        defer { tc_string_free(answer) }
+        return try? JSONDecoder().decode(RunUpdate.self, from: Data(String(cString: answer).utf8))
+    }
+
+    @discardableResult
+    public func runWrite(id: UInt64, line: String) -> Bool {
+        withUTF8(line) { line, lineLen in tc_run_write(handle, id, line, lineLen) }
+    }
+
+    @discardableResult
+    public func runStop(id: UInt64) -> Bool { tc_run_stop(handle, id) }
+
+    public func runForget(id: UInt64) { tc_run_forget(handle, id) }
+
+    /// A place a run's output names: where it is in the output, and the
+    /// file, line and column it names (zero-based).
+    public struct RunPlace: Sendable {
+        public let outputLine: Int
+        public let start: Int
+        public let end: Int
+        public let path: String
+        public let line: Int
+        public let column: Int
+    }
+
+    /// The place after (`forward`) or before a line and character of a
+    /// run's output, round the end; from nowhere when `from` is nil.
+    public func runNeighbouringPlace(id: UInt64, from: (line: Int, character: Int)?, forward: Bool) -> RunPlace? {
+        guard let answer = tc_run_neighbouring_place(
+            handle, id, from != nil, UInt(from?.line ?? 0), UInt(from?.character ?? 0), forward)
+        else { return nil }
+        defer { tc_string_free(answer) }
+        guard let parsed = (try? JSONSerialization.jsonObject(with: Data(String(cString: answer).utf8))) as? [String: Any],
+            let outputLine = parsed["line"] as? Int, let start = parsed["start"] as? Int,
+            let end = parsed["end"] as? Int, let path = parsed["path"] as? String,
+            let line = parsed["placeLine"] as? Int, let column = parsed["column"] as? Int
+        else { return nil }
+        return RunPlace(outputLine: outputLine, start: start, end: end, path: path, line: line, column: column)
     }
 
     // MARK: Language servers

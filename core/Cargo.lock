@@ -703,6 +703,7 @@ dependencies = [
  "grep-regex",
  "grep-searcher",
  "ignore",
+ "libc",
  "libloading",
  "nucleo-matcher",
  "pulldown-cmark",

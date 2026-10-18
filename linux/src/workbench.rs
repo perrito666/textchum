@@ -157,6 +157,8 @@ pub struct Workbench {
     /// each a menu of the constructs beside it; and what they show, so
     /// a caret move inside the same function rebuilds nothing.
     status_crumbs: gtk::Box,
+    /// The output of a command run from this window, under the editor.
+    pub run_panel: Rc<crate::run_panel::RunPanel>,
     shown_crumbs: RefCell<Vec<(String, usize, Vec<(String, usize)>)>>,
     /// The notification area at the bar's right end: the last thing the
     /// editor had to say, as much as fits; a click lists the session's.
@@ -405,6 +407,14 @@ impl Workbench {
         menu.append_section(None, &file_section);
         menu.append_section(None, &edit_section);
         menu.append_section(None, &go_section);
+        let run_section = gtk::gio::Menu::new();
+        run_section.append(Some(&tr("Run Command…")), Some("win.run-command"));
+        run_section.append(Some(&tr("Run Again")), Some("win.run-again"));
+        run_section.append(Some(&tr("Stop")), Some("win.stop-run"));
+        run_section.append(Some(&tr("Next Output Place")), Some("win.next-output-place"));
+        run_section.append(Some(&tr("Previous Output Place")), Some("win.previous-output-place"));
+        run_section.append(Some(&tr("Show Run Output")), Some("win.toggle-run-panel"));
+        menu.append_submenu(Some(&tr("Run")), &run_section);
         menu.append_section(None, &app_section);
         let menu_button = gtk::MenuButton::builder()
             .icon_name("open-menu-symbolic")
@@ -503,6 +513,8 @@ impl Workbench {
         }
         status_notice.connect_clicked(|button| show_notices(button));
         status_bar.append(&status_notice);
+        let run_panel = crate::run_panel::RunPanel::new();
+        content_box.append(&run_panel.root);
         content_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         content_box.append(&status_bar);
         tab_view.set_vexpand(true);
@@ -579,6 +591,7 @@ impl Workbench {
             status_language: status_language.clone(),
             status_encoding: status_encoding.clone(),
             status_crumbs: status_crumbs.clone(),
+            run_panel: Rc::clone(&run_panel),
             shown_crumbs: RefCell::new(Vec::new()),
             status_notice: status_notice.clone(),
             search_bar,
@@ -2634,6 +2647,26 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         });
     });
     add("search-everywhere", workbench, |workbench, _| show_everywhere(workbench));
+    add("run-command", workbench, |workbench, _| ask_for_command(workbench));
+    add("run-again", workbench, |workbench, _| {
+        let command = workbench.run_panel.command();
+        let command = if command.is_empty() { last_command(workbench) } else { command };
+        if command.is_empty() {
+            ask_for_command(workbench);
+        } else {
+            run_in(workbench, &command);
+        }
+    });
+    add("stop-run", workbench, |workbench, _| workbench.run_panel.stop());
+    add("next-output-place", workbench, |workbench, _| step_output_place(workbench, true));
+    add("previous-output-place", workbench, |workbench, _| step_output_place(workbench, false));
+    add("toggle-run-panel", workbench, |workbench, _| {
+        if workbench.run_panel.is_shown() {
+            workbench.run_panel.hide();
+        } else {
+            workbench.run_panel.show();
+        }
+    });
     add("implementation", workbench, |workbench, _| locate(workbench, false));
     add("type-definition", workbench, |workbench, _| locate(workbench, true));
     add("usages", workbench, |workbench, _| {
@@ -3840,6 +3873,12 @@ const PALETTE: &[(&str, &str)] = &[
     ("Changed in Branch…", "win.changed-files"),
     ("Go to Symbol in Project…", "win.project-symbols"),
     ("Search Everywhere…", "win.search-everywhere"),
+    ("Run Command…", "win.run-command"),
+    ("Run Again", "win.run-again"),
+    ("Stop", "win.stop-run"),
+    ("Next Output Place", "win.next-output-place"),
+    ("Previous Output Place", "win.previous-output-place"),
+    ("Show Run Output", "win.toggle-run-panel"),
     ("Save", "win.save"),
     ("Save As…", "win.save-as"),
     ("Revert to Saved", "win.revert"),
@@ -5886,6 +5925,98 @@ fn show_recent_symbols(
         tr("Symbols gone to lately.")
     });
     *found.borrow_mut() = recent;
+}
+
+// MARK: Runs
+
+/// The directory a command runs in: the project of the page in front, or
+/// the folder of its file, or home.
+fn run_directory(workbench: &Rc<Workbench>) -> PathBuf {
+    workbench
+        .selected()
+        .and_then(|page| page.path().borrow().clone())
+        .and_then(|path| {
+            let path = PathBuf::from(path);
+            workspace::project_root_for(&path).or_else(|| path.parent().map(Path::to_owned))
+        })
+        .unwrap_or_else(glib::home_dir)
+}
+
+/// The project the page in front belongs to, for what it remembers.
+fn memory_root(workbench: &Rc<Workbench>) -> Option<String> {
+    workbench.selected().and_then(|page| page.document.project_root.borrow().clone())
+}
+
+/// The command last run in the project in front.
+fn last_command(workbench: &Rc<Workbench>) -> String {
+    crate::shell::memory_option("run.command", memory_root(workbench).as_deref())
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
+/// Run Command…: a command line, run through the shell in the project
+/// in front, its output in the panel under the editor. The line offered
+/// is the last one run in that project.
+fn ask_for_command(workbench: &Rc<Workbench>) {
+    let directory = run_directory(workbench);
+    let dialog = adw::AlertDialog::new(
+        Some(&tr("Run Command")),
+        Some(&fill(&tr("Run through the shell in {}."), &[&directory.to_string_lossy()])),
+    );
+    let entry = gtk::Entry::new();
+    entry.set_placeholder_text(Some("cargo test"));
+    entry.set_text(&last_command(workbench));
+    entry.set_activates_default(true);
+    dialog.set_extra_child(Some(&entry));
+    dialog.add_response("cancel", &tr("Cancel"));
+    dialog.add_response("run", &tr("Run"));
+    dialog.set_default_response(Some("run"));
+    dialog.set_close_response("cancel");
+    dialog.set_response_appearance("run", adw::ResponseAppearance::Suggested);
+    let weak = Rc::downgrade(workbench);
+    let typed = entry.clone();
+    dialog.connect_response(None, move |_, response| {
+        let Some(workbench) = weak.upgrade() else { return };
+        let command = typed.text().trim().to_owned();
+        if response != "run" || command.is_empty() {
+            return;
+        }
+        crate::shell::set_memory_option(
+            "run.command",
+            Some(serde_json::Value::String(command.clone())),
+            memory_root(&workbench).as_deref(),
+        );
+        run_in(&workbench, &command);
+    });
+    dialog.present(Some(&workbench.window));
+    entry.grab_focus();
+}
+
+/// Starts `command` in the project in front and shows it in the run
+/// panel; one that cannot start says why.
+pub(crate) fn run_in(workbench: &Rc<Workbench>, command: &str) {
+    let directory = run_directory(workbench);
+    let started = Shell::instance().runs.borrow_mut().start(command, &directory);
+    match started {
+        Ok(id) => {
+            let weak = Rc::downgrade(workbench);
+            workbench.run_panel.set_on_open(Rc::new(move |path: &str, line: i32, column: usize| {
+                if let Some(workbench) = weak.upgrade() {
+                    workbench.open(Some(PathBuf::from(path)), Some((line, column)));
+                }
+            }));
+            workbench.run_panel.begin(id, command);
+        }
+        Err(error) => workbench.hint(&error),
+    }
+}
+
+/// Next Output Place and Previous: the places the run's output names,
+/// walked like findings.
+fn step_output_place(workbench: &Rc<Workbench>, forward: bool) {
+    if !workbench.run_panel.step(forward) {
+        workbench.hint(&tr("The run's output names no place in a file."));
+    }
 }
 
 /// What a Search Everywhere row stands for.

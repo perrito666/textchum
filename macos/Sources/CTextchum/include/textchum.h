@@ -37,6 +37,13 @@
 #define TC_EVENT_LSP_RESPONSE 4
 
 /**
+ * Event kind: a command run from the editor has news. `seq` is the run's
+ * id; `status` is `output`, `quiet` or `exited` — see
+ * [`textchum_core::run`].
+ */
+#define TC_EVENT_RUN 5
+
+/**
  * Appearance choice: follow the system.
  */
 #define TC_APPEARANCE_SYSTEM 0
@@ -225,6 +232,73 @@ const char *tc_version(void);
  * null.
  */
 struct TcApp *tc_app_new(TcEventCallback callback, void *userdata);
+
+/**
+ * Runs `command` through the shell in `cwd`, its output piped to the
+ * run panel. Answers `{"id": n}`, or `{"error": "why"}` when it could not
+ * start. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; each string must
+ * point to its length of readable bytes.
+ */
+char *tc_run_start(struct TcApp *app,
+                   const char *command,
+                   uintptr_t command_len,
+                   const char *cwd,
+                   uintptr_t cwd_len);
+
+/**
+ * What changed in a run's output since it was last read: `{first,
+ * reset, running, command, lines: [{text, spans, places}]}` — see
+ * [`textchum_core::output::changes_json`]. Null for an id there is no
+ * run for. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`].
+ */
+char *tc_run_read(struct TcApp *app, uint64_t id);
+
+/**
+ * Sends a line to a run's input. False when it is over.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; `line` must point to
+ * `line_len` readable bytes.
+ */
+bool tc_run_write(struct TcApp *app, uint64_t id, const char *line, uintptr_t line_len);
+
+/**
+ * Stops a run and everything it started. False when it is over.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`].
+ */
+bool tc_run_stop(struct TcApp *app, uint64_t id);
+
+/**
+ * Lets go of a run, stopping it first if it is still going.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`].
+ */
+void tc_run_forget(struct TcApp *app, uint64_t id);
+
+/**
+ * The place after (`forward`) or before line `line`, character
+ * `character` of a run's output — from nowhere when `from` is false —
+ * round the end: `{line, start, end, path, placeLine, column}`, or null
+ * when its output names none. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`].
+ */
+char *tc_run_neighbouring_place(struct TcApp *app,
+                                uint64_t id,
+                                bool from,
+                                uintptr_t line,
+                                uintptr_t character,
+                                bool forward);
 
 /**
  * Requests an asynchronous pong event echoing `seq`.

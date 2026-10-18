@@ -1148,6 +1148,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             editors.first { $0.coreDocument.path == path }?.apply(diagnostics: items)
         case .lspResponse:
             break  // routed to its completion handler inside CoreApp
+        case let .run(id, status):
+            for workbench in Workbench.all where workbench.runPanel.runID == id {
+                workbench.runPanel.handle(status: status)
+            }
         case let .serverStatus(server, root, status, message):
             // Not a change of state: what the server is busy with right
             // now. It shows where the notices are and steps aside when
@@ -1770,6 +1774,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(findInProject(_:)): "findInProject",
             #selector(goToSymbolInProject(_:)): "projectSymbols",
             #selector(showSearchEverywhere(_:)): "searchEverywhere",
+            #selector(runCommand(_:)): "runCommand",
+            #selector(runAgain(_:)): "runAgain",
+            #selector(stopRun(_:)): "stopRun",
+            #selector(nextOutputPlace(_:)): "nextOutputPlace",
+            #selector(previousOutputPlace(_:)): "previousOutputPlace",
+            #selector(toggleRunPanel(_:)): "toggleRunPanel",
             #selector(NSSplitViewController.toggleSidebar(_:)): "toggleNavigator",
             #selector(DocumentController.togglePreview(_:)): "togglePreview",
             #selector(toggleLineNumbers(_:)): "toggleLineNumbers",
@@ -2568,6 +2578,91 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let quickFinder = QuickFinderPanel()
     private let commandPalette = CommandPalettePanel()
+
+    // MARK: Runs
+
+    /// The workbench in front, whose run panel the run commands act on.
+    private var frontWorkbench: Workbench? {
+        (NSApp.keyWindow?.windowController as? Workbench) ?? Workbench.all.first
+    }
+
+    /// Run → Run Command… (⌃⌥R): a command line, run in the project of
+    /// the file in front, its output in the panel under the editor. The
+    /// line offered is the last one run in that project.
+    @objc func runCommand(_ sender: Any?) {
+        guard let workbench = frontWorkbench else { return }
+        let project = workbench.focusedDocument?.projectRoot
+        let last = ProjectState.option("run.command", projectRoot: project) as? String ?? ""
+        let alert = NSAlert()
+        alert.messageText = t("Run Command")
+        alert.informativeText = t("Run through the shell in {}.", (currentScope as NSString).abbreviatingWithTildeInPath)
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
+        field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        field.placeholderString = "cargo test"
+        field.stringValue = last
+        alert.accessoryView = field
+        alert.addButton(withTitle: t("Run"))
+        alert.addButton(withTitle: t("Cancel"))
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let command = field.stringValue.trimmingCharacters(in: .whitespaces)
+        guard !command.isEmpty else { return }
+        ProjectState.setOption("run.command", command, projectRoot: project)
+        run(command, in: workbench)
+    }
+
+    /// Run → Run Again (⌘R): the command the panel shows, once more.
+    @objc func runAgain(_ sender: Any?) {
+        guard let workbench = frontWorkbench else { return }
+        let command = workbench.runPanel.command.isEmpty
+            ? ProjectState.option("run.command", projectRoot: workbench.focusedDocument?.projectRoot) as? String ?? ""
+            : workbench.runPanel.command
+        guard !command.isEmpty else {
+            runCommand(sender)
+            return
+        }
+        run(command, in: workbench)
+    }
+
+    /// Starts `command` in the project in front and shows it in the
+    /// workbench's run panel. A run that cannot start says why.
+    func run(_ command: String, in workbench: Workbench) {
+        guard let coreApp else { return }
+        let panel = workbench.runPanel
+        panel.core = coreApp
+        panel.onOpenPlace = { [weak self] path, line, column in
+            self?.recordJumpOrigin()
+            self?.open(path: path, revealLine: line + 1, revealCharacter: column)
+        }
+        switch coreApp.runStart(command: command, cwd: currentScope) {
+        case .success(let id):
+            panel.begin(id: id, command: command)
+        case .failure(let error):
+            workbench.focusedDocument?.showHint(error.message)
+        }
+    }
+
+    @objc func stopRun(_ sender: Any?) {
+        frontWorkbench?.runPanel.stop(sender)
+    }
+
+    /// Next Output Place (F4) and Previous (⇧F4): the places the run's
+    /// output names, walked like findings.
+    @objc func nextOutputPlace(_ sender: Any?) { stepOutputPlace(forward: true) }
+    @objc func previousOutputPlace(_ sender: Any?) { stepOutputPlace(forward: false) }
+
+    private func stepOutputPlace(forward: Bool) {
+        guard let workbench = frontWorkbench else { return }
+        if !workbench.runPanel.step(forward: forward) {
+            workbench.focusedDocument?.showHint(t("The run's output names no place in a file."))
+        }
+    }
+
+    /// Run → Show Run Output: the panel back, or away.
+    @objc func toggleRunPanel(_ sender: Any?) {
+        guard let panel = frontWorkbench?.runPanel else { return }
+        if panel.isShown { panel.hide() } else { panel.show() }
+    }
     let searchEverywhere = SearchEverywhere()
 
     /// Search Everywhere (⇧⌘A): files, symbols, commands and settings in
@@ -3742,6 +3837,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let viewMenuItem = NSMenuItem()
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
+
+        let runMenu = NSMenu(title: t("Run"))
+        let runItem = NSMenuItem(title: t("Run Command…"), action: #selector(runCommand(_:)), keyEquivalent: "r")
+        runItem.keyEquivalentModifierMask = [.control, .option]
+        runMenu.addItem(runItem)
+        let rerunItem = NSMenuItem(title: t("Run Again"), action: #selector(runAgain(_:)), keyEquivalent: "r")
+        rerunItem.keyEquivalentModifierMask = [.command]
+        runMenu.addItem(rerunItem)
+        let stopItem = NSMenuItem(
+            title: t("Stop"), action: #selector(stopRun(_:)), keyEquivalent: String(UnicodeScalar(NSF2FunctionKey)!))
+        stopItem.keyEquivalentModifierMask = [.command]
+        runMenu.addItem(stopItem)
+        runMenu.addItem(.separator())
+        let nextPlace = NSMenuItem(
+            title: t("Next Output Place"), action: #selector(nextOutputPlace(_:)),
+            keyEquivalent: String(UnicodeScalar(NSF4FunctionKey)!))
+        nextPlace.keyEquivalentModifierMask = []
+        runMenu.addItem(nextPlace)
+        let previousPlace = NSMenuItem(
+            title: t("Previous Output Place"), action: #selector(previousOutputPlace(_:)),
+            keyEquivalent: String(UnicodeScalar(NSF4FunctionKey)!))
+        previousPlace.keyEquivalentModifierMask = [.shift]
+        runMenu.addItem(previousPlace)
+        runMenu.addItem(withTitle: t("Show Run Output"), action: #selector(toggleRunPanel(_:)), keyEquivalent: "")
+        let runMenuItem = NSMenuItem()
+        runMenuItem.submenu = runMenu
+        mainMenu.addItem(runMenuItem)
 
         let windowMenu = NSMenu(title: t("Window"))
         windowMenu.addItem(

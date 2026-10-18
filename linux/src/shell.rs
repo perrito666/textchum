@@ -314,6 +314,8 @@ pub const CLOSED_DOCUMENT_MEMORY: usize = 20;
 pub struct Shell {
     pub config: RefCell<Config>,
     pub pool: RefCell<Pool>,
+    /// Commands run from the editor; see [`textchum_core::run`].
+    pub runs: RefCell<textchum_core::run::Runs>,
     events: RefCell<Receiver<Event>>,
     pub pages: RefCell<HashMap<String, Rc<PageHandles>>>,
     pub chum_wait_sentinels: RefCell<HashMap<String, String>>,
@@ -448,6 +450,7 @@ impl Shell {
             }
             textchum_lsp::log::set_path(&log_path);
             let (sender, receiver) = std::sync::mpsc::channel();
+            let runs = textchum_core::run::Runs::new(sender.clone());
             let mut pool = Pool::new(sender);
             // Screenshot/demo hook: route rust at the scripted server.
             if let Some(script) = std::env::var_os("TEXTCHUM_FAKE_LSP") {
@@ -462,6 +465,7 @@ impl Shell {
             let shell = Rc::new(Shell {
                 config: RefCell::new(config),
                 pool: RefCell::new(pool),
+                runs: RefCell::new(runs),
                 events: RefCell::new(receiver),
                 pages: RefCell::new(HashMap::new()),
                 chum_wait_sentinels: RefCell::new(HashMap::new()),
@@ -828,6 +832,13 @@ impl Shell {
                     if let Some(callback) = callback {
                         callback(&json);
                     }
+                }
+                Event::Run { id, status } => {
+                    crate::workbench::Workbench::for_each(|workbench| {
+                        if workbench.run_panel.run_id() == Some(id) {
+                            workbench.run_panel.handle(&status);
+                        }
+                    });
                 }
                 Event::ServerStatus { status, message, server, root } => {
                     // Not a change of state: what the server is busy

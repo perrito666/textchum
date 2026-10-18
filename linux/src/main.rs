@@ -12,6 +12,7 @@ mod page;
 mod paths;
 mod path_actions;
 mod preprocessors;
+mod run_panel;
 mod spell;
 mod session;
 mod shell;
@@ -544,6 +545,11 @@ static DEFAULT_ACCELS: &[(&str, &str)] = &[
     ("win.changed-files", "<Ctrl><Alt>g"),
     ("win.project-symbols", "<Ctrl><Alt>o"),
     ("win.search-everywhere", "<Ctrl><Shift>a"),
+    ("win.run-command", "<Shift>F10"),
+    ("win.run-again", "<Ctrl>F5"),
+    ("win.stop-run", "<Ctrl>F2"),
+    ("win.next-output-place", "F4"),
+    ("win.previous-output-place", "<Shift>F4"),
     ("win.definition", "F12"),
     ("win.implementation", "<Ctrl>F12"),
     ("win.type-definition", "<Ctrl><Shift>F12"),
@@ -2033,6 +2039,46 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             }
         }
         println!("search everywhere ok (a switch flips and saves, the best group first)");
+
+        // A command run from the editor: its output in the panel as it
+        // comes, the place it names walked, the end said.
+        {
+            let dir = std::env::temp_dir().join(format!("textchum-gtk-run-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            let file = dir.join("named.rs");
+            let _ = std::fs::write(&file, "one\ntwo\n");
+            let command = format!("printf 'error: here\\n  --> {}:2:3\\n'", file.display());
+            workbench::run_in(&workbench, &command);
+            let opened: Rc<std::cell::RefCell<Option<(String, i32, usize)>>> =
+                Rc::new(std::cell::RefCell::new(None));
+            {
+                let opened = Rc::clone(&opened);
+                workbench.run_panel.set_on_open(Rc::new(move |path: &str, line: i32, column: usize| {
+                    *opened.borrow_mut() = Some((path.to_owned(), line, column));
+                }));
+            }
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+            while workbench.run_panel.status_text() != textchum_core::i18n::tr("finished") {
+                context.iteration(true);
+                if std::time::Instant::now() > deadline {
+                    eprintln!("FAIL: the run never finished: {:?}", workbench.run_panel.shown_text());
+                    return 1;
+                }
+            }
+            let shown = workbench.run_panel.shown_text();
+            let stepped = workbench.run_panel.step(true);
+            let _ = std::fs::remove_dir_all(&dir);
+            let place = opened.borrow().clone();
+            if !shown.contains("error: here") || !stepped
+                || place.as_ref().map(|(path, line, column)| (path.ends_with("named.rs"), *line, *column))
+                    != Some((true, 1, 2))
+            {
+                eprintln!("FAIL: the run panel showed {shown:?}, stepped to {place:?}");
+                return 1;
+            }
+            workbench.run_panel.hide();
+        }
+        println!("run panel ok (output as it comes, its place walked, the end said)");
 
         // The shell holds documents; the UI holds views of them. What
         // is checked here is that the table behaves like a registry: a
