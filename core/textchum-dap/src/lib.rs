@@ -32,6 +32,9 @@ pub struct Adapter {
     pub command: Vec<String>,
     /// What installs it, for when it is not there.
     pub install: &'static str,
+    /// Spoken to over TCP, at the address it prints, rather than over its
+    /// standard input and output.
+    pub listens: bool,
 }
 
 /// The adapter a launch description names.
@@ -42,28 +45,35 @@ pub fn adapter(name: &str) -> Option<Adapter> {
             id: "debugpy",
             command: words(&["python3", "-m", "debugpy.adapter"]),
             install: "python3 -m pip install debugpy",
+            listens: false,
         }),
+        // Delve speaks only over TCP: it is asked to listen where it
+        // likes on this machine, and says where.
         "dlv" => Some(Adapter {
             id: "go",
-            command: words(&["dlv", "dap"]),
+            command: words(&["dlv", "dap", "--listen=127.0.0.1:0"]),
             install: "go install github.com/go-delve/delve/cmd/dlv@latest",
+            listens: true,
         }),
         // Xcode's lldb-dap is not on the PATH; xcrun finds it.
         "lldb" if cfg!(target_os = "macos") => Some(Adapter {
             id: "lldb-dap",
             command: words(&["xcrun", "lldb-dap"]),
             install: "xcode-select --install",
+            listens: false,
         }),
         "lldb" => Some(Adapter {
             id: "lldb-dap",
             command: vec![lldb_dap(std::env::var_os("PATH").as_deref())],
             install: "your distribution's lldb package, which carries lldb-dap",
+            listens: false,
         }),
         // The scripted adapter the smoke tests drive, where they say it is.
         "fake" => std::env::var("TEXTCHUM_FAKE_DAP").ok().map(|script| Adapter {
             id: "fake",
             command: vec!["python3".to_owned(), script],
             install: "scripts/fake_dap.py",
+            listens: false,
         }),
         _ => None,
     }
@@ -170,6 +180,7 @@ impl Debuggers {
             cwd: cwd.to_path_buf(),
             breakpoints: breakpoints.clone(),
             install: adapter.install.to_owned(),
+            listens: adapter.listens,
         };
         let Some(cargo) = launch["cargo"].as_array() else {
             let session = Session::start(id, session_launch(None), self.events.clone())

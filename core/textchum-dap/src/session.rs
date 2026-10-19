@@ -11,7 +11,7 @@
 //! the program is rather than having to ask.
 
 use std::collections::HashMap;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command as ProcessCommand, Stdio};
 use std::sync::mpsc;
@@ -105,6 +105,10 @@ pub struct Launch {
     /// What installs the adapter, said when it goes before answering —
     /// which is how a missing Python module shows itself.
     pub install: String,
+    /// The adapter is spoken to over a TCP connection rather than its
+    /// standard input and output: it prints `… listening at: host:port`
+    /// once it is ready, as Delve does.
+    pub listens: bool,
 }
 
 pub struct Session {
@@ -138,29 +142,35 @@ impl Session {
             // console's too: it is often why nothing happened.
             let events = events.clone();
             std::thread::spawn(move || {
-                use std::io::BufRead;
                 for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                     send(&events, id, "output", json!({"category": "adapter", "text": format!("{line}\n")}));
                 }
             });
         }
-        {
-            let input = input.clone();
-            std::thread::spawn(move || {
-                let mut reader = BufReader::new(stdout);
-                while let Ok(Some(message)) = read_message(&mut reader) {
-                    if input.send(Input::Adapter(message)).is_err() {
-                        return;
-                    }
-                }
-                let _ = input.send(Input::AdapterGone);
-            });
-        }
         let manager = {
-            let child = Arc::clone(&child);
-            std::thread::Builder::new()
-                .name(format!("dap-{id}"))
-                .spawn(move || Manager::new(id, launch, stdin, events).run(inputs, child))?
+            let (child, input) = (Arc::clone(&child), input.clone());
+            std::thread::Builder::new().name(format!("dap-{id}")).spawn(move || {
+                // Connected here rather than before returning: an adapter
+                // that takes its time to listen does not hold the editor.
+                let writer: Box<dyn Write + Send> = if launch.listens {
+                    match connect(stdout, &events, id, &input) {
+                        Ok(stream) => stream,
+                        Err(why) => {
+                            send(&events, id, "failed", json!({"message": why}));
+                            send(&events, id, "ended", json!({}));
+                            if let Ok(mut child) = child.lock() {
+                                let _ = child.kill();
+                                let _ = child.wait();
+                            }
+                            return;
+                        }
+                    }
+                } else {
+                    forward_messages(BufReader::new(stdout), input);
+                    Box::new(stdin)
+                };
+                Manager::new(id, launch, writer, events).run(inputs, child)
+            })?
         };
         Ok(Session { input, child, manager: Some(manager) })
     }
@@ -193,6 +203,56 @@ impl Drop for Session {
 /// How long a launch may take before it is said to be held up.
 const LAUNCH_PATIENCE: Duration = Duration::from_secs(15);
 
+/// Hands every message read from `reader` to the manager, then says the
+/// adapter is gone.
+fn forward_messages(mut reader: impl BufRead + Send + 'static, input: mpsc::Sender<Input>) {
+    std::thread::spawn(move || {
+        while let Ok(Some(message)) = read_message(&mut reader) {
+            if input.send(Input::Adapter(message)).is_err() {
+                return;
+            }
+        }
+        let _ = input.send(Input::AdapterGone);
+    });
+}
+
+/// For an adapter that listens: waits for it to say where, connects, and
+/// hands what comes over the connection to the manager. What else the
+/// adapter prints goes to the console.
+fn connect(
+    stdout: std::process::ChildStdout,
+    events: &EventSender,
+    id: u64,
+    input: &mpsc::Sender<Input>,
+) -> Result<Box<dyn Write + Send>, String> {
+    let (address_found, address) = mpsc::channel::<String>();
+    {
+        let events = events.clone();
+        std::thread::spawn(move || {
+            let mut waiting = Some(address_found);
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                if let Some(found) = waiting.take() {
+                    match line.split("listening at:").nth(1) {
+                        Some(at) => {
+                            let _ = found.send(at.trim().to_owned());
+                            continue;
+                        }
+                        None => waiting = Some(found),
+                    }
+                }
+                send(&events, id, "output", json!({"category": "adapter", "text": format!("{line}\n")}));
+            }
+        });
+    }
+    let address = address
+        .recv_timeout(LAUNCH_PATIENCE)
+        .map_err(|_| textchum_core::i18n::tr("The adapter did not say where to reach it."))?;
+    let stream = std::net::TcpStream::connect(&address).map_err(|error| format!("{address}: {error}"))?;
+    let reading = stream.try_clone().map_err(|error| format!("{address}: {error}"))?;
+    forward_messages(BufReader::new(reading), input.clone());
+    Ok(Box::new(stream))
+}
+
 fn send(events: &EventSender, session: u64, kind: &str, body: Value) {
     let _ = events.send(Event::Debug { session, kind: kind.to_owned(), json: body.to_string() });
 }
@@ -200,7 +260,7 @@ fn send(events: &EventSender, session: u64, kind: &str, body: Value) {
 struct Manager {
     id: u64,
     launch: Launch,
-    stdin: std::process::ChildStdin,
+    writer: Box<dyn Write + Send>,
     events: EventSender,
     seq: i64,
     pending: HashMap<i64, Pending>,
@@ -221,12 +281,12 @@ struct Manager {
 }
 
 impl Manager {
-    fn new(id: u64, launch: Launch, stdin: std::process::ChildStdin, events: EventSender) -> Manager {
+    fn new(id: u64, launch: Launch, writer: Box<dyn Write + Send>, events: EventSender) -> Manager {
         let breakpoints = launch.breakpoints.iter().cloned().collect();
         Manager {
             id,
             launch,
-            stdin,
+            writer,
             events,
             seq: 0,
             pending: HashMap::new(),
@@ -248,7 +308,7 @@ impl Manager {
     fn request(&mut self, command: &str, arguments: Value, pending: Pending) {
         self.seq += 1;
         let message = json!({"seq": self.seq, "type": "request", "command": command, "arguments": arguments});
-        if write_message(&mut self.stdin, &message).is_ok() {
+        if write_message(&mut self.writer, &message).is_ok() {
             self.pending.insert(self.seq, pending);
         }
     }
@@ -259,7 +319,7 @@ impl Manager {
             "seq": self.seq, "type": "response", "request_seq": request["seq"],
             "command": request["command"], "success": success, "message": message,
         });
-        let _ = write_message(&mut self.stdin, &reply);
+        let _ = write_message(&mut self.writer, &reply);
     }
 
     fn run(mut self, inputs: mpsc::Receiver<Input>, child: Arc<Mutex<Child>>) {
@@ -272,6 +332,9 @@ impl Manager {
             }),
             Pending::Initialize,
         );
+        // An adapter that never answers is said, the same as a launch
+        // that never starts.
+        self.launching = Some(std::time::Instant::now());
         loop {
             let input = match inputs.recv_timeout(Duration::from_millis(250)) {
                 Ok(input) => input,

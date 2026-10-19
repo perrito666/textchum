@@ -256,6 +256,10 @@ msgid "The build failed; its messages are in the console."
 msgstr "La compilación falló; sus mensajes están en la consola."
 
 #: core/textchum-dap/src/session.rs
+msgid "The adapter did not say where to reach it."
+msgstr "El adaptador no dijo dónde encontrarlo."
+
+#: core/textchum-dap/src/session.rs
 msgid "The {} adapter stopped before it answered; if it is not installed: {}"
 msgstr "El adaptador {} se detuvo antes de responder; si no está instalado: {}"
 

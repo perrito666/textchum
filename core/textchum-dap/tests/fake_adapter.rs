@@ -23,6 +23,7 @@ fn fake(arguments: Value, breakpoints: Vec<(PathBuf, Vec<usize>)>) -> Launch {
         cwd: std::env::temp_dir(),
         breakpoints,
         install: "nothing to install".into(),
+        listens: false,
     }
 }
 
@@ -154,3 +155,19 @@ fn a_rust_test_is_built_and_stopped_in_by_lldb_dap() {
     debuggers.forget(id);
     let _ = std::fs::remove_dir_all(&package);
 }
+
+#[test]
+fn an_adapter_that_listens_is_reached_over_tcp() {
+    let (tx, events) = mpsc::channel();
+    let mut launch = fake(json!({"program": "main.py"}), vec![(PathBuf::from("/project/main.py"), vec![1])]);
+    launch.adapter.push("--listen".into());
+    launch.listens = true;
+    let session = Session::start(9, launch, tx).unwrap();
+    let mut seen = Vec::new();
+    let stopped = next(&events, "stopped", &mut seen);
+    assert_eq!(stopped["frames"][0]["line"], 1);
+    assert!(session.send(Command::Continue));
+    next(&events, "ended", &mut seen);
+    drop(session);
+}
+

@@ -152,11 +152,13 @@ msgstr "clangd, et clang-format avant chaque enregistrement."
 
 #: core/textchum-core/src/refactoring.rs
 msgid "Renaming files is not done yet: {} was left as it is."
-msgstr "Le renommage de fichiers n'est pas encore fait : {} a été laissé tel quel."
+msgstr ""
+"Le renommage de fichiers n'est pas encore fait : {} a été laissé tel quel."
 
 #: core/textchum-core/src/refactoring.rs
 msgid "Deleting files is not done yet: {} was left as it is."
-msgstr "La suppression de fichiers n'est pas encore faite : {} a été laissé tel quel."
+msgstr ""
+"La suppression de fichiers n'est pas encore faite : {} a été laissé tel quel."
 
 #: core/textchum-core/src/refactoring.rs
 msgid "Undid {} in {} file."
@@ -254,6 +256,10 @@ msgstr "{} n'est pas installé (installez-le avec : {})"
 #: core/textchum-dap/src/lib.rs
 msgid "The build failed; its messages are in the console."
 msgstr "La compilation a échoué ; ses messages sont dans la console."
+
+#: core/textchum-dap/src/session.rs
+msgid "The adapter did not say where to reach it."
+msgstr "L'adaptateur n'a pas dit où le joindre."
 
 #: core/textchum-dap/src/session.rs
 msgid "The {} adapter stopped before it answered; if it is not installed: {}"
