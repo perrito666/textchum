@@ -399,8 +399,10 @@ Settings ▸ Preprocessors, and in the form that adds one — lists the
 tools the editor knows the command line of for the language in hand,
 marks which are installed, and writes the line when one is chosen. A
 tool that is not installed is still offered, with the command that
-installs it. **Known servers** does the same for the server command
-under Language Servers.
+installs it, and the first save that needs it offers to install it (see
+[Installing what is missing](language-servers.md#installing-what-is-missing)).
+**Known servers** does the same for the server command under Language
+Servers.
 
 | Tool | Languages | The line it writes |
 |---|---|---|
@@ -487,9 +489,10 @@ that a preset was used: what it wrote is yours to edit under Language
 Servers and Preprocessors, and the button reads **Applied** for as long
 as the configuration still says everything the preset would write.
 
-Each preset lists the programs it runs and whether each was found on
-`PATH`; a missing one shows the command that installs it. The editor
-installs nothing itself.
+Each preset lists the programs it runs and whether each was found; a
+missing one shows the command that installs it. Applying a preset does
+not install them; the editor offers to the first time one is needed (see
+[Installing what is missing](language-servers.md#installing-what-is-missing)).
 
 Not there yet: a preset applies to every project (the entries it
 writes can be moved under a project by hand). And the TypeScript preset

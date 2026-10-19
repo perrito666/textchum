@@ -12,7 +12,10 @@ cuando se quiere un servidor distinto del predeterminado.
 
 Las líneas de instalación asumen [Homebrew](https://brew.sh) en macOS;
 en Linux, el gestor de paquetes o el instalador del propio lenguaje
-hacen el mismo trabajo.
+hacen el mismo trabajo. El editor también puede instalar: abre un
+archivo, y lo que su servidor, sus formateadores y su depurador
+necesitan y no tienen aparece en **Instalar…** en la barra de estado
+(ver [Instalar lo que falta](language-servers.md#instalar-lo-que-falta)).
 
 ## Python
 

@@ -153,7 +153,8 @@ of what is beside it, the one it names marked; choosing one goes
 there, as a jump Go Back returns from. Text no grammar reads has none.
 Its right end
 is the **notification area**: the last thing the editor had to say —
-a language server it could not find, and what would install it; a
+a language server it could not find, which the **Install…** button
+beside it installs; a
 grammar it could not load; a save that went ahead without its
 preprocessors — as much of it as fits, the whole of it as a tooltip.
 Nothing there interrupts: what used to be a dialog to dismiss is a line
@@ -456,8 +457,9 @@ program's output, with a field that evaluates an expression in that
 frame. **Continue** (F9, F5 on Linux), **Step Over** (F8, F6 on Linux),
 **Step Into** (F7), **Step Out** (⇧F8, Shift+F7 on Linux) and **Stop
 Debugging** (⇧⌘F2, Ctrl+Shift+F2 on Linux) are in the Run menu and on
-the panel. An adapter that is not installed is named, with the command
-that installs it; a program that does not start says what usually holds
+the panel. An adapter that is not installed is offered for installing
+at once, and debugging starts once the install succeeds; a program
+that does not start says what usually holds
 it up — on macOS, the permission a debugger needs to take control of a
 program, which developer mode (`DevToolsSecurity -enable`) grants.
 

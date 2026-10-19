@@ -3118,6 +3118,96 @@ func runSmokeTest() -> Int32 {
     }
     print("run panel ok (output as it comes, its place walked and opened, the end said)")
 
+    // A program a document needs and does not have is offered for
+    // installing (6.4): the status bar names it, a save formatter that
+    // is missing says so instead of failing obscurely, an install run
+    // in the panel reports how it ended, and what it put into the
+    // project's environment is found there and run from there.
+    do {
+        let project = NSTemporaryDirectory() + "textchum-install-\(getpid())"
+        try? FileManager.default.createDirectory(atPath: project + "/.venv/bin", withIntermediateDirectories: true)
+        try? "[project]\nname = \"shop\"\n".write(toFile: project + "/pyproject.toml", atomically: true, encoding: .utf8)
+        try? "".write(toFile: project + "/.venv/bin/python", atomically: true, encoding: .utf8)
+        try? "x = 1\n".write(toFile: project + "/shop.py", atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(atPath: project) }
+        // A program no machine has, under a name the catalog knows how
+        // to install: the formatter link fails and says it can be
+        // installed, and the document's status bar offers it.
+        let program = "mdformat"
+        if CoreInstall.resolve(program: program, project: project) != nil {
+            print("note: \(program) is installed here; install smoke skipped")
+        } else {
+        let failed = Preprocessors.run(commands: ["\(program) -"], on: "x\n", in: project)
+        guard case .failure(let failure) = failed, failure.details.contains("Install") else {
+            print("FAIL: a missing formatter said \(failed)")
+            return 1
+        }
+        let bench = Workbench(sidebar: nil)
+        guard let opened = try? CoreDocument(contentsOf: project + "/shop.py") else {
+            print("FAIL: the install check's file did not open")
+            return 1
+        }
+        bench.add(DocumentController(document: opened))
+        bench.refreshInstallOffers()
+        guard bench.statusBar.installTitle == t("Install {}…", program),
+            let offer = CoreInstall.offers(forPath: project + "/shop.py").first, offer.program == program,
+            offer.purpose == t("save formatter")
+        else {
+            print("FAIL: the status bar offers \(bench.statusBar.installTitle ?? "nothing")")
+            return 1
+        }
+        // What this machine can install with, the project's own way
+        // first when it keeps its tools in .venv.
+        if let first = offer.methods.first, first.scope != "project" {
+            print("FAIL: a project with a .venv is offered \(offer.methods.map(\.command)) first")
+            return 1
+        }
+        // The install itself, as a stand-in that drops the program into
+        // the project's .venv: it ends with 0, and the program is then
+        // found there, run with the project's environment, and no longer
+        // offered.
+        let panel = RunPanel()
+        let installCore = CoreApp { event in
+            if case let .run(_, status) = event { panel.handle(status: status) }
+        }
+        panel.core = installCore
+        let install = "printf '#!/bin/sh\\nsed \"s|^|$VIRTUAL_ENV: |\"\\n' > .venv/bin/\(program) && chmod +x .venv/bin/\(program)"
+        guard case .success(let id) = installCore.runStart(command: install, cwd: project) else {
+            print("FAIL: the install did not start")
+            return 1
+        }
+        panel.begin(id: id, command: install, cwd: project)
+        spin(untilTrue: { panel.statusText == t("finished") }, seconds: 10)
+        guard panel.exitCode == 0, let found = CoreInstall.resolve(program: program, project: project),
+            found.first?.hasSuffix(".venv/bin/\(program)") == true
+        else {
+            print("FAIL: the install ended with \(String(describing: panel.exitCode)) and found \(String(describing: CoreInstall.resolve(program: program, project: project)))")
+            return 1
+        }
+        bench.refreshInstallOffers()
+        guard bench.statusBar.installTitle == nil,
+            case .success(let formatted) = Preprocessors.run(commands: ["\(program) -"], on: "x\n", in: project),
+            formatted.hasSuffix(".venv: x\n")
+        else {
+            print("FAIL: after the install the bar offers \(bench.statusBar.installTitle ?? "nothing")")
+            return 1
+        }
+        // An install that fails says so by its exit code.
+        guard case .success(let failing) = installCore.runStart(command: "exit 3", cwd: project) else {
+            print("FAIL: the failing install did not start")
+            return 1
+        }
+        panel.begin(id: failing, command: "exit 3", cwd: project)
+        spin(untilTrue: { panel.statusText == t("finished") }, seconds: 10)
+        guard panel.exitCode == 3 else {
+            print("FAIL: a failed install ended with \(String(describing: panel.exitCode))")
+            return 1
+        }
+        bench.window?.close()
+        print("install ok (a missing formatter offered, installed into .venv, found and run there, the end told)")
+        }
+    }
+
     // The tests a run reports are listed beside its output: counted,
     // a test chosen shows the line that reported it, and Rerun Failed
     // runs only the failed one again, where the run was started.

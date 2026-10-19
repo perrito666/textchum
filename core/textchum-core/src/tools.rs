@@ -50,7 +50,6 @@ pub struct ToolSpec {
     pub languages: &'static [&'static str],
     /// The whole command line: stdin in, stdout out.
     pub command: &'static str,
-    pub install: &'static str,
 }
 
 impl ToolSpec {
@@ -58,6 +57,11 @@ impl ToolSpec {
     /// `PATH`.
     pub fn program(&self) -> &'static str {
         self.command.split_whitespace().next().unwrap_or(self.command)
+    }
+
+    /// How the program is installed, in words; see `crate::install`.
+    pub fn install(&self) -> String {
+        crate::install::hint(self.program()).unwrap_or_default()
     }
 }
 
@@ -68,7 +72,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["rust"],
         command: "rustfmt --edition {edition}",
-        install: "rustup component add rustfmt",
     },
     ToolSpec {
         id: "gofmt",
@@ -76,7 +79,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["go"],
         command: "gofmt",
-        install: "comes with Go",
     },
     ToolSpec {
         id: "goimports",
@@ -84,7 +86,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Imports,
         languages: &["go"],
         command: "goimports",
-        install: "go install golang.org/x/tools/cmd/goimports@latest",
     },
     ToolSpec {
         id: "gofumpt",
@@ -92,7 +93,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["go"],
         command: "gofumpt",
-        install: "go install mvdan.cc/gofumpt@latest",
     },
     ToolSpec {
         id: "golines",
@@ -100,7 +100,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["go"],
         command: "golines",
-        install: "go install github.com/segmentio/golines@latest",
     },
     ToolSpec {
         id: "ruff-format",
@@ -108,7 +107,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["python"],
         command: "ruff format --stdin-filename {path} -",
-        install: "uv tool install ruff",
     },
     ToolSpec {
         id: "ruff-fix",
@@ -116,7 +114,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Fixer,
         languages: &["python"],
         command: "ruff check --fix --exit-zero --no-cache --stdin-filename {path} -",
-        install: "uv tool install ruff",
     },
     ToolSpec {
         id: "ruff-imports",
@@ -124,7 +121,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Imports,
         languages: &["python"],
         command: "ruff check --select I --fix --exit-zero --no-cache --stdin-filename {path} -",
-        install: "uv tool install ruff",
     },
     ToolSpec {
         id: "black",
@@ -132,7 +128,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["python"],
         command: "black --quiet --stdin-filename {path} -",
-        install: "uv tool install black",
     },
     ToolSpec {
         id: "isort",
@@ -140,7 +135,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Imports,
         languages: &["python"],
         command: "isort --stdout --filename {path} -",
-        install: "uv tool install isort",
     },
     ToolSpec {
         id: "autopep8",
@@ -148,7 +142,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["python"],
         command: "autopep8 -",
-        install: "uv tool install autopep8",
     },
     ToolSpec {
         id: "yapf",
@@ -156,7 +149,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["python"],
         command: "yapf --quiet",
-        install: "uv tool install yapf",
     },
     ToolSpec {
         id: "autoflake",
@@ -164,7 +156,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Fixer,
         languages: &["python"],
         command: "autoflake --remove-all-unused-imports --stdin-display-name {path} -",
-        install: "uv tool install autoflake",
     },
     ToolSpec {
         id: "usort",
@@ -172,7 +163,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Imports,
         languages: &["python"],
         command: "usort format -",
-        install: "uv tool install usort",
     },
     ToolSpec {
         id: "prettier",
@@ -180,7 +170,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["javascript", "typescript", "tsx", "css", "html", "json", "yaml", "markdown"],
         command: "prettier --stdin-filepath {path}",
-        install: "npm install -g prettier",
     },
     ToolSpec {
         id: "prettierd",
@@ -188,7 +177,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["javascript", "typescript", "tsx", "css", "html", "json", "yaml", "markdown"],
         command: "prettierd {path}",
-        install: "npm install -g @fsouza/prettierd",
     },
     ToolSpec {
         id: "biome",
@@ -196,7 +184,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["javascript", "typescript", "tsx", "json", "css"],
         command: "biome format --stdin-file-path {path}",
-        install: "npm install -g @biomejs/biome",
     },
     ToolSpec {
         id: "dprint",
@@ -204,7 +191,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["javascript", "typescript", "tsx", "json", "markdown", "toml"],
         command: "dprint fmt --stdin {path}",
-        install: "brew install dprint, or cargo install dprint",
     },
     ToolSpec {
         id: "eslint_d",
@@ -212,7 +198,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Fixer,
         languages: &["javascript", "typescript", "tsx"],
         command: "eslint_d --fix-to-stdout --stdin --stdin-filename {path}",
-        install: "npm install -g eslint_d",
     },
     ToolSpec {
         id: "clang-format",
@@ -220,7 +205,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["c", "cpp", "java", "csharp"],
         command: "clang-format --assume-filename={path}",
-        install: "brew install clang-format, or apt install clang-format",
     },
     ToolSpec {
         id: "astyle",
@@ -228,7 +212,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["c", "cpp"],
         command: "astyle",
-        install: "brew install astyle, or apt install astyle",
     },
     ToolSpec {
         id: "shfmt",
@@ -236,7 +219,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["bash"],
         command: "shfmt -filename {path}",
-        install: "brew install shfmt, or go install mvdan.cc/sh/v3/cmd/shfmt@latest",
     },
     ToolSpec {
         id: "beautysh",
@@ -244,7 +226,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["bash"],
         command: "beautysh -",
-        install: "uv tool install beautysh",
     },
     ToolSpec {
         id: "stylua",
@@ -252,7 +233,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["lua"],
         command: "stylua --search-parent-directories --stdin-filepath {path} -",
-        install: "brew install stylua, or cargo install stylua",
     },
     ToolSpec {
         id: "zig-fmt",
@@ -260,7 +240,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["zig"],
         command: "zig fmt --stdin",
-        install: "comes with Zig",
     },
     ToolSpec {
         id: "terraform-fmt",
@@ -268,7 +247,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["hcl"],
         command: "terraform fmt -",
-        install: "brew install terraform",
     },
     ToolSpec {
         id: "tofu-fmt",
@@ -276,7 +254,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["hcl"],
         command: "tofu fmt -",
-        install: "brew install opentofu",
     },
     ToolSpec {
         id: "packer-fmt",
@@ -284,7 +261,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["hcl"],
         command: "packer fmt -",
-        install: "brew install packer",
     },
     ToolSpec {
         id: "nomad-fmt",
@@ -292,7 +268,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["hcl"],
         command: "nomad fmt -",
-        install: "brew install nomad",
     },
     ToolSpec {
         id: "jq",
@@ -300,7 +275,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["json"],
         command: "jq .",
-        install: "brew install jq, or apt install jq",
     },
     ToolSpec {
         id: "fixjson",
@@ -308,7 +282,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["json"],
         command: "fixjson",
-        install: "npm install -g fixjson",
     },
     ToolSpec {
         id: "taplo",
@@ -316,7 +289,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["toml"],
         command: "taplo format -",
-        install: "brew install taplo",
     },
     ToolSpec {
         id: "yamlfmt",
@@ -324,7 +296,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["yaml"],
         command: "yamlfmt -",
-        install: "go install github.com/google/yamlfmt/cmd/yamlfmt@latest",
     },
     ToolSpec {
         id: "mdformat",
@@ -332,7 +303,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["markdown"],
         command: "mdformat -",
-        install: "uv tool install mdformat",
     },
     ToolSpec {
         id: "xmllint",
@@ -340,7 +310,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["xml"],
         command: "xmllint --format -",
-        install: "comes with macOS; apt install libxml2-utils",
     },
     ToolSpec {
         id: "sql-formatter",
@@ -348,7 +317,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["sql"],
         command: "sql-formatter",
-        install: "npm install -g sql-formatter",
     },
     ToolSpec {
         id: "sqlfmt",
@@ -356,7 +324,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["sql"],
         command: "sqlfmt -",
-        install: "uv tool install shandy-sqlfmt",
     },
     ToolSpec {
         id: "pg_format",
@@ -364,7 +331,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["sql"],
         command: "pg_format",
-        install: "brew install pgformatter, or apt install pgformatter",
     },
     ToolSpec {
         id: "swiftformat",
@@ -372,7 +338,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["swift"],
         command: "swiftformat --stdinpath {path}",
-        install: "brew install swiftformat",
     },
     ToolSpec {
         id: "rubocop",
@@ -380,7 +345,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Fixer,
         languages: &["ruby"],
         command: "rubocop --auto-correct-all --fail-level fatal --stderr --force-exclusion --stdin {path}",
-        install: "gem install rubocop",
     },
     ToolSpec {
         id: "standardrb",
@@ -388,7 +352,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Fixer,
         languages: &["ruby"],
         command: "standardrb --fix --fail-level fatal --stderr --stdin {path}",
-        install: "gem install standard",
     },
     ToolSpec {
         id: "nixfmt",
@@ -396,7 +359,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["nix"],
         command: "nixfmt",
-        install: "nix profile install nixpkgs#nixfmt-rfc-style",
     },
     ToolSpec {
         id: "alejandra",
@@ -404,7 +366,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["nix"],
         command: "alejandra --quiet -",
-        install: "nix profile install nixpkgs#alejandra",
     },
     ToolSpec {
         id: "nixpkgs-fmt",
@@ -412,7 +373,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["nix"],
         command: "nixpkgs-fmt",
-        install: "nix profile install nixpkgs#nixpkgs-fmt",
     },
     ToolSpec {
         id: "ormolu",
@@ -420,7 +380,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["haskell"],
         command: "ormolu --stdin-input-file {path}",
-        install: "cabal install ormolu",
     },
     ToolSpec {
         id: "fourmolu",
@@ -428,7 +387,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["haskell"],
         command: "fourmolu --stdin-input-file {path}",
-        install: "cabal install fourmolu",
     },
     ToolSpec {
         id: "stylish-haskell",
@@ -436,7 +394,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["haskell"],
         command: "stylish-haskell",
-        install: "cabal install stylish-haskell",
     },
     ToolSpec {
         id: "ocamlformat",
@@ -444,7 +401,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["ocaml"],
         command: "ocamlformat --enable-outside-detected-project --name {path} -",
-        install: "opam install ocamlformat",
     },
     ToolSpec {
         id: "ocp-indent",
@@ -452,7 +408,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["ocaml"],
         command: "ocp-indent",
-        install: "opam install ocp-indent",
     },
     ToolSpec {
         id: "mix-format",
@@ -460,7 +415,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["elixir"],
         command: "mix format --stdin-filename {path} -",
-        install: "comes with Elixir",
     },
     ToolSpec {
         id: "scalafmt",
@@ -468,7 +422,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["scala"],
         command: "scalafmt --stdin",
-        install: "cs install scalafmt",
     },
     ToolSpec {
         id: "google-java-format",
@@ -476,7 +429,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["java"],
         command: "google-java-format -",
-        install: "brew install google-java-format",
     },
     ToolSpec {
         id: "cmake-format",
@@ -484,7 +436,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["cmake"],
         command: "cmake-format -",
-        install: "uv tool install cmakelang",
     },
     ToolSpec {
         id: "gersemi",
@@ -492,7 +443,6 @@ static TOOLS: &[ToolSpec] = &[
         kind: Kind::Formatter,
         languages: &["cmake"],
         command: "gersemi -",
-        install: "uv tool install gersemi",
     },
 ];
 
@@ -542,8 +492,8 @@ pub fn tool_presets_json() -> String {
                 "languages": tool.languages,
                 "command": tool.command,
                 "program": tool.program(),
-                "install": tool.install,
-                "found": crate::presets::on_path(tool.program()),
+                "install": tool.install(),
+                "found": crate::install::resolve(tool.program(), None).is_some(),
             })
         }))
         .collect();

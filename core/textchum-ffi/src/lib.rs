@@ -269,7 +269,7 @@ pub unsafe extern "C" fn tc_run_start(
 }
 
 /// What changed in a run's output since it was last read: `{first,
-/// reset, running, command, lines: [{text, spans, places}]}` — see
+/// reset, running, exit, command, lines: [{text, spans, places}]}` — see
 /// [`textchum_core::output::changes_json`]. Null for an id there is no
 /// run for. Free with [`tc_string_free`].
 ///
@@ -7268,6 +7268,110 @@ pub unsafe extern "C" fn tc_lsp_executable_exists(
     textchum_lsp::registry::executable_exists(command)
 }
 
+/// What is missing for the document at `path` — language servers,
+/// debuggers and save preprocessors found absent this session — with
+/// the ways each can be installed here, the one that suits the project
+/// first: `[{program, purpose, project, notes, methods: [{installer,
+/// scope, title, command, directory, runs}]}]`. See
+/// [`textchum_core::install`]. Free with [`tc_string_free`].
+///
+/// # Safety
+/// The pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_install_offers(path: *const c_char, len: usize) -> *mut c_char {
+    let Some(path) = (unsafe { str_from_raw(path, len) }) else { return std::ptr::null_mut() };
+    catch_unwind(|| owned_c_string(textchum_core::install::offers_json(std::path::Path::new(path))))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Records that `program` was needed for `project` and is not there,
+/// for [`tc_install_offers`] to offer; `purpose` says what it was for.
+///
+/// # Safety
+/// Each pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_install_note_missing(
+    program: *const c_char,
+    program_len: usize,
+    project: *const c_char,
+    project_len: usize,
+    purpose: *const c_char,
+    purpose_len: usize,
+) {
+    let (Some(program), Some(project), Some(purpose)) = (
+        unsafe { str_from_raw(program, program_len) },
+        unsafe { str_from_raw(project, project_len) },
+        unsafe { str_from_raw(purpose, purpose_len) },
+    ) else {
+        return;
+    };
+    textchum_core::install::note_missing(program, std::path::Path::new(project), purpose);
+}
+
+/// Forgets `program` as missing: it was just installed.
+///
+/// # Safety
+/// The pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_install_forget(program: *const c_char, len: usize) {
+    if let Some(program) = unsafe { str_from_raw(program, len) } {
+        textchum_core::install::forget(program);
+    }
+}
+
+/// Whether the catalog knows how `program` is installed.
+///
+/// # Safety
+/// The pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_install_knows(program: *const c_char, len: usize) -> bool {
+    unsafe { str_from_raw(program, len) }.is_some_and(textchum_core::install::knows)
+}
+
+/// The command line that runs `program` for `project` (empty for
+/// none), as a JSON array of words, program first: from the project's
+/// environment, `PATH`, the per-user folders, or `go tool`. `null` when
+/// it is nowhere. Free with [`tc_string_free`].
+///
+/// # Safety
+/// Each pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_install_resolve(
+    program: *const c_char,
+    program_len: usize,
+    project: *const c_char,
+    project_len: usize,
+) -> *mut c_char {
+    let (Some(program), Some(project)) =
+        (unsafe { str_from_raw(program, program_len) }, unsafe { str_from_raw(project, project_len) })
+    else {
+        return std::ptr::null_mut();
+    };
+    let project = (!project.is_empty()).then(|| std::path::Path::new(project));
+    let answer = match textchum_core::install::resolve(program, project) {
+        Some(words) => serde_json::json!(words),
+        None => serde_json::Value::Null,
+    };
+    owned_c_string(answer.to_string())
+}
+
+/// The environment a program run for `project` gets on top of the
+/// editor's: `{"PATH": …, "VIRTUAL_ENV": …}`, the project's environment
+/// active. Free with [`tc_string_free`].
+///
+/// # Safety
+/// The pointer/length pair must describe readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_install_environment(project: *const c_char, len: usize) -> *mut c_char {
+    let Some(project) = (unsafe { str_from_raw(project, len) }) else { return std::ptr::null_mut() };
+    let pairs: serde_json::Map<String, serde_json::Value> =
+        textchum_core::install::environment(std::path::Path::new(project))
+            .into_iter()
+            .map(|(key, value)| (key, value.into()))
+            .collect();
+    owned_c_string(serde_json::Value::Object(pairs).to_string())
+}
+
 /// The server registry as JSON: an array of
 /// `{"id", "command", "languages": [...], "installHint"}`, so a settings
 /// screen can list what there is to configure rather than only what has
@@ -7286,7 +7390,7 @@ pub extern "C" fn tc_lsp_registry_json() -> *mut c_char {
                 "id": spec.id,
                 "command": command,
                 "languages": spec.languages,
-                "installHint": spec.install_hint,
+                "installHint": spec.install_hint(),
             })
         })
         .collect();

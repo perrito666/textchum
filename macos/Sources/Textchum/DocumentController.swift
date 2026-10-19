@@ -5926,6 +5926,8 @@ final class DocumentController: NSResponder {
             applyWholeDocument(output)
             return .clean
         case .failure(let failure):
+            // A formatter that is not installed is now on offer.
+            workbench?.refreshInstallOffers()
             return .failed(failure)
         }
     }

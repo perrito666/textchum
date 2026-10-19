@@ -39,12 +39,19 @@ impl From<&ServerSpec> for ServerConfig {
             command: spec.command.into(),
             args: spec.args.iter().map(|s| s.to_string()).collect(),
             languages: spec.languages.iter().map(|s| s.to_string()).collect(),
-            install_hint: spec.install_hint.into(),
+            install_hint: spec.install_hint(),
         }
     }
 }
 
 type InstanceKey = (String, PathBuf);
+
+/// The program a command names, without the folder it may be given in:
+/// what the install catalog knows it by.
+fn program_name(command: &str) -> &str {
+    let program = command.split_whitespace().next().unwrap_or(command);
+    Path::new(program).file_name().and_then(|name| name.to_str()).unwrap_or(program)
+}
 
 pub struct Pool {
     events: EventSender,
@@ -286,8 +293,9 @@ impl Pool {
             let install_hint = entry
                 .get("install")
                 .and_then(|v| v.as_str())
-                .unwrap_or("configured in config.json under lsp.servers")
-                .to_owned();
+                .map(str::to_owned)
+                .or_else(|| textchum_core::install::hint(program_name(&command)))
+                .unwrap_or_else(|| "configured in config.json under lsp.servers".to_owned());
             return Some(ServerConfig {
                 id: id.to_owned(),
                 command,
@@ -484,12 +492,14 @@ impl Pool {
                     ));
                 }
             }
+            let install_hint = textchum_core::install::hint(program_name(&command))
+                .unwrap_or_else(|| format!("configured in Settings for {language}"));
             Some(ServerConfig {
                 id: format!("custom:{command}"),
                 command,
                 args,
                 languages: vec![language.to_owned()],
-                install_hint: format!("configured in Settings for {language}"),
+                install_hint,
             })
         }
     }
@@ -658,14 +668,31 @@ impl Pool {
                             std::env::var("PATH").unwrap_or_default()
                         ));
                         self.failed.insert(key);
+                        // The catalog's own sentence offers to install
+                        // what it knows; a server it does not know keeps
+                        // the hint its configuration gave.
+                        let program = program_name(&config.command);
+                        let message = if textchum_core::install::knows(program) {
+                            textchum_core::install::note_missing(
+                                program,
+                                &root,
+                                &textchum_core::i18n::fill(
+                                    &textchum_core::i18n::tr("{} language server"),
+                                    &[language],
+                                ),
+                            );
+                            textchum_core::install::not_installed_message(program, Some(&root))
+                        } else {
+                            textchum_core::i18n::fill(
+                                &textchum_core::i18n::tr("{} is not installed (install with: {})"),
+                                &[&config.command, &config.install_hint],
+                            )
+                        };
                         let _ = self.events.send(Event::ServerStatus {
                             server: config.id.clone(),
                             root: root.to_string_lossy().into_owned(),
                             status: "not-found".into(),
-                            message: format!(
-                                "{} is not installed (install with: {})",
-                                config.command, config.install_hint
-                            ),
+                            message,
                         });
                         // One server missing is one feature missing:
                         // the others still start.
@@ -678,9 +705,16 @@ impl Pool {
         if serving.is_empty() {
             return;
         }
-        let version = 1;
-        self.versions.insert(path.to_owned(), version);
+        // Announcing a document again — after a server was installed,
+        // say — reaches only the servers that do not have it yet: one
+        // that does would be told of an open it already saw, which the
+        // protocol forbids, and its version count would start over.
+        let announced = self.documents.get(path).cloned().unwrap_or_default();
+        let version = *self.versions.entry(path.to_owned()).or_insert(1);
         for key in &serving {
+            if announced.contains(key) {
+                continue;
+            }
             self.instances[key].send(Command::DidOpen {
                 path: path.to_owned(),
                 language: language.to_owned(),
@@ -689,7 +723,13 @@ impl Pool {
             });
             self.touch(key);
         }
-        self.documents.insert(path.to_owned(), serving);
+        let mut documents = announced;
+        for key in serving {
+            if !documents.contains(&key) {
+                documents.push(key);
+            }
+        }
+        self.documents.insert(path.to_owned(), documents);
         self.sweep_idle();
     }
 

@@ -137,6 +137,10 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
             self?.focusedDocument?.showFileProperties(nil)
         }
         // A breadcrumb's sibling chosen is a jump in the document in front.
+        statusBar.onInstall = { [weak self] in
+            guard let self, let delegate = NSApp.delegate as? AppDelegate else { return }
+            delegate.offerInstalls(in: self)
+        }
         statusBar.onCrumb = { [weak self] offset in
             (NSApp.delegate as? AppDelegate)?.recordJumpOrigin()
             self?.focusedDocument?.goToCrumb(offset: offset)
@@ -935,10 +939,21 @@ final class Workbench: NSWindowController, NSWindowDelegate, NSSplitViewDelegate
         statusBar.show(document.statusInfo)
     }
 
+    /// Shows, in the status bar, what the focused document needs and
+    /// does not have. Asked when the focus moves and when something is
+    /// found missing or installed, not at every caret move: it looks on
+    /// disk.
+    func refreshInstallOffers() {
+        let path = focusedDocument?.coreDocument.path ?? focusedDocument?.projectRoot
+        let programs = path.map { CoreInstall.offers(forPath: $0).map(\.program) } ?? []
+        statusBar.showMissing(programs)
+    }
+
     func refreshChrome(for document: DocumentController) {
         refreshTabs()
         refreshPreview()
         refreshStatus()
+        refreshInstallOffers()
         guard focusedDocument === document, let window else { return }
         // The tree follows the focused file's project, and the marks
         // that say "this one is in front" follow the focus.

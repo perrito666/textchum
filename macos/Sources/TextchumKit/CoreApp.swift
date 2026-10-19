@@ -226,6 +226,9 @@ public final class CoreApp {
         /// Everything is drawn again from line 0.
         public let reset: Bool
         public let running: Bool
+        /// The exit code once the run has one; nil while it runs, or
+        /// when a signal stopped it.
+        public let exit: Int?
         public let command: String
         public let lines: [Line]
     }

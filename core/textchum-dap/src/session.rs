@@ -128,6 +128,7 @@ impl Session {
         let mut child = ProcessCommand::new(program)
             .args(args)
             .current_dir(&launch.cwd)
+            .envs(textchum_core::install::environment(&launch.cwd))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

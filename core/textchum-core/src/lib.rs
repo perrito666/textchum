@@ -36,6 +36,7 @@ pub mod hugo;
 pub mod i18n;
 pub mod icons;
 pub mod indent;
+pub mod install;
 pub mod inlay;
 pub mod keys;
 pub mod local_history;

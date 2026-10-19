@@ -884,6 +884,9 @@ impl Shell {
                     crate::workbench::Workbench::for_each(|workbench| {
                         if workbench.run_panel.run_id() == Some(id) {
                             workbench.run_panel.handle(&status);
+                            if status == "exited" {
+                                crate::installer::finished(workbench, id);
+                            }
                         }
                     });
                 }
@@ -948,8 +951,16 @@ impl Shell {
                         // It goes to the window the user is in, not to
                         // whichever page happens to be first in the map.
                         Shell::instance().notify(&text);
+                        if status == "not-found" {
+                            crate::workbench::Workbench::for_each(|workbench| crate::installer::refresh(workbench));
+                        }
                         if let Some(workbench) = crate::workbench::Workbench::active() {
-                            workbench.explain(&text);
+                            // What is missing and can be installed comes
+                            // with the button that installs it (6.4).
+                            let install = tr("Install…");
+                            let offer = (status == "not-found" && workbench.install_label().is_some())
+                                .then_some((install.as_str(), "win.install-missing"));
+                            workbench.explain_offering(&text, offer);
                         }
                     }
                 }

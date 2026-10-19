@@ -138,8 +138,10 @@ impl Runs {
     }
 
     /// What changed in the run's output since it was last read, as the
-    /// JSON [`changes_json`] makes, with `running`; None for an id there
-    /// is no run for. Reading answers the `output` event.
+    /// JSON [`changes_json`] makes, with `running`, and `exit`: the exit
+    /// code once it has one, null while it runs or when it was stopped
+    /// by a signal. None for an id there is no run for. Reading answers
+    /// the `output` event.
     pub fn read(&self, id: u64) -> Option<String> {
         let state = self.runs.get(&id)?;
         let mut state = state.lock().ok()?;
@@ -150,6 +152,7 @@ impl Runs {
             None => serde_json::json!({"first": state.transcript.lines().len(), "reset": false, "lines": []}),
         };
         answer["running"] = running.into();
+        answer["exit"] = state.finished.flatten().into();
         answer["command"] = state.command.clone().into();
         Some(answer.to_string())
     }
@@ -432,6 +435,7 @@ mod tests {
         assert!(texts.contains(&"always"), "colour asked for: {texts:?}");
         assert!(texts.iter().any(|text| text.contains('3')), "the exit is noted: {texts:?}");
         assert_eq!(read["running"], false);
+        assert_eq!(read["exit"], 3);
         assert!(!runs.running(id));
     }
 

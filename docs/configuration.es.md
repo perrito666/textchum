@@ -419,8 +419,11 @@ cadena en Settings ▸ Preprocessors, y en el formulario que añade una —
 lista las herramientas cuya línea de comando el editor conoce para el
 lenguaje en cuestión, marca cuáles están instaladas, y escribe la línea
 al elegir una. Una herramienta que no está instalada se ofrece igual,
-con el comando que la instala. **Known servers** hace lo mismo para el
-comando del servidor en Language Servers.
+con el comando que la instala, y el primer guardado que la necesita
+ofrece instalarla (ver
+[Instalar lo que falta](language-servers.md#instalar-lo-que-falta)).
+**Known servers** hace lo mismo para el comando del servidor en
+Language Servers.
 
 | Herramienta | Lenguajes | La línea que escribe |
 |---|---|---|
@@ -509,9 +512,10 @@ que se usó un perfil: lo que escribió es tuyo para editar en Language
 Servers y Preprocessors, y el botón dice **Applied** mientras la
 configuración siga diciendo todo lo que el perfil escribiría.
 
-Cada perfil lista los programas que ejecuta y si cada uno se encontró
-en `PATH`; el que falta muestra el comando que lo instala. El editor no
-instala nada por su cuenta.
+Cada perfil lista los programas que ejecuta y si cada uno se encontró;
+el que falta muestra el comando que lo instala. Aplicar un perfil no
+los instala; el editor ofrece hacerlo la primera vez que hace falta uno
+(ver [Instalar lo que falta](language-servers.md#instalar-lo-que-falta)).
 
 Todavía no: un perfil se aplica a todos los proyectos (las entradas que
 escribe se pueden mover a un proyecto a mano). Y el perfil de
