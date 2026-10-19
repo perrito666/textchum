@@ -866,7 +866,16 @@ impl Workbench {
 
     /// The notification area's text, for the smoke test.
     pub fn notice_text(&self) -> String {
-        self.status_notice.label().map(|text| text.to_string()).unwrap_or_default()
+        self.status_notice
+            .child()
+            .and_downcast::<gtk::Label>()
+            .map(|label| label.text().to_string())
+            .unwrap_or_default()
+    }
+
+    /// How wide the notification area asks to be, for the smoke test.
+    pub(crate) fn notice_natural_width(&self) -> i32 {
+        self.status_notice.measure(gtk::Orientation::Horizontal, -1).1
     }
 
     /// An explanation rather than a note: it wraps, and it waits to be
@@ -7783,7 +7792,17 @@ fn serde_json_string(text: &str) -> String {
 /// tooltip.
 fn set_notice_label(button: &gtk::Button, text: &str) {
     let first_line = text.lines().next().unwrap_or(text);
-    button.set_label(first_line);
+    // A label of its own, shortened at the end and kept to a width: a
+    // long notice must not widen the window past the screen.
+    let label = button.child().and_downcast::<gtk::Label>().unwrap_or_else(|| {
+        let label = gtk::Label::new(None);
+        button.set_child(Some(&label));
+        label
+    });
+    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    label.set_max_width_chars(60);
+    label.set_xalign(1.0);
+    label.set_text(first_line);
     button.set_tooltip_text(Some(text));
 }
 

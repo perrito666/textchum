@@ -2176,8 +2176,16 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
                 eprintln!("FAIL: the notification area showed {shown:?}");
                 return 1;
             }
+            // A long one is cut short, not let widen the window past the
+            // screen: a window opens at what its content asks for.
+            workbench.set_notice(&"pyright-langserver is not installed ".repeat(20));
+            let wide = workbench.notice_natural_width();
+            if wide > 800 {
+                eprintln!("FAIL: a long notice asks for {wide} pixels");
+                return 1;
+            }
         }
-        println!("notification area ok (the first line of a notice)");
+        println!("notification area ok (the first line of a notice, a long one cut short)");
 
         // Local history: each save keeps its version, and the one the
         // first save replaced; the list shows what restoring each would
