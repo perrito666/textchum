@@ -2728,9 +2728,17 @@ func runSmokeTest() -> Int32 {
             print("FAIL: the refreshed listing does not show the new file")
             return 1
         }
+        // A file saved into a listed folder — by the editor or anything
+        // else — shows without coming back to the app.
+        try? "c\n".write(to: treeRoot.appendingPathComponent("three.txt"), atomically: true, encoding: .utf8)
+        spin(untilTrue: { refreshState.children(of: rootKey, globs: [".*"])?.count == 3 }, seconds: 5)
+        guard refreshState.children(of: rootKey, globs: [".*"])?.count == 3 else {
+            print("FAIL: a file made in a listed folder did not show in the tree")
+            return 1
+        }
         try? FileManager.default.removeItem(at: treeRoot)
     }
-    print("tree refresh ok (listings read again in place, never forgotten)")
+    print("tree refresh ok (listings read again in place, never forgotten, a new file shows on its own)")
 
     // Word-wise selection from a selection the editor did not make —
     // a double-clicked word — grows the same way in both directions:

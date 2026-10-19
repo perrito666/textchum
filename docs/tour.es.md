@@ -34,7 +34,9 @@ abajo el árbol de archivos de ese proyecto.
 La barra de título lleva los datos del documento — codificación,
 tamaño, lenguaje y el número de problemas en cuanto el servidor de
 lenguaje opina. El árbol acompaña: cambiar de pestaña despliega la
-ruta del archivo actual y lo resalta.
+ruta del archivo actual y lo resalta, y un archivo guardado, creado o
+borrado en una carpeta que muestra — por el editor, una refactorización
+o una orden en una terminal — aparece o desaparece solo.
 
 Al hacer clic derecho en el texto aparece el menú del editor: saltar a
 la definición, buscar referencias, renombrar el símbolo, el diagnóstico

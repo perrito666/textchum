@@ -2218,6 +2218,26 @@ fn refresh_file_trees() {
     });
 }
 
+/// Brings a folder's rows to what it holds now, touching only the rows
+/// that changed: a row that stays keeps its place in the model, and a
+/// folder open under it stays open.
+fn sync_listing(store: &gtk::gio::ListStore, wanted: &[String]) {
+    let at = |index: u32| store.item(index).and_then(|item| item.downcast::<gtk::StringObject>().ok()).map(|item| item.string().to_string());
+    let mut index = 0;
+    while index < store.n_items() {
+        if at(index).is_some_and(|path| wanted.contains(&path)) {
+            index += 1;
+        } else {
+            store.remove(index);
+        }
+    }
+    for (position, path) in wanted.iter().enumerate() {
+        if at(position as u32).as_deref() != Some(path.as_str()) {
+            store.insert(position as u32, &gtk::StringObject::new(path));
+        }
+    }
+}
+
 /// The icon pack's image for a file, if a pack is loaded and has one.
 ///
 /// The language is the one the file's name implies rather than whatever
@@ -2235,7 +2255,7 @@ fn packed_icon(path: &Path) -> Option<std::path::PathBuf> {
     icons::icon_for(&name, language, light)
 }
 
-fn build_file_tree(root: &Path) -> gtk::ListView {
+pub(crate) fn build_file_tree(root: &Path) -> gtk::ListView {
     // The configuration decides what the tree hides: dotfiles by
     // default, plus whatever globs the workspace section adds.
     let hide_globs: Rc<Vec<String>> = Rc::new(
@@ -2244,37 +2264,70 @@ fn build_file_tree(root: &Path) -> gtk::ListView {
             .borrow()
             .hide_globs(Some(&root.to_string_lossy())),
     );
-    let children_of = {
+    // What a folder holds, as the tree lists it.
+    let listing = {
         let hide_globs = Rc::clone(&hide_globs);
-        move |path: &Path| -> gtk::gio::ListStore {
-        let store = gtk::gio::ListStore::new::<gtk::StringObject>();
-        let mut entries: Vec<(bool, String)> = std::fs::read_dir(path)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter_map(|entry| {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                if workspace::is_hidden(&name, &hide_globs) {
-                    return None;
-                }
-                let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
-                Some((is_dir, entry.path().to_string_lossy().into_owned()))
-            })
-            .collect();
-        // Directories first, then case-insensitive by name.
-        entries.sort_by_key(|(is_dir, path)| {
-            (
-                !*is_dir,
-                Path::new(path)
-                    .file_name()
-                    .map(|name| name.to_string_lossy().to_lowercase())
-                    .unwrap_or_default(),
-            )
-        });
-        for (_, path) in entries {
-            store.append(&gtk::StringObject::new(&path));
+        move |path: &Path| -> Vec<String> {
+            let mut entries: Vec<(bool, String)> = std::fs::read_dir(path)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter_map(|entry| {
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    if workspace::is_hidden(&name, &hide_globs) {
+                        return None;
+                    }
+                    let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                    Some((is_dir, entry.path().to_string_lossy().into_owned()))
+                })
+                .collect();
+            // Directories first, then case-insensitive by name.
+            entries.sort_by_key(|(is_dir, path)| {
+                (
+                    !*is_dir,
+                    Path::new(path)
+                        .file_name()
+                        .map(|name| name.to_string_lossy().to_lowercase())
+                        .unwrap_or_default(),
+                )
+            });
+            entries.into_iter().map(|(_, path)| path).collect()
         }
-        store
+    };
+    // Each folder listed is watched, so a file made or taken away by
+    // anything — a save, a refactoring, a checkout in a terminal — shows
+    // in the tree. The watches live as long as the tree.
+    let monitors: Rc<RefCell<Vec<gtk::gio::FileMonitor>>> = Rc::new(RefCell::new(Vec::new()));
+    let children_of = {
+        let listing = Rc::new(listing);
+        move |path: &Path| -> gtk::gio::ListStore {
+            let store = gtk::gio::ListStore::new::<gtk::StringObject>();
+            for entry in listing(path) {
+                store.append(&gtk::StringObject::new(&entry));
+            }
+            let watch = gtk::gio::File::for_path(path)
+                .monitor_directory(gtk::gio::FileMonitorFlags::WATCH_MOVES, gtk::gio::Cancellable::NONE);
+            if let Ok(monitor) = watch {
+                let (listing, weak_store, folder) = (Rc::clone(&listing), store.downgrade(), path.to_path_buf());
+                monitor.connect_changed(move |_, _, _, event| {
+                    use gtk::gio::FileMonitorEvent;
+                    if !matches!(
+                        event,
+                        FileMonitorEvent::Created
+                            | FileMonitorEvent::Deleted
+                            | FileMonitorEvent::MovedIn
+                            | FileMonitorEvent::MovedOut
+                            | FileMonitorEvent::Renamed
+                    ) {
+                        return;
+                    }
+                    if let Some(store) = weak_store.upgrade() {
+                        sync_listing(&store, &listing(&folder));
+                    }
+                });
+                monitors.borrow_mut().push(monitor);
+            }
+            store
         }
     };
 

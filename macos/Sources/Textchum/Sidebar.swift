@@ -134,6 +134,7 @@ final class FileTreeState: ObservableObject {
                 MainActor.assumeIsolated {
                     self.pendingListings.remove(url)
                     self.listings[url] = children
+                    self.watchListedFolders()
                 }
             }
         }
@@ -165,8 +166,13 @@ final class FileTreeState: ObservableObject {
     /// forgetting the listings instead redrew it from nothing, rows
     /// saying Loading… in between.
     func refreshListings() {
-        guard !listings.isEmpty else { return }
-        let snapshot = listings
+        refreshListings(of: Array(listings.keys))
+    }
+
+    /// Reads the listed folders among `urls` again, the same way.
+    private func refreshListings(of urls: [URL]) {
+        let snapshot = listings.filter { urls.contains($0.key) }
+        guard !snapshot.isEmpty else { return }
         let globs = listingGlobs
         DispatchQueue.global(qos: .utility).async {
             var fresh: [URL: [FileNode]] = [:]
@@ -184,6 +190,67 @@ final class FileTreeState: ObservableObject {
             }
         }
     }
+    // MARK: Following the disk
+
+    private var stream: FSEventStreamRef?
+    private var watchedPaths: [String] = []
+
+    /// The stream reports to this state, unretained: it stops with it.
+    deinit {
+        if let stream {
+            FSEventStreamStop(stream)
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+        }
+    }
+
+    /// Watches the folders listed, so a file made or taken away by
+    /// anything — a save, a refactoring, a checkout in a terminal — shows
+    /// in the tree: the folder it changed in is read again. Only the
+    /// outermost are watched, since a watch reports every folder below.
+    private func watchListedFolders() {
+        let paths = listings.keys.map { $0.resolvingSymlinksInPath().path }.sorted()
+        var roots: [String] = []
+        for path in paths where !roots.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
+            roots.append(path)
+        }
+        guard roots != watchedPaths else { return }
+        if let stream {
+            FSEventStreamStop(stream)
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            self.stream = nil
+        }
+        watchedPaths = roots
+        guard !roots.isEmpty else { return }
+        var context = FSEventStreamContext(
+            version: 0, info: Unmanaged.passUnretained(self).toOpaque(), retain: nil, release: nil,
+            copyDescription: nil)
+        let callback: FSEventStreamCallback = { _, info, _, paths, _, _ in
+            guard let info else { return }
+            let state = Unmanaged<FileTreeState>.fromOpaque(info).takeUnretainedValue()
+            let changed = (Unmanaged<CFArray>.fromOpaque(paths).takeUnretainedValue() as NSArray) as? [String] ?? []
+            // Delivered on the main queue, as the stream is scheduled.
+            MainActor.assumeIsolated { state.foldersChanged(changed) }
+        }
+        guard
+            let stream = FSEventStreamCreate(
+                nil, callback, &context, roots as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.3,
+                FSEventStreamCreateFlags(kFSEventStreamCreateFlagUseCFTypes))
+        else { return }
+        FSEventStreamSetDispatchQueue(stream, .main)
+        FSEventStreamStart(stream)
+        self.stream = stream
+    }
+
+    /// Folders that changed on disk: the listed ones among them are read
+    /// again.
+    func foldersChanged(_ paths: [String]) {
+        let changed = Set(paths.map { ($0 as NSString).standardizingPath })
+        let urls = listings.keys.filter { changed.contains(($0.resolvingSymlinksInPath().path as NSString).standardizingPath) }
+        refreshListings(of: urls)
+    }
+
     /// The file last revealed in the tree, briefly emphasized.
     @Published var highlighted: URL?
 

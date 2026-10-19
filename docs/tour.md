@@ -32,7 +32,9 @@ file tree below.
 The title bar carries the facts about the document — encoding, size,
 language, and the problem count once a language server has an opinion.
 The tree follows along: switching tabs expands the path to the current
-file and highlights it.
+file and highlights it, and a file saved, made or removed in a folder it
+shows — by the editor, a refactoring or a command in a terminal — appears
+or goes on its own.
 
 Right-clicking in the text opens the editor's own menu: Jump to
 Definition, Find References, Rename Symbol, the diagnostics of the
