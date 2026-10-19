@@ -524,6 +524,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         }
                         return
                     }
+                    if allArguments[flagIndex + 1] == "install" {
+                        // scope = a project, query = a program to call
+                        // missing there; the list of ways to install it
+                        // opens over the window once a document is up.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                guard let self, let workbench = Workbench.all.first else { return }
+                                CoreInstall.noteMissing(
+                                    program: query, project: scope, purpose: t("{} language server", "python"))
+                                workbench.refreshInstallOffers()
+                                self.offerInstalls(in: workbench)
+                            }
+                        }
+                        return
+                    }
                     if allArguments[flagIndex + 1] == "typefiles" {
                         self?.showQuickFinder(mode: .files)
                         let typedScope =
@@ -1151,7 +1166,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Core events
 
     /// Servers already reported missing, so the alert shows once each.
-    private var reportedMissingServers: Set<String> = []
+    var reportedMissingServers: Set<String> = []
+
+    /// Installs running in a run panel, by run id: what each installs.
+    var pendingInstalls: [UInt64: CoreInstall.Offer] = [:]
+    /// What to do again once a program is installed: the debugging that
+    /// could not start without it.
+    var retryAfterInstall: [String: () -> Void] = [:]
+    /// The list of what is missing and the ways to install it.
+    let installPanel = ListPanel()
 
     private func handleCoreEvent(_ event: CoreApp.Event) {
         switch event {
@@ -1181,6 +1204,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case let .run(id, status):
             for workbench in Workbench.all where workbench.runPanel.runID == id {
                 workbench.runPanel.handle(status: status)
+                if status == "exited" {
+                    installFinished(run: id, in: workbench)
+                }
             }
         case let .serverStatus(server, root, status, message):
             // Not a change of state: what the server is busy with right
@@ -1211,6 +1237,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if status == "not-found", !reportedMissingServers.contains(server) {
                 reportedMissingServers.insert(server)
                 notify(t("No language server for this project") + ": " + message)
+            }
+            if status == "not-found" {
+                for workbench in Workbench.all {
+                    workbench.refreshInstallOffers()
+                }
             }
             // A healthy server that stops running gets restarted with
             // backoff; "closed" is our own orderly shutdown and needs
@@ -1322,6 +1353,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func restartLanguageServers() {
         guard let coreApp else { return }
         coreApp.lspRestartServers()
+        reportedMissingServers.removeAll()
+        for editor in editors {
+            editor.reannounceLSP()
+        }
+    }
+
+    /// Lets the pool try the servers that were missing, and announces
+    /// every open document again: a server that now starts gets it, one
+    /// that already had it is not told twice. A formatter is picked up at
+    /// the next save.
+    func startWhatWasMissing() {
+        coreApp?.lspConfigure(json: combinedLSPConfiguration)
         reportedMissingServers.removeAll()
         for editor in editors {
             editor.reannounceLSP()
@@ -2567,7 +2610,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// The pool configuration: server entries plus workspace behavior.
-    private var combinedLSPConfiguration: String {
+    var combinedLSPConfiguration: String {
         "{\"lsp\":\(config?.lspJSON ?? "{}"),\"workspace\":\(config?.workspaceJSON ?? "{}")}"
     }
 
@@ -2753,6 +2796,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             panel.begin(id: id, title: t("Debug {}", runnable.name))
         case .failure(let error):
             workbench.focusedDocument?.showHint(error.message)
+            // A debugger that is not installed: asked for just now, so
+            // the ways to install it are offered at once, and debugging
+            // starts again once one of them worked.
+            let path = workbench.focusedDocument?.coreDocument.path ?? runnable.cwd
+            if let offer = CoreInstall.offers(forPath: path).first(where: { $0.purpose == t("debugger") }) {
+                retryAfterInstall[offer.program] = { [weak self, weak workbench] in
+                    guard let self, let workbench else { return }
+                    self.debug(runnable, in: workbench)
+                }
+                workbench.refreshInstallOffers()
+                offerInstalls(in: workbench)
+            }
         }
     }
 
@@ -3457,6 +3512,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         appMenu.addItem(
             withTitle: t("Install Grammar…"),
             action: #selector(installGrammar(_:)),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(
+            withTitle: t("Install Missing Tools…"),
+            action: #selector(installMissingTools(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(.separator())

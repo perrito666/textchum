@@ -10,6 +10,8 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use textchum_core::i18n::tr;
+
 #[derive(Debug)]
 pub struct Failure {
     pub command: String,
@@ -60,9 +62,30 @@ pub fn run(
                     .replace("{edition}", &edition)
             })
             .collect();
-        let Some((program, arguments)) = words.split_first() else {
+        let Some(program) = words.first() else {
             continue;
         };
+        // Found where the core finds language servers: the project's
+        // environment, then PATH, then the per-user folders installers
+        // write to. One the catalog knows how to install is noted as
+        // missing, so the editor can offer to install it.
+        let words = match textchum_core::install::resolve(program, directory) {
+            Some(mut line) => {
+                line.extend(words[1..].iter().cloned());
+                line
+            }
+            None if textchum_core::install::knows(program) => {
+                if let Some(directory) = directory {
+                    textchum_core::install::note_missing(program, directory, &tr("save formatter"));
+                }
+                return Err(Failure {
+                    command: command.clone(),
+                    details: textchum_core::install::not_installed_message(program, directory),
+                });
+            }
+            None => words,
+        };
+        let (program, arguments) = words.split_first().expect("a program");
         match pipe(&current, program, arguments, directory) {
             Ok(output) => {
                 if output.is_empty() && !current.is_empty() {
@@ -100,6 +123,7 @@ fn pipe(
         .stderr(Stdio::piped());
     if let Some(directory) = directory.filter(|d| d.is_dir()) {
         command.current_dir(directory);
+        command.envs(textchum_core::install::environment(directory));
     }
     let mut child = command.spawn().map_err(|error| error.to_string())?;
 

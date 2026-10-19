@@ -13,6 +13,7 @@ mod paths;
 mod path_actions;
 mod preprocessors;
 mod debug_panel;
+mod installer;
 mod run_panel;
 mod spell;
 mod session;
@@ -2099,6 +2100,114 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
             workbench.run_panel.hide();
         }
         println!("run panel ok (output as it comes, its place walked, the end said)");
+
+        // A program a page needs and does not have is offered for
+        // installing (6.4): a missing save formatter says it can be
+        // installed and the status bar offers it, an install run in the
+        // panel is told apart by how it ended, and what it put into the
+        // project's environment is found there and run from there.
+        {
+            let project = std::env::temp_dir().join(format!("textchum-gtk-install-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(project.join(".venv/bin"));
+            let _ = std::fs::write(project.join("pyproject.toml"), "[project]\nname = \"shop\"\n");
+            let _ = std::fs::write(project.join(".venv/bin/python"), "");
+            let file = project.join("shop.py");
+            let _ = std::fs::write(&file, "x = 1\n");
+            let program = "mdformat";
+            if textchum_core::install::resolve(program, Some(&project)).is_some() {
+                eprintln!("note: {program} is installed here; install smoke skipped");
+            } else {
+                let failed = preprocessors::run(&[format!("{program} -")], "x\n", Some(&project), None, None);
+                if !failed.as_ref().is_err_and(|failure| failure.details.to_lowercase().contains("install")) {
+                    eprintln!("FAIL: a missing formatter said {:?}", failed.map_err(|failure| failure.details));
+                    return 1;
+                }
+                let before = workbench.selected().and_then(|page| page.path().borrow().clone());
+                workbench.open(Some(file.clone()), None);
+                for _ in 0..20 {
+                    context.iteration(false);
+                }
+                installer::refresh(&workbench);
+                // The page's language server may be missing here too, so
+                // the bar may count more than this one.
+                let missing = |program: &str| {
+                    textchum_core::install::missing_for(&file).iter().any(|entry| entry.program == program)
+                };
+                let offered = workbench.install_label();
+                if offered.is_none() || !missing(program) {
+                    eprintln!("FAIL: the status bar offers {offered:?}");
+                    return 1;
+                }
+                let wait_for_end = |what: &str| -> bool {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+                    while workbench.run_panel.status_text() != textchum_core::i18n::tr("finished") {
+                        context.iteration(true);
+                        if std::time::Instant::now() > deadline {
+                            eprintln!("FAIL: {what} never finished: {:?}", workbench.run_panel.shown_text());
+                            return false;
+                        }
+                    }
+                    for _ in 0..20 {
+                        context.iteration(false);
+                    }
+                    true
+                };
+                // An install that fails is said to have failed, and what
+                // it was for is still offered.
+                installer::run_install(&workbench, program, "exit 3", &project);
+                if !wait_for_end("the failing install") {
+                    return 1;
+                }
+                let failure = textchum_core::i18n::fill(
+                    &textchum_core::i18n::tr("Installing {} failed; the run panel has what the installer said."),
+                    &[program],
+                );
+                let said = shell::Shell::instance().notices.borrow().all().iter().any(|notice| notice.text == failure);
+                if workbench.run_panel.exit_code() != Some(3)
+                    || !said
+                    || workbench.install_label().is_none()
+                    || !missing(program)
+                {
+                    eprintln!("FAIL: a failed install ended {:?}, said so: {said}", workbench.run_panel.exit_code());
+                    return 1;
+                }
+                // A stand-in install that drops the program into the
+                // project's .venv: it ends with 0, the offer goes, and the
+                // program is found there and run with the project's
+                // environment.
+                let install = format!(
+                    "printf '#!/bin/sh\\nsed \"s|^|$VIRTUAL_ENV: |\"\\n' > .venv/bin/{program} && chmod +x .venv/bin/{program}"
+                );
+                installer::run_install(&workbench, program, &install, &project);
+                if !wait_for_end("the install") {
+                    return 1;
+                }
+                let formatted = preprocessors::run(&[format!("{program} -")], "x\n", Some(&project), None, None);
+                if workbench.run_panel.exit_code() != Some(0)
+                    || missing(program)
+                    || !formatted.as_ref().is_ok_and(|text| text.ends_with(".venv: x\n"))
+                {
+                    eprintln!(
+                        "FAIL: after the install the bar offers {:?} and the formatter gave {:?}",
+                        workbench.install_label(),
+                        formatted.map_err(|failure| failure.details)
+                    );
+                    return 1;
+                }
+                workbench.run_panel.hide();
+                // The checks after this one work on the page that was in
+                // front before it.
+                let tab = workbench.active_view().selected_page().expect("a selected tab");
+                workbench.forget(&tab);
+                workbench.active_view().close_page_finish(&tab, true);
+                context.iteration(false);
+                if let Some(path) = before {
+                    workbench.open(Some(std::path::PathBuf::from(path)), None);
+                }
+                println!("install ok (a missing formatter offered, installed into .venv, found and run there, the end told)");
+            }
+            let _ = std::fs::remove_dir_all(&project);
+        }
 
         // The tests a run reports are listed beside its output: counted,
         // a test chosen shows the line that reported it, and Rerun Failed

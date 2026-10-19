@@ -162,7 +162,8 @@ nombra marcada; elegir una va allí, como un salto del que Go Back
 vuelve. Un texto que ninguna gramática lee no tiene. Su extremo
 derecho es el **área de
 notificaciones**: lo último que el editor tuvo que decir — un servidor
-de lenguaje que no encontró, y qué lo instalaría; una gramática que no
+de lenguaje que no encontró, que el botón **Instalar…** de al lado
+instala; una gramática que no
 pudo cargar; un guardado que siguió adelante sin sus preprocesadores —
 tanto como quepa, y entero como descripción emergente. Nada de eso
 interrumpe: lo que antes era un diálogo que cerrar es una línea aquí.
@@ -474,7 +475,8 @@ expresión en ese marco. **Continuar** (F9, F5 en Linux), **Paso por
 encima** (F8, F6 en Linux), **Paso adentro** (F7), **Paso afuera** (⇧F8,
 Mayús+F7 en Linux) y **Detener la depuración** (⇧⌘F2, Ctrl+Mayús+F2 en
 Linux) están en el menú Run y en el panel. Un adaptador que no está
-instalado se nombra, con la orden que lo instala; un programa que no
+instalado se ofrece para instalar en el acto, y la depuración arranca
+cuando la instalación sale bien; un programa que no
 arranca dice qué suele retenerlo — en macOS, el permiso que necesita un
 depurador para tomar el control de un programa, que concede el modo de
 desarrollador (`DevToolsSecurity -enable`).

@@ -164,6 +164,12 @@ pub struct Workbench {
     /// The notification area at the bar's right end: the last thing the
     /// editor had to say, as much as fits; a click lists the session's.
     status_notice: gtk::Button,
+    /// "Install ruff…": shown while something the page in front needs is
+    /// missing, and what offers to install it (6.4).
+    status_install: gtk::Button,
+    /// The file the install button was last worked out for, so a page
+    /// that stays in front is not looked up again at every redraw.
+    install_subject: RefCell<Option<String>>,
     search_bar: gtk::SearchBar,
     search_entry: gtk::SearchEntry,
     replace_entry: gtk::Entry,
@@ -403,6 +409,7 @@ impl Workbench {
         import_theme.append(Some(&tr("From TextMate…")), Some("win.import-theme-textmate"));
         app_section.append_submenu(Some(&tr("Import Theme")), &import_theme);
         app_section.append(Some(&tr("Install Grammar…")), Some("win.install-grammar"));
+        app_section.append(Some(&tr("Install Missing Tools…")), Some("win.install-missing"));
         app_section.append(Some(&tr("About Textchum")), Some("win.about"));
         app_section.append(Some(&tr("Close Tab")), Some("win.close-tab"));
         app_section.append(Some(&tr("Reopen Closed Tab")), Some("win.reopen-tab"));
@@ -508,6 +515,12 @@ impl Workbench {
         status_bar.append(&status_indent);
         status_bar.append(&status_language);
         status_bar.append(&status_encoding);
+        let status_install = gtk::Button::with_label("");
+        status_install.add_css_class("flat");
+        status_install.add_css_class("accent");
+        status_install.set_visible(false);
+        status_install.set_action_name(Some("win.install-missing"));
+        status_bar.append(&status_install);
         let status_crumbs = gtk::Box::new(gtk::Orientation::Horizontal, 2);
         status_bar.append(&status_crumbs);
         // The last word, at the right end: one ellipsized line, the
@@ -612,6 +625,8 @@ impl Workbench {
             debug_panel: Rc::clone(&debug_panel),
             shown_crumbs: RefCell::new(Vec::new()),
             status_notice: status_notice.clone(),
+            status_install: status_install.clone(),
+            install_subject: RefCell::new(None),
             search_bar,
             search_entry: search_entry.clone(),
             replace_entry: replace_entry.clone(),
@@ -888,11 +903,21 @@ impl Workbench {
     /// would make a language server that fails on every keystroke pile
     /// up a queue of identical notices to click through.
     pub fn explain(&self, text: &str) {
+        self.explain_offering(text, None);
+    }
+
+    /// [`Workbench::explain`], with a button on the explanation that
+    /// does what it describes: `(label, action)`.
+    pub fn explain_offering(&self, text: &str, offer: Option<(&str, &str)>) {
         if self.explaining.borrow().as_deref() == Some(text) {
             return;
         }
         *self.explaining.borrow_mut() = Some(text.to_owned());
         let toast = long_toast(text);
+        if let Some((label, action)) = offer {
+            toast.set_button_label(Some(label));
+            toast.set_action_name(Some(action));
+        }
         let showing = Rc::clone(&self.explaining);
         toast.connect_dismissed(move |_| {
             showing.borrow_mut().take();
@@ -1898,8 +1923,30 @@ impl Workbench {
         )
     }
 
+    /// The install button: names the one program missing, or counts
+    /// them, and goes when there are none.
+    pub fn show_missing(&self, programs: &[String]) {
+        self.status_install.set_visible(!programs.is_empty());
+        let label = match programs {
+            [one] => fill(&tr("Install {}…"), &[one]),
+            _ => fill(&tr("Install {} missing tools…"), &[&programs.len().to_string()]),
+        };
+        self.status_install.set_label(&label);
+        self.status_install.set_tooltip_text(Some(&programs.join(", ")));
+    }
+
+    /// What the install button says, None while it is hidden.
+    pub fn install_label(&self) -> Option<String> {
+        self.status_install.is_visible().then(|| self.status_install.label().map(|label| label.to_string()).unwrap_or_default())
+    }
+
     pub fn refresh_chrome(&self) {
         self.refresh_status();
+        let subject = self.selected().and_then(|page| page.path().borrow().clone());
+        if *self.install_subject.borrow() != subject {
+            *self.install_subject.borrow_mut() = subject;
+            crate::installer::refresh(self);
+        }
         let Some(page) = self.selected() else {
             self.title.set_title("Textchum");
             self.title.set_subtitle("");
@@ -3033,6 +3080,7 @@ fn install_actions(app: &adw::Application, workbench: &Rc<Workbench>) {
         import_theme(workbench, theme_import::Source::TextMate);
     });
     add("install-grammar", workbench, |workbench, _| install_grammar(workbench));
+    add("install-missing", workbench, |workbench, _| crate::installer::offer(workbench));
     add("file-properties", workbench, |workbench, _| show_file_properties(workbench));
     add("about", workbench, |workbench, _| {
         // The real build version comes from git at compile time (the
@@ -4096,6 +4144,7 @@ const PALETTE: &[(&str, &str)] = &[
     ("Show Diagnostic for Line", "win.diagnostic"),
     ("Go to Last Edit", "win.last-edit"),
     ("Recent Files…", "win.recent-files"),
+    ("Install Missing Tools…", "win.install-missing"),
     ("Recent Places…", "win.recent-places"),
     ("Next Finding", "win.next-finding"),
     ("Previous Finding", "win.previous-finding"),
@@ -5008,7 +5057,7 @@ fn format_via_preprocessors(
                         "Nothing here can format {language}: no language server is \
                          running and no save preprocessor is configured. Install \
                          {} ({}), or {preprocessor_advice}.",
-                        spec.command, spec.install_hint
+                        spec.command, spec.install_hint()
                     ),
                     None => format!(
                         "Nothing here can format {language}: Textchum knows no \
@@ -5104,7 +5153,11 @@ fn run_preprocessor_chain(page: &Rc<Page>) -> Result<(), crate::preprocessors::F
         root.as_deref(),
         Some(&path),
         Some(&server_format),
-    )?;
+    )
+    .inspect_err(|_| {
+        // A formatter that is not installed is now on offer.
+        Workbench::for_each(|workbench| crate::installer::refresh(workbench));
+    })?;
     page::apply_whole_document(page, &output);
     Ok(())
 }
@@ -5444,7 +5497,7 @@ fn show_markdown_outline(workbench: &Rc<Workbench>, page: &Rc<Page>) -> bool {
 /// A small modal list; activating a row runs `choose` and closes.
 /// One row of a picker: what to show, and the heading that starts a
 /// section above it, if it starts one.
-struct PickerRow {
+pub(crate) struct PickerRow {
     label: String,
     heading: Option<String>,
     /// Where the row goes, for a list of places: the file and the
@@ -5453,6 +5506,13 @@ struct PickerRow {
     /// What choosing the row would change, for a list of versions: asked
     /// for when the row is selected, and shown as a diff in its place.
     diff: Option<Rc<dyn Fn() -> String>>,
+}
+
+impl PickerRow {
+    /// A row to choose, starting a section under `heading` when given.
+    pub(crate) fn new(label: String, heading: Option<String>) -> Self {
+        PickerRow { label, heading, place: None, diff: None }
+    }
 }
 
 /// Every label as a row, for pickers with nothing to divide.
@@ -5633,7 +5693,7 @@ fn list_over_preview(list: &gtk::ScrolledWindow, preview: &gtk::TextView) -> gtk
     paned
 }
 
-fn present_picker(
+pub(crate) fn present_picker(
     workbench: &Rc<Workbench>,
     title: &str,
     rows: Vec<PickerRow>,
@@ -6329,7 +6389,7 @@ fn rerun_failed_tests(workbench: &Rc<Workbench>) {
 }
 
 /// Starts `command` in `directory` and shows it in the run panel.
-fn run_in_directory(workbench: &Rc<Workbench>, command: &str, directory: &Path) {
+pub(crate) fn run_in_directory(workbench: &Rc<Workbench>, command: &str, directory: &Path) {
     let started = Shell::instance().runs.borrow_mut().start(command, directory);
     match started {
         Ok(id) => {
@@ -6431,7 +6491,19 @@ pub(crate) fn start_debugging(workbench: &Rc<Workbench>, launch: &serde_json::Va
             }));
             workbench.debug_panel.begin(id, title);
         }
-        Err(why) => workbench.hint(&why),
+        Err(why) => {
+            workbench.hint(&why);
+            let weak = Rc::downgrade(workbench);
+            let (launch, cwd, title) = (launch.clone(), cwd.to_path_buf(), title.to_owned());
+            crate::installer::after_debug_failure(
+                workbench,
+                Box::new(move || {
+                    if let Some(workbench) = weak.upgrade() {
+                        start_debugging(&workbench, &launch, &cwd, &title);
+                    }
+                }),
+            );
+        }
     }
 }
 
@@ -9871,7 +9943,7 @@ fn describe_server(language: &str, command: &str, overridden: bool) -> String {
         return "found on PATH".to_string();
     }
     match textchum_lsp::registry::server_for_language(language) {
-        Some(spec) => format!("not installed — {}", spec.install_hint),
+        Some(spec) => format!("not installed — {}", spec.install_hint()),
         None => "not installed".to_string(),
     }
 }
@@ -9925,7 +9997,7 @@ fn attach_tool_choices(chain_row: &adw::EntryRow, language_row: Option<&adw::Ent
         None,
     )];
     offered.extend(tools.iter().map(|tool| {
-        let found = textchum_core::presets::on_path(tool.program());
+        let found = textchum_core::install::resolve(tool.program(), None).is_some();
         let mut label = format!(
             "{} {} — {}",
             if found { "✓" } else { "✗" },
@@ -9933,7 +10005,7 @@ fn attach_tool_choices(chain_row: &adw::EntryRow, language_row: Option<&adw::Ent
             tool.languages.join(", ")
         );
         if !found {
-            label.push_str(&format!(" · {}", tool.install));
+            label.push_str(&format!(" · {}", tool.install()));
         }
         (label, tool.command, tool.languages.first().copied())
     }));
@@ -9975,7 +10047,7 @@ fn attach_server_choices(command_row: &adw::EntryRow, language_row: &adw::EntryR
                 server.languages.join(", ")
             );
             if !found {
-                label.push_str(&format!(" · {}", server.install_hint));
+                label.push_str(&format!(" · {}", server.install_hint()));
             }
             label
         })

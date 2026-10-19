@@ -96,6 +96,111 @@ msgstr ""
 msgid "Close Tab"
 msgstr "Cerrar pestaña"
 
+#: core/textchum-core/src/install.rs
+msgid "With Homebrew"
+msgstr "Con Homebrew"
+
+#: core/textchum-core/src/install.rs
+msgid "Into this project, recorded in pyproject.toml"
+msgstr "En este proyecto, anotado en pyproject.toml"
+
+#: core/textchum-core/src/install.rs
+msgid "Into this project's .venv, not recorded"
+msgstr "En el .venv de este proyecto, sin anotarlo"
+
+#: core/textchum-core/src/install.rs
+msgid "Into a new .venv for this project"
+msgstr "En un .venv nuevo para este proyecto"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, in an environment of its own"
+msgstr "Para tu usuario, en un entorno propio"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with pip"
+msgstr "Para tu usuario, con pip"
+
+#: core/textchum-core/src/install.rs
+msgid "Into this project, recorded in package.json"
+msgstr "En este proyecto, anotado en package.json"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with npm"
+msgstr "Para tu usuario, con npm"
+
+#: core/textchum-core/src/install.rs
+msgid "Into this module, recorded in go.mod"
+msgstr "En este módulo, anotado en go.mod"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with go install"
+msgstr "Para tu usuario, con go install"
+
+#: core/textchum-core/src/install.rs
+msgid "Into the Rust toolchain"
+msgstr "En la cadena de herramientas de Rust"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with cargo"
+msgstr "Para tu usuario, con cargo"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with gem"
+msgstr "Para tu usuario, con gem"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with dotnet"
+msgstr "Para tu usuario, con dotnet"
+
+#: core/textchum-core/src/install.rs
+msgid "Into the opam switch"
+msgstr "En el switch de opam"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with cabal"
+msgstr "Para tu usuario, con cabal"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with ghcup"
+msgstr "Para tu usuario, con ghcup"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with composer"
+msgstr "Para tu usuario, con composer"
+
+#: core/textchum-core/src/install.rs
+msgid "Into your nix profile"
+msgstr "En tu perfil de nix"
+
+#: core/textchum-core/src/install.rs
+msgid "For your user, with coursier"
+msgstr "Para tu usuario, con coursier"
+
+#: core/textchum-core/src/install.rs
+msgid "With the system's packages (needs an administrator)"
+msgstr "Con los paquetes del sistema (necesita un administrador)"
+
+#: core/textchum-core/src/install.rs
+msgid "With the command-line developer tools"
+msgstr "Con las herramientas de desarrollo de línea de comandos"
+
+#: core/textchum-core/src/install.rs
+msgid ""
+"Nothing here can install it; any of these would let the editor do it: {}"
+msgstr "Nada aquí puede instalarlo; con cualquiera de estos el editor podría hacerlo: {}"
+
+#: core/textchum-core/src/install.rs macos/Sources/Textchum/Preprocessors.swift
+msgid "{} is not installed; Install… offers to install it"
+msgstr "{} no está instalado; Instalar… ofrece instalarlo"
+
+#: core/textchum-core/src/install.rs core/textchum-lsp/src/pool.rs
+msgid "{} is not installed (install with: {})"
+msgstr "{} no está instalado (instálalo con: {})"
+
+#: core/textchum-core/src/install.rs core/textchum-dap/src/lib.rs
+msgid "{} is not installed"
+msgstr "{} no está instalado"
+
 #: core/textchum-core/src/local_history.rs
 msgid "Too large to compare."
 msgstr "Demasiado grande para comparar."
@@ -247,9 +352,10 @@ msgstr ""
 msgid "The build made no program to debug."
 msgstr "La compilación no produjo ningún programa que depurar."
 
-#: core/textchum-dap/src/lib.rs
-msgid "{} is not installed (install with: {})"
-msgstr "{} no está instalado (instálalo con: {})"
+#: core/textchum-dap/src/lib.rs linux/src/installer.rs
+#: macos/Sources/Textchum/AppDelegate.swift
+msgid "debugger"
+msgstr "depurador"
 
 #: core/textchum-dap/src/lib.rs
 msgid "The build failed; its messages are in the console."
@@ -280,6 +386,10 @@ msgid ""
 msgstr ""
 "El programa no ha arrancado tras 15 segundos; puede que el adaptador espere "
 "algo que aquí no puede pedir."
+
+#: core/textchum-lsp/src/pool.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "{} language server"
+msgstr "servidor de lenguaje de {}"
 
 #: linux/src/chords.rs macos/Sources/Textchum/ChordPanel.swift
 msgid "esc closes"
@@ -365,6 +475,33 @@ msgstr "— terminó con {}"
 #: macos/Sources/Textchum/SmokeTest.swift
 msgid "ended"
 msgstr "terminado"
+
+#: linux/src/installer.rs macos/Sources/Textchum/Installer.swift
+msgid "Nothing this document needs is missing."
+msgstr "No falta nada de lo que necesita este documento."
+
+#: linux/src/installer.rs macos/Sources/Textchum/Installer.swift
+msgid "nothing on this machine can install it"
+msgstr "nada en esta máquina puede instalarlo"
+
+#: linux/src/installer.rs macos/Sources/Textchum/Installer.swift
+msgid "Install Missing Tools"
+msgstr "Instalar herramientas que faltan"
+
+#: linux/src/installer.rs macos/Sources/Textchum/Installer.swift
+msgid ""
+"Copied “{}”: it needs an administrator's password, which the run panel "
+"cannot ask for. Paste it into a terminal."
+msgstr "Se copió «{}»: necesita la contraseña de un administrador, que el panel de ejecución no puede pedir. Pégalo en una terminal."
+
+#: linux/src/installer.rs macos/Sources/Textchum/Installer.swift
+msgid "{} is installed"
+msgstr "{} está instalado"
+
+#: linux/src/installer.rs linux/src/main.rs
+#: macos/Sources/Textchum/Installer.swift
+msgid "Installing {} failed; the run panel has what the installer said."
+msgstr "No se pudo instalar {}; el panel de ejecución muestra lo que dijo el instalador."
 
 #: linux/src/keyboard.rs
 msgid "New Tab"
@@ -816,6 +953,11 @@ msgstr "Copiar la ruta y la línea"
 msgid "Copy Forge URL for Line"
 msgstr "Copiar la URL de la forja para la línea"
 
+#: linux/src/preprocessors.rs macos/Sources/Textchum/Preprocessors.swift
+#: macos/Sources/Textchum/SmokeTest.swift
+msgid "save formatter"
+msgstr "formateador al guardar"
+
 #: linux/src/run_panel.rs macos/Sources/Textchum/RunPanel.swift
 msgid "Rerun Failed"
 msgstr "Repetir fallidas"
@@ -853,6 +995,10 @@ msgstr "No se pudo cargar una gramática configurada"
 #: macos/Sources/Textchum/DocumentController.swift
 msgid "the code action"
 msgstr "la acción de código"
+
+#: linux/src/shell.rs
+msgid "Install…"
+msgstr "Instalar…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "New with Format…"
@@ -964,6 +1110,10 @@ msgid "Install Grammar…"
 msgstr "Instalar gramática…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
+msgid "Install Missing Tools…"
+msgstr "Instalar herramientas que faltan…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/AppDelegate.swift
 msgid "About Textchum"
 msgstr "Acerca de Textchum"
 
@@ -1055,6 +1205,15 @@ msgstr "Texto sin formato"
 #: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
 msgid "What is beside it — click to go to one"
 msgstr "Lo que está a su lado — clic para ir a uno"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/SmokeTest.swift
+#: macos/Sources/Textchum/StatusBar.swift
+msgid "Install {}…"
+msgstr "Instalar {}…"
+
+#: linux/src/workbench.rs macos/Sources/Textchum/StatusBar.swift
+msgid "Install {} missing tools…"
+msgstr "Instalar {} herramientas que faltan…"
 
 #: linux/src/workbench.rs macos/Sources/Textchum/Sidebar.swift
 msgid "Open Files"
@@ -2442,6 +2601,10 @@ msgstr "Instalar"
 #: macos/Sources/Textchum/InfoPanel.swift
 msgid "Documentation"
 msgstr "Documentación"
+
+#: macos/Sources/Textchum/Installer.swift
+msgid "Nothing is missing: no document is open"
+msgstr "No falta nada: no hay ningún documento abierto"
 
 #: macos/Sources/Textchum/PathActions.swift
 #: macos/Sources/Textchum/SmokeTest.swift

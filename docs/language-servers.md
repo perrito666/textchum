@@ -203,17 +203,21 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   grammar's colours; see [Syntax highlighting](highlighting.md).
 - **Document Outline** (⇧⌘O) lists the file's symbols — nesting shown
   by indentation, fuzzy-filterable — and ⏎ jumps to the selection.
-- A missing server is reported once, with the command that installs it;
-  everything else about the editor keeps working without it.
+- A missing server is reported once, and offered for installing (see
+  [Installing what is missing](#installing-what-is-missing)); everything
+  else about the editor keeps working without it.
 
 Not there yet: Show Callers lists who calls a function, not what it
 calls.
 
 ## Servers
 
-Textchum finds servers on `PATH` — it does not install them:
+Textchum looks for a server in the project's own environment, then on
+`PATH`, then in the folders installers put programs in for one user.
+The last column is the usual way to install each; when one is missing,
+the editor offers whichever ways this machine can run:
 
-| Language | Server | Install |
+| Language | Server | Usually installed with |
 |---|---|---|
 | Rust | rust-analyzer | `rustup component add rust-analyzer` |
 | Python | pyright | `npm install -g pyright` |
@@ -258,6 +262,74 @@ one of the other two; PHP has `intelephense` and `phpactor`.
 The table names the one used when the configuration says nothing; the
 others are asked for by id, and `lsp.servers` takes one the editor does
 not know.
+
+## Installing what is missing
+
+When a language server, a save formatter or a debugger cannot be found,
+the editor offers to install it rather than telling you to.
+
+- While something the document in front needs is missing, the status
+  bar shows **Install gopls…** (or **Install 2 missing tools…**). The
+  same list is under **Textchum ▸ Install Missing Tools…** and in the
+  command palette. On Linux, the notice that says a server is missing
+  carries an **Install…** button too.
+- The list names each missing program and what it is for, with every
+  way this machine can install it underneath. Return takes the first,
+  which is the one that suits the project.
+  - **Python**: into the project — `uv add --dev` when it has a
+    `pyproject.toml`, into its existing `.venv`, or into a new `.venv` —
+    or for your user with `uv tool install`, `pipx`, or `pip --user`
+    where the system's Python allows it.
+  - **Node**: `npm install --save-dev` into a project with a
+    `package.json`, or `npm install -g`.
+  - **Go**: `go install` for your user. With Go 1.24 and later there is
+    also `go get -tool` into the module, after which the program runs
+    through `go tool`.
+  - **Rust**: `rustup component add`.
+  - **Everything else**: Homebrew, cargo, gem, dotnet, opam, cabal,
+    ghcup, composer, nix or coursier — whichever the tool ships through
+    and the machine has.
+- **Project or user first.** The project's own way comes first when it
+  already keeps its tools there: a `uv.lock` or `.venv`, a
+  `node_modules/.bin`, tools listed in `go.mod`. Otherwise the per-user
+  way comes first. A debugger that is a Python module always goes where
+  the project's Python imports from.
+- **The install runs in the run panel**, where its output can be read.
+  - When it succeeds, the editor says so and starts the servers that
+    were missing for every open document. For a debugger, it starts the
+    debugging that could not start. A formatter is used at the next
+    save.
+  - When it fails, the notice says so, and the panel shows what the
+    installer said.
+- **System packages are copied, not run.** A command like
+  `sudo apt install clangd` needs an administrator's password, which the
+  run panel cannot ask for, so choosing it copies the command for you to
+  paste into a terminal.
+- **When nothing here can install a program**, the list says which
+  installers would let the editor do it.
+
+**Where programs are looked for**, in this order:
+
+1. The project's `.venv/bin` and `node_modules/.bin`, in the project and
+   the folders above it up to the repository's top.
+2. `PATH`.
+3. `~/go/bin`, `~/.local/bin`, `~/.cargo/bin`, `~/.dotnet/tools`,
+   `~/.ghcup/bin` and `~/.cabal/bin`. Installers put programs there,
+   and a desktop session's `PATH` often does not reach them.
+4. For a Go module that lists it as a tool, `go tool`.
+
+A server runs with the project's environment active. Its `.venv/bin`
+and `node_modules/.bin` come first on `PATH`, and `VIRTUAL_ENV` is set,
+so a Python server sees the project's interpreter and packages. Save
+formatters and debug adapters are found and run the same way.
+
+Not there yet:
+
+- Settings describes how to install the servers and tools it lists, but
+  has no Install button.
+- The installers themselves — uv, npm, go and the rest — are not
+  installed for you.
+- A Node project gets npm, not pnpm, yarn or bun.
 
 ## Choosing servers yourself
 
@@ -388,8 +460,10 @@ A command line is run as written, with two substitutions:
   {"python": "{project}/.venv/bin/basedpyright-langserver --stdio"}}}
 ```
 
-This is what a checkout carrying its own tooling needs: a virtualenv, a
-`node_modules/.bin` entry, a server vendored in the repository. The
+This is what a checkout carrying its own tooling somewhere unusual
+needs: a server vendored in the repository, a virtualenv under another
+name. A server in the project's `.venv/bin` or `node_modules/.bin` is
+found by its plain name, without `{project}`. The
 substitution happens per argument after the command line is split, so a
 project path containing spaces stays one argument.
 

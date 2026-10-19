@@ -882,3 +882,57 @@ fn a_document_a_server_asks_to_show_reaches_the_shell_and_the_answer_reaches_the
     drop(pool);
 }
 
+
+#[test]
+fn a_server_installed_later_starts_on_the_next_announce_and_the_others_are_not_told_twice() {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/fake_lsp.py")
+        .canonicalize()
+        .unwrap();
+    let (root, file) = project("proj-installed-later");
+    let late = root.join("bin").join("late-server");
+    let _ = std::fs::remove_file(&late);
+    let configuration = format!(
+        r#"{{"lsp": {{
+            "defaults": {{"rust": "first ;; late"}},
+            "servers": {{
+                "first": {{"command": "python3", "languages": ["rust"],
+                           "args": ["{}", "--tag", "first"]}},
+                "late": {{"command": "{}", "languages": ["rust"]}}}}}}}}"#,
+        script.display(),
+        late.display()
+    );
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.configure(&configuration);
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    let mut seen = Vec::new();
+    collect_until(&events, "the first server's findings and the other missing", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::Diagnostics { json, .. } if json.contains("first finding #1")))
+            && seen.iter().any(|event| matches!(event, Event::ServerStatus { status, .. } if status == "not-found"))
+    });
+
+    // Installed: the program is there now, and the shell configures the
+    // pool again, which lets it try what failed, and announces the
+    // document again.
+    std::fs::create_dir_all(late.parent().unwrap()).unwrap();
+    std::fs::write(&late, format!("#!/bin/sh\nexec python3 '{}' --tag late\n", script.display())).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&late, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    pool.configure(&configuration);
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    collect_until(&events, "the late server's findings", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::Diagnostics { json, .. } if json.contains("late finding #1")))
+    });
+    std::thread::sleep(Duration::from_millis(500));
+    while let Ok(event) = events.try_recv() {
+        seen.push(event);
+    }
+    assert!(
+        !seen.iter().any(|event| matches!(event, Event::Diagnostics { json, .. } if json.contains("first finding #2"))),
+        "the server that had the document was not told it opened again: {seen:?}"
+    );
+    assert_eq!(pool.running().len(), 2);
+}

@@ -95,8 +95,14 @@ impl Instance {
         waiters: Waiters,
         options: ServerOptions,
     ) -> std::io::Result<Self> {
-        let mut child = ProcessCommand::new(&config.command)
+        // Found where a project install puts it as well as on PATH, and
+        // run with the project's environment active, so a Python server
+        // sees the project's interpreter and packages.
+        let line = textchum_core::install::resolve_command(&[config.command.clone()], Some(root));
+        let mut child = ProcessCommand::new(&line[0])
+            .args(&line[1..])
             .args(&config.args)
+            .envs(textchum_core::install::environment(root))
             .current_dir(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

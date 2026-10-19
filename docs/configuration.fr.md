@@ -427,7 +427,9 @@ chaîne dans Settings ▸ Preprocessors, et dans le formulaire qui en
 ajoute une — liste les outils dont l'éditeur connaît la ligne de
 commande pour le langage en question, marque ceux qui sont installés,
 et écrit la ligne quand on en choisit un. Un outil qui n'est pas
-installé est proposé quand même, avec la commande qui l'installe.
+installé est proposé quand même, avec la commande qui l'installe, et le
+premier enregistrement qui en a besoin propose de l'installer (voir
+[Installer ce qui manque](language-servers.md#installer-ce-qui-manque)).
 **Known servers** fait de même pour la commande du serveur dans
 Language Servers.
 
@@ -518,8 +520,10 @@ Language Servers et Preprocessors, et le bouton affiche **Applied**
 tant que la configuration dit encore tout ce que le profil écrirait.
 
 Chaque profil liste les programmes qu'il lance et si chacun a été
-trouvé dans `PATH` ; celui qui manque montre la commande qui l'installe.
-L'éditeur n'installe rien lui-même.
+trouvé ; celui qui manque montre la commande qui l'installe. Appliquer
+un profil ne les installe pas ; l'éditeur propose de le faire la
+première fois que l'un d'eux sert (voir
+[Installer ce qui manque](language-servers.md#installer-ce-qui-manque)).
 
 Pas encore là : un profil s'applique à tous les projets (les entrées
 qu'il écrit peuvent être déplacées sous un projet à la main). Et le

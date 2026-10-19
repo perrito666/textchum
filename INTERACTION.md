@@ -115,6 +115,14 @@ dialog.
 **6.3** The message names what would make it work ("save the file so
 a server can attach"), as `AGENTS.md` already says.
 
+**6.4** When what would make it work is something the editor can do,
+the message offers to do it rather than describing it: a missing
+language server, formatter or debugger comes with an Install action,
+the ways it can be installed offered side by side, the one that suits
+the project first. The install runs where runs are shown, and when it
+succeeds the thing that was missing is tried again without being
+asked.
+
 ## 7. Every jump is remembered
 
 **7.1** Anything that moves the caret to another file, or out of

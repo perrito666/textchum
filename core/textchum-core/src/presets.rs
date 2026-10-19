@@ -22,10 +22,16 @@ use serde_json::{json, Value};
 use crate::i18n::tr;
 use crate::tools;
 
-/// A program a preset runs, and how to get it.
+/// A program a preset runs.
 pub struct Tool {
     pub command: &'static str,
-    pub install: &'static str,
+}
+
+impl Tool {
+    /// How it is installed, in words; see `crate::install`.
+    pub fn install(&self) -> String {
+        crate::install::hint(self.command).unwrap_or_default()
+    }
 }
 
 /// One language's worth of configuration.
@@ -67,9 +73,9 @@ pub fn language_presets() -> Vec<LanguagePreset> {
             // nearest manifest's.
             preprocessors: vec![("rust", vec![tools::command("rustfmt")])],
             tools: vec![
-                Tool { command: "rust-analyzer", install: "rustup component add rust-analyzer" },
-                Tool { command: "cargo-clippy", install: "rustup component add clippy" },
-                Tool { command: "rustfmt", install: "rustup component add rustfmt" },
+                Tool { command: "rust-analyzer" },
+                Tool { command: "cargo-clippy" },
+                Tool { command: "rustfmt" },
             ],
         },
         LanguagePreset {
@@ -89,8 +95,8 @@ pub fn language_presets() -> Vec<LanguagePreset> {
                 vec![tools::command("ruff-fix"), tools::command("ruff-format")],
             )],
             tools: vec![
-                Tool { command: "pyright-langserver", install: "npm install -g pyright" },
-                Tool { command: "ruff", install: "uv tool install ruff" },
+                Tool { command: "pyright-langserver" },
+                Tool { command: "ruff" },
             ],
         },
         LanguagePreset {
@@ -121,11 +127,8 @@ pub fn language_presets() -> Vec<LanguagePreset> {
             )],
             preprocessors: vec![("go", vec![tools::command("goimports")])],
             tools: vec![
-                Tool { command: "gopls", install: "go install golang.org/x/tools/gopls@latest" },
-                Tool {
-                    command: "goimports",
-                    install: "go install golang.org/x/tools/cmd/goimports@latest",
-                },
+                Tool { command: "gopls" },
+                Tool { command: "goimports" },
             ],
         },
         LanguagePreset {
@@ -145,11 +148,8 @@ pub fn language_presets() -> Vec<LanguagePreset> {
                 ("tsx", vec![tools::command("prettier")]),
             ],
             tools: vec![
-                Tool {
-                    command: "typescript-language-server",
-                    install: "npm install -g typescript-language-server typescript",
-                },
-                Tool { command: "prettier", install: "npm install -g prettier" },
+                Tool { command: "typescript-language-server" },
+                Tool { command: "prettier" },
             ],
         },
         LanguagePreset {
@@ -164,11 +164,8 @@ pub fn language_presets() -> Vec<LanguagePreset> {
                 ("cpp", vec![tools::command("clang-format")]),
             ],
             tools: vec![
-                Tool { command: "clangd", install: "brew install llvm, or apt install clangd" },
-                Tool {
-                    command: "clang-format",
-                    install: "brew install clang-format, or apt install clang-format",
-                },
+                Tool { command: "clangd" },
+                Tool { command: "clang-format" },
             ],
         },
     ]

@@ -226,17 +226,22 @@ proyecto en Settings ▸ Language Servers; véase
 - **Esquema del documento** (⇧⌘O) lista los símbolos del archivo — el
   anidamiento se muestra con sangría, filtrable de forma difusa — y ⏎
   salta a la selección.
-- Un servidor ausente se informa una sola vez, con el comando que lo
-  instala; todo lo demás del editor sigue funcionando sin él.
+- Un servidor ausente se informa una sola vez, y se ofrece instalarlo
+  (ver [Instalar lo que falta](#instalar-lo-que-falta)); todo lo demás
+  del editor sigue funcionando sin él.
 
 Todavía no: Show Callers lista quién llama a una función, no a qué
 llama ella.
 
 ## Servidores
 
-Textchum encuentra los servidores en el `PATH` — no los instala:
+Textchum busca un servidor en el entorno del propio proyecto, luego en
+el `PATH`, luego en las carpetas donde los instaladores dejan programas
+para un usuario. La última columna es la forma habitual de instalar
+cada uno; cuando falta, el editor ofrece las formas que esta máquina
+puede ejecutar:
 
-| Lenguaje | Servidor | Instalación |
+| Lenguaje | Servidor | Se instala normalmente con |
 |---|---|---|
 | Rust | rust-analyzer | `rustup component add rust-analyzer` |
 | Python | pyright | `npm install -g pyright` |
@@ -282,6 +287,79 @@ JavaScript, TypeScript y TSX con `typescript-language-server`, `vtsls`,
 La tabla nombra el que se usa cuando la configuración no dice nada; a
 los demás se los pide por identificador, y `lsp.servers` acepta uno que
 el editor no conozca.
+
+## Instalar lo que falta
+
+Cuando no se encuentra un servidor de lenguaje, un formateador al
+guardar o un depurador, el editor ofrece instalarlo en lugar de pedirte
+que lo hagas.
+
+- Mientras falte algo que necesita el documento en primer plano, la
+  barra de estado muestra **Instalar gopls…** (o **Instalar 2
+  herramientas que faltan…**). La misma lista está en **Textchum ▸
+  Instalar herramientas que faltan…** y en la paleta de comandos. En
+  Linux, el aviso que dice que falta un servidor también lleva un botón
+  **Instalar…**.
+- La lista nombra cada programa que falta y para qué es, con debajo
+  todas las formas en que esta máquina puede instalarlo. ⏎ toma la
+  primera, que es la que conviene al proyecto.
+  - **Python**: en el proyecto — `uv add --dev` cuando tiene un
+    `pyproject.toml`, en su `.venv` existente, o en un `.venv` nuevo — o
+    para tu usuario con `uv tool install`, `pipx`, o `pip --user` donde
+    el Python del sistema lo permite.
+  - **Node**: `npm install --save-dev` en un proyecto con
+    `package.json`, o `npm install -g`.
+  - **Go**: `go install` para tu usuario. Con Go 1.24 o posterior
+    también está `go get -tool` en el módulo; después, el programa se
+    ejecuta a través de `go tool`.
+  - **Rust**: `rustup component add`.
+  - **Todo lo demás**: Homebrew, cargo, gem, dotnet, opam, cabal,
+    ghcup, composer, nix o coursier — lo que use la herramienta y tenga
+    la máquina.
+- **Primero el proyecto o el usuario.** La forma del propio proyecto va
+  primero cuando ya guarda allí sus herramientas: un `uv.lock` o un
+  `.venv`, un `node_modules/.bin`, herramientas listadas en `go.mod`. Si
+  no, va primero la forma para el usuario. Un depurador que es un
+  módulo de Python siempre va donde importa el Python del proyecto.
+- **La instalación corre en el panel de ejecución**, donde se puede
+  leer su salida.
+  - Si sale bien, el editor lo dice y arranca los servidores que
+    faltaban para cada documento abierto. Para un depurador, arranca la
+    depuración que no pudo empezar. Un formateador se usa en el
+    siguiente guardado.
+  - Si falla, el aviso lo dice, y el panel muestra lo que dijo el
+    instalador.
+- **Los paquetes del sistema se copian, no se ejecutan.** Una orden como
+  `sudo apt install clangd` necesita la contraseña de un administrador,
+  que el panel de ejecución no puede pedir, así que elegirla copia la
+  orden para que la pegues en una terminal.
+- **Cuando nada aquí puede instalar un programa**, la lista dice qué
+  instaladores permitirían al editor hacerlo.
+
+**Dónde se buscan los programas**, en este orden:
+
+1. El `.venv/bin` y el `node_modules/.bin` del proyecto, en el proyecto
+   y en las carpetas de encima hasta la raíz del repositorio.
+2. El `PATH`.
+3. `~/go/bin`, `~/.local/bin`, `~/.cargo/bin`, `~/.dotnet/tools`,
+   `~/.ghcup/bin` y `~/.cabal/bin`. Los instaladores ponen los
+   programas allí, y el `PATH` de una sesión de escritorio a menudo no
+   llega a ellas.
+4. Para un módulo de Go que lo lista como herramienta, `go tool`.
+
+Un servidor corre con el entorno del proyecto activo. Su `.venv/bin` y
+su `node_modules/.bin` van primero en el `PATH`, y `VIRTUAL_ENV` queda
+definido, así que un servidor de Python ve el intérprete y los paquetes
+del proyecto. Los formateadores al guardar y los adaptadores de
+depuración se encuentran y se ejecutan igual.
+
+Todavía no:
+
+- Settings describe cómo instalar los servidores y herramientas que
+  lista, pero no tiene botón Instalar.
+- Los instaladores en sí — uv, npm, go y los demás — no se instalan por
+  ti.
+- Un proyecto de Node recibe npm, no pnpm, yarn ni bun.
 
 ## Elegir los servidores
 
@@ -417,9 +495,11 @@ Una línea de órdenes se ejecuta tal cual, con dos sustituciones:
   {"python": "{project}/.venv/bin/basedpyright-langserver --stdio"}}}
 ```
 
-Es lo que necesita un repositorio que lleva sus propias herramientas: un
-entorno virtual, una entrada de `node_modules/.bin`, un servidor incluido
-en el propio repositorio. La sustitución ocurre por argumento después de
+Es lo que necesita un repositorio que lleva sus propias herramientas en
+un sitio poco habitual: un servidor incluido en el propio repositorio,
+un entorno virtual con otro nombre. Un servidor en el `.venv/bin` o el
+`node_modules/.bin` del proyecto se encuentra por su nombre, sin
+`{project}`. La sustitución ocurre por argumento después de
 dividir la línea, así que una ruta con espacios sigue siendo un
 argumento.
 

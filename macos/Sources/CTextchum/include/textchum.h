@@ -274,7 +274,7 @@ char *tc_run_start(struct TcApp *app,
 
 /**
  * What changed in a run's output since it was last read: `{first,
- * reset, running, command, lines: [{text, spans, places}]}` — see
+ * reset, running, exit, command, lines: [{text, spans, places}]}` — see
  * [`textchum_core::output::changes_json`]. Null for an id there is no
  * run for. Free with [`tc_string_free`].
  *
@@ -4043,6 +4043,73 @@ bool tc_path_looks_editable(const char *path, uintptr_t len);
  * The pointer/length pair must describe readable bytes.
  */
 bool tc_lsp_executable_exists(const char *command, uintptr_t len);
+
+/**
+ * What is missing for the document at `path` — language servers,
+ * debuggers and save preprocessors found absent this session — with
+ * the ways each can be installed here, the one that suits the project
+ * first: `[{program, purpose, project, notes, methods: [{installer,
+ * scope, title, command, directory, runs}]}]`. See
+ * [`textchum_core::install`]. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * The pointer/length pair must describe readable bytes.
+ */
+char *tc_install_offers(const char *path, uintptr_t len);
+
+/**
+ * Records that `program` was needed for `project` and is not there,
+ * for [`tc_install_offers`] to offer; `purpose` says what it was for.
+ *
+ * # Safety
+ * Each pointer/length pair must describe readable bytes.
+ */
+void tc_install_note_missing(const char *program,
+                             uintptr_t program_len,
+                             const char *project,
+                             uintptr_t project_len,
+                             const char *purpose,
+                             uintptr_t purpose_len);
+
+/**
+ * Forgets `program` as missing: it was just installed.
+ *
+ * # Safety
+ * The pointer/length pair must describe readable bytes.
+ */
+void tc_install_forget(const char *program, uintptr_t len);
+
+/**
+ * Whether the catalog knows how `program` is installed.
+ *
+ * # Safety
+ * The pointer/length pair must describe readable bytes.
+ */
+bool tc_install_knows(const char *program, uintptr_t len);
+
+/**
+ * The command line that runs `program` for `project` (empty for
+ * none), as a JSON array of words, program first: from the project's
+ * environment, `PATH`, the per-user folders, or `go tool`. `null` when
+ * it is nowhere. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * Each pointer/length pair must describe readable bytes.
+ */
+char *tc_install_resolve(const char *program,
+                         uintptr_t program_len,
+                         const char *project,
+                         uintptr_t project_len);
+
+/**
+ * The environment a program run for `project` gets on top of the
+ * editor's: `{"PATH": …, "VIRTUAL_ENV": …}`, the project's environment
+ * active. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * The pointer/length pair must describe readable bytes.
+ */
+char *tc_install_environment(const char *project, uintptr_t len);
 
 /**
  * The server registry as JSON: an array of
