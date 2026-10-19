@@ -3261,6 +3261,30 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         }
         println!("server requests ok (a document shown, a file made by an edit)");
 
+        // A file made in a folder the tree lists — saved by the editor or
+        // by anything else — shows in the tree on its own.
+        {
+            let dir = std::env::temp_dir().join(format!("textchum-gtk-tree-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(dir.join("one.txt"), "a\n");
+            let tree = workbench::build_file_tree(&dir);
+            let rows = || tree.model().map(|model| model.n_items()).unwrap_or(0);
+            let before = rows();
+            let _ = std::fs::write(dir.join("two.txt"), "b\n");
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while rows() < 2 && std::time::Instant::now() < deadline {
+                context.iteration(true);
+            }
+            let after = rows();
+            let _ = std::fs::remove_dir_all(&dir);
+            if before != 1 || after != 2 {
+                eprintln!("FAIL: the tree listed {before} rows, then {after} after a file was made");
+                return 1;
+            }
+        }
+        println!("tree follows the disk ok (a file made in a listed folder shows on its own)");
+
         // Formatting: the scripted server prepends "formatted: " as a
         // TextEdit; the action must carry it through the buffer (and
         // therefore the core) — proving the whole edits pipeline.

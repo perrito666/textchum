@@ -33,7 +33,10 @@ projet, en bas l'arbre de fichiers de ce projet.
 La barre de titre porte les faits du document — encodage, taille,
 langage, et le nombre de problèmes dès qu'un serveur de langage a un
 avis. L'arbre suit : changer d'onglet déplie le chemin du fichier
-courant et le met en évidence.
+courant et le met en évidence, et un fichier enregistré, créé ou
+supprimé dans un dossier qu'il montre — par l'éditeur, une
+refactorisation ou une commande dans un terminal — apparaît ou
+disparaît de lui-même.
 
 Un clic droit dans le texte ouvre le menu de l'éditeur : aller à la
 définition, chercher les références, renommer le symbole, le
