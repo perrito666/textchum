@@ -171,7 +171,15 @@ Settings ▸ Language Servers; see [configuration](configuration.md#projects).
   applied, and one that carries a command rather than an edit is run by
   the server, which sends back the edit the command makes — organize
   imports works this way — and that edit is made the same way as an
-  action's own.
+  action's own. An edit that creates a file — a test file the server
+  writes — makes it first; Undo takes it away again while it is still
+  as made. A server can also ask for a page to be shown: its
+  documentation, an assembly listing, a package's split — the page
+  opens in the browser — or a file, which opens in the editor at the
+  line it names. Notes a server attaches to a point rather than a
+  stretch of text, like the compiler's optimization details, are
+  underlined on the word there. Not there yet: an edit that renames or
+  deletes a file says so and leaves the file as it is.
   When the caret rests on a line where the server has something to
   offer, a bulb appears in the gutter beside it; a click on the bulb
   lists the same actions. Moving to another line takes it away.

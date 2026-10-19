@@ -1161,6 +1161,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             editors.first { $0.coreDocument.path == path }?.apply(diagnostics: items)
         case .lspResponse:
             break  // routed to its completion handler inside CoreApp
+        case let .showDocument(server, root, request, params):
+            let shown = showDocument(paramsJSON: params)
+            coreApp?.lspAnswerRequest(
+                server: server, root: root, request: request, resultJSON: "{\"success\": \(shown)}")
         case let .debug(session, kind, json):
             for workbench in Workbench.all where workbench.debugPanel.sessionID == session {
                 workbench.debugPanel.handle(kind: kind, json: json)
@@ -1242,6 +1246,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let byPath = LSPEdits.workspaceEdits(fromResultJSON: resultJSON)
         guard !byPath.isEmpty else { return false }
         let id = CoreRefactoring.begin(label: label)
+        // The files it makes first: its text edits may be about them.
+        for said in CoreRefactoring.createFiles(id, editJSON: resultJSON) {
+            notify(said)
+        }
         for (path, edits) in byPath {
             if let editor = editors.first(where: { $0.coreDocument.path == path }) {
                 editor.apply(textEdits: edits, tag: id)
@@ -2746,6 +2754,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .failure(let error):
             workbench.focusedDocument?.showHint(error.message)
         }
+    }
+
+    /// What a language server asked to be shown: a web page — its own
+    /// documentation, an assembly listing — in the browser, a file in the
+    /// editor at the place asked for. False when neither could be done.
+    func showDocument(paramsJSON: String) -> Bool {
+        let params = (try? JSONSerialization.jsonObject(with: Data(paramsJSON.utf8))) as? [String: Any] ?? [:]
+        guard let text = params["uri"] as? String, let url = URL(string: text) else { return false }
+        if url.isFileURL, params["external"] as? Bool != true {
+            let start = (params["selection"] as? [String: Any])?["start"] as? [String: Any]
+            let line = start?["line"] as? Int ?? 0
+            let character = start?["character"] as? Int ?? 0
+            open(path: url.path, revealLine: line + 1, revealCharacter: character)
+            return true
+        }
+        return NSWorkspace.shared.open(url)
     }
 
     /// A document's breakpoints changed: the debug sessions are told.

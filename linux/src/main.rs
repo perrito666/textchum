@@ -3221,6 +3221,38 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
         }
         println!("server edits ok (asked for by a command, made, answered, one undo)");
 
+        // A server's own requests the shell answers: a file to show at a
+        // line, and an edit that makes a new file — what gopls's Browse
+        // and Add test actions ask for.
+        {
+            let shell = shell::Shell::instance();
+            let ask = |command: &str, arguments: serde_json::Value| -> Option<String> {
+                let answered: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+                let id = shell.pool.borrow_mut().execute_command(&path, command, arguments);
+                let sink = Rc::clone(&answered);
+                shell.expect_response(id, move |json| *sink.borrow_mut() = Some(json.to_owned()));
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+                while answered.borrow().is_none() && std::time::Instant::now() < deadline {
+                    context.iteration(true);
+                }
+                let answer = answered.borrow().clone();
+                answer
+            };
+            let shown = ask("fake.show", serde_json::json!([format!("file://{}", path.display()), 0]));
+            let made = directory.join("made.go");
+            let created = ask("fake.create", serde_json::json!([format!("file://{}", made.display())]));
+            let written = std::fs::read_to_string(&made).unwrap_or_default();
+            if !shown.as_deref().is_some_and(|answer| answer.contains("\"success\":true")) {
+                eprintln!("FAIL: showing a document answered {shown:?}");
+                return 1;
+            }
+            if !created.as_deref().is_some_and(|answer| answer.contains("\"applied\":true")) || written != "package made\n" {
+                eprintln!("FAIL: the edit that makes a file answered {created:?} and wrote {written:?}");
+                return 1;
+            }
+        }
+        println!("server requests ok (a document shown, a file made by an edit)");
+
         // Formatting: the scripted server prepends "formatted: " as a
         // TextEdit; the action must carry it through the buffer (and
         // therefore the core) — proving the whole edits pipeline.

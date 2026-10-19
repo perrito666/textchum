@@ -395,7 +395,9 @@ fn run_manager(
                     "didChangeConfiguration": {"dynamicRegistration": false},
                     "symbol": {}
                 },
-                "window": {"workDoneProgress": true}
+                // Shown by the shell: a web page in the browser, a
+                // file in the editor.
+                "window": {"workDoneProgress": true, "showDocument": {"support": true}}
             },
         },
     });
@@ -624,17 +626,21 @@ fn answer_if_request(
     ) else {
         return;
     };
-    if method == "workspace/applyEdit" {
-        let params = message.get("params").cloned().unwrap_or(Value::Null);
-        let sent = events.send(Event::ApplyEdit {
-            server: server.to_owned(),
-            root: root.to_string_lossy().into_owned(),
-            request: id.to_string(),
-            params: params.to_string(),
-        });
-        if sent.is_ok() {
-            return;
+    // What only the shell can do — make an edit, open a page — goes to
+    // it, and is answered once done.
+    let params = || message.get("params").cloned().unwrap_or(Value::Null).to_string();
+    let (server, root_text, request) = (server.to_owned(), root.to_string_lossy().into_owned(), id.to_string());
+    let handed = match method {
+        "workspace/applyEdit" => {
+            events.send(Event::ApplyEdit { server, root: root_text, request, params: params() }).is_ok()
         }
+        "window/showDocument" => {
+            events.send(Event::ShowDocument { server, root: root_text, request, params: params() }).is_ok()
+        }
+        _ => false,
+    };
+    if handed {
+        return;
     }
     let reply = json!({
         "jsonrpc": "2.0",

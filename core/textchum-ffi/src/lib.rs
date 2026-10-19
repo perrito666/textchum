@@ -47,6 +47,12 @@ pub const TC_EVENT_APPLY_EDIT: u32 = 6;
 /// `status` what kind of news (`stopped`, `output`, `variables`,
 /// `ended`, …) and `payload` the news as JSON — see `textchum_dap`.
 pub const TC_EVENT_DEBUG: u32 = 7;
+/// Event kind: a language server asked for a document to be shown — a
+/// web page for the browser, a file for the editor. `server` and `path`
+/// name the instance (server id, root), `status` is the request's id as
+/// JSON and `payload` its `{uri, external?, takeFocus?, selection?}`;
+/// answer `{"success": bool}` with [`tc_lsp_answer_request`].
+pub const TC_EVENT_SHOW_DOCUMENT: u32 = 8;
 
 /// An event delivered from the core to the shell.
 ///
@@ -191,6 +197,16 @@ pub extern "C" fn tc_app_new(callback: TcEventCallback, userdata: *mut c_void) -
                     let mut out = TcEvent::new(TC_EVENT_RUN);
                     out.seq = id;
                     out.status = status.as_ptr();
+                    callback(&out, userdata.get());
+                }
+                Event::ShowDocument { server, root, request, params } => {
+                    let (server, root) = (callback_cstring(server), callback_cstring(root));
+                    let (request, params) = (callback_cstring(request), callback_cstring(params));
+                    let mut out = TcEvent::new(TC_EVENT_SHOW_DOCUMENT);
+                    out.server = server.as_ptr();
+                    out.path = root.as_ptr();
+                    out.status = request.as_ptr();
+                    out.payload = params.as_ptr();
                     callback(&out, userdata.get());
                 }
                 Event::Debug { session, kind, json } => {
@@ -455,6 +471,50 @@ pub unsafe extern "C" fn tc_lsp_answer_apply_edit(
         return;
     };
     let _ = catch_unwind(AssertUnwindSafe(|| app.pool.answer_apply_edit(server, root, request, applied)));
+}
+
+/// Answers a server's request the shell handled — a document shown —
+/// with `result`, as JSON; `request` is the id its event carried.
+///
+/// # Safety
+/// `app` must be a live pointer from [`tc_app_new`]; the strings must
+/// point to as many readable bytes as their lengths say.
+#[no_mangle]
+pub unsafe extern "C" fn tc_lsp_answer_request(
+    app: *mut TcApp,
+    server: *const c_char,
+    server_len: usize,
+    root: *const c_char,
+    root_len: usize,
+    request: *const c_char,
+    request_len: usize,
+    result: *const c_char,
+    result_len: usize,
+) {
+    let Some(app) = (unsafe { app.as_ref() }) else { return };
+    let (Some(server), Some(root), Some(request), Some(result)) = (
+        unsafe { str_from_raw(server, server_len) },
+        unsafe { str_from_raw(root, root_len) },
+        unsafe { str_from_raw(request, request_len) },
+        unsafe { str_from_raw(result, result_len) },
+    ) else {
+        return;
+    };
+    let result: serde_json::Value = serde_json::from_str(result).unwrap_or_default();
+    let _ = catch_unwind(AssertUnwindSafe(|| app.pool.answer_request(server, root, request, result)));
+}
+
+/// Makes the files a workspace edit creates, as part of refactoring
+/// `id`, before its text edits are made. Answers a JSON array of what
+/// was left undone, in words. Free with [`tc_string_free`].
+///
+/// # Safety
+/// `edit` must point to `edit_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tc_refactoring_create_files(id: u64, edit: *const c_char, edit_len: usize) -> *mut c_char {
+    let edit = unsafe { str_from_raw(edit, edit_len) }.unwrap_or_default();
+    let said = catch_unwind(|| textchum_core::refactoring::create_files(id, edit)).unwrap_or_default();
+    owned_c_string(serde_json::json!(said).to_string())
 }
 
 /// Sends a line to a run's input. False when it is over.

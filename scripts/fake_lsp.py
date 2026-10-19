@@ -134,6 +134,32 @@ def main():
                     return isinstance(result, dict) and "applied" in result
                 expect_answers(stdin, {2000: applied}, held)
                 send({"jsonrpc": "2.0", "id": message["id"], "result": answer["result"]})
+            elif command in ("fake.show", "fake.create"):
+                # `fake.show` asks for a file to be shown at a line, the
+                # way a server opens its own pages; `fake.create` sends an
+                # edit that makes a new file and writes into it.
+                given = message["params"].get("arguments") or [""]
+                if command == "fake.show":
+                    point = {"line": given[1] if len(given) > 1 else 0, "character": 0}
+                    send({"jsonrpc": "2.0", "id": 2001, "method": "window/showDocument",
+                          "params": {"uri": given[0], "takeFocus": True,
+                                     "selection": {"start": point, "end": point}}})
+                    key, request = "success", 2001
+                else:
+                    send({"jsonrpc": "2.0", "id": 2002, "method": "workspace/applyEdit",
+                          "params": {"label": "Add test", "edit": {"documentChanges": [
+                              {"kind": "create", "uri": given[0]},
+                              {"textDocument": {"uri": given[0], "version": None}, "edits": [{
+                                  "range": {"start": {"line": 0, "character": 0},
+                                            "end": {"line": 0, "character": 0}},
+                                  "newText": "package made\n"}]}]}}})
+                    key, request = "applied", 2002
+                answer = {}
+                def answered(result, key=key):
+                    answer["result"] = result
+                    return isinstance(result, dict) and key in result
+                expect_answers(stdin, {request: answered}, held)
+                send({"jsonrpc": "2.0", "id": message["id"], "result": answer["result"]})
         elif method == "initialize":
             told["initializationOptions"] = message["params"].get("initializationOptions")
             told["workspace"] = message["params"].get("capabilities", {}).get("workspace")
@@ -158,7 +184,7 @@ def main():
                         "renameProvider": True,
                         "documentFormattingProvider": True,
                         "documentSymbolProvider": True,
-                        "executeCommandProvider": {"commands": ["fake.report", "fake.apply"]},
+                        "executeCommandProvider": {"commands": ["fake.report", "fake.apply", "fake.show", "fake.create"]},
                         "signatureHelpProvider": {"triggerCharacters": ["(", ","]},
                         "documentHighlightProvider": True,
                         "workspaceSymbolProvider": True,

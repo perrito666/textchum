@@ -5882,6 +5882,10 @@ pub(crate) fn apply_workspace_edit(workbench: &Rc<Workbench>, json: &str, label:
         return false;
     }
     let id = textchum_core::refactoring::begin(label);
+    // The files it makes first: its text edits may be about them.
+    for said in textchum_core::refactoring::create_files(id, json) {
+        Shell::instance().notify(&said);
+    }
     let mut touched = 0usize;
     for (path, edits) in by_file {
         let mut open_page: Option<Rc<Page>> = None;
@@ -6295,6 +6299,22 @@ fn run_runnable(workbench: &Rc<Workbench>, line: Option<i32>) {
         Some(runnable) => run_in_directory(workbench, &runnable.command, &runnable.cwd),
         None => workbench.hint(&tr("Nothing here runs: put the caret in a test, a benchmark or a main.")),
     }
+}
+
+/// What a language server asked to be shown: a web page — its own
+/// documentation, an assembly listing — in the browser, a file in the
+/// editor at the place asked for. False when neither could be done.
+pub(crate) fn show_document(workbench: &Rc<Workbench>, params: &str) -> bool {
+    let params: serde_json::Value = serde_json::from_str(params).unwrap_or_default();
+    let Some(uri) = params["uri"].as_str() else { return false };
+    if let (Some(path), false) = (uri.strip_prefix("file://"), params["external"] == true) {
+        let line = params["selection"]["start"]["line"].as_i64().unwrap_or(0) as i32;
+        let character = params["selection"]["start"]["character"].as_u64().unwrap_or(0) as usize;
+        workbench.open(Some(PathBuf::from(percent_decode(path))), Some((line, character)));
+        return true;
+    }
+    gtk::UriLauncher::new(uri).launch(Some(&workbench.window), gtk::gio::Cancellable::NONE, |_| {});
+    true
 }
 
 /// Debug at Caret, or a run mark clicked with Alt on zero-based `line`:

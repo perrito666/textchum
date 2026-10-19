@@ -846,6 +846,16 @@ impl Shell {
                         callback(&json);
                     }
                 }
+                Event::ShowDocument { server, root, request, params } => {
+                    let mut front = None;
+                    crate::workbench::Workbench::for_each(|workbench| {
+                        if front.is_none() {
+                            front = Some(Rc::clone(workbench));
+                        }
+                    });
+                    let shown = front.is_some_and(|workbench| crate::workbench::show_document(&workbench, &params));
+                    self.pool.borrow().answer_request(&server, &root, &request, serde_json::json!({"success": shown}));
+                }
                 Event::Debug { session, kind, json } => {
                     crate::workbench::Workbench::for_each(|workbench| {
                         if workbench.debug_panel.session_id() == Some(session) {

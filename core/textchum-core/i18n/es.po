@@ -151,6 +151,14 @@ msgid "clangd, and clang-format before every save."
 msgstr "clangd, y clang-format antes de cada guardado."
 
 #: core/textchum-core/src/refactoring.rs
+msgid "Renaming files is not done yet: {} was left as it is."
+msgstr "Todavía no se renombran archivos: {} se dejó como estaba."
+
+#: core/textchum-core/src/refactoring.rs
+msgid "Deleting files is not done yet: {} was left as it is."
+msgstr "Todavía no se borran archivos: {} se dejó como estaba."
+
+#: core/textchum-core/src/refactoring.rs
 msgid "Undid {} in {} file."
 msgid_plural "Undid {} in {} files."
 msgstr[0] "Deshecho {} en {} archivo."

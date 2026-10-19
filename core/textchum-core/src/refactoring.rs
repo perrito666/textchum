@@ -29,6 +29,8 @@ struct Refactoring {
     label: String,
     open_documents: usize,
     closed: Vec<ClosedFile>,
+    /// Files it made, which undoing takes away again while still empty.
+    created: Vec<PathBuf>,
 }
 
 struct Registry {
@@ -49,7 +51,13 @@ pub fn begin(label: &str) -> u64 {
     let Ok(mut registry) = REGISTRY.lock() else { return 0 };
     let id = registry.next;
     registry.next += 1;
-    registry.refactorings.push(Refactoring { id, label: label.to_owned(), open_documents: 0, closed: Vec::new() });
+    registry.refactorings.push(Refactoring {
+        id,
+        label: label.to_owned(),
+        open_documents: 0,
+        closed: Vec::new(),
+        created: Vec::new(),
+    });
     if registry.refactorings.len() > KEEP {
         registry.refactorings.remove(0);
     }
@@ -71,10 +79,78 @@ pub fn write_closed(id: u64, path: &Path, after: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The path a `file://` URI names.
+fn path_of(uri: &str) -> Option<PathBuf> {
+    let path = uri.strip_prefix("file://")?;
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        if bytes[at] == b'%' && at + 2 < bytes.len() + 1 {
+            if let Some(byte) = std::str::from_utf8(bytes.get(at + 1..at + 3)?).ok().and_then(|hex| u8::from_str_radix(hex, 16).ok()) {
+                decoded.push(byte);
+                at += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[at]);
+        at += 1;
+    }
+    Some(PathBuf::from(String::from_utf8(decoded).ok()?))
+}
+
+/// Makes the files a workspace edit creates, before its text edits are
+/// made, since those may be about them: a test file a server writes, a
+/// new module. A file already there is left as it is. Renaming and
+/// deleting files are not done; what was left undone is said, a line
+/// each.
+pub fn create_files(id: u64, edit_json: &str) -> Vec<String> {
+    let Ok(edit) = serde_json::from_str::<serde_json::Value>(edit_json) else { return Vec::new() };
+    let mut said = Vec::new();
+    for change in edit["documentChanges"].as_array().into_iter().flatten() {
+        match change["kind"].as_str() {
+            Some("create") => {
+                let Some(path) = change["uri"].as_str().and_then(path_of) else { continue };
+                if path.exists() {
+                    continue;
+                }
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                match write_atomically(&path, b"") {
+                    Ok(()) => {
+                        with(id, |refactoring| refactoring.created.push(path.clone()));
+                    }
+                    Err(error) => said.push(format!("{}: {error}", path.display())),
+                }
+            }
+            Some(kind @ ("rename" | "delete")) => {
+                let uri = change["oldUri"].as_str().or(change["uri"].as_str()).unwrap_or_default();
+                let name = path_of(uri)
+                    .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+                    .unwrap_or_else(|| uri.to_owned());
+                let text = if kind == "rename" {
+                    crate::i18n::tr("Renaming files is not done yet: {} was left as it is.")
+                } else {
+                    crate::i18n::tr("Deleting files is not done yet: {} was left as it is.")
+                };
+                said.push(crate::i18n::fill(&text, &[&name]));
+            }
+            _ => {}
+        }
+    }
+    said
+}
+
 /// How many files refactoring `id` touched, open or not; 0 for one not
 /// remembered.
 pub fn files_touched(id: u64) -> usize {
-    with(id, |refactoring| refactoring.open_documents + refactoring.closed.len()).unwrap_or(0)
+    with(id, |refactoring| {
+        // A file made and then written is one file.
+        let made_only = refactoring.created.iter().filter(|path| !refactoring.closed.iter().any(|file| &file.path == *path)).count();
+        refactoring.open_documents + refactoring.closed.len() + made_only
+    })
+    .unwrap_or(0)
 }
 
 pub fn label(id: u64) -> Option<String> {
@@ -91,6 +167,15 @@ pub struct Restored {
 }
 
 pub fn restore_closed(id: u64, undo: bool) -> Restored {
+    let created: Vec<PathBuf> = with(id, |refactoring| refactoring.created.clone()).unwrap_or_default();
+    // Made again before what was written in them is written again.
+    if !undo {
+        for path in &created {
+            if !path.exists() {
+                let _ = write_atomically(path, b"");
+            }
+        }
+    }
     let files: Vec<(PathBuf, String, String)> = with(id, |refactoring| {
         refactoring.closed.iter().map(|file| (file.path.clone(), file.before.clone(), file.after.clone())).collect()
     })
@@ -103,6 +188,16 @@ pub fn restore_closed(id: u64, undo: bool) -> Restored {
             restored.written.push(path);
         } else {
             restored.changed_since.push(path);
+        }
+    }
+    // Taken away again once empty, as they were made; one with anything
+    // in it is somebody's now.
+    if undo {
+        for path in created {
+            let empty = std::fs::metadata(&path).map(|metadata| metadata.len() == 0).unwrap_or(false);
+            if empty && std::fs::remove_file(&path).is_ok() && !restored.written.contains(&path) {
+                restored.written.push(path);
+            }
         }
     }
     restored
@@ -144,6 +239,30 @@ pub fn finish(id: u64, undo: bool, documents: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_file_the_edit_creates_is_made_first_and_taken_away_by_undo() {
+        let dir = std::env::temp_dir().join(format!("textchum-refactoring-create-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let made = dir.join("main_test.go");
+        let id = begin("Add test");
+        let edit = serde_json::json!({"documentChanges": [
+            {"kind": "create", "uri": format!("file://{}", made.display())},
+            {"kind": "delete", "uri": format!("file://{}/old%20file.go", dir.display())},
+        ]});
+        let said = create_files(id, &edit.to_string());
+        assert!(made.is_file() && std::fs::read_to_string(&made).unwrap().is_empty());
+        assert_eq!(said, ["Deleting files is not done yet: old file.go was left as it is."]);
+        // The shell then writes the new file's text into it.
+        write_closed(id, &made, "package main\n").unwrap();
+        assert_eq!(files_touched(id), 1, "made and written is one file");
+        restore_closed(id, true);
+        assert!(!made.exists(), "undo takes the made file away");
+        restore_closed(id, false);
+        assert_eq!(std::fs::read_to_string(&made).unwrap(), "package main\n", "redo makes it and writes it again");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_closed_file_is_put_back_and_written_again_unless_it_changed() {

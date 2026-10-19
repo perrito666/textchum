@@ -853,3 +853,32 @@ fn an_edit_a_server_asks_for_reaches_the_shell_and_the_answer_reaches_the_server
     });
     drop(pool);
 }
+
+#[test]
+fn a_document_a_server_asks_to_show_reaches_the_shell_and_the_answer_reaches_the_server() {
+    let (tx, events) = mpsc::channel();
+    let mut pool = Pool::new(tx);
+    pool.add_override(fake_server_config());
+    let (_root, file) = project("show-document");
+    pool.did_open(&file, "rust", "fn main() {}\n");
+    let uri = format!("file://{}", file.display());
+    let command_id = pool.execute_command(&file, "fake.show", serde_json::json!([uri, 3]));
+    let mut seen = Vec::new();
+    collect_until(&events, "the server's showDocument", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::ShowDocument { .. }))
+    });
+    let Some(Event::ShowDocument { server, root, request, params }) =
+        seen.iter().find(|event| matches!(event, Event::ShowDocument { .. })).cloned()
+    else {
+        unreachable!()
+    };
+    let params: serde_json::Value = serde_json::from_str(&params).unwrap();
+    assert_eq!((params["uri"].as_str(), params["selection"]["start"]["line"].as_u64()), (Some(uri.as_str()), Some(3)));
+    pool.answer_request(&server, &root, &request, serde_json::json!({"success": true}));
+    collect_until(&events, "the command's answer", &mut seen, |seen| {
+        seen.iter().any(|event| matches!(event, Event::LspResponse { id, json }
+            if *id == command_id && json.contains("\"success\":true")))
+    });
+    drop(pool);
+}
+
