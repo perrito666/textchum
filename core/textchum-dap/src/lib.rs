@@ -56,7 +56,7 @@ pub fn adapter(name: &str) -> Option<Adapter> {
         }),
         "lldb" => Some(Adapter {
             id: "lldb-dap",
-            command: words(&["lldb-dap"]),
+            command: vec![lldb_dap(std::env::var_os("PATH").as_deref())],
             install: "your distribution's lldb package, which carries lldb-dap",
         }),
         // The scripted adapter the smoke tests drive, where they say it is.
@@ -67,6 +67,34 @@ pub fn adapter(name: &str) -> Option<Adapter> {
         }),
         _ => None,
     }
+}
+
+/// The lldb adapter on `path`: `lldb-dap` itself, else the newest of the
+/// versioned names distributions install it under (`lldb-dap-18`), else
+/// its older name, `lldb-vscode`, the same way. Plain `lldb-dap` when
+/// none is there, for the error to name.
+fn lldb_dap(path: Option<&std::ffi::OsStr>) -> String {
+    let dirs: Vec<PathBuf> = path.map(|path| std::env::split_paths(path).collect()).unwrap_or_default();
+    for base in ["lldb-dap", "lldb-vscode"] {
+        if dirs.iter().any(|dir| dir.join(base).is_file()) {
+            return base.to_owned();
+        }
+        let newest = dirs
+            .iter()
+            .filter_map(|dir| std::fs::read_dir(dir).ok())
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let version: u32 = name.strip_prefix(base)?.strip_prefix('-')?.parse().ok()?;
+                Some((version, name))
+            })
+            .max();
+        if let Some((_, name)) = newest {
+            return name;
+        }
+    }
+    "lldb-dap".to_owned()
 }
 
 /// The `launch` request's arguments for a launch description, once its
@@ -271,6 +299,23 @@ mod tests {
         assert_eq!(picked_executable(&lines, &json!({"kind": "lib"})).as_deref(), Some("/t/shop-1"));
         assert_eq!(picked_executable(&lines, &json!({"kind": "test", "name": "api"})).as_deref(), Some("/t/api-2"));
         assert_eq!(picked_executable(&lines, &json!({"kind": "bin"})), None);
+    }
+
+    #[test]
+    fn lldb_dap_is_found_under_the_names_distributions_give_it() {
+        let dir = std::env::temp_dir().join(format!("textchum-lldb-names-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = std::ffi::OsString::from(dir.as_os_str());
+        assert_eq!(lldb_dap(Some(&path)), "lldb-dap", "nothing there: the name the error gives");
+        std::fs::write(dir.join("lldb-vscode-14"), "").unwrap();
+        assert_eq!(lldb_dap(Some(&path)), "lldb-vscode-14");
+        std::fs::write(dir.join("lldb-dap-17"), "").unwrap();
+        std::fs::write(dir.join("lldb-dap-18"), "").unwrap();
+        assert_eq!(lldb_dap(Some(&path)), "lldb-dap-18", "the newest, and before the older name");
+        std::fs::write(dir.join("lldb-dap"), "").unwrap();
+        assert_eq!(lldb_dap(Some(&path)), "lldb-dap");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
