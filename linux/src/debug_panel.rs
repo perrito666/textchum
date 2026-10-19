@@ -45,6 +45,10 @@ pub struct DebugPanel {
     variables_list: gtk::ListBox,
     console: gtk::TextView,
     evaluate: gtk::Entry,
+    /// Stack | (variables | console): their widths are set when a
+    /// session begins, since every side would otherwise ask for all.
+    outer: gtk::Paned,
+    inner: gtk::Paned,
     session: Cell<Option<u64>>,
     frames: RefCell<Vec<Frame>>,
     scopes: RefCell<Vec<Node>>,
@@ -108,17 +112,24 @@ impl DebugPanel {
         let evaluate = gtk::Entry::new();
         evaluate.set_placeholder_text(Some(&tr("An expression to evaluate where the program stopped — ⏎")));
         let scrolled = |child: &gtk::Widget| {
-            gtk::ScrolledWindow::builder().child(child).vexpand(true).hexpand(true).width_request(160).build()
+            gtk::ScrolledWindow::builder().child(child).vexpand(true).width_request(160).build()
         };
         let console_side = gtk::Box::new(gtk::Orientation::Vertical, 2);
         console_side.append(&scrolled(console.upcast_ref()));
         console_side.append(&evaluate);
+        console_side.set_hexpand(true);
         let inner = gtk::Paned::new(gtk::Orientation::Horizontal);
         inner.set_start_child(Some(&scrolled(variables_list.upcast_ref())));
         inner.set_end_child(Some(&console_side));
+        inner.set_shrink_start_child(false);
+        inner.set_shrink_end_child(false);
+        inner.set_hexpand(true);
         let outer = gtk::Paned::new(gtk::Orientation::Horizontal);
         outer.set_start_child(Some(&scrolled(frames_list.upcast_ref())));
         outer.set_end_child(Some(&inner));
+        outer.set_resize_start_child(false);
+        outer.set_shrink_start_child(false);
+        outer.set_shrink_end_child(false);
         outer.set_vexpand(true);
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 2);
@@ -138,6 +149,8 @@ impl DebugPanel {
             variables_list: variables_list.clone(),
             console,
             evaluate: evaluate.clone(),
+            outer: outer.clone(),
+            inner: inner.clone(),
             session: Cell::new(None),
             frames: RefCell::new(Vec::new()),
             scopes: RefCell::new(Vec::new()),
@@ -244,6 +257,12 @@ impl DebugPanel {
         self.stop.set_sensitive(true);
         self.set_steppable(false);
         self.root.set_visible(true);
+        // A quarter for the stack, the rest halved between the variables
+        // and the console.
+        let width = self.root.width().max(self.root.parent().map(|parent| parent.width()).unwrap_or(0));
+        let width = if width > 0 { width } else { 1000 };
+        self.outer.set_position(width / 4);
+        self.inner.set_position(width * 3 / 8);
     }
 
     /// What the session said.
