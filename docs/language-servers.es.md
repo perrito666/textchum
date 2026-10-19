@@ -191,7 +191,17 @@ proyecto en Settings ▸ Language Servers; véase
   para que la termine antes de aplicarla, y una que trae un comando en
   vez de una edición la ejecuta el servidor, que devuelve la edición
   que hace el comando — así funciona organizar las importaciones — y
-  esa edición se aplica igual que la de una acción.
+  esa edición se aplica igual que la de una acción. Una edición que
+  crea un archivo — un archivo de pruebas que escribe el servidor — lo
+  crea primero; Deshacer lo quita de nuevo mientras siga como se creó.
+  Un servidor también puede pedir que se muestre una página: su
+  documentación, un listado en ensamblador, la división de un paquete —
+  la página se abre en el navegador — o un archivo, que se abre en el
+  editor en la línea que nombra. Las notas que un servidor sujeta a un
+  punto y no a un tramo de texto, como los detalles de optimización del
+  compilador, se subrayan en la palabra de ese punto. Todavía no: una
+  edición que renombra o borra un archivo lo dice y deja el archivo
+  como está.
   Cuando el cursor se detiene en una línea donde el servidor tiene algo
   que ofrecer, aparece una bombilla en el margen junto a ella; un clic
   en la bombilla lista esas mismas acciones. Pasar a otra línea la

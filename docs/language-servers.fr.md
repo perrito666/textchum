@@ -196,7 +196,17 @@ Language Servers ; voir [configuration](configuration.md#projets).
   modification est exécutée par le serveur, qui renvoie la
   modification que fait la commande — c'est ainsi que fonctionne
   l'organisation des imports — et cette modification est appliquée
-  comme celle d'une action.
+  comme celle d'une action. Une modification qui crée un fichier — un
+  fichier de tests écrit par le serveur — le crée d'abord ; Annuler le
+  retire tant qu'il est resté tel qu'il a été créé. Un serveur peut
+  aussi demander qu'une page soit montrée : sa documentation, un
+  listing en assembleur, le découpage d'un paquet — la page s'ouvre
+  dans le navigateur — ou un fichier, qui s'ouvre dans l'éditeur à la
+  ligne qu'il nomme. Les notes qu'un serveur attache à un point plutôt
+  qu'à un passage, comme les détails d'optimisation du compilateur,
+  sont soulignées sur le mot à cet endroit. Pas encore là : une
+  modification qui renomme ou supprime un fichier le dit et laisse le
+  fichier tel quel.
   Quand le curseur s'arrête sur une ligne où le serveur a quelque chose
   à proposer, une ampoule apparaît dans la marge à côté ; un clic sur
   l'ampoule liste ces mêmes actions. Passer à une autre ligne la retire.

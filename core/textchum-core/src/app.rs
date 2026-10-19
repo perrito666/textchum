@@ -58,6 +58,17 @@ pub enum Event {
         request: String,
         params: String,
     },
+    /// A language server asked the editor to show a document: a web page
+    /// (gopls's documentation, an assembly listing) for the browser, or a
+    /// file to open in the editor. `request` is the request's id as JSON,
+    /// to be answered with `{success}`; `params` is the request's
+    /// `{uri, external?, takeFocus?, selection?}` as JSON.
+    ShowDocument {
+        server: String,
+        root: String,
+        request: String,
+        params: String,
+    },
     /// A debug session has news; see the `textchum-dap` crate. `kind`
     /// says what (`stopped`, `output`, `variables`, `ended`, …) and
     /// `json` carries it.

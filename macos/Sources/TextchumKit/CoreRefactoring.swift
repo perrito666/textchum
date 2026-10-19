@@ -27,6 +27,15 @@ public enum CoreRefactoring {
         return String(cString: answer)
     }
 
+    /// Makes the files a workspace edit creates, before its text edits;
+    /// what was left undone, in words.
+    public static func createFiles(_ id: UInt64, editJSON: String) -> [String] {
+        guard let answer = editJSON.withCString({ tc_refactoring_create_files(id, $0, UInt(strlen($0))) })
+        else { return [] }
+        defer { tc_string_free(answer) }
+        return (try? JSONDecoder().decode([String].self, from: Data(String(cString: answer).utf8))) ?? []
+    }
+
     /// How many files it touched; 0 for one not remembered.
     public static func filesTouched(_ id: UInt64) -> Int {
         Int(tc_refactoring_files_touched(id))

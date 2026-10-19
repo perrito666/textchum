@@ -74,6 +74,10 @@ public final class CoreApp {
         /// request's `{label?, edit}` as JSON, `request` its id, to be
         /// handed back to ``lspAnswerApplyEdit(server:root:request:applied:)``.
         case applyEdit(server: String, root: String, request: String, params: String)
+        /// A language server asked for a document to be shown: `params`
+        /// is the request's `{uri, external?, selection?}` as JSON, to be
+        /// answered with ``lspAnswerRequest(server:root:request:resultJSON:)``.
+        case showDocument(server: String, root: String, request: String, params: String)
         /// A debug session has news: `kind` says what (stopped, output,
         /// variables, ended, …), `json` carries it.
         case debug(session: UInt64, kind: String, json: String)
@@ -164,6 +168,14 @@ public final class CoreApp {
                 sink.deliver(.lspResponse(id: event.seq, json: payload ?? "null"))
             case UInt32(TC_EVENT_RUN):
                 sink.deliver(.run(id: event.seq, status: event.status.map { String(cString: $0) } ?? ""))
+            case UInt32(TC_EVENT_SHOW_DOCUMENT):
+                sink.deliver(
+                    .showDocument(
+                        server: event.server.map { String(cString: $0) } ?? "",
+                        root: path ?? "",
+                        request: event.status.map { String(cString: $0) } ?? "",
+                        params: payload ?? "{}"
+                    ))
             case UInt32(TC_EVENT_DEBUG):
                 sink.deliver(
                     .debug(
@@ -819,6 +831,20 @@ public final class CoreApp {
             withUTF8(root) { root, rootLen in
                 withUTF8(request) { request, requestLen in
                     tc_lsp_answer_apply_edit(handle, server, serverLen, root, rootLen, request, requestLen, applied)
+                }
+            }
+        }
+    }
+
+    /// Answers a server's request the shell handled with `resultJSON`.
+    public func lspAnswerRequest(server: String, root: String, request: String, resultJSON: String) {
+        withUTF8(server) { server, serverLen in
+            withUTF8(root) { root, rootLen in
+                withUTF8(request) { request, requestLen in
+                    withUTF8(resultJSON) { result, resultLen in
+                        tc_lsp_answer_request(
+                            handle, server, serverLen, root, rootLen, request, requestLen, result, resultLen)
+                    }
                 }
             }
         }

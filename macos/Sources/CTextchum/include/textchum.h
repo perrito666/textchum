@@ -59,6 +59,15 @@
 #define TC_EVENT_DEBUG 7
 
 /**
+ * Event kind: a language server asked for a document to be shown — a
+ * web page for the browser, a file for the editor. `server` and `path`
+ * name the instance (server id, root), `status` is the request's id as
+ * JSON and `payload` its `{uri, external?, takeFocus?, selection?}`;
+ * answer `{"success": bool}` with [`tc_lsp_answer_request`].
+ */
+#define TC_EVENT_SHOW_DOCUMENT 8
+
+/**
  * Appearance choice: follow the system.
  */
 #define TC_APPEARANCE_SYSTEM 0
@@ -388,6 +397,34 @@ void tc_lsp_answer_apply_edit(struct TcApp *app,
                               const char *request,
                               uintptr_t request_len,
                               bool applied);
+
+/**
+ * Answers a server's request the shell handled — a document shown —
+ * with `result`, as JSON; `request` is the id its event carried.
+ *
+ * # Safety
+ * `app` must be a live pointer from [`tc_app_new`]; the strings must
+ * point to as many readable bytes as their lengths say.
+ */
+void tc_lsp_answer_request(struct TcApp *app,
+                           const char *server,
+                           uintptr_t server_len,
+                           const char *root,
+                           uintptr_t root_len,
+                           const char *request,
+                           uintptr_t request_len,
+                           const char *result,
+                           uintptr_t result_len);
+
+/**
+ * Makes the files a workspace edit creates, as part of refactoring
+ * `id`, before its text edits are made. Answers a JSON array of what
+ * was left undone, in words. Free with [`tc_string_free`].
+ *
+ * # Safety
+ * `edit` must point to `edit_len` readable bytes.
+ */
+char *tc_refactoring_create_files(uint64_t id, const char *edit, uintptr_t edit_len);
 
 /**
  * Sends a line to a run's input. False when it is over.

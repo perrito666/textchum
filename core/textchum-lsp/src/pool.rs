@@ -975,9 +975,16 @@ impl Pool {
     /// [`textchum_core::Event::ApplyEdit`] carried — once the shell has
     /// made the edit, or found it could not.
     pub fn answer_apply_edit(&self, server: &str, root: &str, request: &str, applied: bool) {
+        self.answer_request(server, root, request, serde_json::json!({"applied": applied}));
+    }
+
+    /// Answers a server→client request the shell handled — an edit made,
+    /// a document shown — with `result`; `request` is the id the event
+    /// carried.
+    pub fn answer_request(&self, server: &str, root: &str, request: &str, result: serde_json::Value) {
         let Ok(id) = serde_json::from_str::<serde_json::Value>(request) else { return };
         if let Some(instance) = self.instances.get(&(server.to_owned(), PathBuf::from(root))) {
-            instance.send(crate::instance::Command::Reply { id, result: serde_json::json!({"applied": applied}) });
+            instance.send(crate::instance::Command::Reply { id, result });
         }
     }
 

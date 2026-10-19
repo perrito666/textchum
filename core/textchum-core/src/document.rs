@@ -634,11 +634,30 @@ impl Document {
             let character = item[character].as_u64().unwrap_or(0) as usize;
             self.buffer.utf16_offset_at(line, character)
         };
+        let rope = self.buffer.rope();
+        // A finding with no width — gopls's optimizer notes are at a
+        // point — would underline nothing; it gets the word it points at,
+        // or the character, so it can be seen and hovered.
+        let widened = |start: usize| -> usize {
+            let at = rope.utf16_cu_to_char(start.min(rope.len_utf16_cu()));
+            let mut end = at;
+            while end < rope.len_chars() && {
+                let c = rope.char(end);
+                c.is_alphanumeric() || c == '_'
+            } {
+                end += 1;
+            }
+            if end == at && at < rope.len_chars() && !matches!(rope.char(at), '\n' | '\r') {
+                end += 1;
+            }
+            rope.char_to_utf16_cu(end)
+        };
         self.diagnostics = items
             .iter()
             .map(|item| {
                 let start = position(item, "line", "character");
                 let end = position(item, "endLine", "endCharacter").max(start);
+                let end = if end == start { widened(start) } else { end };
                 Finding {
                     start,
                     end,
@@ -1631,6 +1650,19 @@ use d;
         assert_eq!(crumbs[0].0, "main");
         assert_eq!(crumbs[0].1, 5, "after a two-byte character that is one UTF-16 unit");
         assert!(document.breadcrumbs_json(caret).contains("\"label\":\"main\""));
+    }
+
+    #[test]
+    fn a_finding_at_a_point_takes_the_word_there() {
+        let mut document = Document::new();
+        document.replace_utf16(0, 0, "fmt.Println(x)\n").unwrap();
+        document.set_diagnostics(
+            r#"[{"line":0,"character":4,"endLine":0,"endCharacter":4,"severity":3,"message":"inlining call"},
+                {"line":0,"character":11,"endLine":0,"endCharacter":11,"severity":3,"message":"escapes"},
+                {"line":0,"character":14,"endLine":0,"endCharacter":14,"severity":3,"message":"at the end"}]"#,
+        );
+        let spans: Vec<(usize, usize)> = document.diagnostics().iter().map(|finding| (finding.start, finding.end)).collect();
+        assert_eq!(spans, [(4, 11), (11, 12), (14, 14)], "a word, a character, nothing at the line break");
     }
 
     #[test]
