@@ -1648,22 +1648,30 @@ fn run_smoke_test(app: &adw::Application) -> i32 {
     if have_fake_server {
         let context = glib::MainContext::default();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        let squiggled = || {
+            buffer
+                .iter_at_offset(0)
+                .tags()
+                .iter()
+                .any(|tag| tag.name().is_some_and(|name| name.starts_with("diag-")))
+        };
+        // Until the underline is there, not only the count: the first
+        // findings can be about the text before an earlier edit, with the
+        // fresh ones a moment behind.
         loop {
             context.iteration(true);
-            if !handles.problems.borrow().is_empty() {
+            if !handles.problems.borrow().is_empty() && squiggled() {
                 break;
             }
             if std::time::Instant::now() > deadline {
-                eprintln!("FAIL: no diagnostics arrived");
-                return 1;
+                break;
             }
         }
-        let squiggled = buffer
-            .iter_at_offset(0)
-            .tags()
-            .iter()
-            .any(|tag| tag.name().is_some_and(|name| name.starts_with("diag-")));
-        if !squiggled {
+        if handles.problems.borrow().is_empty() {
+            eprintln!("FAIL: no diagnostics arrived");
+            return 1;
+        }
+        if !squiggled() {
             eprintln!("FAIL: diagnostics did not tag the text");
             return 1;
         }
