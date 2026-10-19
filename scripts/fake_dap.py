@@ -8,9 +8,14 @@ children), a step that moves one line down, and an end with an exit
 code. A launch whose `program` is "fail" is refused. It never asks the
 client anything except, once, for a terminal, which the client must
 decline without the session ending.
+
+With `--listen` it speaks over TCP instead, the way Delve does: it
+listens on a port of its choosing, says where on its standard output,
+and serves one connection.
 """
 
 import json
+import socket
 import sys
 
 
@@ -31,6 +36,8 @@ def read_message(stream):
 
 
 seq = 0
+# Where messages go: standard output, or the connection when listening.
+out = sys.stdout.buffer
 
 
 def send(payload):
@@ -38,9 +45,9 @@ def send(payload):
     seq += 1
     payload["seq"] = seq
     body = json.dumps(payload).encode("utf-8")
-    sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(body))
-    sys.stdout.buffer.write(body)
-    sys.stdout.buffer.flush()
+    out.write(b"Content-Length: %d\r\n\r\n" % len(body))
+    out.write(body)
+    out.flush()
 
 
 def respond(request, body=None, success=True, message=None):
@@ -56,7 +63,16 @@ def event(name, body=None):
 
 
 def main():
+    global out
     stdin = sys.stdin.buffer
+    if "--listen" in sys.argv:
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        print("DAP server listening at: 127.0.0.1:%d" % server.getsockname()[1], flush=True)
+        connection, _ = server.accept()
+        stdin = connection.makefile("rb")
+        out = connection.makefile("wb")
     program = None
     breakpoints = {}
     line = 1
