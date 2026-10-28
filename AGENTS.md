@@ -41,6 +41,17 @@ this document" beats a beep; "save the file so a python server can
 attach, or add a save preprocessor for python" beats "no". When
 something cannot work, say what would make it work.
 
+**Do not tell the user to do something the editor can do for them.**
+Saying what would make a thing work is the floor, not the goal. When
+the fix is a command the editor could run — installing a missing
+language server, formatter or debugger, creating the environment it
+goes into — offer to run it, with the alternatives side by side (into
+this project's environment or for the whole user, through whichever
+installer is present), and pick the result up when it finishes. A
+command printed for the user to copy into a terminal is the fallback
+for what the editor truly cannot do, such as a system package that
+needs an administrator's password.
+
 **Degrade, never block.** A missing language server, a broken config, a
 formatter that is not installed — each of these makes one feature
 unavailable and nothing else. A broken `config.json` is preserved,

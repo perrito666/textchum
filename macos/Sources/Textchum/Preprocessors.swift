@@ -85,12 +85,27 @@ enum Preprocessors {
     ) -> Result<String, Failure> {
         let commandLine = words.joined(separator: " ")
         let process = Process()
-        // `env` resolves the tool against the login-shell PATH the app
-        // adopted at startup, same as language servers.
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = words
+        // Found where the core finds language servers: the project's
+        // environment, then the login-shell PATH the app adopted at
+        // startup, then the per-user folders installers write to.
+        let program = words[0]
+        if let resolved = CoreInstall.resolve(program: program, project: directory) {
+            process.executableURL = URL(fileURLWithPath: resolved[0])
+            process.arguments = Array(resolved.dropFirst()) + Array(words.dropFirst())
+        } else if CoreInstall.knows(program: program) {
+            if let directory {
+                CoreInstall.noteMissing(program: program, project: directory, purpose: t("save formatter"))
+            }
+            return .failure(
+                Failure(command: commandLine, details: t("{} is not installed; Install… offers to install it", program)))
+        } else {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = words
+        }
         if let directory, FileManager.default.fileExists(atPath: directory) {
             process.currentDirectoryURL = URL(fileURLWithPath: directory)
+            process.environment = ProcessInfo.processInfo.environment.merging(
+                CoreInstall.environment(project: directory)) { _, project in project }
         }
         let stdin = Pipe()
         let stdout = Pipe()

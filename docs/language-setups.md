@@ -11,7 +11,10 @@ only needed when you want a different server than the default.
 
 Install lines assume [Homebrew](https://brew.sh) on macOS; on Linux,
 your package manager or the language's own installer does the same
-job.
+job. The editor can also do the installing: open a file, and what its
+server, formatters and debugger need and do not have comes up under
+**Install…** in the status bar (see
+[Installing what is missing](language-servers.md#installing-what-is-missing)).
 
 ## Python
 

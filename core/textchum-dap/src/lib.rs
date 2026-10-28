@@ -30,8 +30,12 @@ pub struct Adapter {
     pub id: &'static str,
     /// Its command line, program first.
     pub command: Vec<String>,
-    /// What installs it, for when it is not there.
-    pub install: &'static str,
+    /// What the install catalog knows it by (`textchum_core::install`).
+    pub package: &'static str,
+    /// A command that succeeds only when the adapter can run: for an
+    /// adapter that is a module its interpreter imports, starting it is
+    /// no test — the interpreter is there either way.
+    pub check: Option<Vec<String>>,
     /// Spoken to over TCP, at the address it prints, rather than over its
     /// standard input and output.
     pub listens: bool,
@@ -44,7 +48,8 @@ pub fn adapter(name: &str) -> Option<Adapter> {
         "debugpy" => Some(Adapter {
             id: "debugpy",
             command: words(&["python3", "-m", "debugpy.adapter"]),
-            install: "python3 -m pip install debugpy",
+            package: "debugpy",
+            check: Some(words(&["python3", "-c", "import debugpy"])),
             listens: false,
         }),
         // Delve speaks only over TCP: it is asked to listen where it
@@ -52,27 +57,31 @@ pub fn adapter(name: &str) -> Option<Adapter> {
         "dlv" => Some(Adapter {
             id: "go",
             command: words(&["dlv", "dap", "--listen=127.0.0.1:0"]),
-            install: "go install github.com/go-delve/delve/cmd/dlv@latest",
+            package: "dlv",
+            check: None,
             listens: true,
         }),
         // Xcode's lldb-dap is not on the PATH; xcrun finds it.
         "lldb" if cfg!(target_os = "macos") => Some(Adapter {
             id: "lldb-dap",
             command: words(&["xcrun", "lldb-dap"]),
-            install: "xcode-select --install",
+            package: "lldb-dap",
+            check: Some(words(&["xcrun", "--find", "lldb-dap"])),
             listens: false,
         }),
         "lldb" => Some(Adapter {
             id: "lldb-dap",
             command: vec![lldb_dap(std::env::var_os("PATH").as_deref())],
-            install: "your distribution's lldb package, which carries lldb-dap",
+            package: "lldb-dap",
+            check: None,
             listens: false,
         }),
         // The scripted adapter the smoke tests drive, where they say it is.
         "fake" => std::env::var("TEXTCHUM_FAKE_DAP").ok().map(|script| Adapter {
             id: "fake",
             command: vec!["python3".to_owned(), script],
-            install: "scripts/fake_dap.py",
+            package: "fake",
+            check: None,
             listens: false,
         }),
         _ => None,
@@ -171,20 +180,37 @@ impl Debuggers {
         let Some(adapter) = adapter(name) else {
             return Err(textchum_core::i18n::tr("Nothing here can be debugged: put the caret in a test or a main."));
         };
+        // Found in the project's environment first, as its language
+        // server is: debugging a project means its interpreter.
+        let command = textchum_core::install::resolve_command(&adapter.command, Some(cwd));
+        if let Some(check) = &adapter.check {
+            let check = textchum_core::install::resolve_command(check, Some(cwd));
+            let ran = std::process::Command::new(&check[0])
+                .args(&check[1..])
+                .current_dir(cwd)
+                .envs(textchum_core::install::environment(cwd))
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+            if !ran.is_ok_and(|status| status.success()) {
+                return Err(missing(&adapter, cwd));
+            }
+        }
         let id = self.next;
         self.next += 1;
+        let install = textchum_core::install::hint(adapter.package).unwrap_or_default();
         let session_launch = |program: Option<&str>| Launch {
-            adapter: adapter.command.clone(),
+            adapter: command.clone(),
             adapter_id: adapter.id.to_owned(),
             arguments: launch_arguments(name, launch, cwd, program),
             cwd: cwd.to_path_buf(),
             breakpoints: breakpoints.clone(),
-            install: adapter.install.to_owned(),
+            install: install.clone(),
             listens: adapter.listens,
         };
         let Some(cargo) = launch["cargo"].as_array() else {
             let session = Session::start(id, session_launch(None), self.events.clone())
-                .map_err(|error| not_installed(&adapter, &error))?;
+                .map_err(|error| not_installed(&adapter, cwd, &error))?;
             if let Ok(mut sessions) = self.sessions.lock() {
                 sessions.insert(id, session);
             }
@@ -195,6 +221,7 @@ impl Debuggers {
         let cargo: Vec<String> = cargo.iter().filter_map(|word| word.as_str().map(str::to_owned)).collect();
         let pick = launch["pick"].clone();
         let (events, sessions, cwd) = (self.events.clone(), Arc::clone(&self.sessions), cwd.to_path_buf());
+        let adapter = adapter.clone();
         let starting = session_launch(None);
         std::thread::spawn(move || {
             let say = |kind: &str, body: Value| {
@@ -220,7 +247,7 @@ impl Debuggers {
                         sessions.insert(id, session);
                     }
                 }
-                Err(error) => say("failed", json!({"message": not_installed(&adapter, &error)})),
+                Err(error) => say("failed", json!({"message": not_installed(&adapter, &cwd, &error)})),
             }
         });
         Ok(id)
@@ -248,16 +275,25 @@ impl Debuggers {
 }
 
 /// Why an adapter could not be run, and what installs it.
-fn not_installed(adapter: &Adapter, error: &std::io::Error) -> String {
-    let command = adapter.command.join(" ");
+fn not_installed(adapter: &Adapter, cwd: &Path, error: &std::io::Error) -> String {
     if error.kind() == std::io::ErrorKind::NotFound {
-        textchum_core::i18n::fill(
-            &textchum_core::i18n::tr("{} is not installed (install with: {})"),
-            &[&command, adapter.install],
-        )
+        missing(adapter, cwd)
     } else {
-        format!("{command}: {error}")
+        format!("{}: {error}", adapter.command.join(" "))
     }
+}
+
+/// The adapter is not there: noted where the editor offers to install
+/// what is missing, and said so.
+fn missing(adapter: &Adapter, cwd: &Path) -> String {
+    if !textchum_core::install::knows(adapter.package) {
+        return textchum_core::i18n::fill(
+            &textchum_core::i18n::tr("{} is not installed"),
+            &[&adapter.command.join(" ")],
+        );
+    }
+    textchum_core::install::note_missing(adapter.package, cwd, &textchum_core::i18n::tr("debugger"));
+    textchum_core::install::not_installed_message(adapter.package, Some(cwd))
 }
 
 /// Runs a cargo build in `cwd`, handing each message a person would read

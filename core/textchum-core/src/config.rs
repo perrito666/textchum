@@ -513,8 +513,8 @@ impl Config {
                     "tools": preset.tools.iter().map(|tool| {
                         serde_json::json!({
                             "command": tool.command,
-                            "install": tool.install,
-                            "found": crate::presets::on_path(tool.command),
+                            "install": tool.install(),
+                            "found": crate::install::resolve(tool.command, None).is_some(),
                         })
                     }).collect::<Vec<_>>(),
                 })

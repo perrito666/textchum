@@ -41,6 +41,9 @@ final class StatusBar: NSView {
     /// room for; the whole of it is the tooltip, and the list is a
     /// click away.
     private let notice = makeButton()
+    /// "Install ruff…": shown while something the focused document
+    /// needs is missing, and what offers to install it (6.4).
+    private let install = makeButton()
     private var shown = Info()
     private var noticePopover: NSPopover?
 
@@ -56,6 +59,8 @@ final class StatusBar: NSView {
     /// Goes to a UTF-16 offset of the focused document: a breadcrumb's
     /// menu item was chosen.
     var onCrumb: ((Int) -> Void)?
+    /// Offers to install what is missing.
+    var onInstall: (() -> Void)?
 
     static let height: CGFloat = 24
 
@@ -72,6 +77,12 @@ final class StatusBar: NSView {
             button.font = font
             button.target = self
         }
+        install.font = font
+        install.target = self
+        install.action = #selector(offerInstall(_:))
+        install.contentTintColor = .controlAccentColor
+        install.isHidden = true
+        install.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         indent.action = #selector(openProperties(_:))
         language.action = #selector(openProperties(_:))
         notice.action = #selector(showNotices(_:))
@@ -86,7 +97,7 @@ final class StatusBar: NSView {
         crumbBar.orientation = .horizontal
         crumbBar.spacing = 2
         crumbBar.setContentCompressionResistancePriority(.defaultLow + 1, for: .horizontal)
-        let row = NSStackView(views: [position, indent, language, encoding, branch, crumbBar])
+        let row = NSStackView(views: [position, indent, language, encoding, branch, install, crumbBar])
         row.orientation = .horizontal
         row.spacing = 14
         row.translatesAutoresizingMaskIntoConstraints = false
@@ -113,6 +124,24 @@ final class StatusBar: NSView {
         button.contentTintColor = .secondaryLabelColor
         button.setButtonType(.momentaryChange)
         return button
+    }
+
+    /// The programs missing for the focused document: the install button
+    /// names the one, or counts them, and goes when there are none.
+    func showMissing(_ programs: [String]) {
+        install.isHidden = programs.isEmpty
+        install.title =
+            programs.count == 1
+            ? t("Install {}…", programs[0])
+            : t("Install {} missing tools…", String(programs.count))
+        install.toolTip = programs.joined(separator: ", ")
+    }
+
+    /// For the smoke test: what the install button says, nil when hidden.
+    var installTitle: String? { install.isHidden ? nil : install.title }
+
+    @objc private func offerInstall(_ sender: Any?) {
+        onInstall?()
     }
 
     func show(_ info: Info) {

@@ -1,12 +1,13 @@
 //! The server registry: which language server serves which language.
 //!
-//! Servers are found on `PATH` — Textchum does not install them, it
-//! tells the user what to install when one is missing. Configuration
+//! Servers are found in the project's environment, on `PATH` and in
+//! the per-user folders installers write to; when one is missing the
+//! editor offers to install it (see `textchum_core::install`). Configuration
 //! can add servers this table does not know, and redefine the ones it
 //! does, under `lsp.servers`.
 //!
 //! Every command and argument list here comes from that server's own
-//! documentation, and the install hints are ours. A server started
+//! documentation. A server started
 //! without its transport flag exits without saying why, so an entry
 //! that is a guess is worse than no entry.
 
@@ -21,8 +22,15 @@ pub struct ServerSpec {
     /// Syntax-language names (as the core reports them) this server
     /// handles.
     pub languages: &'static [&'static str],
-    /// Shown when the executable is missing.
-    pub install_hint: &'static str,
+}
+
+impl ServerSpec {
+    /// How the server is installed, in words, for where it is described
+    /// rather than installed; the catalog in `textchum_core::install`
+    /// is the one place that knows.
+    pub fn install_hint(&self) -> String {
+        textchum_core::install::hint(self.command).unwrap_or_default()
+    }
 }
 
 static SERVERS: &[ServerSpec] = &[
@@ -31,7 +39,6 @@ static SERVERS: &[ServerSpec] = &[
         command: "rust-analyzer",
         args: &[],
         languages: &["rust"],
-        install_hint: "rustup component add rust-analyzer",
     },
     ServerSpec {
         id: "pyright",
@@ -43,277 +50,233 @@ static SERVERS: &[ServerSpec] = &[
         // reads as a second way to satisfy the same request, and
         // installing it alone changes nothing, because the command
         // Textchum looks for is still pyright-langserver.
-        install_hint: "npm install -g pyright (or: uv tool install pyright). \
-                       To use python-lsp-server instead, install it and set \
-                       python to pylsp in Preferences → Language Servers",
     },
     ServerSpec {
         id: "basedpyright",
         command: "basedpyright-langserver",
         args: &["--stdio"],
         languages: &["python"],
-        install_hint: "uv tool install basedpyright (or: npm install -g basedpyright)",
     },
     ServerSpec {
         id: "pylsp",
         command: "pylsp",
         args: &[],
         languages: &["python"],
-        install_hint: "uv tool install python-lsp-server \
-                       (or: pipx install python-lsp-server)",
     },
     ServerSpec {
         id: "ruff",
         command: "ruff",
         args: &["server"],
         languages: &["python"],
-        install_hint: "uv tool install ruff (or: pipx install ruff)",
     },
     ServerSpec {
         id: "jedi",
         command: "jedi-language-server",
         args: &[],
         languages: &["python"],
-        install_hint: "uv tool install jedi-language-server \
-                       (or: pipx install jedi-language-server)",
     },
     ServerSpec {
         id: "gopls",
         command: "gopls",
         args: &[],
         languages: &["go", "gotmpl"],
-        install_hint: "go install golang.org/x/tools/gopls@latest",
     },
     ServerSpec {
         id: "clangd",
         command: "clangd",
         args: &[],
         languages: &["c", "cpp"],
-        install_hint: "xcode-select --install (or brew install llvm)",
     },
     ServerSpec {
         id: "typescript-language-server",
         command: "typescript-language-server",
         args: &["--stdio"],
         languages: &["javascript", "typescript", "tsx"],
-        install_hint: "npm install -g typescript-language-server typescript",
     },
     ServerSpec {
         id: "jdtls",
         command: "jdtls",
         args: &[],
         languages: &["java"],
-        install_hint: "brew install jdtls",
     },
     ServerSpec {
         id: "ruby-lsp",
         command: "ruby-lsp",
         args: &[],
         languages: &["ruby"],
-        install_hint: "gem install ruby-lsp",
     },
     ServerSpec {
         id: "solargraph",
         command: "solargraph",
         args: &["stdio"],
         languages: &["ruby"],
-        install_hint: "gem install solargraph",
     },
     ServerSpec {
         id: "csharp-ls",
         command: "csharp-ls",
         args: &[],
         languages: &["csharp"],
-        install_hint: "dotnet tool install --global csharp-ls",
     },
     ServerSpec {
         id: "lua-language-server",
         command: "lua-language-server",
         args: &[],
         languages: &["lua"],
-        install_hint: "brew install lua-language-server",
     },
     ServerSpec {
         id: "nil",
         command: "nil",
         args: &[],
         languages: &["nix"],
-        install_hint: "nix profile install nixpkgs#nil",
     },
     ServerSpec {
         id: "haskell-language-server",
         command: "haskell-language-server-wrapper",
         args: &["--lsp"],
         languages: &["haskell"],
-        install_hint: "ghcup install hls (or: brew install haskell-language-server)",
     },
     ServerSpec {
         id: "ocamllsp",
         command: "ocamllsp",
         args: &[],
         languages: &["ocaml"],
-        install_hint: "opam install ocaml-lsp-server",
     },
     ServerSpec {
         id: "metals",
         command: "metals",
         args: &[],
         languages: &["scala"],
-        install_hint: "brew install coursier/formulas/coursier && cs install metals",
     },
     ServerSpec {
         id: "cmake-language-server",
         command: "cmake-language-server",
         args: &[],
         languages: &["cmake"],
-        install_hint: "uv tool install cmake-language-server (or: pipx install it)",
     },
     ServerSpec {
         id: "sourcekit-lsp",
         command: "sourcekit-lsp",
         args: &[],
         languages: &["swift"],
-        install_hint: "ships with the Xcode toolchain",
     },
     ServerSpec {
         id: "zls",
         command: "zls",
         args: &[],
         languages: &["zig"],
-        install_hint: "brew install zls",
     },
     ServerSpec {
         id: "bash-language-server",
         command: "bash-language-server",
         args: &["start"],
         languages: &["bash"],
-        install_hint: "npm install -g bash-language-server",
     },
     ServerSpec {
         id: "ty",
         command: "ty",
         args: &["server"],
         languages: &["python"],
-        install_hint: "uv tool install ty",
     },
     ServerSpec {
         id: "pyrefly",
         command: "pyrefly",
         args: &["lsp"],
         languages: &["python"],
-        install_hint: "uv tool install pyrefly",
     },
     ServerSpec {
         id: "vtsls",
         command: "vtsls",
         args: &["--stdio"],
         languages: &["javascript", "typescript", "tsx"],
-        install_hint: "npm install -g @vtsls/language-server",
     },
     ServerSpec {
         id: "deno",
         command: "deno",
         args: &["lsp"],
         languages: &["javascript", "typescript", "tsx"],
-        install_hint: "brew install deno",
     },
     ServerSpec {
         id: "biome",
         command: "biome",
         args: &["lsp-proxy"],
         languages: &["javascript", "typescript", "tsx"],
-        install_hint: "npm install -g @biomejs/biome",
     },
     ServerSpec {
         id: "vscode-json-language-server",
         command: "vscode-json-language-server",
         args: &["--stdio"],
         languages: &["json"],
-        install_hint: "npm install -g vscode-langservers-extracted",
     },
     ServerSpec {
         id: "vscode-html-language-server",
         command: "vscode-html-language-server",
         args: &["--stdio"],
         languages: &["html"],
-        install_hint: "npm install -g vscode-langservers-extracted",
     },
     ServerSpec {
         id: "vscode-css-language-server",
         command: "vscode-css-language-server",
         args: &["--stdio"],
         languages: &["css"],
-        install_hint: "npm install -g vscode-langservers-extracted",
     },
     ServerSpec {
         id: "yaml-language-server",
         command: "yaml-language-server",
         args: &["--stdio"],
         languages: &["yaml"],
-        install_hint: "npm install -g yaml-language-server",
     },
     ServerSpec {
         id: "taplo",
         command: "taplo",
         args: &["lsp", "stdio"],
         languages: &["toml"],
-        install_hint: "brew install taplo \
-                       (or: cargo install taplo-cli --features lsp)",
     },
     ServerSpec {
         id: "marksman",
         command: "marksman",
         args: &["server"],
         languages: &["markdown"],
-        install_hint: "brew install marksman",
     },    ServerSpec {
         id: "elixir-ls",
         command: "elixir-ls",
         args: &[],
         languages: &["elixir"],
-        install_hint: "brew install elixir-ls",
     },
     ServerSpec {
         id: "intelephense",
         command: "intelephense",
         args: &["--stdio"],
         languages: &["php"],
-        install_hint: "npm install -g intelephense",
     },
     ServerSpec {
         id: "phpactor",
         command: "phpactor",
         args: &["language-server"],
         languages: &["php"],
-        install_hint: "composer global require phpactor/phpactor",
     },
     ServerSpec {
         id: "docker-langserver",
         command: "docker-langserver",
         args: &["--stdio"],
         languages: &["dockerfile"],
-        install_hint: "npm install -g dockerfile-language-server-nodejs",
     },
     ServerSpec {
         id: "lemminx",
         command: "lemminx",
         args: &[],
         languages: &["xml"],
-        install_hint: "brew install lemminx",
     },
     ServerSpec {
         id: "sqls",
         command: "sqls",
         args: &[],
         languages: &["sql"],
-        install_hint: "go install github.com/sqls-server/sqls@latest",
     },
     ServerSpec {
         id: "r-languageserver",
         command: "R",
         args: &["--no-echo", "-e", "languageserver::run()"],
         languages: &["r"],
-        install_hint: "R -e 'install.packages(\"languageserver\")'",
     },
     // rubocop as a server is a linter, not a replacement for the two
     // above: it is asked for by id, usually beside one of them.
@@ -322,7 +285,6 @@ static SERVERS: &[ServerSpec] = &[
         command: "rubocop",
         args: &["--lsp"],
         languages: &["ruby"],
-        install_hint: "gem install rubocop",
     },
 ];
 
@@ -358,7 +320,8 @@ pub fn all() -> &'static [ServerSpec] {
 }
 
 /// Whether an executable is reachable — an absolute path that exists, or
-/// a bare name found on `PATH`. Settings uses it to say whether a
+/// a bare name found on `PATH` or in the per-user folders installers
+/// write to. Settings uses it to say whether a
 /// configured command would actually start.
 pub fn executable_exists(command: &str) -> bool {
     // The stored value is a command line; the pool splits it on
@@ -366,14 +329,7 @@ pub fn executable_exists(command: &str) -> bool {
     let Some(program) = command.split_whitespace().next() else {
         return false;
     };
-    let program = std::path::Path::new(program);
-    if program.components().count() > 1 {
-        return program.is_file();
-    }
-    let Some(path) = std::env::var_os("PATH") else {
-        return false;
-    };
-    std::env::split_paths(&path).any(|dir| dir.join(program).is_file())
+    textchum_core::install::resolve(program, None).is_some()
 }
 
 #[cfg(test)]
@@ -439,14 +395,19 @@ mod tests {
     }
 
     #[test]
-    fn install_hints_name_the_command_they_install() {
-        // The pyright hint used to offer python-lsp-server in the same
-        // sentence, and a reader who installed only that got nothing:
-        // the command Textchum looks for is still pyright-langserver.
-        let hint = server_for_language("python").unwrap().install_hint;
-        let pyright = hint.find("pyright").expect("names pyright");
-        let alternative = hint.find("python-lsp-server").expect("names the alternative");
-        assert!(pyright < alternative);
+    fn every_server_has_a_way_to_install_it() {
+        // A server the catalog does not know would be reported missing
+        // with nothing to offer.
+        for spec in all() {
+            assert!(
+                textchum_core::install::knows(spec.command),
+                "{} ({}) is not in the install catalog",
+                spec.id,
+                spec.command
+            );
+            assert!(!spec.install_hint().is_empty(), "{} has no hint", spec.id);
+        }
+        assert!(server_for_language("python").unwrap().install_hint().contains("pyright"));
     }
 
     #[test]

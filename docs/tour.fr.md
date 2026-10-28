@@ -165,7 +165,8 @@ qu'elle nomme marquée ; en choisir une y va, comme un saut dont Go Back
 revient. Un texte qu'aucune grammaire ne lit n'en a pas. Son extrémité
 droite
 est la **zone de notifications** : la dernière chose que l'éditeur a eu
-à dire — un serveur de langage introuvable, et ce qui l'installerait ;
+à dire — un serveur de langage introuvable, que le bouton
+**Installer…** à côté installe ;
 une grammaire qu'il n'a pas pu charger ; un enregistrement qui s'est
 fait sans ses préprocesseurs — autant qu'il en tient, et en entier
 comme infobulle. Rien de cela n'interrompt : ce qui était un dialogue
@@ -482,7 +483,8 @@ programme, avec un champ qui évalue une expression dans ce cadre.
 sous Linux), **Pas à pas détaillé** (F7), **Pas à pas sortant** (⇧F8,
 Maj+F7 sous Linux) et **Arrêter le débogage** (⇧⌘F2, Ctrl+Maj+F2 sous
 Linux) sont dans le menu Run et sur le panneau. Un adaptateur absent
-est nommé, avec la commande qui l'installe ; un programme qui ne
+est proposé à l'installation sur-le-champ, et le débogage démarre une
+fois l'installation réussie ; un programme qui ne
 démarre pas dit ce qui le retient d'habitude — sous macOS, la
 permission dont un débogueur a besoin pour prendre le contrôle d'un
 programme, qu'accorde le mode développeur (`DevToolsSecurity -enable`).

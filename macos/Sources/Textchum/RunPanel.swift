@@ -17,6 +17,9 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
 {
     /// The run on show, and the core that runs it.
     private(set) var runID: UInt64?
+    /// How the run in the panel ended: its exit code, nil while it runs
+    /// or when it was stopped.
+    private(set) var exitCode: Int?
     weak var core: CoreApp?
     /// Opens a place the output names: path, zero-based line and column.
     var onOpenPlace: ((String, Int, Int) -> Void)?
@@ -181,6 +184,7 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
             core?.runForget(id: previous)
         }
         runID = id
+        exitCode = nil
         self.command = command
         self.cwd = cwd
         title.stringValue = command
@@ -213,6 +217,7 @@ final class RunPanel: NSView, NSTextViewDelegate, NSTextFieldDelegate, NSOutline
                 apply(update)
                 refreshTests()
                 if !update.running {
+                    exitCode = update.exit
                     status.stringValue = t("finished")
                     stopButton.isEnabled = false
                     input.isHidden = true

@@ -39,6 +39,9 @@ pub struct RunPanel {
     view: gtk::TextView,
     input: gtk::Entry,
     run_id: Cell<Option<u64>>,
+    /// How the run in the panel ended: its exit code, None while it runs
+    /// or when it was stopped.
+    exit_code: Cell<Option<i32>>,
     command: RefCell<String>,
     places: RefCell<Vec<Vec<Named>>>,
     /// Where Next Output Place stepped last: an output line and a start.
@@ -151,6 +154,7 @@ impl RunPanel {
             view: view.clone(),
             input: input.clone(),
             run_id: Cell::new(None),
+            exit_code: Cell::new(None),
             command: RefCell::new(String::new()),
             places: RefCell::new(Vec::new()),
             stepped: Cell::new(None),
@@ -278,6 +282,10 @@ impl RunPanel {
         self.run_id.get()
     }
 
+    pub fn exit_code(&self) -> Option<i32> {
+        self.exit_code.get()
+    }
+
     pub fn command(&self) -> String {
         self.command.borrow().clone()
     }
@@ -293,6 +301,7 @@ impl RunPanel {
             Shell::instance().runs.borrow_mut().forget(previous);
         }
         self.run_id.set(Some(id));
+        self.exit_code.set(None);
         *self.command.borrow_mut() = command.to_owned();
         *self.cwd.borrow_mut() = cwd.to_path_buf();
         self.title.set_text(command);
@@ -327,6 +336,7 @@ impl RunPanel {
         self.apply(&update);
         self.refresh_tests(id);
         if update["running"] == false {
+            self.exit_code.set(update["exit"].as_i64().map(|code| code as i32));
             self.status.set_text(&tr("finished"));
             self.stop.set_sensitive(false);
             self.input.set_visible(false);
