@@ -390,8 +390,11 @@ pub fn hint(program: &str) -> Option<String> {
     let mut commands: Vec<String> =
         methods(program, None, &host).into_iter().map(|method| method.command).collect();
     if commands.is_empty() {
+        // pip and venv are abilities of python3 rather than programs on
+        // PATH, so they are not in INSTALLERS; without them a Python
+        // module such as debugpy would have no command to suggest.
         let everything = Host {
-            installers: INSTALLERS.iter().map(|name| name.to_string()).collect(),
+            installers: INSTALLERS.iter().chain(&["pip", "venv"]).map(|name| name.to_string()).collect(),
             go_tools: false,
             macos: host.macos,
             home: host.home.clone(),
